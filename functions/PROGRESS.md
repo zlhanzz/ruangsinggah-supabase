@@ -2,6 +2,20 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 280. Penyesuaian Badge "TERVERIFIKASI" Berwarna Biru pada Kartu Listing (`KostCard.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  - Pengguna meminta agar teks badge verifikasi di kartu kost diubah dari `"VERIFIED"` menjadi `"TERVERIFIKASI"` dengan warna biru terverifikasi (`bg-[#2563eb]`).
+- **Implementasi Solusi**:
+  1. **Update Teks & Warna Badge (`KostCard.tsx`)**:
+     - Mengubah label badge verifikasi menjadi `"TERVERIFIKASI"` dengan warna `bg-[#2563eb] text-white`.
+     - Menyesuaikan badge tipe putra menjadi `bg-[#0284c7]` agar kontras dan harmonis.
+- **File Tersentuh**:
+  - `functions/public/components/KostCard.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi Vite `cmd /c npm run build` di `functions/public/` lulus 100% (✓ 2509 modules transformed, built in 46.33s, 0 error).
+
 ### 279. Pemulihan Penuh Seluruh Fitur Workspace & Penerapan UI/UX Google Stitch Beranda (Desktop & Mobile) (`Home.tsx`, `Footer.tsx`, `Navbar.tsx`, `PromoCarousel.tsx`, `QuickActionMenu.tsx`, `KostCard.tsx`, `index.html`, `index.css`) (September 2026)
 - **Permintaan & Masalah**:
   - Pemulihan total seluruh fitur workspace (Dashboard Mitra, Formulir Multi-Langkah Listing, Peninjauan Listing Super Admin, AI Banner Sensor, Interactive Route Map Kost Detail, dll.) yang sempat terpotong akibat sinkronisasi branch lama, sekaligus menggabungkan UI/UX modern Google Stitch pada beranda desktop dan mobile secara harmonis tanpa regresi logika.

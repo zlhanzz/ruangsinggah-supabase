@@ -80,13 +80,13 @@ const KostCard: React.FC<KostCardProps> = ({ kost, onClick, onDelete }) => {
         {/* Top Badges */}
         <div className="absolute top-3 left-3 flex flex-wrap gap-1.5 z-10">
           <span className={`px-2.5 py-1 rounded-md text-[10px] font-extrabold uppercase tracking-wider ${
-            kost.type === 'Putra' ? 'bg-[#2563eb]' : kost.type === 'Putri' ? 'bg-[#e11d48]' : 'bg-[#7c3aed]'
+            kost.type === 'Putra' ? 'bg-[#0284c7]' : kost.type === 'Putri' ? 'bg-[#e11d48]' : 'bg-[#7c3aed]'
           } text-white shadow-xs`}>
             KOST {kost.type.toUpperCase()}
           </span>
           {(kost.isVerified || kost.isManaged) && (
-            <span className="bg-[#ff7a00] text-white px-2.5 py-1 rounded-md text-[10px] font-extrabold uppercase tracking-wider shadow-xs">
-              VERIFIED
+            <span className="bg-[#2563eb] text-white px-2.5 py-1 rounded-md text-[10px] font-extrabold uppercase tracking-wider shadow-xs">
+              TERVERIFIKASI
             </span>
           )}
           {variantCount > 1 && (

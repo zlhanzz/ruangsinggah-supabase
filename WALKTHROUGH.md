@@ -1,18 +1,27 @@
-# WALKTHROUGH: Pemulihan Penuh Seluruh Fitur Workspace & Penerapan Desain Google Stitch
+# WALKTHROUGH: Penyesuaian Badge "TERVERIFIKASI" Berwarna Biru pada Kartu Listing
 
-## 1. Ringkasan Pemulihan & Eksekusi
-Telah berhasil dipulihkan secara 100% utuh seluruh riwayat fitur dari commit pengembangan (`6bb92eb`), sehingga **seluruh fitur lanjutan tetap utuh tanpa kehilangan satu pun logika bisnis**:
-- **Dashboard Mitra & Listing Manager**: Formulir listing 6-langkah mandiri, validasi OCR KTP, AI Contact Banner Sensor, smart auto-pilot, pengajuan sewa, kompresi WebP, dan modal peninjauan admin 3-tab.
-- **Halaman Detail Kost (`KostDetail.tsx`)**: Interactive In-App Route Preview, Auto-Scale Adaptive Viewport mini peta, penyajian fasilitas terstruktur berhirarki, dan landmark terdekat.
-- **UI/UX Google Stitch Beranda (Desktop & Mobile)**:
-  - **Tipografi**: Universal `Plus Jakarta Sans`.
-  - **Desktop**: 4-segmen search bar melayang, 3D stacked deck carousel, 4 kartu fitur, dan footer jaringan afiliasi lengkap.
-  - **Mobile**: Search bar 1-baris ramping, banner swipeable full-width, 4 menu fitur 1-baris dalam kartu putih, dan bottom navigation bar.
-- **Rebranding Nasional & SEO**: Title tab browser `RuangSinggah.id - Platform Pencarian & Sewa Properti Terpercaya Se-Indonesia`, OpenGraph, Twitter Cards, dan Schema.org JSON-LD.
+## 1. Ringkasan Pekerjaan
+Telah berhasil diselaraskan tampilan badge verifikasi pada kartu listing properti (**`KostCard.tsx`**):
+- **Teks**: Menggunakan bahasa Indonesia baku **`TERVERIFIKASI`** (sebelumnya `VERIFIED`).
+- **Warna**: Menggunakan warna biru terverifikasi **`bg-[#2563eb]`** (*Royal Blue*) dengan teks putih tebal.
 
 ---
 
-## 2. Hasil Pengujian & Kompilasi
+## 2. Rincian Perubahan Berkas
+
+### A. [`KostCard.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/components/KostCard.tsx)
+- Mengubah badge verifikasi menjadi:
+  ```tsx
+  {(kost.isVerified || kost.isManaged) && (
+    <span className="bg-[#2563eb] text-white px-2.5 py-1 rounded-md text-[10px] font-extrabold uppercase tracking-wider shadow-xs">
+      TERVERIFIKASI
+    </span>
+  )}
+  ```
+
+---
+
+## 3. Hasil Pengujian & Kompilasi
 
 ```bash
 cmd /c npm run build
@@ -20,12 +29,14 @@ cmd /c npm run build
 **Output:**
 ```text
 ✓ 2509 modules transformed.
-✓ built in 43.93s
+✓ built in 46.33s
 Exit code: 0 (0 error)
 ```
 
 ---
 
-## 3. Status Git Branch
+## 4. Panduan Pengujian
 
-Seluruh perubahan telah di-commit dan di-push dengan aman ke remote branch **`bukan-productions`**.
+1. **Buka Halaman Beranda / Hasil Pencarian di `localhost:5173`**:
+   - Perhatikan kartu-kartu kost yang terverifikasi.
+   - Badge di pojok atas foto kini berwarna biru dengan teks **`TERVERIFIKASI`**.
