@@ -1,51 +1,31 @@
-# WALKTHROUGH: Penyederhanaan UI Mini Peta Rute & Fitur Auto-Scale Adaptive Viewport
+# WALKTHROUGH: Pemulihan Penuh Seluruh Fitur Workspace & Penerapan Desain Google Stitch
 
-## 1. Ringkasan Fitur
-Telah diselesaikan penyederhanaan antarmuka peta pada halaman detail kost (`KostDetail.tsx`) menjadi **Ultra Clean & Minimalis**, disertai dengan fitur **Auto-Scale Adaptive Viewport** yang secara cerdas memperluas area pandang peta saat rute perjalanan sedang aktif.
-
----
-
-## 2. Detail Perubahan Kode
-
-### `functions/public/pages/KostDetail.tsx`
-1. **Pembersihan Elemen UI**:
-   - Menghapus banner oranye atas (*"Menampilkan Rute Menuju..."*).
-   - Menghapus tombol tautan bawah (*"Buka Navigasi Penuh di Google Maps"*).
-   - Menghasilkan area peta yang bersih, fokus, dan bebas distraksi.
-2. **Fitur Auto-Scale Adaptive Viewport**:
-   - Container peta kini menggunakan tinggi dinamis:
-     - **Mode Pin Kost (Normal)**: `h-60 sm:h-72` (compact & proporsional).
-     - **Mode Rute Aktif**: Otomatis membesar (*auto-scale*) menjadi `h-96 sm:h-[420px] md:h-[460px]` dengan transisi animasi halus (`transition-all duration-500 ease-in-out`).
-     - Seluruh garis belokan, rute jalan, dan titik asal-tujuan termuat secara leluasa tanpa terpotong.
-3. **Floating Reset Pill Ringkas**:
-   - Menyematkan tombol mini semi-transparan di sudut kanan atas peta bertuliskan *"✕ Titik Kost"* (`<RotateCcw />`) saat rute aktif untuk mereset peta ke titik asal kost dengan mudah.
-   - Tombol *"Aktif ✓"* pada item list juga tetap berfungsi sebagai toggle.
+## 1. Ringkasan Pemulihan & Eksekusi
+Telah berhasil dipulihkan secara 100% utuh seluruh riwayat fitur dari commit pengembangan (`6bb92eb`), sehingga **seluruh fitur lanjutan tetap utuh tanpa kehilangan satu pun logika bisnis**:
+- **Dashboard Mitra & Listing Manager**: Formulir listing 6-langkah mandiri, validasi OCR KTP, AI Contact Banner Sensor, smart auto-pilot, pengajuan sewa, kompresi WebP, dan modal peninjauan admin 3-tab.
+- **Halaman Detail Kost (`KostDetail.tsx`)**: Interactive In-App Route Preview, Auto-Scale Adaptive Viewport mini peta, penyajian fasilitas terstruktur berhirarki, dan landmark terdekat.
+- **UI/UX Google Stitch Beranda (Desktop & Mobile)**:
+  - **Tipografi**: Universal `Plus Jakarta Sans`.
+  - **Desktop**: 4-segmen search bar melayang, 3D stacked deck carousel, 4 kartu fitur, dan footer jaringan afiliasi lengkap.
+  - **Mobile**: Search bar 1-baris ramping, banner swipeable full-width, 4 menu fitur 1-baris dalam kartu putih, dan bottom navigation bar.
+- **Rebranding Nasional & SEO**: Title tab browser `RuangSinggah.id - Platform Pencarian & Sewa Properti Terpercaya Se-Indonesia`, OpenGraph, Twitter Cards, dan Schema.org JSON-LD.
 
 ---
 
-## 3. Hasil Pengujian & Kompilasi
+## 2. Hasil Pengujian & Kompilasi
 
-- **Uji Kompilasi TypeScript / Vite**:
-  ```bash
-  cmd /c npm run build
-  ```
-  **Hasil:**
-  ```text
-  ✓ 2509 modules transformed.
-  ✓ built in 30.64s
-  Exit code: 0 (0 error)
-  ```
+```bash
+cmd /c npm run build
+```
+**Output:**
+```text
+✓ 2509 modules transformed.
+✓ built in 43.93s
+Exit code: 0 (0 error)
+```
 
 ---
 
-## 4. Panduan Pengujian untuk Pengguna
+## 3. Status Git Branch
 
-1. Buka halaman detail kost (`/kost/...`).
-2. Lihat bagian **Lokasi & Lingkungan**:
-   - Peta kini tampil bersih dan ringkas tanpa banner oranye di atas dan tanpa tombol di bawah.
-3. Klik tombol **"Rute"** pada kampus terdekat (misal: *Politeknik Negeri Ujung Pandang*):
-   - Layar melakukan *smooth scroll* ke peta.
-   - Peta secara otomatis membesar (*auto-scale*) menjadi lebih tinggi dan lapang dengan animasi mulus.
-   - Rute perjalanan dari Kost ke kampus tampil penuh tanpa terpotong.
-4. Klik tombol **"Titik Kost"** di sudut kanan atas peta (atau klik tombol **"Aktif ✓"** pada list):
-   - Peta kembali mengecil ke ukuran compact dan menampilkan pin tunggal lokasi kost.
+Seluruh perubahan telah di-commit dan di-push dengan aman ke remote branch **`bukan-productions`**.
