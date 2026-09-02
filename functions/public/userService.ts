@@ -12,7 +12,7 @@ const convertTimestamp = (ts: any): string => {
 
 // Helper to extract display URL from image object or string
 // Prioritize WebP > Original > Thumbnail
-const getDisplayImageUrl = (img: any): string => {
+export const getDisplayImageUrl = (img: any): string => {
   if (!img) return '';
   if (typeof img === 'string') return ensureAbsoluteUrl(img, 'properties');
   const path = img.webp || img.original || img.thumbnail || img.url || '';
@@ -131,7 +131,7 @@ export async function getPublishedProperties(): Promise<Kost[]> {
     return data.map((row) => {
       const rawImages = row.image_urls || [];
       const images = rawImages.map(getDisplayImageUrl).filter((u: string) => u !== '');
-      const photosMeta = rawImages.map(getDisplayImageObject).filter(Boolean) as ImageUrlObject[];
+      const photosMeta = (row.metadata?.photos_meta || rawImages).map(getDisplayImageObject).filter(Boolean) as ImageUrlObject[];
 
       const rawVideos = row.video_urls || [];
       const videos = rawVideos.map(getDisplayVideoUrl).filter((u: string) => u !== '');
@@ -208,7 +208,11 @@ export async function getPublishedPropertyDetails(propertyId: string): Promise<K
 
         if (privRow) {
           const isOwner = privRow.owner_uid === user.id;
-          const isAdmin = user.app_metadata?.role === 'admin' || user.user_metadata?.role === 'admin';
+          let isAdmin = user.app_metadata?.role === 'admin' || user.user_metadata?.role === 'admin';
+          if (!isAdmin) {
+            const { data: dbUser } = await supabase.from('users').select('role').eq('id', user.id).maybeSingle();
+            if (dbUser?.role === 'admin') isAdmin = true;
+          }
           if (isOwner || isAdmin) {
             row = privRow;
           }
@@ -220,7 +224,7 @@ export async function getPublishedPropertyDetails(propertyId: string): Promise<K
 
     const rawImages = row.image_urls || [];
     const images = rawImages.map(getDisplayImageUrl).filter((u: string) => u !== '');
-    const photosMeta = rawImages.map(getDisplayImageObject).filter(Boolean) as ImageUrlObject[];
+    const photosMeta = (row.metadata?.photos_meta || rawImages).map(getDisplayImageObject).filter(Boolean) as ImageUrlObject[];
 
     const rawVideos = row.video_urls || [];
     const videos = rawVideos.map(getDisplayVideoUrl).filter((u: string) => u !== '');

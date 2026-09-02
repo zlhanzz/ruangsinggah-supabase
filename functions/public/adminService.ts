@@ -1,7 +1,7 @@
 import { supabase } from './supabase';
 import { Kost, DatabaseProduct, ImageUrlObject, VideoUrlObject, SurveyRequest, Banner, KostManagerPackage, MitraPromoPopupSetting } from './types';
 import { notifyAdminStatusUpdate } from './emailService';
-import { ensureAbsoluteUrl } from './userService';
+import { ensureAbsoluteUrl, getDisplayImageUrl, getDisplayImageObject } from './userService';
 import { getCurrentDate } from './utils/timeUtils';
 
 // ---- TYPE DEF ----
@@ -392,14 +392,16 @@ export async function getAdminProperties(ownerUid?: string): Promise<BasicProper
 
   return data.map((row) => {
     const rawImages = row.image_urls || [];
-    const images: string[] = rawImages.map((img: any) =>
-      typeof img === 'string' ? img : (img.webp || img.original || img.thumbnail || '')
-    ).filter((u: string) => u !== '');
+    const images: string[] = rawImages.map(getDisplayImageUrl).filter((u: string) => u !== '');
+    const photosMeta = (row.metadata?.photos_meta || rawImages).map(getDisplayImageObject).filter(Boolean) as ImageUrlObject[];
 
     const rawVideos = row.video_urls || [];
     const videos: string[] = rawVideos.map((vid: any) =>
       typeof vid === 'string' ? vid : (vid.original || '')
     ).filter((u: string) => u !== '');
+
+    const photoCategories = row.photo_categories || row.photoCategories || (row.metadata && (row.metadata.photo_categories || row.metadata.photoCategories)) || [];
+    const categorizedPhotos = row.categorized_photos || row.categorizedPhotos || (row.metadata && (row.metadata.categorized_photos || row.metadata.categorizedPhotos)) || {};
 
     const ownerData = Array.isArray(row.users) ? row.users[0] : row.users;
     const isSystemId = ['super_admin_id', 'admin-system-id'].includes(row.owner_uid?.toLowerCase());
@@ -422,6 +424,9 @@ export async function getAdminProperties(ownerUid?: string): Promise<BasicProper
       status: row.status || 'draft',
       address: row.address || '',
       imageUrls: images,
+      photosMeta,
+      photoCategories,
+      categorizedPhotos,
       videoUrls: videos,
       instagramUrl: row.instagram_url || '',
       tiktokUrl: row.tiktok_url || '',

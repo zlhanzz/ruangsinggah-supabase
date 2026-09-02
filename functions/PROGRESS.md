@@ -2,6 +2,37 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 276. Perbaikan Tampilan Foto Listing pada Sesi Admin & Penerapan Stale-While-Revalidate di Halaman Detail (`App.tsx`, `userService.ts`, `adminService.ts`) (September 2026)
+- **Permintaan & Masalah**:
+  - Pengguna melaporkan bahwa foto listing kost ("Kost Apalah Daya") tampil sempurna ketika diakses oleh real user, mobile, maupun guest (belum login), namun foto dan thumbnail tidak muncul (broken image icon) ketika diakses oleh akun Administrator di desktop browser saat membuka pratinjau / deep link `/kost/...`.
+- **Investigasi & Analisis Akar Masalah**:
+  1. *Stale State Caching di `KostDetailWrapper` (`App.tsx`)*:
+     - `KostDetailWrapper` sebelumnya memeriksa `if (!kost || kost.id !== realPropertyId)`.
+     - Karena akun admin di browser desktop sudah membuka website dan memuat state `listings` sebelum foto diperbaiki/diupload ulang, `listings.find(...)` menemukan objek properti lama yang masih menyimpan URL foto rusak di memori tab.
+     - Akibat kondisi `if (!kost || ...)` tersebut, pemanggilan `getPublishedPropertyDetails(realPropertyId)` dilewati sehingga tab admin terus menampilkan data lama. Sebaliknya, tab incognito / guest memuat data fresh dari server sehingga foto muncul normal.
+  2. *Ketiadaan Resolver `getDisplayImageUrl` & Metadata di `getAdminProperties` (`adminService.ts`)*:
+     - Fungsi `getAdminProperties` sebelumnya memetakan `image_urls` mentah tanpa melalui `getDisplayImageUrl` dan belum menyertakan `photosMeta`, `photoCategories`, serta `categorizedPhotos`.
+  3. *Inkonsistensi `photosMeta` di `userService.ts`*:
+     - Pada `getPublishedProperties` dan `getPublishedPropertyDetails`, pemetaan `photosMeta` belum memprioritaskan `row.metadata?.photos_meta`.
+- **Implementasi Solusi**:
+  1. **Penerapan Pola Stale-While-Revalidate pada `KostDetailWrapper` (`App.tsx`)**:
+     - `KostDetailWrapper` menggunakan data in-memory `listings` untuk render instan awal (0ms delay), namun **selalu melakukan background fetch `getPublishedPropertyDetails(realPropertyId)`** setiap kali halaman dibuka.
+     - Begitu data server terbaru didapatkan, state `kost` langsung diperbarui secara reaktif sehingga tampilan foto, harga, dan ketersediaan selalu sinkron 100%.
+  2. **Resolusi URL & Metadata Lengkap pada `getAdminProperties` (`adminService.ts`)**:
+     - Menggunakan `getDisplayImageUrl` dan `getDisplayImageObject` agar seluruh URL foto dipastikan teresolusi ke CDN proxy Cloudflare `https://media.ruangsinggah.id/...`.
+     - Memetakan `photosMeta`, `photoCategories`, dan `categorizedPhotos` secara lengkap pada objek `BasicPropertyInfo`.
+  3. **Penyelarasan `photosMeta` & Verifikasi Admin di `userService.ts`**:
+     - Memastikan `photosMeta` memprioritaskan `row.metadata?.photos_meta || rawImages`.
+     - Memperkuat verifikasi admin pada mode pratinjau draft dengan mengecek tabel `users`.
+- **File Tersentuh**:
+  - `functions/public/App.tsx`
+  - `functions/public/userService.ts`
+  - `functions/public/adminService.ts`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Uji kompilasi build Vite `cmd /c npm run build` lulus 100% (✓ 2509 modules transformed, built in 25.93s, 0 error).
+
 ### 275. Perbaikan Foto Hilang Pasca-Edit Listing Mitra & Penegasan Alur Publish Baru vs Edit Listing (`adminService.ts` & `KostFormMitra.tsx`) (September 2026)
 - **Permintaan & Masalah**:
   - Mitra melaporkan bahwa setelah melakukan pengeditan data kost pada Dashboard Mitra lalu menyimpannya, foto-foto pada listing menjadi hilang / rusak (tampil sebagai broken image icon `Thumbnail 1`, `Thumbnail 2`, dst. di sisi user pencari kost).

@@ -571,26 +571,32 @@ const App: React.FC = () => {
     const realPropertyId = extractKostId(id || '');
 
     const [kost, setKost] = useState<Kost | null>(
-      listings.find((k: any) => k.id === realPropertyId || createKostSlug(k) === id) || null
+      () => listings.find((k: any) => k.id === realPropertyId || createKostSlug(k) === id) || null
     );
     const [loading, setLoading] = useState(!kost);
 
+    // Stale-While-Revalidate: Tampilkan data memori secara instan jika ada, dan selalu fetch data terbaru di background
     useEffect(() => {
+      let isMounted = true;
       async function loadKost() {
         if (!realPropertyId) return;
-        if (!kost || kost.id !== realPropertyId) {
-          setLoading(true);
-          try {
-            const data = await getPublishedPropertyDetails(realPropertyId);
+        try {
+          const data = await getPublishedPropertyDetails(realPropertyId);
+          if (isMounted && data) {
             setKost(data);
-          } catch (e) {
-            console.error(e);
-          } finally {
+          }
+        } catch (e) {
+          console.error('Failed to load fresh property details:', e);
+        } finally {
+          if (isMounted) {
             setLoading(false);
           }
         }
       }
       loadKost();
+      return () => {
+        isMounted = false;
+      };
     }, [realPropertyId]);
 
     // Canonical URL Sync: jika user membuka via UUID lama, perbarui URL di address bar ke format SEO slug
