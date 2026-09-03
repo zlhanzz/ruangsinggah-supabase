@@ -1258,7 +1258,7 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                                 </button>
                                 <button onClick={() => handleMenuChange('chat')} className="bg-white border border-gray-100 rounded-2xl p-4 flex items-center gap-3 shadow-sm active:scale-95 transition-transform">
                                     <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center text-blue-500 shrink-0"><MessageSquare size={20} /></div>
-                                    <div className="text-left"><p className="text-xs font-black text-gray-900">Pesan</p><p className="text-[10px] text-gray-400 font-bold">{chatCount} Chat</p></div>
+                                    <div className="text-left"><p className="text-xs font-black text-gray-900">Pesan</p><p className="text-[10px] text-gray-400 font-bold">{chatUnreadCount > 0 ? `${chatUnreadCount} Belum Dibaca` : 'Semua Terbaca'}</p></div>
                                 </button>
                             </div>
 
