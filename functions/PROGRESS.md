@@ -2,6 +2,33 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 286. Redesain UI/UX Halaman Profil Mode Desktop Presisi Mockup Google Stitch (`Profile.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  - Pengguna meminta perombakan layout halaman Profile desktop menjadi layout 2-kolom modern sesuai desain referensi Google Stitch, menghilangkan tumpang tindih elemen (*overlapping*), dan meningkatkan estetika antarmuka.
+- **Implementasi Solusi**:
+  1. **Header & Breadcrumbs Rapi**:
+     - Breadcrumb bersih `/ Pengaturan Akun / Profil {RoleTitle}` dengan judul tebal, badge role (*Super Admin*, *Mitra Pemilik*, *Pencari Kost*), deskripsi wewenang, dan tombol aksi atas (*Kembali ke Beranda* & *Edit Profil*).
+  2. **Sidebar Card Kiri Sticky (`lg:col-span-4`)**:
+     - Header cover gradasi oranye `#ff7a00` dengan badge `SISTEM UTAMA` / `AKUN AKTIF`.
+     - Lingkaran avatar besar (`w-28 h-28`) dengan inisial/foto WebP jernih dan badge centang verifikasi.
+     - Nama pengguna dengan ikon verified checkmark, email, dan badge pill terverifikasi.
+     - Grid 4-box ringkasan meta (*Role Otoritas*, *Status Akun*, *Bergabung*, *Tingkat Akses*).
+     - Tombol aksi sidebar: `Edit Profil Sekarang` (dark navy) dan `Ganti Kata Sandi` (lengkap dengan modal interaktif).
+  3. **Panel Informasi Kanan (`lg:col-span-8`)**:
+     - **Kartu 1 - Informasi Kontak & Pekerjaan**: Grid 2x2 (*WhatsApp* dengan badge hijau Aktif, *Pekerjaan*, *Nama Kampus/Tempat Kerja*, *Jenis Kelamin*).
+     - **Kartu 2 - Data Kelahiran & Domisili**: Grid 2x2 (*Agama*, *Status Hubungan*, *Tempat Lahir*, *Tanggal Lahir*) + *Alamat Asal / Domisili Lengkap* (full-width).
+     - **Kartu Khusus Agen**: Panel upload dan verifikasi KTP (NIK + Foto KTP) untuk role `survey_agent`.
+     - **Kartu 3 - Banner Status Administrator/Otoritas Terverifikasi**: Banner rapi berikon shield dengan teks bersih tanpa tumpang tindih.
+     - **Bottom Action Buttons**: Tombol *Kembali* dan *Edit Profil* / *Simpan Perubahan* & *Batal*.
+  4. **Modal Ganti Kata Sandi Interaktif**:
+     - Dilengkapi form input kata sandi baru, konfirmasi, toggle show/hide password, dan opsi pengiriman link reset ke email pengguna via Supabase Auth.
+- **File Tersentuh**:
+  - `functions/public/pages/Profile.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi Vite `cmd /c npm run build` di `functions/public/` lulus 100% (✓ 2509 modules transformed, built in 1m 1s, 0 error).
+
 ### 285. Perbaikan Visibilitas Mobile Bottom Navigation Bar pada Halaman Orders & Sub-Routes (`Navbar.tsx` & `MyKost.tsx`) (September 2026)
 - **Permintaan & Masalah**:
   - Pengguna mendapati Mobile Bottom Navigation Bar menghilang saat membuka menu **Orders / Kost Saya** (`/my-bookings`).
