@@ -1974,7 +1974,7 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
           {/* Right Sidebar - Booking Card */}
           <div className="relative">
             <div className="lg:sticky lg:top-20">
-              <div className="bg-white rounded-[2rem] lg:rounded-[2.5rem] p-5 sm:p-6 lg:p-7 border border-gray-100 shadow-xl shadow-gray-100/50 lg:max-h-[calc(100vh-5.5rem)] lg:overflow-y-auto lg:overscroll-contain lg:pr-5 lg:scrollbar-thin lg:scrollbar-thumb-orange-200">
+              <div className="bg-white rounded-[2rem] lg:rounded-[2.5rem] p-5 sm:p-6 lg:p-7 border border-gray-100 shadow-xl shadow-gray-100/50">
                 <div className="mb-6">
                   <p className="text-[10px] text-gray-400 font-black uppercase tracking-widest mb-2">Harga Sewa</p>
                   <div className="flex flex-col">

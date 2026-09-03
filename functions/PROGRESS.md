@@ -2,6 +2,19 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 295. Tampilan Penuh Menyeluruh Right Sidebar Booking Card di KostDetail.tsx (`KostDetail.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  - Pada layar desktop, card samping (*Right Sidebar Booking Card*) yang memuat harga sewa, tipe kamar, nomor kamar, durasi sewa, fasilitas, dan tombol pengajuan sewa memiliki batasan tinggi `max-h` dan `overflow-y-auto`. Hal ini memotong informasi serta memunculkan scrollbar internal yang membuat user tidak menyadari keberadaan tombol "Ajukan Sewa".
+- **Implementasi Solusi**:
+  - Menghapus kelas pembatas `lg:max-h-[calc(100vh-5.5rem)] lg:overflow-y-auto lg:overscroll-contain lg:pr-5 lg:scrollbar-thin lg:scrollbar-thumb-orange-200` pada container card di `KostDetail.tsx`.
+  - Card kini merender seluruh kontennya secara natural, penuh, dan terbuka tanpa ada informasi yang terpotong ataupun scrollbar bersarang.
+- **File Tersentuh**:
+  - `functions/public/pages/KostDetail.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi Vite `cmd /c npm run build` di `functions/public/` lulus 100% (✓ 2509 modules transformed, built in 24.00s, 0 error).
+
 ### 294. Perbaikan ReferenceError 'Star is not defined' pada Halaman Detail Kost (`KostDetail.tsx`) (September 2026)
 - **Permintaan & Masalah**:
   - Timbul runtime crash `Uncaught ReferenceError: Star is not defined at KostDetail.tsx:1870` saat membuka halaman detail kost.
