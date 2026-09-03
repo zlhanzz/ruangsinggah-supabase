@@ -2,6 +2,43 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 309. Penyempurnaan Menu Pesan Mitra, Reset Unread Badge, Isolasi Role Chat, dan Sensor Nomor Kontak Luar (`chatService.ts`, `ChatWindow.tsx`, `MitraDashboard.tsx`, `Chat.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  - Badge angka pada menu "Pesan" di sidebar Mitra sebelumnya menghitung seluruh percakapan (`chatSessions.length`) alih-alih jumlah pesan belum dibaca, sehingga badge angka tetap menyala merah meski pesan sudah dibaca/dibalas.
+  - Sesi chat antara akun sebagai pencari kost dan pemilik kost tercampur ke dalam Dashboard Mitra tanpa isolasi peran.
+  - Belum ada mekanisme pendeteksi dan pemblokir pengiriman kontak nomor HP/WhatsApp untuk mencegah transaksi di luar platform aplikasi.
+  - Input pencarian chat di sidebar Dashboard Mitra belum terhubung ke pemfilteran pesan.
+- **Implementasi Solusi**:
+  1. **Kalkulasi & Reset Instan Unread Badge (`MitraDashboard.tsx`)**:
+     - Mengubah kalkulasi badge menu "Pesan" menjadi jumlah akumulasi pesan belum dibaca: `(chatSessions || []).reduce((acc, s) => acc + (s.unread_count || 0), 0)`.
+     - Ketika sesi chat dipilih/dibuka (`handleSelectChat`), `unread_count` sesi terkait langsung di-reset ke `0` secara optimistik (0ms delay) dan memicu `markMessagesAsRead(session.id, 'owner')`.
+     - Menambahkan callback `onMessagesRead` pada `ChatWindow` untuk menyinkronkan status pembacaan secara real-time.
+     - Menampilkan indikator unread badge bulat merah di list percakapan hanya jika `unread_count > 0`.
+  2. **Isolasi Role Chat (Anti-Bocor / Role Isolation) (`chatService.ts`, `MitraDashboard.tsx`, `Chat.tsx`)**:
+     - Menambahkan parameter `roleFilter?: 'owner' | 'user'` pada fungsi `getMyChatSessions(userId, roleFilter)`.
+     - Dashboard Mitra (`/dashboard-mitra/chat`): Hanya memuat pesan di mana akun bertindak sebagai pemilik kost (`getMyChatSessions(uid, 'owner')`).
+     - Halaman Chat Pengguna (`/chat`): Hanya memuat pesan saat bertindak sebagai pencari kost (`getMyChatSessions(user.uid, 'user')`).
+  3. **Deteksi & Pemblokiran Otomatis Nomor HP / Kontak Luar (`containsPhoneNumber`)**:
+     - Mengembangkan fungsi validator `containsPhoneNumber(text)` di `chatService.ts` yang mendeteksi:
+       - Tautan WhatsApp langsung (`wa.me`, `api.whatsapp.com`, `wa.link`).
+       - Kata kunci kontak (`wa:`, `no hp:`, `kontak:`, `hubungi:`) yang diikuti digit angka $\ge 6$.
+       - Format nomor HP seluler Indonesia (`08xx`, `628xx`, `+628xx`) dengan panjang 9-14 digit.
+       - Angka berurutan yang disamarkan dengan spasi/simbol (misal `0 8 1 2 3 ...`).
+     - Di sisi UI (`ChatWindow.tsx`), sistem mencegat submit pesan jika terdeteksi kontak luar, menampilkan banner peringatan keamanan merah, dan membatalkan pengiriman.
+     - Di sisi service (`sendMessage`), sistem melempar exception pencegahan sebagai lapisan keamanan lapis kedua.
+  4. **Pencarian Real-Time Percakapan di Sidebar Chat (`MitraDashboard.tsx`)**:
+     - Menghubungkan input *Search* dengan state `chatSearchQuery` yang memfilter nama penyewa, judul kost, dan pesan terakhir secara instan.
+- **File Tersentuh**:
+  - `functions/public/chatService.ts`
+  - `functions/public/components/ChatWindow.tsx`
+  - `functions/public/pages/MitraDashboard.tsx`
+  - `functions/public/pages/Chat.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi TypeScript `tsc` di `functions/` lulus 100% (0 error).
+  - Kompilasi build Vite `cmd /c npm run build` di `functions/public/` lulus 100% (✓ 2509 modules transformed, built in 45.12s, 0 error).
+
 ### 308. Kendali Cepat Update Jumlah Kamar Tersedia di Menu "Kost Saya" (`MitraDashboard.tsx`) (September 2026)
 - **Permintaan & Masalah**:
   - Pemilik kost sebelumnya harus masuk ke wizard form pengeditan total 6 langkah (`KostFormMitra`) hanya untuk mengubah jumlah kamar kosong/tersedia.

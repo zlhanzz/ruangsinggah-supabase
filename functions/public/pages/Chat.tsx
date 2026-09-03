@@ -24,7 +24,7 @@ const Chat: React.FC<ChatProps> = ({ user, onPageChange }) => {
   const loadSessions = async () => {
     setLoading(true);
     try {
-      const data = await getMyChatSessions(user.uid);
+      const data = await getMyChatSessions(user.uid, 'user');
       setSessions(data);
     } catch (err) {
       console.error('Failed to load chat sessions:', err);
@@ -135,9 +135,16 @@ const Chat: React.FC<ChatProps> = ({ user, onPageChange }) => {
                     {/* Content */}
                     <div className="flex-grow min-w-0">
                       <div className="flex justify-between items-start mb-0.5">
-                        <h4 className="font-black text-gray-900 text-sm tracking-tight truncate pr-2">
-                          {partnerName}
-                        </h4>
+                        <div className="flex items-center gap-1.5 min-w-0 pr-2">
+                          <h4 className="font-black text-gray-900 text-sm tracking-tight truncate">
+                            {partnerName}
+                          </h4>
+                          {Boolean(session.unread_count && session.unread_count > 0) && (
+                            <span className="min-w-[18px] h-[18px] bg-rose-500 text-white text-[9px] font-black rounded-full flex items-center justify-center px-1 shrink-0 shadow-sm animate-pulse">
+                              {(session.unread_count || 0) > 9 ? '9+' : session.unread_count}
+                            </span>
+                          )}
+                        </div>
                         <span className="text-[10px] font-bold text-gray-300 flex items-center gap-1 shrink-0">
                           <Clock className="w-3 h-3" />
                           {session.last_message_at ? new Date(session.last_message_at).toLocaleDateString('id-ID', { day: '2-digit', month: 'short' }) : ''}
@@ -153,7 +160,7 @@ const Chat: React.FC<ChatProps> = ({ user, onPageChange }) => {
                         </div>
                       )}
                       
-                      <p className="text-xs text-gray-500 font-medium truncate italic opacity-80">
+                      <p className={`text-xs truncate ${Boolean(session.unread_count && session.unread_count > 0) ? 'text-gray-900 font-bold' : 'text-gray-500 font-medium italic opacity-80'}`}>
                         {session.last_message || 'Belum ada pesan...'}
                       </p>
                     </div>
@@ -187,6 +194,9 @@ const Chat: React.FC<ChatProps> = ({ user, onPageChange }) => {
           propertyName={selectedSession.property?.title}
           contactName={user.uid === selectedSession.user_id ? selectedSession.owner?.name : selectedSession.user?.name}
           contactType={user.uid === selectedSession.user_id ? 'owner' : 'user' as any}
+          onMessagesRead={() => {
+            setSessions(prev => prev.map(s => s.id === selectedSession.id ? { ...s, unread_count: 0 } : s));
+          }}
         />
       )}
     </div>

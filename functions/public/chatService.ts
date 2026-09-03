@@ -184,6 +184,73 @@ export async function getChatMessages(sessionId: string): Promise<ChatMessage[]>
 import { notifyMitra } from './notificationBridge';
 
 /**
+ * Memeriksa apakah teks pesan mengandung nomor telepon / kontak luar.
+ * Digunakan untuk mencegah transaksi dan komunikasi di luar platform resmi (anti-disintermediation).
+ */
+export function containsPhoneNumber(text: string): { blocked: boolean; reason?: string } {
+  if (!text || typeof text !== 'string') return { blocked: false };
+
+  const lower = text.toLowerCase();
+
+  // 1. Cek tautan WhatsApp langsung
+  if (
+    lower.includes('wa.me/') || 
+    lower.includes('api.whatsapp.com') || 
+    lower.includes('chat.whatsapp.com') ||
+    lower.includes('wa.link/')
+  ) {
+    return {
+      blocked: true,
+      reason: 'Pengiriman tautan WhatsApp langsung tidak diperbolehkan demi keamanan transaksi di RuangSinggah.'
+    };
+  }
+
+  // 2. Cek keyword kontak yang diikuti angka/karakter (misal "wa: 0812...", "no hp 0857...", "hubungi 08...")
+  const contactKeywordRegex = /(?:wa|whatsapp|no\s*hp|nomor\s*hp|telepon|telp|telpon|kontak|hubungi|call)\s*[:=.-]?\s*([0-9\s.-]{6,})/i;
+  const keywordMatch = text.match(contactKeywordRegex);
+  if (keywordMatch) {
+    const rawDigits = keywordMatch[1].replace(/\D/g, '');
+    if (rawDigits.length >= 6) {
+      return {
+        blocked: true,
+        reason: 'Pengiriman nomor kontak telepon/WhatsApp dilarang demi menjaga keamanan dan perlindungan transaksi di aplikasi RuangSinggah.'
+      };
+    }
+  }
+
+  // 3. Normalisasi string: hapus karakter pemisah umum (spasi, strip, titik, koma, kurung, garis miring, underscore, plus)
+  const cleaned = text.replace(/[\s\.\-_/\\,():+*~]/g, '');
+
+  // 4. Pola nomor telepon seluler Indonesia (08xx, 628xx, +628xx) dengan panjang 9 s/d 14 digit
+  const idnPhoneRegex = /(?:^|\D)(?:08|628)\d{7,12}(?:\D|$)/;
+  if (idnPhoneRegex.test(cleaned)) {
+    return {
+      blocked: true,
+      reason: 'Pengiriman nomor telepon/WhatsApp dilarang demi menjaga keamanan transaksi resmi di RuangSinggah.'
+    };
+  }
+
+  // 5. Pola angka berurutan yang disamarkan dengan spasi/simbol antar angka (misal "0 8 1 2 3 4 5 6 7 8 9")
+  const separatedDigitsMatch = text.match(/(?:\d[\s\.\-_/\\,():+*~]*){9,}\d/);
+  if (separatedDigitsMatch) {
+    const rawDigits = separatedDigitsMatch[0].replace(/\D/g, '');
+    // Jika diawali 08, 628, atau 021/022/031
+    if (
+      rawDigits.startsWith('08') || 
+      rawDigits.startsWith('628') || 
+      (rawDigits.startsWith('0') && rawDigits.length >= 10)
+    ) {
+      return {
+        blocked: true,
+        reason: 'Pengiriman nomor telepon/kontak langsung tidak diperbolehkan demi keamanan dan perlindungan akun Anda.'
+      };
+    }
+  }
+
+  return { blocked: false };
+}
+
+/**
  * Mengirim pesan baru
  */
 export async function sendMessage(
@@ -194,6 +261,12 @@ export async function sendMessage(
   optName?: string,
   optPhoto?: string
 ) {
+  // Validasi pencegahan nomor HP / kontak luar (Anti-Disintermediation)
+  const phoneCheck = containsPhoneNumber(content);
+  if (phoneCheck.blocked) {
+    throw new Error(phoneCheck.reason || 'Pesan mengandung nomor telepon/kontak luar yang dilarang sistem.');
+  }
+
   const { data, error } = await supabase
     .from('chat_messages')
     .insert({
@@ -406,18 +479,26 @@ export function subscribeToChatSessions(onSessionChange: () => void) {
 }
 
 /**
- * Mendapatkan daftar semua sesi chat milik user
+ * Mendapatkan daftar semua sesi chat milik user dengan dukungan filter role ('owner' | 'user')
  */
-export async function getMyChatSessions(userId: string): Promise<ChatSession[]> {
+export async function getMyChatSessions(userId: string, roleFilter?: 'owner' | 'user'): Promise<ChatSession[]> {
   // 1. Fetch raw sessions with property details
-  const { data: sessions, error } = await supabase
+  let query = supabase
     .from('chat_sessions')
     .select(`
       *,
       property:property_id (title)
-    `)
-    .or(`user_id.eq.${userId},owner_id.eq.${userId}`)
-    .order('updated_at', { ascending: false });
+    `);
+
+  if (roleFilter === 'owner') {
+    query = query.eq('owner_id', userId);
+  } else if (roleFilter === 'user') {
+    query = query.eq('user_id', userId);
+  } else {
+    query = query.or(`user_id.eq.${userId},owner_id.eq.${userId}`);
+  }
+
+  const { data: sessions, error } = await query.order('updated_at', { ascending: false });
 
   if (error) {
     console.error('Error fetching my chat sessions:', error);
@@ -468,15 +549,23 @@ export async function getMyChatSessions(userId: string): Promise<ChatSession[]> 
     });
   }
 
-  // 3.5. Fetch unread messages for user
+  // 3.5. Fetch unread messages for user with role perspective filter
   const sessionIds = sessions.map(s => s.id);
+  let unreadQuery = supabase
+    .from('chat_messages')
+    .select('session_id')
+    .in('session_id', sessionIds)
+    .neq('sender_id', userId)
+    .eq('is_read', false);
+
+  if (roleFilter === 'owner') {
+    unreadQuery = unreadQuery.eq('sender_type', 'user');
+  } else if (roleFilter === 'user') {
+    unreadQuery = unreadQuery.eq('sender_type', 'owner');
+  }
+
   const { data: unreadRows } = sessionIds.length > 0
-    ? await supabase
-        .from('chat_messages')
-        .select('session_id')
-        .in('session_id', sessionIds)
-        .neq('sender_id', userId)
-        .eq('is_read', false)
+    ? await unreadQuery
     : { data: [] };
 
   const unreadMap = new Map<string, number>();

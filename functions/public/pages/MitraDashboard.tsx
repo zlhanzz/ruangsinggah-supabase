@@ -6,16 +6,16 @@ import { Kost, Page, MitraPromoPopupSetting } from '../types';
 import { FORMAT_CURRENCY, INDONESIAN_BANKS } from '../constants';
 import { getOwnerProperties, getOwnerBookings, updateBookingStatus } from '../userService';
 import { getResidentStatus, getMitraPromoPopupSetting } from '../adminService';
-import { getMyChatSessions, ChatSession, getOrCreateChatSession } from '../chatService';
+import { getMyChatSessions, ChatSession, getOrCreateChatSession, markMessagesAsRead } from '../chatService';
 import { getCurrentDate, setMockDate, getMockDateStr, parseDateSafely } from '../utils/timeUtils';
 import { createKostSlug } from '../utils/slugUtils';
 import MitraKostPreviewModal from '../components/mitra/MitraKostPreviewModal';
 import { notifyAdminWithdrawalRequest } from '../emailService';
 import TimeSimulator from '../components/TimeSimulator';
-import { 
+import {
     AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer
 } from 'recharts';
-import { 
+import {
     Zap, Home, ClipboardList, Wallet, User, Users, Compass,
     Plus, Edit, Eye, Check, MessageSquare, Search, Filter, MoreHorizontal, ArrowUpRight, ArrowRight,
     Clock, LogOut, Bell, ChevronRight, TrendingUp, Menu, X, Landmark, CreditCard, Save,
@@ -82,11 +82,10 @@ type MenuKey = 'overview' | 'properties' | 'bookings' | 'tenants' | 'chat' | 'wa
 const SideNavItem: React.FC<{ active: boolean; icon: React.ReactNode; label: string; badge?: number; onClick: () => void }> = ({ active, icon, label, badge, onClick }) => (
     <button
         onClick={onClick}
-        className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-2xl text-sm font-semibold transition-all duration-300 group ${
-            active
-                ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-md shadow-orange-500/10'
-                : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-        }`}
+        className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-2xl text-sm font-semibold transition-all duration-300 group ${active
+            ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-md shadow-orange-500/10'
+            : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+            }`}
     >
         <span className={`${active ? 'text-white' : 'text-gray-400 group-hover:text-orange-500'} transition-colors`}>{icon}</span>
         <span className="flex-1 text-left">{label}</span>
@@ -151,6 +150,7 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
     const [residentStatus, setResidentStatus] = useState<any[]>([]);
     const [chatSessions, setChatSessions] = useState<ChatSession[]>([]);
     const [activeChat, setActiveChat] = useState<ChatSession | null>(null);
+    const [chatSearchQuery, setChatSearchQuery] = useState('');
     const [searchTerm, setSearchTerm] = useState('');
     const [stats, setStats] = useState({ totalRevenue: 0, availableBalance: 0, pendingApprovals: 0, totalViews: 1240, ctr: 4.2, activeTenants: 0 });
     const [showKostForm, setShowKostForm] = useState(false);
@@ -200,7 +200,7 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                     return;
                 }
             }
-        } catch {}
+        } catch { }
         setActiveDraft(null);
     }, [draftStorageKey]);
 
@@ -222,7 +222,7 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                 localStorage.removeItem(draftStorageKey);
                 setActiveDraft(null);
                 window.dispatchEvent(new Event('kost_draft_updated'));
-            } catch {}
+            } catch { }
         }
     };
 
@@ -243,7 +243,7 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
     const [showWithdrawConfirm, setShowWithdrawConfirm] = useState(false);
     const [withdrawAmount, setWithdrawAmount] = useState('');
     const [isLoadingWallet, setIsLoadingWallet] = useState(false);
-    
+
     // Withdrawal Bank Info State
     const [withdrawalAccount, setWithdrawalAccount] = useState({
         bank_name: user?.bank_name || 'BCA',
@@ -252,7 +252,7 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
     });
     const [isEditingBank, setIsEditingBank] = useState(false);
     const [isSavingBank, setIsSavingBank] = useState(false);
-    const [editForm, setEditForm] = useState({...withdrawalAccount});
+    const [editForm, setEditForm] = useState({ ...withdrawalAccount });
     const [isTestingWa, setIsTestingWa] = useState(false);
     const [testWaPhone, setTestWaPhone] = useState('');
     const [selectedBookingForProfile, setSelectedBookingForProfile] = useState<any | null>(null);
@@ -355,7 +355,7 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                 updated_at: new Date().toISOString()
             }, { onConflict: 'user_id' });
             if (error) throw error;
-            
+
             // Also trigger auth metadata update to sync with App.tsx
             await supabase.auth.updateUser({
                 data: {
@@ -365,7 +365,7 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                 }
             });
 
-            setWithdrawalAccount({...editForm});
+            setWithdrawalAccount({ ...editForm });
             setIsEditingBank(false);
             alert('Rekening penarikan diperbarui!');
         } catch (e: any) {
@@ -394,14 +394,14 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                 getOwnerProperties(uid),
                 getOwnerBookings(uid),
                 getResidentStatus(uid),
-                getMyChatSessions(uid),
+                getMyChatSessions(uid, 'owner'),
                 supabase.from('withdrawal_requests').select('*').eq('agent_id', uid).order('created_at', { ascending: false }),
                 supabase.from('kostmanager_requests').select('*').eq('user_id', uid).order('created_at', { ascending: false })
             ]);
 
             // GROUPING LOGIC: Group split transactions (Rent + Facility) into one card for the Owner
             const groupedBookingsMap = new Map<string, any>();
-            
+
             // First pass: map all booking_session_ids to the main transaction ID
             const sessionToParentMap = new Map<string, string>();
             rawBookingsData.forEach((b: any) => {
@@ -413,33 +413,33 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
 
             rawBookingsData.forEach((b: any) => {
                 const bMeta = typeof b.metadata === 'string' ? JSON.parse(b.metadata) : (b.metadata || {});
-                
+
                 // Determine the "True Parent ID" for this transaction
                 // 1. If it has a booking_session_id that we mapped to a parent
                 // 2. If it has a direct parent_order_id
                 // 3. Fallback to its own ID
-                const trueParentId = (bMeta.booking_session_id ? sessionToParentMap.get(bMeta.booking_session_id) : null) 
-                                     || bMeta.parent_order_id 
-                                     || b.id;
-                
+                const trueParentId = (bMeta.booking_session_id ? sessionToParentMap.get(bMeta.booking_session_id) : null)
+                    || bMeta.parent_order_id
+                    || b.id;
+
                 if (!groupedBookingsMap.has(trueParentId)) {
-                    groupedBookingsMap.set(trueParentId, { 
-                        ...b, 
+                    groupedBookingsMap.set(trueParentId, {
+                        ...b,
                         all_transactions: [b],
-                        total_amount: Number(b.amount || 0) 
+                        total_amount: Number(b.amount || 0)
                     });
                 } else {
                     const existing = groupedBookingsMap.get(trueParentId);
                     existing.all_transactions.push(b);
                     existing.total_amount += Number(b.amount || 0);
-                    
+
                     // Priority for main display info: 'kost_booking' or 'perpanjangan_sewa'
                     const isMainProduct = ['kost_booking', 'perpanjangan_sewa', 'rent', 'kost'].includes(b.product_type);
                     if (isMainProduct) {
                         existing.id = b.id; // Ensure head ID is the Rent ID
                         existing.product_type = b.product_type;
                         existing.metadata = { ...existing.metadata, ...bMeta };
-                        existing.amount = b.amount; 
+                        existing.amount = b.amount;
                     }
                 }
             });
@@ -506,12 +506,12 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                         const isPaid = (b.status || '').toUpperCase() === 'PAID';
                         if (!isPaid) return false;
                         const bDate = new Date(b.created_at);
-                        return bDate.getDate() === d.getDate() && 
-                               bDate.getMonth() === d.getMonth() && 
-                               bDate.getFullYear() === d.getFullYear();
+                        return bDate.getDate() === d.getDate() &&
+                            bDate.getMonth() === d.getMonth() &&
+                            bDate.getFullYear() === d.getFullYear();
                     })
                     .reduce((a, b) => a + (b.amount || 0), 0);
-                
+
                 last7DaysData.push({ day: dayLabel, views: dayRevenue });
             }
             setDynamicChartData(last7DaysData);
@@ -531,7 +531,7 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
         }
     };
 
-    useEffect(() => { 
+    useEffect(() => {
         if (user) {
             setWithdrawalAccount({
                 bank_name: user.bank_name || 'BCA',
@@ -556,7 +556,7 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                     table: 'chat_sessions',
                     filter: `owner_id=eq.${uid}`
                 }, () => {
-                   loadData(true);
+                    loadData(true);
                 })
                 .subscribe();
 
@@ -567,13 +567,13 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                     schema: 'public',
                     table: 'resident_status'
                 }, () => {
-                   console.log('Resident status change detected');
-                   loadData(true);
+                    console.log('Resident status change detected');
+                    loadData(true);
                 })
                 .subscribe();
 
-            return () => { 
-                supabase.removeChannel(sessionsChannel); 
+            return () => {
+                supabase.removeChannel(sessionsChannel);
                 supabase.removeChannel(statusChannel);
             };
         }
@@ -581,7 +581,7 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
 
     const handleApprove = async (group: any) => {
         if (!window.confirm('Setujui pesanan ini? Calon penghuni akan diminta melakukan pembayaran.')) return;
-        try { 
+        try {
             setLoading(true);
             const transactions = group.all_transactions || [group];
             await Promise.all(transactions.map((t: any) => updateBookingStatus(t.id, 'AWAITING_PAYMENT')));
@@ -618,7 +618,7 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                 .delete()
                 .eq('id', id);
             if (error) throw error;
-            
+
             alert('Kost berhasil dihapus.');
             await loadData();
         } catch (err: any) {
@@ -687,14 +687,14 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
     });
 
     const pendingCount = bookings.filter(b => (b.status || '').toUpperCase() === 'PENDING_APPROVAL' && !kmPropIds.has(b.product_id)).length;
-    const chatCount = chatSessions.length;
+    const chatUnreadCount = (chatSessions || []).reduce((acc, s) => acc + (s.unread_count || 0), 0);
 
     const NAV_ITEMS: { key: MenuKey; icon: React.ReactNode; label: string; badge?: number }[] = [
         { key: 'overview', icon: <Zap size={20} />, label: 'Beranda' },
         { key: 'properties', icon: <Home size={20} />, label: 'Kost Saya' },
         { key: 'bookings', icon: <ClipboardList size={20} />, label: 'Pesanan', badge: pendingCount },
         { key: 'tenants', icon: <Users size={20} />, label: 'Penghuni Aktif', badge: stats.activeTenants },
-        { key: 'chat', icon: <MessageSquare size={20} />, label: 'Pesan', badge: chatCount },
+        { key: 'chat', icon: <MessageSquare size={20} />, label: 'Pesan', badge: chatUnreadCount },
         { key: 'wallet', icon: <Wallet size={20} />, label: 'Dompet' },
         { key: 'profile', icon: <User size={20} />, label: 'Profil' },
     ];
@@ -708,10 +708,17 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
         );
     }
 
+    const handleSelectChat = (session: ChatSession) => {
+        setActiveChat(session);
+        // Instant optimistic unread reset for this session
+        setChatSessions(prev => prev.map(s => s.id === session.id ? { ...s, unread_count: 0 } : s));
+        markMessagesAsRead(session.id, 'owner');
+    };
+
     const handleStartChat = async (tenantId: string, kostId: string) => {
         try {
             const session = await getOrCreateChatSession(tenantId, uid, kostId);
-            setActiveChat(session);
+            handleSelectChat(session);
             handleMenuChange('chat');
         } catch (e: any) {
             alert('Gagal memulai percakapan: ' + e.message);
@@ -927,7 +934,7 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
 
                 {/* Mobile Top Header Bar with Hamburger Menu */}
                 <header className="lg:hidden h-16 bg-white border-b border-gray-100 flex items-center justify-between px-4 sticky top-0 z-40">
-                    <button 
+                    <button
                         onClick={() => setMobileSidebarOpen(true)}
                         className="p-2 rounded-xl hover:bg-gray-50 text-gray-600 focus:outline-none"
                     >
@@ -969,14 +976,14 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                                         <div className="text-left">
                                             <h4 className="text-orange-900 font-black uppercase text-[10px] tracking-widest mb-1">Identitas Belum Lengkap</h4>
                                             <p className="text-gray-600 text-[11px] font-medium leading-tight">
-                                                {user?.verification_status === 'pending' 
-                                                    ? 'Data verifikasi Anda sedang dalam peninjauan admin. Mohon tunggu.' 
+                                                {user?.verification_status === 'pending'
+                                                    ? 'Data verifikasi Anda sedang dalam peninjauan admin. Mohon tunggu.'
                                                     : 'Verifikasi KTP Anda sekarang untuk mulai mempublikasikan iklan kost.'}
                                             </p>
                                         </div>
                                     </div>
                                     {user?.verification_status !== 'pending' && (
-                                        <button 
+                                        <button
                                             onClick={() => handleMenuChange('profile')}
                                             className="bg-orange-500 hover:bg-orange-600 text-white px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-lg shadow-orange-100 shrink-0"
                                         >
@@ -1080,15 +1087,13 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                                                         {/* Step 1 */}
                                                         <button
                                                             onClick={() => handleMenuChange('profile')}
-                                                            className={`p-4 rounded-2xl border text-left transition-all flex lg:flex-col items-center lg:items-center gap-3.5 cursor-pointer group ${
-                                                                step1Done
-                                                                    ? 'bg-emerald-50/40 border-emerald-100 hover:bg-emerald-50/80'
-                                                                    : 'bg-orange-50/40 border-orange-200 hover:bg-orange-50 ring-2 ring-orange-100'
-                                                            }`}
+                                                            className={`p-4 rounded-2xl border text-left transition-all flex lg:flex-col items-center lg:items-center gap-3.5 cursor-pointer group ${step1Done
+                                                                ? 'bg-emerald-50/40 border-emerald-100 hover:bg-emerald-50/80'
+                                                                : 'bg-orange-50/40 border-orange-200 hover:bg-orange-50 ring-2 ring-orange-100'
+                                                                }`}
                                                         >
-                                                            <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold shrink-0 transition-transform group-hover:scale-110 shadow-sm ${
-                                                                step1Done ? 'bg-emerald-500 text-white shadow-emerald-500/20' : 'bg-orange-500 text-white'
-                                                            }`}>
+                                                            <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold shrink-0 transition-transform group-hover:scale-110 shadow-sm ${step1Done ? 'bg-emerald-500 text-white shadow-emerald-500/20' : 'bg-orange-500 text-white'
+                                                                }`}>
                                                                 {step1Done ? <Check size={18} /> : '1'}
                                                             </div>
                                                             <div className="lg:text-center min-w-0">
@@ -1104,15 +1109,13 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                                                         {/* Step 2 */}
                                                         <button
                                                             onClick={() => { if (checkVerification()) handleMenuChange('properties'); }}
-                                                            className={`p-4 rounded-2xl border text-left transition-all flex lg:flex-col items-center lg:items-center gap-3.5 cursor-pointer group ${
-                                                                step2Done
-                                                                    ? 'bg-emerald-50/40 border-emerald-100 hover:bg-emerald-50/80'
-                                                                    : (step1Done ? 'bg-orange-50/40 border-orange-200 hover:bg-orange-50 ring-2 ring-orange-100' : 'bg-gray-50/60 border-gray-100 opacity-60')
-                                                            }`}
+                                                            className={`p-4 rounded-2xl border text-left transition-all flex lg:flex-col items-center lg:items-center gap-3.5 cursor-pointer group ${step2Done
+                                                                ? 'bg-emerald-50/40 border-emerald-100 hover:bg-emerald-50/80'
+                                                                : (step1Done ? 'bg-orange-50/40 border-orange-200 hover:bg-orange-50 ring-2 ring-orange-100' : 'bg-gray-50/60 border-gray-100 opacity-60')
+                                                                }`}
                                                         >
-                                                            <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold shrink-0 transition-transform group-hover:scale-110 shadow-sm ${
-                                                                step2Done ? 'bg-emerald-500 text-white shadow-emerald-500/20' : (step1Done ? 'bg-orange-500 text-white' : 'bg-gray-200 text-gray-500')
-                                                            }`}>
+                                                            <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold shrink-0 transition-transform group-hover:scale-110 shadow-sm ${step2Done ? 'bg-emerald-500 text-white shadow-emerald-500/20' : (step1Done ? 'bg-orange-500 text-white' : 'bg-gray-200 text-gray-500')
+                                                                }`}>
                                                                 {step2Done ? <Check size={18} /> : '2'}
                                                             </div>
                                                             <div className="lg:text-center min-w-0">
@@ -1128,15 +1131,13 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                                                         {/* Step 3 */}
                                                         <button
                                                             onClick={handleViewListing}
-                                                            className={`p-4 rounded-2xl border text-left transition-all flex lg:flex-col items-center lg:items-center gap-3.5 cursor-pointer group ${
-                                                                step3Done
-                                                                    ? 'bg-emerald-50/40 border-emerald-100 hover:bg-emerald-50/80'
-                                                                    : (step2Done ? 'bg-blue-50/50 border-blue-200 hover:bg-blue-50 ring-2 ring-blue-100' : 'bg-gray-50/60 border-gray-100 opacity-60')
-                                                            }`}
+                                                            className={`p-4 rounded-2xl border text-left transition-all flex lg:flex-col items-center lg:items-center gap-3.5 cursor-pointer group ${step3Done
+                                                                ? 'bg-emerald-50/40 border-emerald-100 hover:bg-emerald-50/80'
+                                                                : (step2Done ? 'bg-blue-50/50 border-blue-200 hover:bg-blue-50 ring-2 ring-blue-100' : 'bg-gray-50/60 border-gray-100 opacity-60')
+                                                                }`}
                                                         >
-                                                            <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold shrink-0 transition-transform group-hover:scale-110 shadow-sm ${
-                                                                step3Done ? 'bg-emerald-500 text-white shadow-emerald-500/20' : (step2Done ? 'bg-blue-500 text-white' : 'bg-gray-200 text-gray-500')
-                                                            }`}>
+                                                            <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold shrink-0 transition-transform group-hover:scale-110 shadow-sm ${step3Done ? 'bg-emerald-500 text-white shadow-emerald-500/20' : (step2Done ? 'bg-blue-500 text-white' : 'bg-gray-200 text-gray-500')
+                                                                }`}>
                                                                 {step3Done ? <Check size={18} /> : '3'}
                                                             </div>
                                                             <div className="lg:text-center min-w-0">
@@ -1152,15 +1153,13 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                                                         {/* Step 4 */}
                                                         <button
                                                             onClick={() => handleMenuChange('bookings')}
-                                                            className={`p-4 rounded-2xl border text-left transition-all flex lg:flex-col items-center lg:items-center gap-3.5 cursor-pointer group ${
-                                                                step4Done
-                                                                    ? 'bg-emerald-50/40 border-emerald-100 hover:bg-emerald-50/80'
-                                                                    : (step3Done ? 'bg-orange-50/40 border-orange-200 hover:bg-orange-50' : 'bg-gray-50/60 border-gray-100 opacity-60')
-                                                            }`}
+                                                            className={`p-4 rounded-2xl border text-left transition-all flex lg:flex-col items-center lg:items-center gap-3.5 cursor-pointer group ${step4Done
+                                                                ? 'bg-emerald-50/40 border-emerald-100 hover:bg-emerald-50/80'
+                                                                : (step3Done ? 'bg-orange-50/40 border-orange-200 hover:bg-orange-50' : 'bg-gray-50/60 border-gray-100 opacity-60')
+                                                                }`}
                                                         >
-                                                            <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold shrink-0 transition-transform group-hover:scale-110 shadow-sm ${
-                                                                step4Done ? 'bg-emerald-500 text-white shadow-emerald-500/20' : 'bg-gray-200 text-gray-500'
-                                                            }`}>
+                                                            <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold shrink-0 transition-transform group-hover:scale-110 shadow-sm ${step4Done ? 'bg-emerald-500 text-white shadow-emerald-500/20' : 'bg-gray-200 text-gray-500'
+                                                                }`}>
                                                                 {step4Done ? <Check size={18} /> : '4'}
                                                             </div>
                                                             <div className="lg:text-center min-w-0">
@@ -1178,28 +1177,28 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                                                 {/* Action Button CTA */}
                                                 <div className="mt-7 flex justify-center relative z-10">
                                                     {!step1Done ? (
-                                                        <button 
+                                                        <button
                                                             onClick={() => handleMenuChange('profile')}
                                                             className="bg-orange-500 hover:bg-orange-600 text-white px-8 py-3.5 rounded-2xl text-xs font-black uppercase tracking-widest transition-transform active:scale-95 shadow-lg shadow-orange-500/25 flex items-center gap-2 cursor-pointer"
                                                         >
                                                             <User size={15} /> Verifikasi Identitas Sekarang
                                                         </button>
                                                     ) : !step2Done ? (
-                                                        <button 
+                                                        <button
                                                             onClick={() => handleMenuChange('properties')}
                                                             className="bg-gray-900 hover:bg-black text-white px-8 py-3.5 rounded-2xl text-xs font-black uppercase tracking-widest transition-transform active:scale-95 shadow-md flex items-center gap-2 cursor-pointer"
                                                         >
                                                             <Plus size={15} /> Mulai Upload Kost Sekarang
                                                         </button>
                                                     ) : !step3Done ? (
-                                                        <button 
+                                                        <button
                                                             onClick={handleViewListing}
                                                             className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white px-8 py-3.5 rounded-2xl text-xs font-black uppercase tracking-widest transition-transform active:scale-95 shadow-lg shadow-blue-500/25 flex items-center gap-2 cursor-pointer"
                                                         >
                                                             <Eye size={15} /> Lihat Listing Saya (POV User)
                                                         </button>
                                                     ) : (
-                                                        <button 
+                                                        <button
                                                             onClick={handleCompleteTour}
                                                             className="bg-gradient-to-r from-emerald-500 via-teal-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white px-8 py-3.5 rounded-2xl text-xs font-black uppercase tracking-widest transition-transform active:scale-95 shadow-lg shadow-emerald-500/25 flex items-center gap-2 cursor-pointer"
                                                         >
@@ -1215,7 +1214,7 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
 
                             {/* ── MOBILE QUICK MENU (PINTAS MENU) ─────────────────── */}
                             <div className="lg:hidden grid grid-cols-2 gap-4">
-                                <button 
+                                <button
                                     onClick={() => handleMenuChange('properties')}
                                     className="bg-white border-2 border-orange-100 rounded-3xl p-5 flex flex-col items-center text-center gap-3 active:scale-95 transition-all shadow-sm group hover:border-orange-500"
                                 >
@@ -1227,7 +1226,7 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                                         <p className="text-[10px] font-bold text-gray-400 uppercase mt-0.5">Atur Iklan</p>
                                     </div>
                                 </button>
-                                <button 
+                                <button
                                     onClick={() => handleMenuChange('wallet')}
                                     className="bg-white border-2 border-blue-100 rounded-3xl p-5 flex flex-col items-center text-center gap-3 active:scale-95 transition-all shadow-sm group hover:border-blue-500"
                                 >
@@ -1301,7 +1300,7 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                                                     <div className="flex items-center justify-between mb-2">
                                                         <div className="flex items-center gap-2">
                                                             <div className="w-8 h-8 rounded-xl bg-gray-100 overflow-hidden shrink-0">
-                                                                <img src={p.imageUrls[0] as string} className="w-full h-full object-cover" alt="" onError={(e) => { (e.target as HTMLImageElement).style.display='none'; }} />
+                                                                <img src={p.imageUrls[0] as string} className="w-full h-full object-cover" alt="" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
                                                             </div>
                                                             <p className="text-xs font-black text-gray-900 truncate max-w-[110px]">{p.title}</p>
                                                         </div>
@@ -1400,11 +1399,11 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                                             </div>
                                         </div>
                                         <button
-                                            onClick={() => { 
+                                            onClick={() => {
                                                 if (checkVerification()) {
-                                                    setEditingKost(null); 
-                                                    setIsStartingFresh(true); 
-                                                    setShowKostForm(true); 
+                                                    setEditingKost(null);
+                                                    setIsStartingFresh(true);
+                                                    setShowKostForm(true);
                                                 }
                                             }}
                                             className="h-11 px-5 bg-orange-500 hover:bg-orange-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg shadow-orange-100 flex items-center gap-2 active:scale-95 transition-transform cursor-pointer"
@@ -1430,7 +1429,7 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                                                     <span className="text-[11px] font-black uppercase tracking-widest text-amber-800">Draft Belum Selesai</span>
                                                 </div>
                                             )}
-                                            
+
                                             {/* Top Left: Step Info */}
                                             <div className="absolute top-4 left-4">
                                                 <span className="px-3 py-1 bg-black/65 backdrop-blur-md text-white rounded-full text-[9px] font-black uppercase tracking-widest border border-white/20 flex items-center gap-1.5">
@@ -1503,7 +1502,7 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                                             <div className="relative h-52">
                                                 <img src={p.imageUrls[0] as string} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" alt="" />
                                                 <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-black/10 to-transparent" />
-                                                
+
                                                 {/* Badges */}
                                                 <div className="absolute top-4 left-4 flex flex-col gap-1.5 items-start">
                                                     {isKm && (
@@ -1532,7 +1531,7 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                                                         </span>
                                                     )}
                                                 </div>
-                                                
+
                                                 <div className="absolute bottom-4 left-4 right-4 flex items-center justify-between text-white">
                                                     <p className="text-[10px] font-bold opacity-80">{p.views || 0} views</p>
                                                     {isKm && (
@@ -1547,7 +1546,7 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                                                 <h4 className="font-black text-gray-900 uppercase tracking-tight truncate group-hover:text-orange-500 transition-colors text-base">
                                                     {p.title}
                                                 </h4>
-                                                
+
                                                 <p className="text-xs font-bold text-gray-400 mt-1 flex items-center gap-1 uppercase tracking-widest truncate">
                                                     <MapPin size={12} className="text-orange-400 shrink-0" /> {p.address || p.city}
                                                 </p>
@@ -1611,7 +1610,7 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                                                                         onClick={() => setQuickRoomModalKost(p)}
                                                                         className="w-full py-2 px-3 bg-white hover:bg-orange-50 text-orange-600 border border-orange-200 rounded-xl text-[11px] font-black uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 shadow-2xs active:scale-98 cursor-pointer"
                                                                     >
-                                                                        <Zap size={12} fill="currentColor" /> Atur Kamar per Tipe
+                                                                        <Zap size={12} fill="currentColor" /> Atur Ketersediaan Jumlah Kamar
                                                                     </button>
                                                                 </div>
                                                             ) : (
@@ -1625,7 +1624,7 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                                                                     >
                                                                         -
                                                                     </button>
-                                                                    
+
                                                                     <div className="flex-1 flex flex-col items-center justify-center">
                                                                         <span className="text-sm font-black text-gray-900 leading-tight">
                                                                             {p.roomTypes?.[0]?.availableRoomCount ?? (p.roomTypes?.[0]?.isAvailable !== false ? 1 : 0)} <span className="text-[10px] font-bold text-gray-500">Kamar</span>
@@ -1735,17 +1734,17 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                                                     </div>
                                                 ) : (
                                                     <div className="flex gap-2 mt-4">
-                                                        <button 
+                                                        <button
                                                             onClick={() => setPreviewingKost(p)}
                                                             className="flex-1 h-11 rounded-xl bg-gray-50 text-gray-700 font-bold text-xs hover:bg-gray-100 transition-colors border border-gray-100 flex items-center justify-center gap-1 cursor-pointer"
                                                         >
                                                             <Eye size={14} /> Preview
                                                         </button>
                                                         <button
-                                                            onClick={() => { 
+                                                            onClick={() => {
                                                                 if (checkVerification()) {
-                                                                    setEditingKost(p); 
-                                                                    setShowKostForm(true); 
+                                                                    setEditingKost(p);
+                                                                    setShowKostForm(true);
                                                                 }
                                                             }}
                                                             className="w-11 h-11 rounded-xl bg-gray-900 text-white flex items-center justify-center hover:bg-orange-500 transition-colors shadow-md"
@@ -1813,17 +1812,15 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                                     <button
                                         key={tab.key}
                                         onClick={() => setBookingTab(tab.key as any)}
-                                        className={`flex-1 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-1.5 ${
-                                            bookingTab === tab.key
-                                                ? 'bg-white text-gray-900 shadow-sm border border-gray-100'
-                                                : 'text-gray-400 hover:text-gray-600'
-                                        }`}
+                                        className={`flex-1 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-1.5 ${bookingTab === tab.key
+                                            ? 'bg-white text-gray-900 shadow-sm border border-gray-100'
+                                            : 'text-gray-400 hover:text-gray-600'
+                                            }`}
                                     >
                                         {tab.label}
                                         {tab.count > 0 && (
-                                            <span className={`min-w-[18px] h-[18px] rounded-full text-[9px] font-black flex items-center justify-center px-1 ${
-                                                bookingTab === tab.key ? 'bg-orange-500 text-white' : 'bg-gray-200 text-gray-500'
-                                            }`}>{tab.count}</span>
+                                            <span className={`min-w-[18px] h-[18px] rounded-full text-[9px] font-black flex items-center justify-center px-1 ${bookingTab === tab.key ? 'bg-orange-500 text-white' : 'bg-gray-200 text-gray-500'
+                                                }`}>{tab.count}</span>
                                         )}
                                     </button>
                                 ))}
@@ -1837,10 +1834,10 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                                             {/* Kost Preview Image */}
                                             <div className="w-full lg:w-48 h-32 rounded-2xl bg-gray-100 overflow-hidden shrink-0 relative">
                                                 {(b.property?.image_urls?.[0]) ? (
-                                                    <img 
-                                                        src={b.property.image_urls[0]} 
-                                                        className="w-full h-full object-cover group-hover/card:scale-110 transition-transform duration-700" 
-                                                        alt="" 
+                                                    <img
+                                                        src={b.property.image_urls[0]}
+                                                        className="w-full h-full object-cover group-hover/card:scale-110 transition-transform duration-700"
+                                                        alt=""
                                                         onError={(e) => {
                                                             (e.target as HTMLImageElement).style.display = 'none';
                                                             (e.target as HTMLImageElement).parentElement!.classList.add('flex', 'flex-col', 'items-center', 'justify-center');
@@ -1859,7 +1856,7 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                                                 <div className="flex-1 space-y-4">
                                                     {/* Applicant Info Header - PRIORITIZED */}
                                                     <div className="flex items-center gap-5">
-                                                        <button 
+                                                        <button
                                                             onClick={(e) => { e.stopPropagation(); setSelectedBookingForProfile(b); }}
                                                             className="w-16 h-16 rounded-[1.5rem] bg-orange-500 flex items-center justify-center text-white font-black text-2xl shadow-xl shadow-orange-100 hover:scale-110 active:scale-95 transition-all overflow-hidden shrink-0 border-4 border-white relative"
                                                         >
@@ -1870,9 +1867,9 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
 
                                                             {/* Layer 2: Image (On top) */}
                                                             {b.user?.photo_url && (
-                                                                <img 
-                                                                    src={b.user.photo_url} 
-                                                                    className="absolute inset-0 w-full h-full object-cover z-10 transition-opacity duration-300" 
+                                                                <img
+                                                                    src={b.user.photo_url}
+                                                                    className="absolute inset-0 w-full h-full object-cover z-10 transition-opacity duration-300"
                                                                     alt="" // Empty alt to prevent text-over-image on error
                                                                     onError={(e) => {
                                                                         e.currentTarget.style.display = 'none';
@@ -1882,17 +1879,17 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                                                         </button>
                                                         <div className="min-w-0">
                                                             <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-2">
-                                                                <button 
+                                                                <button
                                                                     onClick={(e) => { e.stopPropagation(); setSelectedBookingForProfile(b); }}
                                                                     className="font-black text-gray-900 text-2xl lg:text-3xl tracking-tight hover:text-orange-500 transition-colors text-left block truncate max-w-full leading-none"
                                                                 >
                                                                     {b.user?.name}
                                                                 </button>
-                                                                
+
                                                                 {/* CHAT BUTTON - ONLY FOR APPROVED BOOKINGS */}
                                                                 {b.status !== 'PENDING_APPROVAL' && (
-                                                                    <button 
-                                                                        onClick={(e) => { 
+                                                                    <button
+                                                                        onClick={(e) => {
                                                                             e.stopPropagation();
                                                                             handleMenuChange('chat');
                                                                             // Logic to select this specific chat will be handled by chatService/state
@@ -1951,14 +1948,14 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                                                     <div className="w-full mt-4">
                                                         {bookingTab === 'pending' && (
                                                             <div className="flex flex-col gap-2">
-                                                                <button 
-                                                                    onClick={() => handleReject(b)} 
+                                                                <button
+                                                                    onClick={() => handleReject(b)}
                                                                     className="w-full h-10 rounded-xl border border-rose-200 text-rose-500 font-black text-[10px] uppercase hover:bg-rose-50 transition-colors"
                                                                 >
                                                                     Tolak
                                                                 </button>
-                                                                <button 
-                                                                    onClick={() => handleApprove(b)} 
+                                                                <button
+                                                                    onClick={() => handleApprove(b)}
                                                                     className="w-full h-10 bg-gray-900 text-white rounded-xl font-black text-[10px] uppercase shadow-lg shadow-gray-200 hover:bg-orange-500 transition-all active:scale-95"
                                                                 >
                                                                     Setujui
@@ -1996,7 +1993,7 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                     {/* PENGHUNI AKTIF */}
                     {activeMenu === 'tenants' && (
                         <div className="animate-in fade-in duration-300">
-                            <MitraTenantManagement 
+                            <MitraTenantManagement
                                 residentStatus={residentStatus}
                                 properties={properties}
                                 bookings={bookings}
@@ -2010,9 +2007,17 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                     {/* CHAT */}
                     {activeMenu === 'chat' && (
                         <div className="animate-in fade-in duration-300 h-[calc(100vh-12rem)] flex flex-col">
-                            <div className="mb-5">
-                                <h3 className="font-black text-gray-900 text-lg">Pesan & Diskusi</h3>
-                                <p className="text-xs text-gray-400 font-bold mt-0.5 uppercase tracking-widest">Komunikasi dengan calon penghuni</p>
+                            <div className="mb-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                                <div>
+                                    <h3 className="font-black text-gray-900 text-lg">Pesan & Diskusi</h3>
+                                    <p className="text-xs text-gray-400 font-bold mt-0.5 uppercase tracking-widest">Komunikasi dengan calon penghuni</p>
+                                </div>
+                                {chatUnreadCount > 0 && (
+                                    <span className="self-start sm:self-auto bg-rose-50 border border-rose-200 text-rose-600 text-xs font-black px-3 py-1.5 rounded-full flex items-center gap-1.5 shadow-sm">
+                                        <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse" />
+                                        {chatUnreadCount} Pesan Belum Dibaca
+                                    </span>
+                                )}
                             </div>
                             <div className="flex-1 bg-white rounded-3xl border border-gray-100 shadow-sm flex overflow-hidden">
                                 {/* Sidebar list */}
@@ -2020,32 +2025,67 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                                     <div className="p-4 border-b border-gray-50">
                                         <div className="relative">
                                             <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                                            <input type="text" placeholder="Cari percakapan..." className="w-full h-10 bg-gray-50 rounded-xl pl-9 pr-3 text-xs font-bold text-gray-900 border border-gray-100 focus:outline-none focus:ring-2 focus:ring-orange-500/20" />
+                                            <input
+                                                type="text"
+                                                value={chatSearchQuery}
+                                                onChange={(e) => setChatSearchQuery(e.target.value)}
+                                                placeholder="Cari percakapan..."
+                                                className="w-full h-10 bg-gray-50 rounded-xl pl-9 pr-3 text-xs font-bold text-gray-900 border border-gray-100 focus:outline-none focus:ring-2 focus:ring-orange-500/20"
+                                            />
                                         </div>
                                     </div>
                                     <div className="flex-1 overflow-y-auto divide-y divide-gray-50">
-                                        {chatSessions.map(session => {
-                                            const ts = session.last_message_at ? new Date(session.last_message_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : '';
-                                            return (
-                                                <button
-                                                    key={session.id}
-                                                    onClick={() => setActiveChat(session)}
-                                                    className={`w-full p-4 flex items-start gap-3 hover:bg-gray-50 transition-colors text-left ${activeChat?.id === session.id ? 'bg-orange-50/50 border-l-2 border-l-orange-500' : ''}`}
-                                                >
-                                                    <div className="w-10 h-10 rounded-full bg-orange-100 flex items-center justify-center text-orange-600 font-bold text-sm shrink-0">
-                                                        {session.user?.name?.charAt(0) || '?'}
+                                        {(() => {
+                                            const filteredSessions = chatSessions.filter(session => {
+                                                const tenantName = session.user?.name || '';
+                                                const propTitle = (session as any).property?.title || '';
+                                                const lastMsg = session.last_message || '';
+                                                const q = chatSearchQuery.toLowerCase().trim();
+                                                return !q || tenantName.toLowerCase().includes(q) || propTitle.toLowerCase().includes(q) || lastMsg.toLowerCase().includes(q);
+                                            });
+
+                                            if (filteredSessions.length === 0) {
+                                                return (
+                                                    <div className="p-8 text-center">
+                                                        <MessageSquare size={24} className="mx-auto text-gray-300 mb-2" />
+                                                        <p className="text-xs font-bold text-gray-400">
+                                                            {chatSearchQuery ? 'Tidak ada percakapan yang cocok' : 'Belum ada pesan masuk'}
+                                                        </p>
                                                     </div>
-                                                    <div className="flex-1 min-w-0">
-                                                        <div className="flex justify-between items-baseline">
-                                                            <p className="text-xs font-black text-gray-900 truncate">{session.user?.name}</p>
-                                                            <span className="text-[9px] font-bold text-gray-400 shrink-0 ml-2">{ts}</span>
+                                                );
+                                            }
+
+                                            return filteredSessions.map(session => {
+                                                const ts = session.last_message_at ? new Date(session.last_message_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : '';
+                                                const hasUnread = Boolean(session.unread_count && session.unread_count > 0);
+                                                return (
+                                                    <button
+                                                        key={session.id}
+                                                        onClick={() => handleSelectChat(session)}
+                                                        className={`w-full p-4 flex items-start gap-3 hover:bg-gray-50 transition-colors text-left ${activeChat?.id === session.id ? 'bg-orange-50/50 border-l-2 border-l-orange-500' : ''}`}
+                                                    >
+                                                        <div className="w-10 h-10 rounded-full bg-orange-100 flex items-center justify-center text-orange-600 font-bold text-sm shrink-0">
+                                                            {session.user?.name?.charAt(0) || '?'}
                                                         </div>
-                                                        <p className="text-[10px] font-bold text-orange-500 uppercase tracking-wide truncate mt-0.5">{(session as any).property?.title}</p>
-                                                        <p className="text-[10px] text-gray-400 truncate mt-0.5">{session.last_message}</p>
-                                                    </div>
-                                                </button>
-                                            );
-                                        })}
+                                                        <div className="flex-1 min-w-0">
+                                                            <div className="flex justify-between items-baseline">
+                                                                <div className="flex items-center gap-1.5 min-w-0">
+                                                                    <p className="text-xs font-black text-gray-900 truncate">{session.user?.name || 'Calon Penghuni'}</p>
+                                                                    {hasUnread && (
+                                                                        <span className="min-w-[18px] h-[18px] bg-rose-500 text-white text-[9px] font-black rounded-full flex items-center justify-center px-1 shrink-0 shadow-sm animate-pulse">
+                                                                            {(session.unread_count || 0) > 9 ? '9+' : session.unread_count}
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+                                                                <span className="text-[9px] font-bold text-gray-400 shrink-0 ml-2">{ts}</span>
+                                                            </div>
+                                                            <p className="text-[10px] font-bold text-orange-500 uppercase tracking-wide truncate mt-0.5">{(session as any).property?.title}</p>
+                                                            <p className={`text-[10px] truncate mt-0.5 ${hasUnread ? 'text-gray-900 font-bold' : 'text-gray-400'}`}>{session.last_message}</p>
+                                                        </div>
+                                                    </button>
+                                                );
+                                            });
+                                        })()}
                                     </div>
                                 </div>
 
@@ -2066,6 +2106,9 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                                                     onClose={() => setActiveChat(null)}
                                                     propertyName={(activeChat as any).property?.title}
                                                     isEmbedded={true}
+                                                    onMessagesRead={() => {
+                                                        setChatSessions(prev => prev.map(s => s.id === activeChat.id ? { ...s, unread_count: 0 } : s));
+                                                    }}
                                                 />
                                             </div>
                                         </>
@@ -2108,7 +2151,7 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                                         </div>
                                     </div>
                                     <div className="relative z-10 mt-6">
-                                        <button 
+                                        <button
                                             onClick={() => {
                                                 if (stats.availableBalance < 10000) {
                                                     alert('Saldo minimal untuk penarikan adalah Rp 10.000');
@@ -2139,7 +2182,7 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                                             <p className="text-[10px] font-bold text-gray-400 mt-1 uppercase tracking-widest">A/N {withdrawalAccount.bank_account_name}</p>
                                         </div>
                                     </div>
-                                    <button className="mt-4 h-11 w-full border-2 border-dashed border-gray-200 text-gray-400 font-black text-xs uppercase tracking-widest rounded-xl hover:bg-orange-50 hover:text-orange-500 hover:border-orange-200 transition-colors" onClick={() => { setEditForm({...withdrawalAccount}); setIsEditingBank(true); }} >
+                                    <button className="mt-4 h-11 w-full border-2 border-dashed border-gray-200 text-gray-400 font-black text-xs uppercase tracking-widest rounded-xl hover:bg-orange-50 hover:text-orange-500 hover:border-orange-200 transition-colors" onClick={() => { setEditForm({ ...withdrawalAccount }); setIsEditingBank(true); }} >
                                         + Ganti Rekening Penarikan
                                     </button>
                                 </div>
@@ -2155,9 +2198,8 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                                         allTransactions.map(tx => (
                                             <div key={tx.id} className="flex justify-between items-center p-4 rounded-2xl bg-gray-50 border border-gray-50 hover:bg-white hover:border-orange-100 transition-all group gap-4 min-w-0">
                                                 <div className="flex items-center gap-4 min-w-0 flex-1">
-                                                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold text-xs shrink-0 ${
-                                                        tx.type === 'IN' ? 'bg-green-100 text-green-600' : 'bg-rose-100 text-rose-600'
-                                                    }`}>
+                                                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold text-xs shrink-0 ${tx.type === 'IN' ? 'bg-green-100 text-green-600' : 'bg-rose-100 text-rose-600'
+                                                        }`}>
                                                         {tx.type}
                                                     </div>
                                                     <div className="min-w-0 flex-1">
@@ -2176,9 +2218,8 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                                                         <p className="text-[10px] font-bold text-gray-400 uppercase tracking-tight mt-0.5">{tx.date.toLocaleDateString('id-ID')}</p>
                                                     </div>
                                                 </div>
-                                                <p className={`text-sm font-black shrink-0 ${
-                                                    tx.type === 'IN' ? 'text-green-600' : 'text-rose-600'
-                                                }`}>
+                                                <p className={`text-sm font-black shrink-0 ${tx.type === 'IN' ? 'text-green-600' : 'text-rose-600'
+                                                    }`}>
                                                     {tx.type === 'IN' ? '+' : '-'}{FORMAT_CURRENCY(tx.amount)}
                                                 </p>
                                             </div>
@@ -2192,11 +2233,11 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                     {/* PROFIL */}
                     {activeMenu === 'profile' && (
                         <div className="animate-in fade-in duration-300">
-                            <MitraProfile 
-                                uid={uid} 
-                                user={user} 
-                                onBack={() => handleMenuChange('overview')} 
-                                onLogout={() => onPageChange?.(Page.HOME)} 
+                            <MitraProfile
+                                uid={uid}
+                                user={user}
+                                onBack={() => handleMenuChange('overview')}
+                                onLogout={() => onPageChange?.(Page.HOME)}
                                 autoOpenKmProgress={tab === 'profile/km-progress'}
                             />
                         </div>
@@ -2246,7 +2287,7 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                     onSuccess={() => { setShowKostForm(false); setEditingKost(null); setIsStartingFresh(false); checkDraft(); loadData(); }}
                 />
             )}
-            
+
             {/* Bank Edit Modal */}
             {isEditingBank && (
                 <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
@@ -2264,16 +2305,16 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                                 </div>
                             </div>
                         </div>
-                        
+
                         <div className="p-8 space-y-6">
                             <div className="space-y-4">
                                 <div className="space-y-2">
                                     <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block ml-1">Nama Bank / Dompet (BCA, Mandiri, OVO, dll)</label>
                                     <div className="relative">
                                         <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"><Landmark size={18} /></div>
-                                        <select 
+                                        <select
                                             value={editForm.bank_name}
-                                            onChange={e => setEditForm({...editForm, bank_name: e.target.value})}
+                                            onChange={e => setEditForm({ ...editForm, bank_name: e.target.value })}
                                             className="w-full h-14 bg-gray-50 border border-gray-100 rounded-2xl pl-12 pr-4 text-sm font-bold text-gray-900 focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none transition-all appearance-none cursor-pointer"
                                         >
                                             <option value="" disabled>Pilih Bank / Dompet</option>
@@ -2284,44 +2325,44 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                                         <div className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"><ChevronRight size={16} className="rotate-90" /></div>
                                     </div>
                                 </div>
-                                
+
                                 <div className="space-y-2">
                                     <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block ml-1">Nomor Rekening / Virtual Account</label>
                                     <div className="relative">
                                         <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"><CreditCard size={18} /></div>
-                                        <input 
-                                            type="text" 
+                                        <input
+                                            type="text"
                                             value={editForm.bank_account}
-                                            onChange={e => setEditForm({...editForm, bank_account: e.target.value})}
+                                            onChange={e => setEditForm({ ...editForm, bank_account: e.target.value })}
                                             placeholder="Contoh: 1234567890"
                                             className="w-full h-14 bg-gray-50 border border-gray-100 rounded-2xl pl-12 pr-4 text-sm font-bold text-gray-900 focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none transition-all"
                                         />
                                     </div>
                                 </div>
-                                
+
                                 <div className="space-y-2">
                                     <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block ml-1">Atas Nama (Sesuai Rekening)</label>
                                     <div className="relative">
                                         <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"><User size={18} /></div>
-                                        <input 
-                                            type="text" 
+                                        <input
+                                            type="text"
                                             value={editForm.bank_account_name}
-                                            onChange={e => setEditForm({...editForm, bank_account_name: e.target.value.toUpperCase()})}
+                                            onChange={e => setEditForm({ ...editForm, bank_account_name: e.target.value.toUpperCase() })}
                                             placeholder="Contoh: AHMAD SUBARI"
                                             className="w-full h-14 bg-gray-50 border border-gray-100 rounded-2xl pl-12 pr-4 text-sm font-bold text-gray-900 uppercase focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none transition-all"
                                         />
                                     </div>
                                 </div>
                             </div>
-                            
+
                             <div className="flex gap-3 pt-2">
-                                <button 
+                                <button
                                     onClick={() => setIsEditingBank(false)}
                                     className="flex-1 h-12 rounded-2xl border border-gray-100 text-gray-400 font-black text-[10px] uppercase tracking-widest hover:bg-gray-50 transition-all active:scale-95"
                                 >
                                     Batal
                                 </button>
-                                <button 
+                                <button
                                     onClick={saveWithdrawalAccount}
                                     disabled={isSavingBank || !editForm.bank_name || !editForm.bank_account || !editForm.bank_account_name}
                                     className="flex-[2] h-12 bg-gray-900 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest flex items-center justify-center gap-2 shadow-xl shadow-gray-200 hover:bg-orange-500 hover:shadow-orange-100 transition-all active:scale-95 disabled:bg-gray-200 disabled:shadow-none"
@@ -2348,13 +2389,13 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                         <div className="w-16 h-16 bg-orange-100 text-orange-600 rounded-full flex items-center justify-center mx-auto mb-5 text-2xl shadow-inner animate-bounce">💰</div>
                         <h3 className="text-2xl font-black text-gray-900 tracking-tight mb-1">Konfirmasi Penarikan</h3>
                         <p className="text-sm text-gray-500 mb-6">Pastikan detail rekening dan nominal di bawah sudah benar.</p>
-                        
+
                         <div className="space-y-4 mb-6">
                             <div className="bg-orange-50/50 border border-orange-100 rounded-2xl p-5 text-center">
                                 <p className="text-[10px] font-bold text-orange-600 uppercase tracking-widest mb-1">Jumlah Tarik</p>
                                 <p className="text-3xl font-black text-orange-600">{FORMAT_CURRENCY(stats.availableBalance)}</p>
                             </div>
-                            
+
                             <div className="bg-gray-50/50 border border-gray-100 rounded-2xl p-5 text-left">
                                 <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3">Tujuan Rekening</p>
                                 <div className="flex items-center gap-3">
@@ -2369,13 +2410,13 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                         </div>
 
                         <div className="flex gap-3">
-                            <button 
+                            <button
                                 onClick={() => setShowWithdrawConfirm(false)}
                                 className="flex-1 py-3.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-2xl text-xs font-black uppercase tracking-widest transition-all active:scale-[0.98]"
                             >
                                 Batal
                             </button>
-                            <button 
+                            <button
                                 onClick={handleWithdraw}
                                 disabled={isWithdrawing}
                                 className="flex-1 py-3.5 bg-orange-600 hover:bg-orange-700 text-white rounded-2xl text-xs font-black uppercase tracking-widest shadow-lg shadow-orange-600/10 active:scale-[0.98] transition-all disabled:opacity-50"
@@ -2390,9 +2431,9 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
             {/* APPLICANT PROFILE MODAL - COMPREHENSIVE & SECURE */}
             {(selectedBookingForProfile || selectedUserForProfile) && (
                 <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-                    <div 
-                        className="absolute inset-0 bg-gray-900/60 backdrop-blur-md animate-in fade-in duration-300" 
-                        onClick={() => { setSelectedBookingForProfile(null); setSelectedUserForProfile(null); }} 
+                    <div
+                        className="absolute inset-0 bg-gray-900/60 backdrop-blur-md animate-in fade-in duration-300"
+                        onClick={() => { setSelectedBookingForProfile(null); setSelectedUserForProfile(null); }}
                     />
                     <div className="relative bg-white w-full max-w-lg rounded-[3.5rem] overflow-hidden shadow-2xl animate-in zoom-in-95 duration-500">
                         {/* Modal Header */}
@@ -2400,14 +2441,14 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                             {/* Decorative background pattern */}
                             <div className="absolute inset-0 opacity-20 pointer-events-none" style={{ backgroundImage: 'radial-gradient(circle at 2px 2px, white 1px, transparent 0)', backgroundSize: '24px 24px' }} />
                             <div className="absolute top-0 right-0 w-64 h-64 bg-orange-500/20 rounded-full blur-[80px] -mr-32 -mt-32" />
-                            
-                            <button 
+
+                            <button
                                 onClick={() => { setSelectedBookingForProfile(null); setSelectedUserForProfile(null); }}
                                 className="absolute top-8 right-8 w-12 h-12 bg-white/10 hover:bg-white/20 text-white rounded-full flex items-center justify-center backdrop-blur-md transition-all z-10 border border-white/20 active:scale-90"
                             >
                                 <X size={24} />
                             </button>
-                            
+
                             <div className="absolute -bottom-14 left-10">
                                 <div className="w-32 h-32 rounded-[2.5rem] bg-orange-500 border-8 border-white shadow-2xl flex items-center justify-center text-white font-black text-4xl overflow-hidden relative group">
                                     {/* Layer 1: Initials (Always present in background) */}
@@ -2417,10 +2458,10 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
 
                                     {/* Layer 2: Image (On top) */}
                                     {(selectedUserForProfile?.photo_url || selectedBookingForProfile?.user?.photo_url) && (
-                                        <img 
-                                            src={selectedUserForProfile?.photo_url || selectedBookingForProfile?.user?.photo_url} 
-                                            className="absolute inset-0 w-full h-full object-cover z-10 transition-opacity duration-300" 
-                                            alt="" 
+                                        <img
+                                            src={selectedUserForProfile?.photo_url || selectedBookingForProfile?.user?.photo_url}
+                                            className="absolute inset-0 w-full h-full object-cover z-10 transition-opacity duration-300"
+                                            alt=""
                                             onError={(e) => {
                                                 e.currentTarget.style.display = 'none';
                                             }}
@@ -2486,7 +2527,7 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                                 </div>
 
                                 <div className="pt-10">
-                                    <button 
+                                    <button
                                         onClick={() => { setSelectedBookingForProfile(null); setSelectedUserForProfile(null); }}
                                         className="w-full bg-gray-100 hover:bg-gray-200 text-gray-600 py-6 rounded-[2rem] font-black text-xs uppercase tracking-[0.3em] transition-all flex items-center justify-center gap-4 active:scale-95"
                                     >
@@ -2572,11 +2613,10 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                                     return (
                                         <div
                                             key={idx}
-                                            className={`p-4 rounded-2xl border transition-all ${
-                                                isAvail
-                                                    ? 'bg-emerald-50/40 border-emerald-200 text-slate-900'
-                                                    : 'bg-rose-50/40 border-rose-200 text-slate-800'
-                                            }`}
+                                            className={`p-4 rounded-2xl border transition-all ${isAvail
+                                                ? 'bg-emerald-50/40 border-emerald-200 text-slate-900'
+                                                : 'bg-rose-50/40 border-rose-200 text-slate-800'
+                                                }`}
                                         >
                                             <div className="flex items-center justify-between gap-2 mb-2">
                                                 <span className="font-black text-sm uppercase tracking-tight flex items-center gap-1.5">
@@ -2584,11 +2624,10 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                                                     {rName.startsWith('Kamar') ? rName : `Kamar ${rName}`}
                                                 </span>
                                                 <span
-                                                    className={`px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider ${
-                                                        isAvail
-                                                            ? 'bg-emerald-500 text-white'
-                                                            : 'bg-rose-500 text-white'
-                                                    }`}
+                                                    className={`px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider ${isAvail
+                                                        ? 'bg-emerald-500 text-white'
+                                                        : 'bg-rose-500 text-white'
+                                                        }`}
                                                 >
                                                     {isAvail ? '🟢 Kosong' : '🔴 Terisi'}
                                                 </span>
@@ -2666,11 +2705,10 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                                         key={tab.key}
                                         type="button"
                                         onClick={() => setRequestTab(tab.key as any)}
-                                        className={`p-3 rounded-2xl border text-center transition-all flex flex-col items-center gap-1.5 cursor-pointer ${
-                                            requestTab === tab.key
-                                                ? 'bg-orange-500 border-orange-600 text-white shadow-md shadow-orange-500/20'
-                                                : 'bg-white hover:bg-gray-50 border-gray-200 text-gray-700'
-                                        }`}
+                                        className={`p-3 rounded-2xl border text-center transition-all flex flex-col items-center gap-1.5 cursor-pointer ${requestTab === tab.key
+                                            ? 'bg-orange-500 border-orange-600 text-white shadow-md shadow-orange-500/20'
+                                            : 'bg-white hover:bg-gray-50 border-gray-200 text-gray-700'
+                                            }`}
                                     >
                                         {tab.icon}
                                         <span className="text-[10px] font-black uppercase tracking-wider">{tab.label}</span>
@@ -2841,13 +2879,13 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                         {promoPopupSetting.image_url ? (
                             /* Model 1: Desain Grafis Banner Yang Diunggah Super Admin */
                             <div className="relative rounded-3xl overflow-hidden shadow-2xl bg-gray-900 border border-white/20 group">
-                                <div 
+                                <div
                                     onClick={() => handlePromoNavigate(promoPopupSetting.link_url)}
                                     className="cursor-pointer overflow-hidden block"
                                 >
-                                    <img 
-                                        src={promoPopupSetting.image_url} 
-                                        alt={promoPopupSetting.alt_text || promoPopupSetting.title || 'Promo KostManager'} 
+                                    <img
+                                        src={promoPopupSetting.image_url}
+                                        alt={promoPopupSetting.alt_text || promoPopupSetting.title || 'Promo KostManager'}
                                         className="w-full h-auto max-h-[75vh] object-contain group-hover:scale-[1.02] transition-transform duration-300"
                                     />
                                 </div>
@@ -2868,7 +2906,7 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                             /* Model 2: Fallback Desain Default Visual KostManager */
                             <div className="bg-gradient-to-br from-orange-600 via-amber-500 to-orange-600 rounded-3xl p-6 lg:p-8 text-white shadow-2xl border border-orange-400/30 overflow-hidden relative">
                                 <div className="absolute top-0 right-0 w-48 h-48 bg-white/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none" />
-                                
+
                                 <div className="relative z-10 space-y-4">
                                     <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-white/20 rounded-full shadow-sm backdrop-blur-sm">
                                         <Zap size={12} className="text-white animate-pulse" fill="currentColor" />

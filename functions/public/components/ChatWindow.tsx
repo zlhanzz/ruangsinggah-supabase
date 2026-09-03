@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Send, MessageSquare, Clock, Check, CheckCheck, ChevronLeft } from 'lucide-react';
-import { ChatSession, ChatMessage, getChatMessages, sendMessage, subscribeToMessages, markMessagesAsRead } from '../chatService';
+import { X, Send, MessageSquare, Clock, Check, CheckCheck, ChevronLeft, ShieldAlert } from 'lucide-react';
+import { ChatSession, ChatMessage, getChatMessages, sendMessage, subscribeToMessages, markMessagesAsRead, containsPhoneNumber } from '../chatService';
 
 interface ChatWindowProps {
   session: ChatSession;
@@ -10,13 +10,15 @@ interface ChatWindowProps {
   contactName?: string;
   contactType?: 'owner' | 'caretaker' | 'admin' | 'manager';
   isEmbedded?: boolean;
+  onMessagesRead?: () => void;
 }
 
-const ChatWindow: React.FC<ChatWindowProps> = ({ session, currentUser, onClose, propertyName, contactName, contactType, isEmbedded }) => {
+const ChatWindow: React.FC<ChatWindowProps> = ({ session, currentUser, onClose, propertyName, contactName, contactType, isEmbedded, onMessagesRead }) => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [loading, setLoading] = useState(true);
   const [sendingMessages, setSendingMessages] = useState<Set<string>>(new Set());
+  const [warningMessage, setWarningMessage] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   // Identitas pengirim saat ini di tingkat komponen (diakses oleh loadMessages, useEffect, dan handleSendMessage)
@@ -27,6 +29,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ session, currentUser, onClose, 
     loadMessages();
     if (currentSenderType) {
       markMessagesAsRead(session.id, currentSenderType);
+      onMessagesRead?.();
     }
     
     // Subscribe ke pesan baru & update status baca secara real-time
@@ -54,6 +57,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ session, currentUser, onClose, 
         // Jika pesan datang dari lawan bicara saat window terbuka, tandai sebagai dibaca
         if (msg.sender_type !== currentSenderType) {
           markMessagesAsRead(session.id, currentSenderType);
+          onMessagesRead?.();
         }
 
         return [...prev, msg];
@@ -76,6 +80,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ session, currentUser, onClose, 
       setMessages(msgs);
       if (currentSenderType) {
         markMessagesAsRead(session.id, currentSenderType);
+        onMessagesRead?.();
       }
     } catch (err) {
       console.error('Failed to load messages:', err);
@@ -92,7 +97,17 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ session, currentUser, onClose, 
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newMessage.trim() || sendingMessages.size > 0) return;
+    const textToSend = newMessage.trim();
+    if (!textToSend || sendingMessages.size > 0) return;
+
+    // VALIDASI OTOMATIS: Larangan pengiriman nomor HP / Kontak Luar (Anti-Disintermediation)
+    const phoneCheck = containsPhoneNumber(textToSend);
+    if (phoneCheck.blocked) {
+      setWarningMessage(phoneCheck.reason || 'Pengiriman nomor telepon/WhatsApp dilarang demi keamanan transaksi di aplikasi.');
+      return;
+    } else {
+      setWarningMessage(null);
+    }
 
     const tempId = Date.now().toString();
     setSendingMessages(prev => new Set(prev).add(tempId));
@@ -103,7 +118,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ session, currentUser, onClose, 
       session_id: session.id,
       sender_id: currentId,
       sender_type: currentSenderType,
-      message: newMessage.trim(),
+      message: textToSend,
       is_read: false,
       created_at: new Date().toISOString()
     };
@@ -117,6 +132,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ session, currentUser, onClose, 
       if (savedMsg && savedMsg.id) {
         setMessages(prev => prev.map(m => m.id === tempId ? savedMsg : m));
       }
+      onMessagesRead?.();
     } catch (err: any) {
       console.error('Failed to send message:', err);
       setMessages(prev => prev.filter(m => m.id !== tempId));
@@ -182,12 +198,32 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ session, currentUser, onClose, 
           )}
         </div>
 
+        {/* Warning Banner Anti-Disintermediation */}
+        {warningMessage && (
+          <div className="px-4 py-2.5 bg-rose-50 border-t border-rose-100 flex items-start gap-2.5 text-rose-700 animate-in slide-in-from-bottom-2 duration-200">
+            <ShieldAlert size={16} className="shrink-0 text-rose-500 mt-0.5" />
+            <div className="flex-1">
+              <p className="text-[11px] font-bold leading-tight">{warningMessage}</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setWarningMessage(null)}
+              className="text-rose-400 hover:text-rose-600 p-0.5"
+            >
+              <X size={13} />
+            </button>
+          </div>
+        )}
+
         {/* Input Area */}
         <form onSubmit={handleSendMessage} className="p-4 bg-white border-t border-gray-50 flex items-center gap-3">
           <input
             type="text"
             value={newMessage}
-            onChange={(e) => setNewMessage(e.target.value)}
+            onChange={(e) => {
+              setNewMessage(e.target.value);
+              if (warningMessage) setWarningMessage(null);
+            }}
             placeholder="Ketik balasan..."
             maxLength={1000}
             className="flex-1 bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-orange-500/10 focus:border-orange-500 transition-all"
@@ -279,12 +315,32 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ session, currentUser, onClose, 
           )}
         </div>
 
+        {/* Warning Banner Anti-Disintermediation */}
+        {warningMessage && (
+          <div className="px-6 py-3 bg-rose-50 border-t border-rose-100 flex items-start gap-3 text-rose-700 animate-in slide-in-from-bottom-2 duration-200">
+            <ShieldAlert size={18} className="shrink-0 text-rose-500 mt-0.5" />
+            <div className="flex-1">
+              <p className="text-xs font-bold leading-tight">{warningMessage}</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setWarningMessage(null)}
+              className="text-rose-400 hover:text-rose-600 p-1"
+            >
+              <X size={14} />
+            </button>
+          </div>
+        )}
+
         {/* Input Area */}
         <form onSubmit={handleSendMessage} className="p-6 bg-white border-t border-gray-100 flex items-center gap-4">
           <input
             type="text"
             value={newMessage}
-            onChange={(e) => setNewMessage(e.target.value)}
+            onChange={(e) => {
+              setNewMessage(e.target.value);
+              if (warningMessage) setWarningMessage(null);
+            }}
             placeholder="Ketik balasan..."
             maxLength={1000}
             className="flex-1 bg-gray-50 border border-gray-100 rounded-2xl px-6 py-4 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-orange-500/10 focus:border-orange-500 transition-all"
