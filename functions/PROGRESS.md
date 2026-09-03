@@ -2,6 +2,76 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 298. Pembaruan Akurasi Ikon SVG Fasilitas Umum & Kamar Menggantikan Fallback Centang (`KostDetail.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  - Sub-kelengkapan fasilitas umum (kompor, kulkas, wastafel cuci piring, alat masak, dispenser, parkir motor, dll.) serta beberapa fasilitas kamar dan gedung sebelumnya masih menggunakan ikon centang generik (`<Check />` / `<CheckCircle2 />`).
+- **Implementasi Solusi**:
+  1. **Pemetaan Icon SVG Murni Presisi Tinggi (`getFacilityItemIcon`)**:
+     - Menambahkan fungsi resolver komprehensif yang memetakan puluhan kata kunci fasilitas ke ikon SVG murni `lucide-react` (0 FOUT):
+       - Dapur & Masak: `Flame` (Kompor/Gas), `Refrigerator` (Kulkas), `UtensilsCrossed` (Alat Masak), `Utensils` (Alat Makan/Meja Makan), `CupSoda` (Dispenser/Air), `Droplets` (Wastafel Cuci Piring/Sink), `CookingPot` (Rice Cooker/Panci), `Zap` (Microwave).
+       - Parkir: `Bike` (Parkir Motor/Sepeda), `Car` (Parkir Mobil/Garasi).
+       - Kamar Mandi: `ShowerHead` (Shower), `ThermometerSun` (Water Heater), `Waves` (Bak Mandi), `Bath` (Kloset/Toilet/Kamar Mandi), `Droplets` (Wastafel).
+       - Kamar Tidur: `Bed` (Kasur/Springbed/Bantal), `Layers` (Lemari/Wardrobe/Storage), `Armchair` (Meja/Kursi/Sofa), `Wind` (AC), `Fan` (Kipas Angin), `Tv` (TV), `Sun` (Jendela), `Home` (Balkon), `Trash2` (Tempat Sampah).
+       - Gedung & Keamanan: `Wifi`, `Camera`, `ShieldCheck`, `KeyRound`, `Shirt`, `Sun`, `Building2`, `Dumbbell`, `Waves`.
+  2. **Penggantian Seluruh Ikon Centang Generik**:
+     - Mengganti `<Check />` pada chips sub-kelengkapan Dapur Bersama, Area Parkir, WC Umum, dan Ruang Tamu dengan `getFacilityItemIcon(sub)`.
+     - Memperbarui icon pada fasilitas kamar mandi dan dapur pribadi di kolom utama listing dan dropdown sidebar.
+- **File Tersentuh**:
+  - `functions/public/pages/KostDetail.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi Vite `cmd /c npm run build` di `functions/public/` lulus 100% (✓ 2509 modules transformed, built in 32.23s, 0 error).
+
+### 297. Seksian Dinamis Fasilitas Kamar pada Kolom Utama Listing di Bawah Fasilitas Umum (`KostDetail.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  - Pengguna meminta agar seluruh informasi fasilitas untuk setiap tipe kamar yang terdaftar di listing ditampilkan secara dinamis di kolom utama listing tepat di bawah bagian "Fasilitas Umum".
+- **Implementasi Solusi**:
+  1. **Komponen InfoSection 'Fasilitas Kamar'**:
+     - Menambahkan `InfoSection title="Fasilitas Kamar"` di bawah `InfoSection title="Fasilitas Umum"` pada kolom utama listing.
+  2. **Navigasi Tab Tipe Kamar Interaktif**:
+     - Jika listing memiliki lebih dari 1 tipe kamar (*Standard*, *Premium*, *VIP*, dll.), disediakan tombol tab tipe kamar yang sinkron dengan seleksi tipe kamar.
+  3. **Penyajian Rincian Fasilitas Lengkap**:
+     - Menampilkan informasi ukuran kamar, status ketersediaan, perabot & ruangan, kamar mandi, dapur pribadi, atau status kosongan lengkap dengan ikon vector SVG murni dari `lucide-react`.
+- **File Tersentuh**:
+  - `functions/public/pages/KostDetail.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi Vite `cmd /c npm run build` di `functions/public/` lulus 100% (✓ 2509 modules transformed, built in 37.00s, 0 error).
+
+### 296. Fasilitas Kamar Terintegrasi Dropdown (Maximize/Minimize) pada Setiap Kartu Tipe Kamar (`KostDetail.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  - Pengguna menginginkan rincian fasilitas kamar menjadi dropdown interaktif langsung di dalam setiap kartu tipe kamar (dapat di-maximize / minimize). Selain itu, duplikasi blok fasilitas kamar terpisah di bawah pilihan durasi sewa dihapus agar antarmuka lebih bersih dan mudah dipahami.
+- **Implementasi Solusi**:
+  1. **State Dropdown & Parser Per Grup**:
+     - Menambahkan state `expandedFacilityTypeIdxs` dan handler `toggleFacilityDropdown(pIdx, e)` di `KostDetail.tsx`.
+     - Menyediakan fungsi `getGroupStructuredFacilities(group)` dan `getRoomItemIcon(name)` untuk memilah perabot kamar, kamar mandi, dapur pribadi, dan status kosongan per tipe kamar.
+  2. **Komponen Dropdown (Maximize / Minimize)**:
+     - Menambahkan trigger tombol *"Lihat Rincian Fasilitas"* / *"Tutup Rincian Fasilitas"* dengan status Maximize/Minimize dan animasi putar ikon `<ChevronDown />`.
+     - Merender grid rincian fasilitas lengkap berikon SVG murni `lucide-react` di dalam kartu tipe kamar saat terbuka.
+  3. **Pembersihan Seksian Terpisah Redundan**:
+     - Menghapus blok fasilitas statis terpisah di bawah pilihan durasi sewa, sehingga alur pemesanan langsung mengalir ke pemilihan durasi dan tombol "Ajukan Sewa".
+- **File Tersentuh**:
+  - `functions/public/pages/KostDetail.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi Vite `cmd /c npm run build` di `functions/public/` lulus 100% (✓ 2509 modules transformed, built in 28.43s, 0 error).
+
+### 295. Tampilan Penuh Menyeluruh Right Sidebar Booking Card di KostDetail.tsx (`KostDetail.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  - Pada layar desktop, card samping (*Right Sidebar Booking Card*) yang memuat harga sewa, tipe kamar, nomor kamar, durasi sewa, fasilitas, dan tombol pengajuan sewa memiliki batasan tinggi `max-h` dan `overflow-y-auto`. Hal ini memotong informasi serta memunculkan scrollbar internal yang membuat user tidak menyadari keberadaan tombol "Ajukan Sewa".
+- **Implementasi Solusi**:
+  - Menghapus kelas pembatas `lg:max-h-[calc(100vh-5.5rem)] lg:overflow-y-auto lg:overscroll-contain lg:pr-5 lg:scrollbar-thin lg:scrollbar-thumb-orange-200` pada container card di `KostDetail.tsx`.
+  - Card kini merender seluruh kontennya secara natural, penuh, dan terbuka tanpa ada informasi yang terpotong ataupun scrollbar bersarang.
+- **File Tersentuh**:
+  - `functions/public/pages/KostDetail.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi Vite `cmd /c npm run build` di `functions/public/` lulus 100% (✓ 2509 modules transformed, built in 24.00s, 0 error).
+
 ### 294. Perbaikan ReferenceError 'Star is not defined' pada Halaman Detail Kost (`KostDetail.tsx`) (September 2026)
 - **Permintaan & Masalah**:
   - Timbul runtime crash `Uncaught ReferenceError: Star is not defined at KostDetail.tsx:1870` saat membuka halaman detail kost.
