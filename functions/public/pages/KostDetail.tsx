@@ -1749,13 +1749,13 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
                       {structuredPublicFacilities.groups.map(group => (
                         <div 
                           key={group.id} 
-                          className="bg-white p-4 sm:p-5 rounded-2xl sm:rounded-3xl border border-gray-100/90 shadow-sm shadow-gray-100/50 flex flex-col justify-between gap-3 hover:border-orange-200 transition-all group"
+                          className="bg-white p-4 sm:p-5 rounded-2xl sm:rounded-3xl border border-gray-100/90 shadow-2xs hover:border-orange-200 transition-all group flex flex-col justify-start gap-3"
                         >
                           <div className="flex items-center gap-3">
                             <div className="w-10 h-10 rounded-2xl bg-orange-50 text-orange-600 flex items-center justify-center shrink-0 border border-orange-100 group-hover:scale-105 group-hover:bg-orange-500 group-hover:text-white transition-all duration-300">
                               {group.icon}
                             </div>
-                            <div>
+                            <div className="min-w-0">
                               <h4 className="font-black text-sm text-gray-900 tracking-tight">{group.title}</h4>
                               <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">
                                 {group.subItems.length > 0 ? `${group.subItems.length} Kelengkapan Tersedia` : 'Fasilitas Bersama'}
@@ -1764,8 +1764,8 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
                           </div>
 
                           {/* Chips Sub-Kelengkapan */}
-                          {group.subItems.length > 0 && (
-                            <div className="flex flex-wrap gap-1.5 pt-1 border-t border-gray-50">
+                          {group.subItems.length > 0 ? (
+                            <div className="flex flex-wrap gap-1.5 pt-2.5 border-t border-gray-100/80">
                               {group.subItems.map(sub => (
                                 <span 
                                   key={sub} 
@@ -1775,6 +1775,12 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
                                   <span>{sub}</span>
                                 </span>
                               ))}
+                            </div>
+                          ) : (
+                            <div className="pt-2 border-t border-gray-100/80">
+                              <span className="text-[11px] font-medium text-gray-400 italic">
+                                Tersedia untuk seluruh penghuni kost
+                              </span>
                             </div>
                           )}
                         </div>

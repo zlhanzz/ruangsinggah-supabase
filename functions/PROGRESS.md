@@ -2,6 +2,23 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 302. Perbaikan Dinamis UI/UX Kartu Fasilitas Umum Menghilangkan Gap Kosong (`KostDetail.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  - Pada kartu fasilitas umum (seperti `Area Parkir` dan `Dapur Bersama`), penggunaan `justify-between` pada grid 2 kolom membuat kartu yang hanya memiliki 1 sub-kelengkapan (misal *Parkir Motor*) terdorong jauh ke dasar kartu, menyisakan ruang kosong putih canggung di tengah.
+- **Implementasi Solusi**:
+  1. **Layout & Alignment Proporsional (`justify-start`)**:
+     - Mengganti alignment container kartu menjadi `flex flex-col justify-start gap-3`, sehingga chips kelengkapan selalu tersusun rapat dan elegan tepat di bawah header fasilitas.
+  2. **Spacing & Divider Halus**:
+     - Menata ulang container chips sub-kelengkapan dengan padding atas dan garis pemisah halus (`pt-2.5 border-t border-gray-100/80`).
+  3. **Graceful Fallback State**:
+     - Jika sebuah fasilitas umum dicentang tanpa sub-item spesifik, kartu menampilkan catatan informatif yang rapi (*"Tersedia untuk seluruh penghuni kost"*), menjaga kartu tetap berimbang dan tidak rusak.
+- **File Tersentuh**:
+  - `functions/public/pages/KostDetail.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi Vite `cmd /c npm run build` di `functions/public/` lulus 100% (✓ 2509 modules transformed, built in 25.29s, 0 error).
+
 ### 301. Redesain Komprehensif Halaman Data Kost (E-Directory & Database Kost Area Kampus) (`Products.tsx`) (September 2026)
 - **Permintaan & Masalah**:
   - Pengguna meminta perombakan tampilan antarmuka halaman menu **Data Kost** (`/products`) agar 100% selaras dengan desain referensi modern e-directory kampus Makassar & Gowa.
