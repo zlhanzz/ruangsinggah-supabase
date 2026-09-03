@@ -16,7 +16,7 @@ import {
   Phone, User as UserIcon, MessageSquare, Clock, Wifi, CookingPot, Car, 
   Bike, Bath, ShieldCheck, KeyRound, Shirt, Sun, Building2, Armchair, 
   Wind, Tv, Droplets, Utensils, Refrigerator, Lock, MapPin, Navigation, 
-  GraduationCap, RotateCcw
+  GraduationCap, RotateCcw, Star
 } from 'lucide-react';
 import { createKostSlug } from '../utils/slugUtils';
 
