@@ -326,6 +326,13 @@ export async function sendMessage(
     console.error('Error updating session last message:', sessionError);
   }
 
+  // AUTO-READ: Tandai semua pesan lawan bicara sebelumnya dalam sesi ini sebagai terbaca (is_read = true)
+  try {
+    await markMessagesAsRead(sessionId, senderType, senderId);
+  } catch (markErr) {
+    console.warn('Auto-mark read error in sendMessage:', markErr);
+  }
+
   // Notify recipient
   try {
     const { data: session } = await supabase
@@ -414,16 +421,22 @@ export async function sendMessage(
 /**
  * Menandai semua pesan dalam sesi yang ditujukan kepada pembaca sebagai sudah dibaca (is_read = true)
  */
-export async function markMessagesAsRead(sessionId: string, readerSenderType: 'user' | 'owner') {
+export async function markMessagesAsRead(sessionId: string, readerSenderType: 'user' | 'owner', readerId?: string) {
   try {
     const targetSenderType = readerSenderType === 'user' ? 'owner' : 'user';
-    const { error } = await supabase
+    let query = supabase
       .from('chat_messages')
       .update({ is_read: true })
       .eq('session_id', sessionId)
-      .eq('sender_type', targetSenderType)
       .eq('is_read', false);
 
+    if (readerId) {
+      query = query.neq('sender_id', readerId);
+    } else {
+      query = query.eq('sender_type', targetSenderType);
+    }
+
+    const { error } = await query;
     if (error) {
       console.warn('Error marking messages as read:', error);
     }
@@ -553,7 +566,7 @@ export async function getMyChatSessions(userId: string, roleFilter?: 'owner' | '
   const sessionIds = sessions.map(s => s.id);
   let unreadQuery = supabase
     .from('chat_messages')
-    .select('session_id')
+    .select('session_id, sender_id, sender_type, created_at')
     .in('session_id', sessionIds)
     .neq('sender_id', userId)
     .eq('is_read', false);
@@ -568,10 +581,44 @@ export async function getMyChatSessions(userId: string, roleFilter?: 'owner' | '
     ? await unreadQuery
     : { data: [] };
 
+  // Fetch recent messages to check if user/owner already replied after unread messages
+  const { data: latestSenderRows } = sessionIds.length > 0
+    ? await supabase
+        .from('chat_messages')
+        .select('session_id, sender_id, sender_type, created_at')
+        .in('session_id', sessionIds)
+        .order('created_at', { ascending: false })
+    : { data: [] };
+
+  // Group latest message sender by session
+  const latestMessageBySession = new Map<string, any>();
+  latestSenderRows?.forEach((msg: any) => {
+    if (!latestMessageBySession.has(msg.session_id)) {
+      latestMessageBySession.set(msg.session_id, msg);
+    }
+  });
+
   const unreadMap = new Map<string, number>();
+  const sessionsToAutoHeal: string[] = [];
+
   unreadRows?.forEach((r: any) => {
+    const latestMsg = latestMessageBySession.get(r.session_id);
+    // SMART UNREAD RESOLUTION: Jika pesan terakhir dalam sesi ini dikirim oleh saya (userId),
+    // artinya saya sudah membaca dan membalas pesan sebelumnya!
+    if (latestMsg && (latestMsg.sender_id === userId || (roleFilter && latestMsg.sender_type === roleFilter))) {
+      sessionsToAutoHeal.push(r.session_id);
+      return; // Jangan hitung sebagai unread
+    }
     unreadMap.set(r.session_id, (unreadMap.get(r.session_id) || 0) + 1);
   });
+
+  // Background auto-heal database is_read for sessions where user already replied
+  if (sessionsToAutoHeal.length > 0) {
+    const uniqueHealIds = [...new Set(sessionsToAutoHeal)];
+    uniqueHealIds.forEach(sId => {
+      markMessagesAsRead(sId, roleFilter || 'owner', userId).catch(() => {});
+    });
+  }
 
   // 3.6. Fetch session IDs with actual messages (filter out empty sessions)
   const { data: messageCounts } = sessionIds.length > 0

@@ -712,7 +712,7 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
         setActiveChat(session);
         // Instant optimistic unread reset for this session
         setChatSessions(prev => prev.map(s => s.id === session.id ? { ...s, unread_count: 0 } : s));
-        markMessagesAsRead(session.id, 'owner');
+        markMessagesAsRead(session.id, 'owner', uid);
     };
 
     const handleStartChat = async (tenantId: string, kostId: string) => {

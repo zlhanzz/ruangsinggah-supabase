@@ -2,6 +2,29 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 311. Perbaikan Tuntas Sinkronisasi Unread Badge Pesan saat Refresh, Smart Unread Resolution & Auto-Heal (`chatService.ts`, `ChatWindow.tsx`, `MitraDashboard.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  - Pengguna melaporkan bahwa saat halaman Dashboard Mitra di-refresh, badge unread pesan (misal "2 Pesan Belum Dibaca" atau badge `2` merah) masih muncul kembali meskipun pesan sudah dibaca dan dibalas ("masih ad").
+  - Masalah terjadi karena pengiriman balasan (`sendMessage`) sebelumnya belum menandai pesan lawan bicara sebagai terbaca di tabel `chat_messages` database, filter `markMessagesAsRead` belum menyertakan `readerId`, dan belum ada mekanisme penyelesaian cerdas jika percakapan sudah dibalas oleh pemilik.
+- **Implementasi Solusi**:
+  1. **Auto-Mark Read saat Mengirim Pesan (`sendMessage` di `chatService.ts`)**:
+     - Setiap kali pengguna/pemilik mengirimkan balasan pesan, `sendMessage` otomatis memicu `markMessagesAsRead(sessionId, senderType, senderId)` untuk mengubah seluruh pesan lawan bicara sebelumnya menjadi `is_read = true`.
+  2. **Peningkatan Akurasi `markMessagesAsRead`**:
+     - Ditambahkan parameter `readerId?: string` dengan query `.neq('sender_id', readerId)` agar seluruh pesan dari pihak lawan pasti ter-update di database Supabase tanpa terganjal ketidakcocokan tipe pengirim.
+  3. **Smart Unread Resolution & Background Auto-Heal (`getMyChatSessions` di `chatService.ts`)**:
+     - Menganalisis pengirim pesan terakhir dalam sesi: jika pesan terakhir dikirim oleh pengguna/pemilik saat ini (`latestMsg.sender_id === userId` atau pengirim bertipe `roleFilter`), sistem secara cerdas mengenali bahwa pesan lawan bicara sudah dibaca dan dibalas $\rightarrow$ `unread_count` diatur `0`.
+     - Otomatis memicu *background auto-heal* untuk memperbarui flag `is_read = true` pada baris-baris pesan yang tertinggal di database.
+  4. **Penyempurnaan Integrasi Komponen (`ChatWindow.tsx`, `MitraDashboard.tsx`)**:
+     - Meneruskan `currentId` / `uid` ke `markMessagesAsRead` pada pemuatan awal, langganan realtime, dan pemilihan sesi chat.
+- **File Tersentuh**:
+  - `functions/public/chatService.ts`
+  - `functions/public/components/ChatWindow.tsx`
+  - `functions/public/pages/MitraDashboard.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi build Vite `cmd /c npm run build` di `functions/public/` lulus 100% (✓ 2509 modules transformed, built in 39.69s, 0 error).
+
 ### 310. Penyembunyian Header Navigation Khusus Landing Page KostManager (`App.tsx`) (September 2026)
 - **Permintaan & Masalah**:
   - Ketika membuka landing page KostManager (`/kostmanager` / `/kost-manager`), header navigation utama (Navbar) di bagian atas tetap muncul sehingga tampilan bertumpuk dengan navigasi landing page.

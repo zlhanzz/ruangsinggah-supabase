@@ -28,7 +28,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ session, currentUser, onClose, 
   useEffect(() => {
     loadMessages();
     if (currentSenderType) {
-      markMessagesAsRead(session.id, currentSenderType);
+      markMessagesAsRead(session.id, currentSenderType, currentId);
       onMessagesRead?.();
     }
     
@@ -55,8 +55,8 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ session, currentUser, onClose, 
         }
 
         // Jika pesan datang dari lawan bicara saat window terbuka, tandai sebagai dibaca
-        if (msg.sender_type !== currentSenderType) {
-          markMessagesAsRead(session.id, currentSenderType);
+        if (msg.sender_type !== currentSenderType || msg.sender_id !== currentId) {
+          markMessagesAsRead(session.id, currentSenderType, currentId);
           onMessagesRead?.();
         }
 
@@ -67,7 +67,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ session, currentUser, onClose, 
     return () => {
       subscription.unsubscribe();
     };
-  }, [session.id, currentSenderType]);
+  }, [session.id, currentSenderType, currentId]);
 
   useEffect(() => {
     scrollToBottom();
@@ -79,7 +79,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ session, currentUser, onClose, 
       const msgs = await getChatMessages(session.id);
       setMessages(msgs);
       if (currentSenderType) {
-        markMessagesAsRead(session.id, currentSenderType);
+        markMessagesAsRead(session.id, currentSenderType, currentId);
         onMessagesRead?.();
       }
     } catch (err) {
