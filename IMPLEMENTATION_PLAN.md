@@ -1,20 +1,25 @@
-# Rencana Implementasi: Perbaikan Tuntas Error Submodule Cloudflare Pages & Deployment Production
+# Rencana Implementasi: Sinkronisasi Build Output Directory Cloudflare Pages (`functions/public/dist`)
 
-## 1. Analisis Masalah & Akar Penyebab Error Cloudflare
-- **Akar Masalah dari Log Cloudflare**:
-  - Log error Cloudflare Pages:
+## 1. Analisis Masalah & Log Cloudflare Pages
+- **Temuan dari Log Terbaru**:
+  - Proses `git clone` sudah **100% SUKSES** setelah submodule `gitleaks` dibersihkan di commit sebelumnya.
+  - Proses instalasi dependensi (`npm install`) dan kompilasi Vite (`vite build`) juga **100% SUKSES (✓ 2509 modules transformed)**.
+  - **Titik Kegagalan**:
     ```
-    fatal: No url found for submodule path 'gitleaks' in .gitmodules
-    Failed: error occurred while updating repository submodules
+    Validating asset output directory
+    Error: Output directory "functions/public/dist" not found.
+    Failed: build output directory not found
     ```
-  - **Penyebab**: Folder `gitleaks` di dalam repository secara tidak sengaja terdaftar di git index sebagai *git submodule (gitlink mode 160000)* tanpa adanya file `.gitmodules` atau URL yang valid.
-  - Ketika Cloudflare Pages melakukan `git clone` dan mencoba menginisialisasi submodule (`git submodule update --init --recursive`), git mengalami fatal error sehingga seluruh proses build dan deployment dibatalkan (*Failed*). Akibatnya, Cloudflare Pages terus melayani deployment lama (dari 23/53 hari lalu).
+- **Akar Penyebab**:
+  - Cloudflare Pages pada proyek ini dikonfigurasi mencari output di **`functions/public/dist`** (standar bawaan preset Vite).
+  - Sementara itu, konfigurasi `vite.config.ts` diatur untuk mengeluarkan output ke `../../public` (root `public/`).
+  - Akibatnya, Cloudflare Pages menganggap folder output tidak ada karena folder `functions/public/dist` kosong/belum dibuat.
 
 - **Tujuan Solusi**:
-  1. Menghapus gitlink `gitleaks` dari tracking git (`git rm --cached gitleaks`).
-  2. Menambahkan `gitleaks/` dan `.wrangler/` ke `.gitignore` agar tidak terlacak lagi sebagai submodule.
-  3. Menambahkan file `package.json` di root repository dengan script delegasi build (`npm --prefix functions/public run build`) untuk menjamin kompabilitas penuh dengan build runner Cloudflare Pages.
-  4. Melakukan commit & push perbaikan ke `bukan-productions` dan `main` agar Cloudflare Pages dapat melakukan clone dan deployment dengan sukses 100%.
+  1. Memperbarui script `"build"` di `functions/public/package.json` agar setelah `vite build` selesai, otomatis menyinkronkan seluruh file hasil build ke folder **`dist`** (`functions/public/dist`) menggunakan native Node `fs.cpSync`.
+  2. Memperbarui script `"build"` di root `package.json` agar juga membuat output di `dist/` dan `functions/public/dist`.
+  3. Memastikan semua direktori output (`public/`, `dist/`, dan `functions/public/dist/`) terisi lengkap dan siap disajikan oleh Cloudflare Pages.
+  4. Commit dan push ke `bukan-productions` dan `main` agar Cloudflare Pages langsung sukses melakukan deployment.
 
 ---
 
@@ -22,49 +27,32 @@
 
 | File | Tindakan & Penjelasan Perubahan |
 | :--- | :--- |
-| `.gitignore` | Tambahkan `gitleaks/`, `.wrangler/`, dan `scratch/` agar tidak masuk ke git tracking. |
-| `package.json` (Root) | Buat file `package.json` di root repository dengan script `"build": "npm --prefix functions/public run build"`. |
-| Git Index | Hapus entri submodule `gitleaks` dari cache git (`git rm --cached gitleaks`). |
+| `functions/public/package.json` | Perbarui script `"build": "vite build && node -e \"const fs=require('fs'); fs.cpSync('../../public', './dist', {recursive: true, force: true});\""`. |
+| `package.json` (Root) | Sinkronkan script delegasi build agar menyertakan penyalinan folder output. |
+| `.gitignore` | Pastikan `functions/public/dist/` atau `dist/` diatur dengan tepat. |
 
 ---
 
 ## 3. Langkah-Langkah Eksekusi
 
-### Langkah 1: Hapus Submodule dari Git Index & Perbarui `.gitignore`
-- Jalankan perintah `git rm --cached gitleaks` (dan hapus folder lokal jika perlu).
-- Perbarui `.gitignore` dengan menambahkan:
-  ```gitignore
-  # Submodules & Security Tools
-  gitleaks/
-  .wrangler/
-  scratch/
-  ```
+### Langkah 1: Perbarui Script Build
+- Modifikasi `functions/public/package.json` dan root `package.json`.
 
-### Langkah 2: Buat Root `package.json`
-- Buat file `package.json` di root:
-  ```json
-  {
-    "name": "ruangsinggah",
-    "version": "1.0.0",
-    "private": true,
-    "scripts": {
-      "build": "npm --prefix functions/public run build"
-    }
-  }
-  ```
+### Langkah 2: Uji Kompilasi Lokal & Validasi Folder `dist`
+- Jalankan `cmd /c npm run build` di root repository.
+- Verifikasi keberadaan file `index.html` dan folder `assets/` di dalam `functions/public/dist/`.
 
-### Langkah 3: Validasi Build, Merge ke `main`, & Push
-- Jalankan build di `functions/public` untuk memastikan tidak ada error.
-- Commit dan push ke `bukan-productions`.
+### Langkah 3: Merge ke `main` & Push ke GitHub
+- Commit ke `bukan-productions`.
 - Merge ke branch `main` dan push ke `origin main`.
 
 ---
 
 ## 4. Rencana Verifikasi
 
-1. **Uji Git Index**:
-   - Jalankan `git ls-files --stage gitleaks` $\rightarrow$ Pastikan 0 output (tidak ada lagi entri gitlink `160000`).
+1. **Uji Validasi Folder Lokal**:
+   - Memastikan `functions/public/dist/index.html` dan `functions/public/dist/assets/` ada dan terisi lengkap.
 2. **Verifikasi Deployment Cloudflare Pages**:
-   - Setelah di-push ke `main`, pantau Cloudflare Pages $\rightarrow$ Proses `Cloning repository` akan berhasil tanpa error submodule `gitleaks`, dan status deployment berubah menjadi **Active / Success (Hijau)**.
-3. **Verifikasi Web Production `https://ruangsinggah.id`**:
-   - Buka website live $\rightarrow$ Seluruh fitur terbaru (Progres 301 s/d 312) langsung aktif di production.
+   - Cloudflare Pages akan memvalidasi direktori `functions/public/dist` $\rightarrow$ Validasi asset sukses $\rightarrow$ Status berubah menjadi **Success / Active (Hijau)**.
+3. **Verifikasi Live Website `https://ruangsinggah.id`**:
+   - Website live akan langsung menyajikan versi terbaru dari commit `1d545634` / commit perbaikan ini.

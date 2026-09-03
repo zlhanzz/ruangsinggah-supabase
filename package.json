@@ -4,6 +4,6 @@
   "private": true,
   "description": "RuangSinggah.id Monorepo & Static Site Root",
   "scripts": {
-    "build": "npm --prefix functions/public run build"
+    "build": "npm --prefix functions/public run build && node -e \"const fs=require('fs'); if(fs.existsSync('./public')) fs.cpSync('./public', './dist', {recursive: true, force: true});\""
   }
 }

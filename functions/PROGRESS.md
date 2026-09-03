@@ -2,6 +2,31 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 314. Sinkronisasi Build Output Directory Cloudflare Pages `functions/public/dist` (`functions/public/package.json`, `package.json`) (September 2026)
+- **Permintaan & Masalah**:
+  - Cloudflare Pages berhasil clone repository dan build Vite, namun gagal pada tahap validasi asset output:
+    `Error: Output directory "functions/public/dist" not found.`
+    `Failed: build output directory not found`
+  - Cloudflare Pages mencari folder `functions/public/dist`, sedangkan konfigurasi Vite sebelumnya menghasilkan output langsung ke `public/` di root.
+- **Implementasi Solusi**:
+  1. **Otomatisasi Ekspor Output ke `dist` (`functions/public/package.json`)**:
+     - Memperbarui script build:
+       `"build": "vite build && node -e \"const fs=require('fs'); fs.cpSync('../../public', './dist', {recursive: true, force: true});\""`
+     - Menjamin folder `functions/public/dist/` selalu terisi aset build terbaru secara instan.
+  2. **Delegasi Sinkronisasi Root (`package.json`)**:
+     - Memperbarui script build root:
+       `"build": "npm --prefix functions/public run build && node -e \"const fs=require('fs'); if(fs.existsSync('./public')) fs.cpSync('./public', './dist', {recursive: true, force: true});\""`
+  3. **Penerapan Penuh ke Branch `main`**:
+     - Menggabungkan seluruh pembaruan ke branch `bukan-productions` dan `main`, lalu melakukan push ke `origin main`.
+- **File Tersentuh**:
+  - `functions/public/package.json`
+  - `package.json` (Root)
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Validasi lokal: `functions/public/dist/index.html` dan `functions/public/dist/assets/` berhasil terbuat secara lengkap.
+  - Build delegasi root sukses 100% (✓ 2509 modules transformed, built in 36.97s, 0 error).
+
 ### 313. Perbaikan Tuntas Error Submodule Cloudflare Pages & Full Production Deployment (`.gitignore`, `package.json`, Git Index) (September 2026)
 - **Permintaan & Masalah**:
   - Cloudflare Pages mengalami kegagalan clone repository (*Failed build*):
