@@ -2002,7 +2002,7 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
     console.log("DEBUG_MYKOST_RENDER: activeTab:", activeTab);
 
     return (
-        <div className="min-h-screen bg-[#F8FAFC] pt-8 pb-12 font-outfitSelection">
+        <div className="min-h-screen bg-[#F8FAFC] pt-8 pb-28 sm:pb-12 font-outfitSelection">
             {/* Background Decorations */}
             <div className="fixed inset-0 overflow-hidden pointer-events-none z-0">
                 <div className="absolute -top-[10%] -right-[10%] w-[40%] h-[40%] bg-orange-100/30 rounded-full blur-[120px]" />

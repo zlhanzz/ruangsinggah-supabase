@@ -2,6 +2,23 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 285. Perbaikan Visibilitas Mobile Bottom Navigation Bar pada Halaman Orders & Sub-Routes (`Navbar.tsx` & `MyKost.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  - Pengguna mendapati Mobile Bottom Navigation Bar menghilang saat membuka menu **Orders / Kost Saya** (`/my-bookings`).
+- **Implementasi Solusi**:
+  1. **Pembaruan Logika Visibilitas Berbasis Prefix (`Navbar.tsx`)**:
+     - Mengubah perbandingan array kaku `[...].includes(activePage)` menjadi pengecekan fleksibel berbasis route (`activePage.startsWith(Page.MY_BOOKINGS)`, `startsWith(Page.CHAT)`, `startsWith(Page.LISTINGS)`, dll.).
+     - Menjamin Mobile Bottom Navigation Bar selalu muncul di seluruh halaman user umum dan hanya disembunyikan pada halaman dashboard pengelola/admin.
+  2. **Penyelarasan Padding Bawah Halaman (`MyKost.tsx`)**:
+     - Mengubah padding bawah container menjadi `pb-28 sm:pb-12` agar kartu pesanan di bagian bawah tidak tertutup oleh bottom navigation bar.
+- **File Tersentuh**:
+  - `functions/public/components/Navbar.tsx`
+  - `functions/public/pages/MyKost.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi Vite `cmd /c npm run build` di `functions/public/` lulus 100% (✓ 2509 modules transformed, built in 34.13s, 0 error).
+
 ### 284. Redesain Mobile Bottom Navigation Bar Presisi Mockup Google Stitch (`Navbar.tsx`) (September 2026)
 - **Permintaan & Masalah**:
   - Pengguna merasa ikon dan teks pada bottom navbar mobile sebelumnya terlalu kecil, tipis, dan berwarna abu-abu pudar sehingga sulit dilihat dan dioperasikan di layar HP.
