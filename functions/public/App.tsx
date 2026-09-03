@@ -325,7 +325,7 @@ const App: React.FC = () => {
         if (!isRecovery) {
           if (role === 'owner') {
             // Isolasi Pemilik Kost: Langsung arahkan ke Dashboard Mitra jika berada di login atau halaman user publik
-            const publicUserPages = [Page.LOGIN, Page.HOME, Page.LISTINGS, Page.PRODUCTS, Page.OWNER, Page.SURVEY_SERVICE, Page.KOSTMANAGER, Page.ABOUT, Page.CONTACT];
+            const publicUserPages = [Page.LOGIN, Page.HOME, Page.LISTINGS, Page.PRODUCTS, Page.OWNER, Page.SURVEY_SERVICE, Page.ABOUT, Page.CONTACT];
             if (publicUserPages.includes(location.pathname as Page) || location.pathname === '/') {
               navigate(Page.DASHBOARD_MITRA, { replace: true });
             }
@@ -742,8 +742,10 @@ const App: React.FC = () => {
             } />
             <Route path={Page.TERMS} element={<Terms />} />
             <Route path={Page.KOSTMANAGER} element={
-              user?.role === 'owner' ? <Navigate to={Page.DASHBOARD_MITRA} replace /> :
-              <KostManagerLanding user={user} />
+              <KostManagerLanding 
+                user={user} 
+                onBack={() => navigate(user?.role === 'owner' ? Page.DASHBOARD_MITRA : Page.HOME)} 
+              />
             } />
             <Route path={Page.ARTICLES} element={<Articles />} />
             <Route path={Page.ARTICLE_DETAIL} element={<Articles />} />

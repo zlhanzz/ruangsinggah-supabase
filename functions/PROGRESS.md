@@ -2,6 +2,27 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 305. Integrasi & Pembukaan Akses Landing Page KostManager bagi Pemilik Kost (`App.tsx`, `KostManagerLanding.tsx`, `MitraDashboard.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  - Setelah penerapan isolasi role sebelumnya, rute `Page.KOSTMANAGER` (`/kostmanager`) terblokir dan me-redirect pemilik kost kembali ke `/dashboard-mitra`. Akibatnya, pemilik kost tidak bisa mempelajari rincian program KostManager atau mendaftarkan propertinya saat mengklik banner/popup promo KostManager.
+- **Implementasi Solusi**:
+  1. **Pembukaan Akses Rute `/kostmanager` di `App.tsx`**:
+     - Menghapus `Page.KOSTMANAGER` dari daftar rute terblokir/redirect di `fetchUserData()` dan `<Routes>`.
+     - Mengizinkan Pemilik Kost membuka landing page `/kostmanager` tanpa terlempar balik ke Dashboard Mitra.
+  2. **Penyempurnaan Navigasi di `KostManagerLanding.tsx`**:
+     - Memperbarui fungsi `handleGoBack` dan tombol navigasi atas agar secara cerdas mengenali akun mitra dan menampilkan label `← Kembali ke Dashboard Mitra` yang mengarahkan mitra langsung kembali ke `Page.DASHBOARD_MITRA` (`/dashboard-mitra`).
+  3. **Penyematan Pintasan di `MitraDashboard.tsx`**:
+     - Menambahkan kartu promosi/informasi eksklusif *KostManager Auto-Pilot* di bagian bawah sidebar desktop & mobile drawer.
+     - Memastikan tombol popup promo *Pelajari Sekarang ↗* mengarahkan mitra ke `/kostmanager` secara mulus dan responsif.
+- **File Tersentuh**:
+  - `functions/public/App.tsx`
+  - `functions/public/pages/KostManagerLanding.tsx`
+  - `functions/public/pages/MitraDashboard.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi Vite `cmd /c npm run build` di `functions/public/` lulus 100% (✓ 2509 modules transformed, built in 34.30s, 0 error).
+
 ### 304. Isolasi Lingkungan Penuh Portal Pemilik Kost (Role Isolation & Anti-Tembus Beranda User) (`App.tsx`, `Login.tsx`, `Navbar.tsx`) (September 2026)
 - **Permintaan & Masalah**:
   - Saat login sebagai Pemilik Kost (Mitra), pengguna seringkali mendarat atau tembus ke tampilan Beranda pencari kost (`Page.HOME` / `/`), dan harus membuka menu profil terlebih dahulu untuk mengakses Dashboard Mitra. Pengguna meminta agar lingkungan pemilik kost terisolasi sepenuhnya dan langsung diarahkan ke portal dashboard pemilik kost tanpa akses tembus ke tampilan pencari kost.

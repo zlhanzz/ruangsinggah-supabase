@@ -128,6 +128,7 @@ interface KostManagerLandingProps {
 
 const KostManagerLanding: React.FC<KostManagerLandingProps> = ({ user, onBack, isEmbedded }) => {
   const navigate = useNavigate();
+  const isMitra = !!user && (user.role === 'owner' || user.role === 'mitra');
   const [searchParams, setSearchParams] = useSearchParams();
   const urlOrderId = searchParams.get('orderId');
 
@@ -298,6 +299,8 @@ const KostManagerLanding: React.FC<KostManagerLandingProps> = ({ user, onBack, i
   const handleGoBack = () => {
     if (onBack) {
       onBack();
+    } else if (isMitra) {
+      navigate(Page.DASHBOARD_MITRA);
     } else {
       navigate(-1);
     }
@@ -413,8 +416,6 @@ const KostManagerLanding: React.FC<KostManagerLandingProps> = ({ user, onBack, i
     setShowPayment(true);
   };
 
-  const isMitra = user && (user.role === 'owner' || user.role === 'mitra');
-
   return (
     <div className="min-h-screen bg-slate-50 text-gray-900 font-sans overflow-x-hidden font-medium">
       {/* Sidebar Drawer for Mitra Context */}
@@ -484,10 +485,10 @@ const KostManagerLanding: React.FC<KostManagerLandingProps> = ({ user, onBack, i
             )}
             <button
               onClick={handleGoBack}
-              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white hover:bg-slate-100 text-gray-600 hover:text-orange-500 font-bold text-xs uppercase tracking-wider transition-all duration-300 border border-slate-200/60 shadow-sm active:scale-95"
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white hover:bg-slate-100 text-gray-700 hover:text-orange-500 font-bold text-xs uppercase tracking-wider transition-all duration-300 border border-slate-200/60 shadow-sm active:scale-95 cursor-pointer"
             >
               <ArrowLeft size={14} className="stroke-[3]" />
-              <span>{onBack ? 'Kembali ke Pilihan' : 'Kembali'}</span>
+              <span>{isMitra ? 'Kembali ke Dashboard Mitra' : (onBack ? 'Kembali ke Pilihan' : 'Kembali')}</span>
             </button>
           </div>
 

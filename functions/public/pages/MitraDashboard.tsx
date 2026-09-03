@@ -774,6 +774,24 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                     ))}
                 </nav>
 
+                {/* KostManager Promo Card */}
+                <div className="px-4 py-3 border-t border-gray-50">
+                    <div className="bg-gradient-to-br from-orange-500 via-amber-500 to-orange-600 rounded-2xl p-3.5 text-white shadow-lg shadow-orange-500/10 relative overflow-hidden">
+                        <div className="flex items-center gap-1.5 mb-1.5">
+                            <Sparkles size={13} className="text-amber-200" />
+                            <span className="text-[9px] font-black uppercase tracking-wider text-amber-100">Layanan Eksklusif</span>
+                        </div>
+                        <h5 className="text-xs font-black leading-tight mb-1 text-white">KostManager Auto-Pilot</h5>
+                        <p className="text-[10px] text-orange-50 leading-tight mb-2.5">Tingkatkan okupansi & kelola sewa tanpa ribet.</p>
+                        <button
+                            onClick={() => navigate(Page.KOSTMANAGER)}
+                            className="w-full py-1.5 bg-white hover:bg-orange-50 text-orange-600 rounded-xl font-black text-[10px] uppercase tracking-wider transition-all flex items-center justify-center gap-1 shadow-xs cursor-pointer active:scale-95"
+                        >
+                            Pelajari Program <ArrowUpRight size={12} />
+                        </button>
+                    </div>
+                </div>
+
                 {/* Logout Option */}
                 <div className="p-4 border-t border-gray-50">
                     <button
@@ -832,6 +850,28 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                                 />
                             ))}
                         </nav>
+                        
+                        {/* Mobile KostManager Promo Card */}
+                        <div className="px-4 py-3 border-t border-gray-50">
+                            <div className="bg-gradient-to-br from-orange-500 via-amber-500 to-orange-600 rounded-2xl p-3.5 text-white shadow-lg shadow-orange-500/10 relative overflow-hidden">
+                                <div className="flex items-center gap-1.5 mb-1.5">
+                                    <Sparkles size={13} className="text-amber-200" />
+                                    <span className="text-[9px] font-black uppercase tracking-wider text-amber-100">Layanan Eksklusif</span>
+                                </div>
+                                <h5 className="text-xs font-black leading-tight mb-1 text-white">KostManager Auto-Pilot</h5>
+                                <p className="text-[10px] text-orange-50 leading-tight mb-2.5">Tingkatkan okupansi & kelola sewa tanpa ribet.</p>
+                                <button
+                                    onClick={() => {
+                                        setMobileSidebarOpen(false);
+                                        navigate(Page.KOSTMANAGER);
+                                    }}
+                                    className="w-full py-1.5 bg-white hover:bg-orange-50 text-orange-600 rounded-xl font-black text-[10px] uppercase tracking-wider transition-all flex items-center justify-center gap-1 shadow-xs cursor-pointer active:scale-95"
+                                >
+                                    Pelajari Program <ArrowUpRight size={12} />
+                                </button>
+                            </div>
+                        </div>
+
                         <div className="p-4 border-t border-gray-50">
                             <button
                                 onClick={() => { onLogout?.(); setMobileSidebarOpen(false); }}
