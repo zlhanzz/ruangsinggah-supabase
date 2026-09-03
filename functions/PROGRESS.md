@@ -2,6 +2,23 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 307. Pembersihan Kartu Promosi KostManager dari Sidebar Dashboard Mitra (`MitraDashboard.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  - Pengguna merasa tampilan kartu promosi oranye *"KostManager Auto-Pilot"* di bagian bawah sidebar navigasi terasa sesak dan mengganggu alur navigasi menu utama pemilik kost.
+- **Implementasi Solusi**:
+  1. **Penghapusan Kartu Promosi di Sidebar Desktop**:
+     - Menghapus komponen kartu promosi KostManager di atas tombol *Keluar Akun* pada sidebar desktop `MitraDashboard.tsx`.
+  2. **Penghapusan Kartu Promosi di Drawer Mobile**:
+     - Menghapus komponen kartu promosi KostManager pada menu drawer mobile.
+  3. **Sidebar Navigasi Bersih & Ergonomis**:
+     - Sidebar kembali bersih, rapi, dan hanya memuat informasi mitra, daftar menu utama (*Beranda, Kost Saya, Pesanan, Penghuni Aktif, Pesan, Dompet, Profil*), dan tombol *Keluar Akun*.
+- **File Tersentuh**:
+  - `functions/public/pages/MitraDashboard.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi Vite `cmd /c npm run build` di `functions/public/` lulus 100% (✓ 2509 modules transformed, built in 40.42s, 0 error).
+
 ### 306. Perbaikan Navigasi Tombol Promo KostManager (/kost-manager vs /kostmanager) (`App.tsx`, `MitraDashboard.tsx`, `adminService.ts`, `BannerManagement.tsx`) (September 2026)
 - **Permintaan & Masalah**:
   - Tombol *"Pelajari Sekarang ↗"* pada modal popup promo KostManager di Dashboard Mitra masih belum bisa membuka landing page KostManager karena terjadi ketidakcocokan URL default: database dan adminService menggunakan `'/kost-manager'` (dengan tanda hubung), sedangkan router aplikasi terdaftar sebagai `Page.KOSTMANAGER = '/kostmanager'` (tanpa tanda hubung), sehingga terjadi 404 $\rightarrow$ fallback redirect kembali ke Dashboard Mitra.
