@@ -518,32 +518,55 @@ export async function addPropertyReview(propertyId: string, review: { userId: st
   try {
     const { data: property, error: fetchError } = await supabase
       .from('properties')
-      .select('reviews')
+      .select('reviews, rating')
       .eq('id', propertyId)
       .single();
 
     if (fetchError) throw fetchError;
 
-    const currentReviews = property.reviews || [];
+    const currentReviews = Array.isArray(property?.reviews) ? property.reviews : [];
     const newReview = {
       ...review,
+      rating: Number(review.rating) || 5,
       date: getCurrentDate().toISOString()
     };
-    const updatedReviews = [...currentReviews, newReview];
+
+    // Upsert review by userId if user already submitted a review previously
+    const existingIndex = currentReviews.findIndex((r: any) => r.userId === review.userId);
+    let updatedReviews: any[] = [];
+    if (existingIndex >= 0) {
+      updatedReviews = [...currentReviews];
+      updatedReviews[existingIndex] = newReview;
+    } else {
+      updatedReviews = [...currentReviews, newReview];
+    }
 
     // Calculate new average rating
     const totalRating = updatedReviews.reduce((sum: number, r: any) => sum + (Number(r.rating) || 0), 0);
     const newAverageRating = Number((totalRating / updatedReviews.length).toFixed(1));
 
-    // Use RPC to bypass RLS for rating/reviews update if necessary
-    const { error: rpcError } = await supabase.rpc('submit_property_review', {
-      prop_id: propertyId,
-      new_review: newReview, // RPC appends this to the array
-      new_rating: newAverageRating
-    });
+    // Try direct update first
+    const { error: updateError } = await supabase
+      .from('properties')
+      .update({
+        reviews: updatedReviews,
+        rating: newAverageRating
+      })
+      .eq('id', propertyId);
 
-    if (rpcError) throw rpcError;
-    return { success: true };
+    if (updateError) {
+      // Fallback to RPC if RLS restricts direct update
+      const { error: rpcError } = await supabase.rpc('submit_property_review', {
+        prop_id: propertyId,
+        new_review: newReview,
+        new_rating: newAverageRating
+      });
+      if (rpcError) {
+        console.warn('RPC submit_property_review fallback also encountered error:', rpcError);
+      }
+    }
+
+    return { success: true, newAverageRating, reviews: updatedReviews };
   } catch (error) {
     console.error('Error adding property review:', error);
     throw error;

@@ -1,69 +1,79 @@
-# IMPLEMENTATION PLAN: Perbaikan Populasi Opsi Filter (Provinsi, Kota, Kecamatan, Kampus) Berbasis Database
+# IMPLEMENTATION PLAN: Sistem Rating & Ulasan Riil Langsung dari Penghuni Kost
 
-## 1. Analisis Masalah & Akar Penyebab
-- **Masalah**:
-  - Dropdown "PILIH PROVINSI", "PILIH KOTA", "PILIH KECAMATAN / AREA", dan "PILIH KAMPUS" hanya menampilkan opsi default (*"Semua Provinsi"*, *"Semua Kota"*, dll.) tanpa memunculkan daftar opsi lokasi dari listing yang ada di database.
-- **Akar Penyebab**:
-  1. Pada fungsi `getAvailableFilterOptions()`, query database menggunakan `.select('province, city, area, campuses, metadata')`. Karena kolom `province` di tabel PostgreSQL `properties` tidak didefinisikan sebagai kolom mandiri (melainkan tersimpan di dalam objek `metadata` atau diturunkan dari alamat/kota), PostgREST Supabase mengembalikan error `column properties.province does not exist`, sehingga `error` terpicu dan mengembalikan array kosong `[]`.
-  2. Pada fungsi `getFilteredProperties()`, pemanggilan `.eq('province', selectedProvince)` juga berpotensi error karena ketiadaan kolom fisik `province`.
-  3. Komponen `Listings.tsx` belum memiliki fallback ekstraksi opsi otomatis dari `initialListings` saat pemanggilan awal database sedang dalam proses.
+## 1. Analisis Masalah & Kebutuhan
+- **Kondisi Saat Ini**:
+  - Rating kost di kartu listing (`KostCard.tsx`) saat ini menggunakan fallback nilai statis `5.0` meskipun kost tersebut belum memiliki ulasan asli dari penyewa.
+  - Penghuni aktif di portal **Anak Kost / Penghuni** (`MyKost.tsx`) belum memiliki modul interaktif untuk memberikan bintang rating (1-5) dan testimoni ulasan mengenai kost yang sedang mereka tempati.
+  - Halaman detail kost (`KostDetail.tsx`) belum menampilkan seksian ulasan asli dari para penghuni.
+- **Kebutuhan Pengguna**:
+  1. **Penghapusan Rating Dummy**:
+     - Rating kost harus **100% murni dan riil** berdasarkan ulasan penghuni.
+     - Jika ada ulasan: Tampilkan nilai rata-rata riil (misal: `⭐ 4.8 (5 Ulasan)`).
+     - Jika belum ada ulasan: Tampilkan badge informatif `⭐ Baru` atau `Belum ada ulasan` (bukan rating palsu 5.0).
+  2. **Form Ulasan & Rating Langsung bagi Penghuni Aktif (`MyKost.tsx`)**:
+     - Di portal penghuni kost (`MyKost.tsx`), sediakan card / modal interaktif **"Ulasan & Rating Kost Anda"**.
+     - Penghuni dapat memilih rating bintang (1 - 5 ⭐) dan menulis komentar testimoni jujur (kebersihan, fasilitas, keamanan, kenyamanan).
+     - Submit ulasan akan langsung menyimpan ke database Supabase via `addPropertyReview` dan menghitung ulang skor rata-rata properti.
+  3. **Penyajian Seksian Ulasan di Halaman Detail Kost (`KostDetail.tsx`)**:
+     - Menampilkan ringkasan skor rating riil dan daftar testimoni penghuni (nama penghuni, bintang rating, tanggal, dan komentar).
 
 ---
 
-## 2. Arsitektur & Solusi Perbaikan
+## 2. Arsitektur & Logika Perubahan
 
-1. **Pembaruan Query Aman di Backend (`userService.ts`)**:
-   - Ganti query `getAvailableFilterOptions()` menggunakan `.select('*')` (aman 100% dari error kolom spesifik).
-   - Ekstraksi `province` cerdas:
-     `const prov = (row.province || row.metadata?.province || (row.city ? 'Sulawesi Selatan' : '')).trim();`
-     (Mendeteksi metadata, kolom, atau wilayah regional kota seperti Makassar/Gowa).
-   - Ekstraksi `district` / `area` dari `row.area || row.metadata?.area`.
-   - Ekstraksi `campuses` dari array `row.campuses` per properti.
-   - Mengumpulkan `rawRelations: GeoRelationEntry[]` secara lengkap dari seluruh listing published.
-   - Pada `getFilteredProperties()`, filter provinsi dan kampus ditangani dengan mapping aman yang mendukung kolom maupun metadata JSONB.
+1. **Perhitungan Rating Riil di `KostCard.tsx`**:
+   - Ekstraksi array ulasan: `reviews = kost.reviews || []`.
+   - Jika `reviews.length > 0`:
+     - `avgRating = (reviews.reduce((sum, r) => sum + (Number(r.rating) || 0), 0) / reviews.length).toFixed(1)`
+     - Tampilkan: `⭐ {avgRating} ({reviews.length})`
+   - Jika `reviews.length === 0`:
+     - Tampilkan: `⭐ Baru` (dengan styling badge abu-abu/oranye lembut tanpa angka rating fiktif).
 
-2. **Pembaruan di `Listings.tsx`**:
-   - Menambahkan mekanisme fallback otomatis dari `initialListings` jika `getAvailableFilterOptions` memerlukan waktu:
-     - Mengisi `availableProvinces`, `availableCities`, `availableDistricts`, `availableCampuses`, dan `rawRelations` secara instan dari `initialListings`.
-     - Memperbarui secara asinkron begitu `getAvailableFilterOptions()` selesai.
+2. **Modul Pemberian Ulasan Penghuni di `MyKost.tsx`**:
+   - Menambahkan komponen/modal **"Beri Ulasan Kost"** di tab ringkasan kost penghuni.
+   - Fitur pemilihan bintang interaktif (Hover & Click 1-5 bintang).
+   - Textarea komentar ulasan dengan validasi minimal 5 karakter.
+   - Integrasi penyimpanan ke backend `addPropertyReview(propertyId, { userId, userName, rating, comment })`.
+   - Jika penghuni sudah pernah memberikan ulasan, tampilkan ulasan mereka saat ini dengan opsi edit / perbarui.
 
-3. **Pembaruan di `FilterControls.tsx`**:
-   - Memastikan dropdown selalu menampilkan opsi unik yang telah di-sort dan terbebas dari duplikasi / string kosong.
-   - Label dropdown dan cascading antar pilihan (Provinsi $\rightarrow$ Kota $\rightarrow$ Kecamatan $\rightarrow$ Kampus) bekerja mulus secara real-time.
+3. **Seksian Ulasan Penghuni di `KostDetail.tsx`**:
+   - Menambahkan seksian `InfoSection` berjudul **"Ulasan Penghuni Kost"**.
+   - Menampilkan total rating rata-rata riil, progress bar sebaran bintang (5⭐, 4⭐, 3⭐, 2⭐, 1⭐), serta kartu-kartu testimoni penghuni terverifikasi.
+
+4. **Pembaruan Backend `userService.ts`**:
+   - Memastikan `addPropertyReview` menghitung `newAverageRating` dengan tepat, mengupdate kolom `rating` dan `reviews` di tabel `properties`, serta mendukung update ulasan jika user yang sama mengedit ulasannya.
 
 ---
 
 ## 3. Batasan Cakupan & Proteksi Logika (Strict Scope Boundary)
 - **File Terdampak**:
+  - `functions/public/components/KostCard.tsx`
+  - `functions/public/pages/MyKost.tsx`
+  - `functions/public/pages/KostDetail.tsx`
   - `functions/public/userService.ts`
-  - `functions/public/components/FilterControls.tsx`
-  - `functions/public/pages/Listings.tsx`
 - **Proteksi Logika**:
-  - Menjaga seluruh properti Mitra Biasa dan Mitra KostManager tetap muncul secara lengkap.
-  - Mempertahankan tombol "Terapkan Filter" on-demand.
-  - Pure SVG icons (`lucide-react`) tanpa FOUT.
+  - Menjaga data tagihan, sewa kamar, chat, komplain, dan layanan darurat di `MyKost.tsx` tetap utuh 100%.
+  - Seluruh ikon menggunakan komponen SVG murni dari `lucide-react` (bebas FOUT 100%).
 
 ---
 
 ## 4. Langkah-Langkah Eksekusi
-1. **Perbaiki `userService.ts`**:
-   - Gunakan `.select('*')` pada `getAvailableFilterOptions()` dengan ekstraksi fallback provinsi, kota, kecamatan, dan kampus.
-   - Amankan query `getFilteredProperties()` agar kompatibel dengan skema tabel `properties`.
-2. **Perbaiki `Listings.tsx`**:
-   - Tambahkan ekstraksi fallback instan dari `initialListings`.
-3. **Validasi & Pengujian**:
-   - Jalankan `cmd /c npm run build` untuk memastikan kelulusan kompilasi.
-   - Pastikan opsi Provinsi ("Sulawesi Selatan"), Kota ("Makassar", "Gowa"), Kecamatan ("Tamalanrea", dll.), dan Kampus ("Unhas", "UNM", dll.) langsung tampil di dropdown.
+1. **Perbarui `KostCard.tsx`**:
+   - Hapus fallback dummy `'5.0'`, gantikan dengan kalkulasi riil dari `reviews` atau badge `'Baru'`.
+2. **Perbarui `userService.ts`**:
+   - Optimalkan `addPropertyReview` (dukung upsert review per user).
+3. **Tambahkan Fitur Review di `MyKost.tsx`**:
+   - Pasang card/modal "Beri Ulasan Kost" di dashboard anak kost.
+4. **Tambahkan Seksian Review di `KostDetail.tsx`**:
+   - Render daftar review dan rating breakdown riil dari database.
 
 ---
 
 ## 5. Rencana Verifikasi
 1. **Uji Kompilasi Build**:
-   - `cmd /c npm run build` di `functions/public/` (0 error).
-2. **Uji Dropdown UI**:
-   - Buka filter $\rightarrow$ Pastikan dropdown Provinsi memuat opsi provinsi dari listing.
-   - Buka dropdown Kota $\rightarrow$ Memuat opsi kota listing.
-   - Buka dropdown Kecamatan $\rightarrow$ Memuat opsi kecamatan listing.
-   - Buka dropdown Kampus $\rightarrow$ Memuat opsi kampus listing.
+   - Menjalankan `cmd /c npm run build` di `functions/public/` (0 error).
+2. **Uji Fungsionalitas**:
+   - Lihat listing kartu kost tanpa review $\rightarrow$ Menampilkan badge `⭐ Baru` (bukan 5.0).
+   - Buka `MyKost.tsx` $\rightarrow$ Kirim ulasan bintang 5 dengan komentar $\rightarrow$ Cek kembali kartu kost dan detail kost $\rightarrow$ Rating langsung terhitung dan komentar tampil.
 3. **Pencatatan & Git Push**:
-   - Catat di `functions/PROGRESS.md` (Nomor 292), perbarui `WALKTHROUGH.md`, dan push ke branch `bukan-productions`.
+   - Catat di `functions/PROGRESS.md` (Nomor 293), perbarui `WALKTHROUGH.md`, dan push ke branch `bukan-productions`.

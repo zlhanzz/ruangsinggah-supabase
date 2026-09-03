@@ -69,6 +69,13 @@ const KostCard: React.FC<KostCardProps> = ({ kost, onClick, onDelete }) => {
 
   const primaryImageUrl = kost.imageUrls && kost.imageUrls.length > 0 ? kost.imageUrls[0] : '';
 
+  // Real Rating Calculation from Verified Tenant Reviews
+  const reviews = Array.isArray(kost.reviews) ? kost.reviews : [];
+  const reviewCount = reviews.length;
+  const avgRating = reviewCount > 0
+    ? (reviews.reduce((sum: number, r: any) => sum + (Number(r.rating) || 0), 0) / reviewCount).toFixed(1)
+    : (kost.rating && kost.rating > 0 ? Number(kost.rating).toFixed(1) : null);
+
   return (
     <div 
       onClick={() => onClick?.(kost.id)}
@@ -126,10 +133,18 @@ const KostCard: React.FC<KostCardProps> = ({ kost, onClick, onDelete }) => {
             <h3 className="font-bold text-base text-[#0b1c30] line-clamp-1 group-hover:text-[#ff7a00] transition-colors uppercase tracking-tight">
               {kost.title}
             </h3>
-            <div className="flex items-center gap-1 text-[#ff7a00] font-bold text-xs shrink-0">
-              <Star size={14} className="fill-[#ff7a00] text-[#ff7a00]" />
-              <span>{kost.rating || '5.0'}</span>
-            </div>
+            {avgRating ? (
+              <div className="flex items-center gap-1 text-[#ff7a00] font-bold text-xs shrink-0">
+                <Star size={14} className="fill-[#ff7a00] text-[#ff7a00]" />
+                <span>{avgRating}</span>
+                {reviewCount > 0 && <span className="text-[10px] text-gray-400 font-semibold">({reviewCount})</span>}
+              </div>
+            ) : (
+              <div className="flex items-center gap-1 text-slate-500 font-bold text-[10px] shrink-0 bg-slate-50 border border-slate-200/60 px-2 py-0.5 rounded-md">
+                <Star size={11} className="text-amber-400 fill-amber-400" />
+                <span>Baru</span>
+              </div>
+            )}
           </div>
           
           <div className="text-[#8c7263] text-xs font-medium flex items-center gap-1.5">

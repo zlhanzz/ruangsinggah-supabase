@@ -1848,6 +1848,108 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
               </InfoSection>
             )}
 
+            {/* Seksian Ulasan Riil Penghuni Kost */}
+            <InfoSection title="Ulasan Penghuni Kost" defaultOpen={true}>
+              {(() => {
+                const reviews = Array.isArray(kost.reviews) ? kost.reviews : [];
+                const totalRev = reviews.length;
+                const avg = totalRev > 0
+                  ? (reviews.reduce((s: number, r: any) => s + (Number(r.rating) || 0), 0) / totalRev).toFixed(1)
+                  : null;
+
+                const starCounts = [5, 4, 3, 2, 1].map(stars => ({
+                  stars,
+                  count: reviews.filter((r: any) => Math.round(Number(r.rating) || 0) === stars).length,
+                  pct: totalRev > 0 ? (reviews.filter((r: any) => Math.round(Number(r.rating) || 0) === stars).length / totalRev) * 100 : 0
+                }));
+
+                if (totalRev === 0) {
+                  return (
+                    <div className="p-8 text-center bg-gray-50/60 rounded-3xl border border-gray-100 space-y-2">
+                      <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center mx-auto text-amber-400 shadow-xs border border-gray-100">
+                        <Star size={24} className="fill-amber-400 text-amber-400" />
+                      </div>
+                      <h4 className="font-black text-gray-900 text-sm uppercase tracking-tight">Belum Ada Ulasan</h4>
+                      <p className="text-xs text-gray-500 max-w-md mx-auto">
+                        Kost ini belum memiliki ulasan dari penghuni. Ulasan akan tampil secara otomatis setelah penghuni memberikan penilaian pengalaman tinggal mereka.
+                      </p>
+                    </div>
+                  );
+                }
+
+                return (
+                  <div className="space-y-6">
+                    {/* Rating Overview Summary */}
+                    <div className="bg-gray-50/70 p-6 rounded-3xl border border-gray-100 flex flex-col sm:flex-row gap-6 items-center sm:items-stretch">
+                      {/* Left: Score Box */}
+                      <div className="flex flex-col items-center justify-center sm:pr-8 sm:border-r border-gray-200/80 shrink-0">
+                        <span className="text-5xl font-black text-gray-900 tracking-tight">{avg}</span>
+                        <div className="flex gap-1 text-orange-500 my-1.5">
+                          {[1, 2, 3, 4, 5].map(i => (
+                            <Star key={i} size={16} className={`fill-orange-500 ${Number(avg) >= i ? 'text-orange-500' : 'text-gray-200'}`} />
+                          ))}
+                        </div>
+                        <span className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">{totalRev} Ulasan Terverifikasi</span>
+                      </div>
+
+                      {/* Right: Distribution Bars */}
+                      <div className="flex-1 w-full space-y-2 justify-center flex flex-col">
+                        {starCounts.map(item => (
+                          <div key={item.stars} className="flex items-center gap-3 text-xs font-bold text-gray-600">
+                            <span className="w-6 text-right shrink-0">{item.stars} ⭐</span>
+                            <div className="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden">
+                              <div 
+                                className="h-full bg-orange-500 rounded-full transition-all duration-500" 
+                                style={{ width: `${item.pct}%` }} 
+                              />
+                            </div>
+                            <span className="w-8 text-left text-[10px] text-gray-400 shrink-0 font-semibold">{item.count}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Review List */}
+                    <div className="space-y-4">
+                      {reviews.map((rev: any, idx: number) => {
+                        const revDate = rev.date ? new Date(rev.date).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }) : 'Baru saja';
+                        return (
+                          <div key={idx} className="bg-white p-5 rounded-2xl border border-gray-100 shadow-2xs space-y-2.5">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-3">
+                                <div className="w-9 h-9 rounded-full bg-orange-100 text-[#ff7a00] font-black text-xs flex items-center justify-center uppercase">
+                                  {(rev.userName || 'P')[0]}
+                                </div>
+                                <div>
+                                  <div className="flex items-center gap-1.5">
+                                    <h5 className="text-xs font-black text-gray-900">{rev.userName || 'Penghuni Kost'}</h5>
+                                    <span className="bg-emerald-50 text-emerald-700 text-[9px] font-extrabold px-1.5 py-0.5 rounded border border-emerald-200">
+                                      Penghuni Terverifikasi ✓
+                                    </span>
+                                  </div>
+                                  <span className="text-[10px] text-gray-400 font-medium">{revDate}</span>
+                                </div>
+                              </div>
+                              <div className="flex gap-0.5 text-amber-400">
+                                {[1, 2, 3, 4, 5].map(s => (
+                                  <Star key={s} size={13} className={s <= Number(rev.rating) ? 'fill-amber-400 text-amber-400' : 'text-gray-200'} />
+                                ))}
+                              </div>
+                            </div>
+                            {rev.comment && (
+                              <p className="text-xs text-gray-700 leading-relaxed pl-12">
+                                "{rev.comment}"
+                              </p>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })()}
+            </InfoSection>
+
             {/* Lapor Listing Banner Card */}
             <div className="bg-gray-50/80 rounded-3xl p-6 border border-gray-100 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
               <div className="flex items-start gap-3">

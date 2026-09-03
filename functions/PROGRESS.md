@@ -2,6 +2,33 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 293. Sistem Rating & Ulasan Riil Terverifikasi Langsung dari Penghuni Kost (`KostCard.tsx`, `KostDetail.tsx`, `MyKost.tsx`, `userService.ts`) (September 2026)
+- **Permintaan & Masalah**:
+  - Pengguna melaporkan bahwa rating kost pada kartu listing masih bernilai dummy (5.0 statis) dan meminta agar rating kost 100% riil serta bersumber dari penilaian langsung penghuni kost yang aktif.
+- **Implementasi Solusi**:
+  1. **Penghapusan Dummy Rating di `KostCard.tsx`**:
+     - Menghapus nilai fallback statis `5.0`.
+     - Mengkalkulasi nilai rata-rata ulasan riil: `(reviews.reduce(sum + rating) / reviews.length).toFixed(1)`.
+     - Jika kost memiliki ulasan: Tampilkan `⭐ {avgRating} ({reviewCount})`.
+     - Jika kost belum memiliki ulasan: Tampilkan badge elegan `⭐ Baru` (tanpa rating fiktif).
+  2. **Modul Pemberian Ulasan & Rating Penghuni di `MyKost.tsx`**:
+     - Menambahkan tombol aksi **"Beri Ulasan & Rating Kost"** / **"Edit Ulasan & Rating"** pada kartu sewa aktif anak kost.
+     - Menyediakan modal interaktif pemilihan bintang 1–5 (hover & click responsive) dan textarea testimoni pengalaman tinggal.
+     - Menyimpan ulasan ke database Supabase via `addPropertyReview()` dengan dukungan upsert per user.
+  3. **Penyajian Seksian Ulasan di Halaman Detail Kost (`KostDetail.tsx`)**:
+     - Menambahkan `InfoSection` **"Ulasan Penghuni Kost"** yang menyajikan ringkasan skor rating rata-rata riil, diagram persentase sebaran bintang (5⭐ s.d. 1⭐), serta daftar testimoni jujur penghuni terverifikasi lengkap dengan avatar, tanggal, dan komentar.
+  4. **Peningkatan Backend `userService.ts`**:
+     - Mengoptimalkan fungsi `addPropertyReview` agar mengkalkulasi ulang rata-rata rating properti secara presisi dan menyimpannya ke kolom `reviews` dan `rating` di tabel `properties`.
+- **File Tersentuh**:
+  - `functions/public/components/KostCard.tsx`
+  - `functions/public/pages/KostDetail.tsx`
+  - `functions/public/pages/MyKost.tsx`
+  - `functions/public/userService.ts`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi Vite `cmd /c npm run build` di `functions/public/` lulus 100% (✓ 2509 modules transformed, built in 25.71s, 0 error).
+
 ### 292. Perbaikan Populasi Opsi Filter (Provinsi, Kota, Kecamatan, Kampus) Berbasis Database (`userService.ts` & `Listings.tsx`) (September 2026)
 - **Permintaan & Masalah**:
   - Pengguna melaporkan bahwa opsi dropdown filter (Provinsi, Kota, Kecamatan, Kampus) masih belum menampilkan daftar opsi sesuai listing yang ada di database (hanya memuat opsi default "Semua...").
