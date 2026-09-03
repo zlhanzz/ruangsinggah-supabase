@@ -3,10 +3,10 @@ import { useLocation, useParams } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
 import { Kost } from '../types';
 import KostCard from '../components/KostCard';
-import { getRoomEffectivePrice } from '../userService';
+import { getFilteredProperties, getAvailableFilterOptions } from '../userService';
 import FilterDrawer from '../components/FilterDrawer';
 import FilterControls, { FilterState } from '../components/FilterControls';
-import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Search, Frown } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Search, Frown, Loader2 } from 'lucide-react';
 
 const ITEMS_PER_PAGE = 9; // 3 Baris x 3 Kolom pada Desktop
 
@@ -31,12 +31,13 @@ interface ListingsProps {
   onFilterToggle?: (isOpen: boolean) => void;
 }
 
-const Listings: React.FC<ListingsProps> = ({ onKostClick, listings = [], loading = false, onDelete, user, onFilterToggle }) => {
+const Listings: React.FC<ListingsProps> = ({ onKostClick, listings: initialListings = [], loading: initialLoading = false, onDelete, user, onFilterToggle }) => {
   const { search } = useLocation();
   const { campusSlug, areaSlug } = useParams<{ campusSlug?: string; areaSlug?: string }>();
   const queryParams = useMemo(() => new URLSearchParams(search), [search]);
   const resultsTopRef = useRef<HTMLDivElement>(null);
 
+  // Filter State
   const [filters, setFilters] = useState<FilterState>({
     searchTerm: '',
     typeFilter: 'Semua',
@@ -44,11 +45,56 @@ const Listings: React.FC<ListingsProps> = ({ onKostClick, listings = [], loading
     selectedCampus: 'Semua',
     maxPrice: 5000000,
   });
-  
+
+  // Server-Side Data & Pagination State
+  const [kosts, setKosts] = useState<Kost[]>(initialListings.slice(0, ITEMS_PER_PAGE));
+  const [totalCount, setTotalCount] = useState<number>(initialListings.length);
+  const [loading, setLoading] = useState<boolean>(initialLoading);
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [isMobileFilterOpen, setIsMobileFilterOpen] = useState(false);
-  
-  // Initialize and sync with URL query parameters & dynamic route parameters (pSEO)
+
+  // Dynamic Filter Options from Database
+  const [availableCities, setAvailableCities] = useState<string[]>([]);
+  const [availableCampuses, setAvailableCampuses] = useState<string[]>([]);
+
+  // Fetch available filter options (Cities & Campuses) on mount
+  useEffect(() => {
+    let isMounted = true;
+    const loadOptions = async () => {
+      try {
+        const { cities, campuses } = await getAvailableFilterOptions();
+        if (isMounted) {
+          if (cities.length > 0) setAvailableCities(cities);
+          if (campuses.length > 0) setAvailableCampuses(campuses);
+        }
+      } catch (err) {
+        console.error('Failed to load filter options:', err);
+      }
+    };
+    loadOptions();
+    return () => { isMounted = false; };
+  }, []);
+
+  // Fallback to initialListings if availableCities/Campuses are empty
+  useEffect(() => {
+    if (availableCities.length === 0 && initialListings.length > 0) {
+      const cities = Array.from(new Set(initialListings.map(k => k.city).filter(c => c && c.trim() !== ''))).sort();
+      setAvailableCities(cities);
+    }
+    if (availableCampuses.length === 0 && initialListings.length > 0) {
+      const campuses = new Set<string>();
+      initialListings.forEach(k => {
+        if (k.campuses) {
+          k.campuses.forEach(c => {
+            if (c.name && c.name.trim() !== '') campuses.add(c.name.trim());
+          });
+        }
+      });
+      setAvailableCampuses(Array.from(campuses).sort());
+    }
+  }, [initialListings, availableCities.length, availableCampuses.length]);
+
+  // Sync route parameters & URL query params into filters
   useEffect(() => {
     const qSearch = queryParams.get('search');
     const qCity = queryParams.get('city');
@@ -59,39 +105,21 @@ const Listings: React.FC<ListingsProps> = ({ onKostClick, listings = [], loading
     let finalCampus = qCampus || 'Semua';
     let finalSearch = qSearch || '';
 
-    if (campusSlug && listings.length > 0) {
-      const matched = listings.reduce((found, k) => {
-        if (found) return found;
-        if (k.campuses) {
-          const c = k.campuses.find(c => slugify(c.name) === campusSlug.toLowerCase());
-          if (c) return c.name;
-        }
-        return null;
-      }, null as string | null);
-
-      if (matched) {
-        finalCampus = matched;
-      } else {
-        const campusMap: Record<string, string> = {
-          unhas: 'Unhas',
-          unm: 'UNM',
-          umi: 'UMI',
-          unibos: 'Unibos',
-          uin: 'UIN Alauddin',
-          pnup: 'PNUP',
-          unismuh: 'Unismuh'
-        };
-        finalCampus = campusMap[campusSlug.toLowerCase()] || campusSlug;
-      }
+    if (campusSlug) {
+      const campusMap: Record<string, string> = {
+        unhas: 'Unhas',
+        unm: 'UNM',
+        umi: 'UMI',
+        unibos: 'Unibos',
+        uin: 'UIN Alauddin',
+        pnup: 'PNUP',
+        unismuh: 'Unismuh'
+      };
+      finalCampus = campusMap[campusSlug.toLowerCase()] || campusSlug;
     }
 
-    if (areaSlug && listings.length > 0) {
-      const matchedArea = listings.find(k => k.area && slugify(k.area) === areaSlug.toLowerCase())?.area;
-      if (matchedArea) {
-        finalSearch = matchedArea;
-      } else {
-        finalSearch = areaSlug.replace(/-/g, ' ');
-      }
+    if (areaSlug) {
+      finalSearch = areaSlug.replace(/-/g, ' ');
     }
 
     setFilters(prev => ({
@@ -102,12 +130,58 @@ const Listings: React.FC<ListingsProps> = ({ onKostClick, listings = [], loading
       typeFilter: qType || prev.typeFilter,
       maxPrice: qMaxPrice ? parseInt(qMaxPrice) : prev.maxPrice,
     }));
-  }, [queryParams, campusSlug, areaSlug, listings]);
+  }, [queryParams, campusSlug, areaSlug]);
 
   // Reset pagination to page 1 whenever filters change
+  const prevFiltersRef = useRef(filters);
   useEffect(() => {
-    setCurrentPage(1);
-  }, [filters, campusSlug, areaSlug]);
+    if (
+      prevFiltersRef.current.searchTerm !== filters.searchTerm ||
+      prevFiltersRef.current.typeFilter !== filters.typeFilter ||
+      prevFiltersRef.current.selectedCity !== filters.selectedCity ||
+      prevFiltersRef.current.selectedCampus !== filters.selectedCampus ||
+      prevFiltersRef.current.maxPrice !== filters.maxPrice
+    ) {
+      setCurrentPage(1);
+      prevFiltersRef.current = filters;
+    }
+  }, [filters]);
+
+  // Execute Database Backend Query with Debouncing on Search Input
+  useEffect(() => {
+    let isCancelled = false;
+    setLoading(true);
+
+    const debounceTimer = setTimeout(async () => {
+      try {
+        const { kosts: fetchedKosts, totalCount: fetchedTotal } = await getFilteredProperties({
+          searchTerm: filters.searchTerm,
+          typeFilter: filters.typeFilter,
+          selectedCity: filters.selectedCity,
+          selectedCampus: filters.selectedCampus,
+          maxPrice: filters.maxPrice,
+          page: currentPage,
+          limit: ITEMS_PER_PAGE
+        });
+
+        if (!isCancelled) {
+          setKosts(fetchedKosts);
+          setTotalCount(fetchedTotal);
+        }
+      } catch (err) {
+        console.error('Error fetching backend filtered properties:', err);
+      } finally {
+        if (!isCancelled) {
+          setLoading(false);
+        }
+      }
+    }, 250); // 250ms debounce for instantaneous feel while preventing excessive SQL hits
+
+    return () => {
+      isCancelled = true;
+      clearTimeout(debounceTimer);
+    };
+  }, [filters, currentPage]);
 
   useEffect(() => {
     if (onFilterToggle) onFilterToggle(isMobileFilterOpen);
@@ -120,87 +194,10 @@ const Listings: React.FC<ListingsProps> = ({ onKostClick, listings = [], loading
     setFilters(prev => ({ ...prev, ...newFilters }));
   };
 
-  // Dynamically extract available cities from listings
-  const availableCities = useMemo(() => {
-    const cities = new Set(listings.map(k => k.city).filter(c => c && c.trim() !== ''));
-    return Array.from(cities).sort();
-  }, [listings]);
-
-  // Dynamically extract available campuses based on selected city
-  const availableCampuses = useMemo(() => {
-    let relevantListings = listings;
-    if (filters.selectedCity !== 'Semua') {
-      relevantListings = listings.filter(k => k.city === filters.selectedCity);
-    }
-    const campuses = new Set<string>();
-    relevantListings.forEach(k => {
-      if (k.campuses) {
-        k.campuses.forEach(c => {
-          if (c.name && c.name.trim() !== '') {
-            campuses.add(c.name);
-          }
-        });
-      }
-    });
-    return Array.from(campuses).sort();
-  }, [listings, filters.selectedCity]);
-
-  const filteredKosts = useMemo(() => {
-    let result = [...listings];
-
-    if (filters.searchTerm) {
-      const searchLower = filters.searchTerm.toLowerCase();
-      result = result.filter(k => 
-        k.title.toLowerCase().includes(searchLower) || 
-        k.address.toLowerCase().includes(searchLower) ||
-        (k.area && k.area.toLowerCase().includes(searchLower))
-      );
-    }
-
-    if (filters.typeFilter !== 'Semua') {
-      result = result.filter(k => k.type === filters.typeFilter);
-    }
-
-    if (filters.selectedCity !== 'Semua') {
-      result = result.filter(k => k.city === filters.selectedCity);
-    }
-
-    if (filters.selectedCampus !== 'Semua') {
-      result = result.filter(k => 
-        k.campuses && k.campuses.some(c => c.name === filters.selectedCampus)
-      );
-    }
-
-    result = result.filter(k => {
-      let prices: number[] = [];
-      if (k.roomTypes && k.roomTypes.length > 0) {
-        const effectivePrices = k.roomTypes.map(getRoomEffectivePrice);
-        const monthlyBased = effectivePrices.filter(p => p.priority <= 4);
-        if (monthlyBased.length > 0) {
-          prices = monthlyBased.map(p => p.price);
-        } else {
-          prices = effectivePrices.map(p => p.price);
-        }
-      } else {
-        prices = [Number(k.price) || 0];
-      }
-      const minVariantPrice = Math.min(...prices);
-      return minVariantPrice <= filters.maxPrice;
-    });
-
-    return result;
-  }, [filters, listings]);
-
-  // Pagination calculations
-  const totalPages = Math.max(1, Math.ceil(filteredKosts.length / ITEMS_PER_PAGE));
-  
-  const paginatedKosts = useMemo(() => {
-    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
-    return filteredKosts.slice(startIndex, startIndex + ITEMS_PER_PAGE);
-  }, [filteredKosts, currentPage]);
-
-  const startIndex = (currentPage - 1) * ITEMS_PER_PAGE + 1;
-  const endIndex = Math.min(currentPage * ITEMS_PER_PAGE, filteredKosts.length);
+  // Pagination calculations based on backend total count
+  const totalPages = Math.max(1, Math.ceil(totalCount / ITEMS_PER_PAGE));
+  const startIndex = totalCount > 0 ? (currentPage - 1) * ITEMS_PER_PAGE + 1 : 0;
+  const endIndex = Math.min(currentPage * ITEMS_PER_PAGE, totalCount);
 
   const handlePageChange = (page: number) => {
     if (page < 1 || page > totalPages || page === currentPage) return;
@@ -268,7 +265,6 @@ const Listings: React.FC<ListingsProps> = ({ onKostClick, listings = [], loading
         pnup: 'PNUP (Politeknik Negeri Ujung Pandang)',
         unismuh: 'Unismuh (Universitas Muhammadiyah Makassar)'
       };
-      // Get readable name
       let campusName = campusSlug;
       if (filters.selectedCampus && filters.selectedCampus !== 'Semua') {
         campusName = filters.selectedCampus;
@@ -284,7 +280,6 @@ const Listings: React.FC<ListingsProps> = ({ onKostClick, listings = [], loading
       if (filters.searchTerm) {
         areaName = filters.searchTerm;
       }
-      // Capitalize
       areaName = areaName.replace(/\b\w/g, c => c.toUpperCase());
 
       title = `Kost Area ${areaName} Makassar Murah Terverifikasi - RuangSinggah.id`;
@@ -387,12 +382,15 @@ const Listings: React.FC<ListingsProps> = ({ onKostClick, listings = [], loading
                           {filters.selectedCampus !== 'Semua' ? ` • ${filters.selectedCampus}` : ''}
                       </p>
                    </div>
-                   <span className="bg-gray-900 text-white px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest shadow-md">
-                      {filteredKosts.length} Unit
-                   </span>
+                   <div className="flex items-center gap-2">
+                     {loading && <Loader2 className="w-4 h-4 text-[#ff7a00] animate-spin shrink-0" />}
+                     <span className="bg-gray-900 text-white px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest shadow-md">
+                        {totalCount} Unit
+                     </span>
+                   </div>
                 </div>
 
-                {loading ? (
+                {loading && kosts.length === 0 ? (
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
                         {[1, 2, 3, 4, 5, 6].map((n) => (
                             <div key={n} className="bg-white rounded-2xl border border-gray-100 overflow-hidden h-full flex flex-col animate-pulse">
@@ -405,11 +403,11 @@ const Listings: React.FC<ListingsProps> = ({ onKostClick, listings = [], loading
                             </div>
                         ))}
                     </div>
-                ) : paginatedKosts.length > 0 ? (
+                ) : kosts.length > 0 ? (
                     <>
-                      {/* Property Cards Grid (Lazy-Loaded) */}
-                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                          {paginatedKosts.map(kost => (
+                      {/* Property Cards Grid (Server Filtered & Paginated) */}
+                      <div className={`grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 transition-opacity duration-200 ${loading ? 'opacity-60' : 'opacity-100'}`}>
+                          {kosts.map(kost => (
                               <KostCard key={kost.id} kost={kost} onClick={onKostClick} onDelete={onDelete} />
                           ))}
                       </div>
@@ -420,7 +418,7 @@ const Listings: React.FC<ListingsProps> = ({ onKostClick, listings = [], loading
                           
                           {/* Info Text */}
                           <p className="text-xs font-bold text-gray-500 order-2 sm:order-1">
-                            Menampilkan <span className="text-gray-900 font-extrabold">{startIndex}-{endIndex}</span> dari <span className="text-gray-900 font-extrabold">{filteredKosts.length}</span> Unit Kost
+                            Menampilkan <span className="text-gray-900 font-extrabold">{startIndex}-{endIndex}</span> dari <span className="text-gray-900 font-extrabold">{totalCount}</span> Unit Kost
                           </p>
 
                           {/* Page Buttons */}

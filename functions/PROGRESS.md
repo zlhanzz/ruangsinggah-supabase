@@ -2,6 +2,28 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 289. Migrasi Filter, Pencarian, dan Paginasi Listing Kost ke Backend Supabase Query (Mitra Biasa & Mitra KostManager) (`userService.ts` & `Listings.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  - Pengguna meminta agar filter, pencarian teks, dan paginasi pada katalog listing kost diproses langsung di level backend database (Supabase PostgreSQL Query) daripada di browser (client-side), serta memastikan query bekerja untuk kedua jenis properti (Mitra Biasa dan Mitra KostManager).
+- **Implementasi Solusi**:
+  1. **Query Database PostgreSQL Dinamis di Backend (`userService.ts`)**:
+     - Membuat fungsi `getFilteredProperties(params)` yang mengeksekusi PostgREST SQL query langsung ke tabel `properties` dengan status `published` (mencakup properti mitra biasa `is_managed = false` dan mitra KostManager `is_managed = true`).
+     - **Pencarian Teks Multi-Kolom**: `.or('title.ilike.%${term}%,address.ilike.%${term}%,area.ilike.%${term}%')` untuk mencari nama kost, alamat, maupun wilayah.
+     - **Filter Kategori**: Mendukung filter tipe hunian (`type`), filter kota (`city`), filter kampus terdekat (`campuses`), dan filter harga maksimal (`price`).
+     - **Paginasi Server-Side**: Mengambil data range `.range(from, to)` (9 item per page) dan menghitung total record yang cocok via `{ count: 'exact' }`.
+     - Menyediakan fungsi `getAvailableFilterOptions()` untuk mengambil daftar kota dan kampus aktif secara dinamis dari database.
+  2. **Integrasi Client dengan Debouncing (`Listings.tsx`)**:
+     - Menghubungkan seluruh state filter dan tombol paginasi langsung ke `getFilteredProperties`.
+     - Memasang debounce 250ms pada input pencarian agar transisi pencarian terasa instan tanpa membebani kuota database dengan query bertubi-tubi.
+     - Menampilkan indikator loading halus saat data sedang diambil dari backend.
+- **File Tersentuh**:
+  - `functions/public/userService.ts`
+  - `functions/public/pages/Listings.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi Vite `cmd /c npm run build` di `functions/public/` lulus 100% (✓ 2509 modules transformed, built in 24.55s, 0 error).
+
 ### 288. Penerapan Lazy Loading Gambar & Paginasi Halaman pada Menu Listing (`Listings.tsx` & `KostCard.tsx`) (September 2026)
 - **Permintaan & Masalah**:
   - Pengguna meminta agar halaman katalog listing menerapkan *lazy load* gambar untuk mencegah lag saat render awal, serta menerapkan paginasi halaman (page 1, 2, 3...) jika jumlah unit kost mencapai batas tertentu sehingga tidak menumpuk dalam 1 halaman panjang.

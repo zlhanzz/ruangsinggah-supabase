@@ -117,6 +117,65 @@ export const getRoomEffectivePrice = (room: any) => {
   return { price: Number(room.price) || 0, unit: '/bln', priority: 7 };
 };
 
+export interface PropertyFilterParams {
+  searchTerm?: string;
+  typeFilter?: string;
+  selectedCity?: string;
+  selectedCampus?: string;
+  maxPrice?: number;
+  page?: number;
+  limit?: number;
+}
+
+export function transformPropertyRow(row: any): Kost {
+  const rawImages = row.image_urls || [];
+  const images = rawImages.map(getDisplayImageUrl).filter((u: string) => u !== '');
+  const photosMeta = (row.metadata?.photos_meta || rawImages).map(getDisplayImageObject).filter(Boolean) as ImageUrlObject[];
+
+  const rawVideos = row.video_urls || [];
+  const videos = rawVideos.map(getDisplayVideoUrl).filter((u: string) => u !== '');
+
+  return {
+    id: row.id,
+    ownerUid: row.owner_uid,
+    title: row.title || 'Tanpa Nama',
+    description: row.description || '',
+    price: row.price || (row.room_types && row.room_types.length > 0 ? row.room_types[0].price : 0),
+    facilities: row.facilities || [],
+    address: row.address || '',
+    province: row.province || row.metadata?.province || '',
+    city: row.city || '',
+    area: row.area || '',
+    type: row.type || 'Campur',
+    status: row.status || 'published',
+    isVerified: row.is_verified ?? false,
+    isManaged: row.is_managed ?? false,
+    rating: row.rating || 0,
+    location: row.location || { lat: 0, lng: 0 },
+    imageUrls: images,
+    photosMeta,
+    videoUrls: videos,
+    instagramUrl: row.instagram_url || '',
+    tiktokUrl: row.tiktok_url || '',
+    roomTypes: row.room_types || [],
+    reviews: row.reviews || [],
+    rules: row.rules || [],
+    campuses: row.campuses || [],
+    publicFacilities: row.public_facilities || [],
+    virtualTourUrl: row.virtual_tour_url || '',
+    additionalFeePrice: row.additional_fee_price,
+    additionalFeeName: row.additional_fee_name,
+    additionalFeeStartsFrom: row.additional_fee_starts_from,
+    createdAt: convertTimestamp(row.created_at),
+    updatedAt: convertTimestamp(row.updated_at),
+    omnichannelContactName: row.omnichannel_contact_name,
+    omnichannelContactPhone: row.omnichannel_contact_phone,
+    omnichannelContactType: row.omnichannel_contact_type,
+    photoCategories: row.photo_categories || row.photoCategories || (row.metadata && (row.metadata.photo_categories || row.metadata.photoCategories)) || [],
+    categorizedPhotos: row.categorized_photos || row.categorizedPhotos || (row.metadata && (row.metadata.categorized_photos || row.metadata.categorizedPhotos)) || {},
+  } as Kost;
+}
+
 export async function getPublishedProperties(): Promise<Kost[]> {
   try {
     const { data, error } = await supabase
@@ -128,57 +187,127 @@ export async function getPublishedProperties(): Promise<Kost[]> {
     if (error) throw error;
     if (!data) return [];
 
-    return data.map((row) => {
-      const rawImages = row.image_urls || [];
-      const images = rawImages.map(getDisplayImageUrl).filter((u: string) => u !== '');
-      const photosMeta = (row.metadata?.photos_meta || rawImages).map(getDisplayImageObject).filter(Boolean) as ImageUrlObject[];
-
-      const rawVideos = row.video_urls || [];
-      const videos = rawVideos.map(getDisplayVideoUrl).filter((u: string) => u !== '');
-
-      return {
-        id: row.id,
-        ownerUid: row.owner_uid,
-        title: row.title || 'Tanpa Nama',
-        description: row.description || '',
-        price: row.price || (row.room_types && row.room_types.length > 0 ? row.room_types[0].price : 0),
-        facilities: row.facilities || [],
-        address: row.address || '',
-        province: row.province || row.metadata?.province || '',
-        city: row.city || '',
-        area: row.area || '',
-        type: row.type || 'Campur',
-        status: row.status || 'published',
-        isVerified: row.is_verified ?? false,
-        isManaged: row.is_managed ?? false,
-        rating: row.rating || 0,
-        location: row.location || { lat: 0, lng: 0 },
-        imageUrls: images,
-        photosMeta,
-        videoUrls: videos,
-        instagramUrl: row.instagram_url || '',
-        tiktokUrl: row.tiktok_url || '',
-        roomTypes: row.room_types || [],
-        reviews: row.reviews || [],
-        rules: row.rules || [],
-        campuses: row.campuses || [],
-        publicFacilities: row.public_facilities || [],
-        virtualTourUrl: row.virtual_tour_url || '',
-        additionalFeePrice: row.additional_fee_price,
-        additionalFeeName: row.additional_fee_name,
-        additionalFeeStartsFrom: row.additional_fee_starts_from,
-        createdAt: convertTimestamp(row.created_at),
-        updatedAt: convertTimestamp(row.updated_at),
-        omnichannelContactName: row.omnichannel_contact_name,
-        omnichannelContactPhone: row.omnichannel_contact_phone,
-        omnichannelContactType: row.omnichannel_contact_type,
-        photoCategories: row.photo_categories || row.photoCategories || (row.metadata && (row.metadata.photo_categories || row.metadata.photoCategories)) || [],
-        categorizedPhotos: row.categorized_photos || row.categorizedPhotos || (row.metadata && (row.metadata.categorized_photos || row.metadata.categorizedPhotos)) || {},
-      } as Kost;
-    });
+    return data.map(transformPropertyRow);
   } catch (error: any) {
     console.error('Error fetching published properties:', error);
     return [];
+  }
+}
+
+/**
+ * Backend Database Query: Filter, search, and paginate properties directly from PostgreSQL
+ * Supports both standard Mitra properties (is_managed = false) and KostManager properties (is_managed = true)
+ */
+export async function getFilteredProperties(params: PropertyFilterParams = {}): Promise<{
+  kosts: Kost[];
+  totalCount: number;
+}> {
+  try {
+    let query = supabase
+      .from('properties')
+      .select('*', { count: 'exact' })
+      .eq('status', 'published');
+
+    // 1. Multi-column Text Search (Title, Address, Area)
+    if (params.searchTerm && params.searchTerm.trim() !== '') {
+      const term = params.searchTerm.trim();
+      query = query.or(`title.ilike.%${term}%,address.ilike.%${term}%,area.ilike.%${term}%`);
+    }
+
+    // 2. Room / Kost Type Filter
+    if (params.typeFilter && params.typeFilter !== 'Semua') {
+      query = query.eq('type', params.typeFilter);
+    }
+
+    // 3. City Filter
+    if (params.selectedCity && params.selectedCity !== 'Semua') {
+      query = query.eq('city', params.selectedCity);
+    }
+
+    // 4. Max Price Filter
+    if (params.maxPrice && params.maxPrice < 5000000) {
+      query = query.lte('price', params.maxPrice);
+    }
+
+    // Sort newest updated first
+    query = query.order('updated_at', { ascending: false });
+
+    // 5. Server-Side Pagination Range (if no custom campus post-filter needed)
+    const isCampusFiltered = params.selectedCampus && params.selectedCampus !== 'Semua';
+    if (!isCampusFiltered && params.page && params.limit) {
+      const from = (params.page - 1) * params.limit;
+      const to = from + params.limit - 1;
+      query = query.range(from, to);
+    }
+
+    const { data, error, count } = await query;
+    if (error) throw error;
+    if (!data) return { kosts: [], totalCount: 0 };
+
+    let mappedKosts = data.map(transformPropertyRow);
+
+    // If Campus filter is active, perform campus matching
+    if (isCampusFiltered) {
+      const targetCampus = params.selectedCampus!.toLowerCase();
+      mappedKosts = mappedKosts.filter(k => 
+        k.campuses && k.campuses.some(c => c.name && c.name.toLowerCase().includes(targetCampus))
+      );
+      const totalCampusCount = mappedKosts.length;
+      if (params.page && params.limit) {
+        const from = (params.page - 1) * params.limit;
+        mappedKosts = mappedKosts.slice(from, from + params.limit);
+      }
+      return { kosts: mappedKosts, totalCount: totalCampusCount };
+    }
+
+    return {
+      kosts: mappedKosts,
+      totalCount: count ?? mappedKosts.length
+    };
+  } catch (error: any) {
+    console.error('Error in getFilteredProperties:', error);
+    return { kosts: [], totalCount: 0 };
+  }
+}
+
+/**
+ * Fetch unique cities and campuses available in the database for dropdown filter options
+ */
+export async function getAvailableFilterOptions(): Promise<{
+  cities: string[];
+  campuses: string[];
+}> {
+  try {
+    const { data, error } = await supabase
+      .from('properties')
+      .select('city, campuses')
+      .eq('status', 'published');
+
+    if (error || !data) return { cities: [], campuses: [] };
+
+    const cities = new Set<string>();
+    const campuses = new Set<string>();
+
+    data.forEach((row: any) => {
+      if (row.city && row.city.trim() !== '') {
+        cities.add(row.city.trim());
+      }
+      if (Array.isArray(row.campuses)) {
+        row.campuses.forEach((c: any) => {
+          if (c?.name && c.name.trim() !== '') {
+            campuses.add(c.name.trim());
+          }
+        });
+      }
+    });
+
+    return {
+      cities: Array.from(cities).sort(),
+      campuses: Array.from(campuses).sort()
+    };
+  } catch (error: any) {
+    console.error('Error fetching available filter options:', error);
+    return { cities: [], campuses: [] };
   }
 }
 

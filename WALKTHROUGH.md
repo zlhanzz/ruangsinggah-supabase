@@ -1,31 +1,31 @@
-# WALKTHROUGH: Penerapan Lazy Loading Gambar & Paginasi Halaman pada Menu Listing
+# WALKTHROUGH: Migrasi Filter, Pencarian, dan Paginasi Listing Kost ke Backend Database Supabase Query
 
 ## 1. Ringkasan Pekerjaan
-Telah berhasil diselesaikan implementasi **Lazy Loading Gambar** dan **Paginasi Halaman (Pagination)** pada katalog pencarian listing kost:
-- **Lazy Loading Gambar & Skeleton Shimmer (`KostCard.tsx`)**:
-  - Menambahkan atribut `loading="lazy"` dan `decoding="async"` pada elemen `<img>` kartu properti sehingga browser hanya memuat gambar yang mendekati viewport pengguna.
-  - Menambahkan state `imageLoaded` berpadu dengan efek skeleton shimmer lembut saat gambar sedang diproses untuk mencegah *layout shift* dan rendering lag.
-  - Fallback kartu aman jika gambar gagal dimuat.
-- **Paginasi Halaman Dinamis (`Listings.tsx`)**:
-  - Menetapkan batas tampilan sebanyak **9 unit kost per halaman** (pas 3 baris $\times$ 3 kolom grid).
-  - Jika total unit kost melebihi 9 unit (misal 11 unit), unit ke 10 dan 11 akan ditampilkan di Halaman 2.
-  - Navigasi paginasi modern: Tombol *Sebelumnya*, nomor halaman aktif (*1, 2, 3...*), dan tombol *Berikutnya*.
-  - Indikator range teks: *"Menampilkan **1-9** dari **11** Unit Kost"*.
-  - *Smooth Scroll* otomatis kembali ke bagian atas hasil pencarian saat berpindah halaman.
-  - Reset otomatis ke Halaman 1 saat pengguna memfilter atau mencari kost baru.
+Telah berhasil diselesaikan migrasi **Filter, Pencarian, dan Paginasi Listing Kost** dari yang sebelumnya berjalan di browser (*client-side*) menjadi berjalan langsung di level **Backend Database (PostgreSQL Supabase Query)**:
+- **Query Database Backend Supabase (`userService.ts`)**:
+  - Membuat fungsi `getFilteredProperties(params)` yang memfilter langsung di tabel `properties` dengan status `published`.
+  - **Inklusivitas Penuh**: Mendukung seluruh unit properti **Mitra Biasa** (`is_managed = false`) dan **Mitra KostManager** (`is_managed = true`).
+  - **Pencarian Teks Multi-Kolom**: `.or('title.ilike.%${term}%,address.ilike.%${term}%,area.ilike.%${term}%')` untuk mencari nama kost, alamat, maupun kelurahan/kecamatan.
+  - **Filter Kategori**: Filter tipe hunian (*Putra, Putri, Campur*), filter kota (*Makassar, Gowa, dll.*), filter kampus terdekat (*Unhas, UNM, UMI, dll.*), dan filter harga maksimal.
+  - **Paginasi Server-Side**: Mengambil hanya 9 baris data per halaman dengan `.range(from, to)` dan `{ count: 'exact' }` untuk mendapatkan jumlah total data yang cocok dari backend.
+  - Opsi dropdown filter kota dan kampus diambil secara dinamis via `getAvailableFilterOptions()`.
+- **Integrasi di Halaman Katalog (`Listings.tsx`)**:
+  - Menghubungkan kontrol filter dan search bar ke backend dengan debounce 250ms pada input pencarian (mencegah beban query berlebih saat pengguna mengetik cepat).
+  - Paginasi 9 unit per halaman diatur langsung menggunakan `totalCount` dari database.
+  - Skeleton loading halus saat server memproses query.
 
 ---
 
 ## 2. Rincian Perubahan Berkas
 
-### A. [`KostCard.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/components/KostCard.tsx)
-- Menambahkan `loading="lazy"` dan `decoding="async"`.
-- Menambahkan shimmer skeleton saat loading dan fallback view jika URL gambar bermasalah.
+### A. [`userService.ts`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/userService.ts)
+- Menambahkan `transformPropertyRow(row)` untuk standarisasi pemetaan properti.
+- Menambahkan interface `PropertyFilterParams`.
+- Menambahkan fungsi `getFilteredProperties(params)` dan `getAvailableFilterOptions()`.
 
 ### B. [`Listings.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/Listings.tsx)
-- Menambahkan state `currentPage` dan slice data `paginatedKosts`.
-- Menambahkan komponen navigasi paginasi dengan nomor halaman, smart ellipsis, dan kontrol navigasi.
-- Menambahkan auto smooth scroll ke atas dan auto-reset saat filter berganti.
+- Menghubungkan seluruh proses filtering dan paginasi langsung ke `getFilteredProperties`.
+- Mengimplementasikan debouncing pada kata kunci pencarian.
 
 ---
 
@@ -37,7 +37,7 @@ cmd /c npm run build
 **Output:**
 ```text
 ✓ 2509 modules transformed.
-✓ built in 23.66s
+✓ built in 24.55s
 Exit code: 0 (0 error)
 ```
 
@@ -46,7 +46,7 @@ Exit code: 0 (0 error)
 ## 4. Panduan Pengujian
 
 1. **Buka Halaman Cari Kost (`/listings`)**:
-   - Perhatikan bahwa hanya 9 unit kost pertama yang tampil pada halaman 1.
-   - Perhatikan indikator teks *"Menampilkan 1-9 dari 11 Unit Kost"* di bagian bawah grid.
-   - Klik tombol **2** atau tombol **Berikutnya**: Daftar akan berpindah menampilkan unit ke 10 dan 11, dan halaman akan otomatis bergulir (*smooth scroll*) ke bagian atas.
-   - Coba ubah filter (misal: pilih kota atau kampus tertentu): Paginasi akan otomatis mereset ke Halaman 1.
+   - Ketikkan nama kost atau nama daerah (misal: "Madani", "Daya", "Tamalanrea") $\rightarrow$ Database Supabase akan langsung merespons dengan properti yang cocok baik milik Mitra Biasa maupun KostManager.
+   - Pilih filter **Tipe Kost** (*Putra, Putri, Campur*), **Pilih Kota**, atau **Pilih Kampus** $\rightarrow$ Hasil terfilter secara instan dari database.
+   - Geser slider **Harga Maksimal** $\rightarrow$ Database hanya mengembalikan kost yang sesuai dengan tarif.
+   - Uji klik tombol paginasi (Halaman 1, 2, dll.) $\rightarrow$ Database hanya mengunduh 9 record per halaman.
