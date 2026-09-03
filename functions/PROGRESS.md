@@ -2,6 +2,23 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 283. Penambahan Menu Chat / Pesan pada Mobile Bottom Navigation Bar & Dropdown Profil (`Navbar.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  - Pengguna meminta penambahan menu **Chat / Pesan** pada bottom navigation bar versi mobile agar pengguna dapat langsung mengakses dan meninjau seluruh riwayat percakapan yang pernah dilakukan dengan pemilik kost maupun admin/pengelola.
+- **Implementasi Solusi**:
+  1. **Integrasi Menu Chat pada Mobile Bottom Nav (`Navbar.tsx`)**:
+     - Menjadikan Mobile Bottom Navigation Bar berformat 5 menu seimbang (*Home*, *Search*, *Chat*, *Orders*, *Profile*).
+     - Menggunakan icon vector SVG `<MessageSquare />` dari package `lucide-react` (100% bebas FOUT).
+     - Navigasi pintar: jika pengguna sudah login langsung membuka `Page.CHAT` (`/chat`), jika belum login diarahkan ke `Page.LOGIN`.
+  2. **Shortcut Chat pada Dropdown Profil Desktop & Mobile**:
+     - Menambahkan menu *Pesan / Chat* pada dropdown avatar profil untuk akses cepat di perangkat desktop.
+- **File Tersentuh**:
+  - `functions/public/components/Navbar.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi Vite `cmd /c npm run build` di `functions/public/` lulus 100% (✓ 2509 modules transformed, built in 50.70s, 0 error).
+
 ### 282. Perbaikan ReferenceError AlertCircle is not defined pada KostDetail (`KostDetail.tsx`) (September 2026)
 - **Permintaan & Masalah**:
   - Pengguna menemukan error `ReferenceError: AlertCircle is not defined` saat membuka detail kost yang memiliki tipe kamar "Kosongan (Tanpa Perabot)".

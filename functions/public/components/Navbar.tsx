@@ -212,6 +212,15 @@ const Navbar: React.FC<NavbarProps> = ({ activePage, onPageChange, user, onLogou
                         </button>
                         <button
                           onClick={() => {
+                            onPageChange(Page.CHAT);
+                            setIsProfileOpen(false);
+                          }}
+                          className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-orange-50 hover:text-orange-600 border-t border-gray-50"
+                        >
+                          Pesan / Chat
+                        </button>
+                        <button
+                          onClick={() => {
                             onPageChange(Page.MY_BOOKINGS);
                             setIsProfileOpen(false);
                           }}
@@ -339,6 +348,15 @@ const Navbar: React.FC<NavbarProps> = ({ activePage, onPageChange, user, onLogou
                       </button>
                       <button
                         onClick={() => {
+                          onPageChange(Page.CHAT);
+                          setIsProfileOpen(false);
+                        }}
+                        className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-orange-50 hover:text-orange-600 border-t border-gray-50"
+                      >
+                        Pesan / Chat
+                      </button>
+                      <button
+                        onClick={() => {
                           onPageChange(Page.MY_BOOKINGS);
                           setIsProfileOpen(false);
                         }}
@@ -395,10 +413,10 @@ const Navbar: React.FC<NavbarProps> = ({ activePage, onPageChange, user, onLogou
         </div>
       </nav>
 
-      {/* Mobile Bottom Navigation Bar (4 Items: Home, Search, Orders, Profile) */}
+      {/* Mobile Bottom Navigation Bar (5 Items: Home, Search, Chat, Orders, Profile) */}
       {[Page.HOME, Page.LISTINGS, Page.PRODUCTS, Page.MY_BOOKINGS, Page.CHAT, Page.PROFILE].includes(activePage) && !hideBottomNav && (
         <div className="md:hidden fixed bottom-0 left-0 right-0 w-full z-[100] bg-white/95 backdrop-blur-md border-t border-gray-100 shadow-[0_-4px_20px_rgba(0,0,0,0.06)] pb-[env(safe-area-inset-bottom)]">
-          <div className="flex items-center justify-around py-1.5 px-2">
+          <div className="flex items-center justify-around py-1.5 px-1">
             {/* 1. Home */}
             <button
               onClick={() => onPageChange(Page.HOME)}
@@ -406,7 +424,7 @@ const Navbar: React.FC<NavbarProps> = ({ activePage, onPageChange, user, onLogou
                 activePage === Page.HOME ? 'text-orange-500' : 'text-gray-400 hover:text-gray-800'
               }`}
             >
-              <Home size={22} className={activePage === Page.HOME ? 'stroke-orange-500 stroke-[2.5]' : 'stroke-gray-400'} />
+              <Home size={21} className={activePage === Page.HOME ? 'stroke-orange-500 stroke-[2.5]' : 'stroke-gray-400'} />
               <span className={`text-[10px] ${activePage === Page.HOME ? 'font-bold text-orange-500' : 'font-medium text-gray-500'}`}>
                 Home
               </span>
@@ -419,33 +437,46 @@ const Navbar: React.FC<NavbarProps> = ({ activePage, onPageChange, user, onLogou
                 activePage === Page.LISTINGS ? 'text-orange-500' : 'text-gray-400 hover:text-gray-800'
               }`}
             >
-              <Search size={22} className={activePage === Page.LISTINGS ? 'stroke-orange-500 stroke-[2.5]' : 'stroke-gray-400'} />
+              <Search size={21} className={activePage === Page.LISTINGS ? 'stroke-orange-500 stroke-[2.5]' : 'stroke-gray-400'} />
               <span className={`text-[10px] ${activePage === Page.LISTINGS ? 'font-bold text-orange-500' : 'font-medium text-gray-500'}`}>
                 Search
               </span>
             </button>
 
-            {/* 3. Orders */}
+            {/* 3. Chat */}
             <button
-              onClick={() => onPageChange(Page.MY_BOOKINGS)}
+              onClick={() => onPageChange(user ? Page.CHAT : Page.LOGIN)}
+              className={`flex-1 flex flex-col items-center gap-0.5 py-1 transition-all cursor-pointer ${
+                activePage === Page.CHAT ? 'text-orange-500' : 'text-gray-400 hover:text-gray-800'
+              }`}
+            >
+              <MessageSquare size={21} className={activePage === Page.CHAT ? 'stroke-orange-500 stroke-[2.5]' : 'stroke-gray-400'} />
+              <span className={`text-[10px] ${activePage === Page.CHAT ? 'font-bold text-orange-500' : 'font-medium text-gray-500'}`}>
+                Chat
+              </span>
+            </button>
+
+            {/* 4. Orders */}
+            <button
+              onClick={() => onPageChange(user ? Page.MY_BOOKINGS : Page.LOGIN)}
               className={`flex-1 flex flex-col items-center gap-0.5 py-1 transition-all cursor-pointer ${
                 activePage === Page.MY_BOOKINGS ? 'text-orange-500' : 'text-gray-400 hover:text-gray-800'
               }`}
             >
-              <ClipboardList size={22} className={activePage === Page.MY_BOOKINGS ? 'stroke-orange-500 stroke-[2.5]' : 'stroke-gray-400'} />
+              <ClipboardList size={21} className={activePage === Page.MY_BOOKINGS ? 'stroke-orange-500 stroke-[2.5]' : 'stroke-gray-400'} />
               <span className={`text-[10px] ${activePage === Page.MY_BOOKINGS ? 'font-bold text-orange-500' : 'font-medium text-gray-500'}`}>
                 Orders
               </span>
             </button>
 
-            {/* 4. Profile */}
+            {/* 5. Profile */}
             <button
               onClick={() => onPageChange(user ? Page.PROFILE : Page.LOGIN)}
               className={`flex-1 flex flex-col items-center gap-0.5 py-1 transition-all cursor-pointer ${
                 activePage === Page.PROFILE || activePage === Page.LOGIN ? 'text-orange-500' : 'text-gray-400 hover:text-gray-800'
               }`}
             >
-              <User size={22} className={activePage === Page.PROFILE || activePage === Page.LOGIN ? 'stroke-orange-500 stroke-[2.5]' : 'stroke-gray-400'} />
+              <User size={21} className={activePage === Page.PROFILE || activePage === Page.LOGIN ? 'stroke-orange-500 stroke-[2.5]' : 'stroke-gray-400'} />
               <span className={`text-[10px] ${activePage === Page.PROFILE || activePage === Page.LOGIN ? 'font-bold text-orange-500' : 'font-medium text-gray-500'}`}>
                 Profile
               </span>
