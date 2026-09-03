@@ -290,9 +290,8 @@ const App: React.FC = () => {
           return;
         }
 
-        if (portalView === 'user' && role === 'owner') {
-          console.log("Partner logged in to user portal. Forcing user view.");
-          role = 'user';
+        if (role === 'owner') {
+          localStorage.setItem('portal_view', 'owner');
         }
 
         console.log("Determined role:", role);
@@ -322,12 +321,17 @@ const App: React.FC = () => {
 
         setUser(safeUser);
 
-        if (location.pathname === Page.LOGIN) {
-          const isRecovery = new URLSearchParams(window.location.search).get('mode') === 'recovery';
-          if (!isRecovery) {
+        const isRecovery = new URLSearchParams(window.location.search).get('mode') === 'recovery';
+        if (!isRecovery) {
+          if (role === 'owner') {
+            // Isolasi Pemilik Kost: Langsung arahkan ke Dashboard Mitra jika berada di login atau halaman user publik
+            const publicUserPages = [Page.LOGIN, Page.HOME, Page.LISTINGS, Page.PRODUCTS, Page.OWNER, Page.SURVEY_SERVICE, Page.KOSTMANAGER, Page.ABOUT, Page.CONTACT];
+            if (publicUserPages.includes(location.pathname as Page) || location.pathname === '/') {
+              navigate(Page.DASHBOARD_MITRA, { replace: true });
+            }
+          } else if (location.pathname === Page.LOGIN) {
             if (role === 'admin') navigate(Page.DASHBOARD_ADMIN, { replace: true });
             else if (role === 'survey_agent') navigate(Page.DASHBOARD_AGENT, { replace: true });
-            else if (role === 'owner') navigate(Page.DASHBOARD_MITRA, { replace: true });
             else navigate(Page.HOME, { replace: true });
           }
         }
@@ -668,11 +672,26 @@ const App: React.FC = () => {
            <Suspense fallback={<PageLoader />}>
            <Routes>
              <Route path="/payment-status/:orderId" element={<OrderPaymentStatus user={user} />} />
-              <Route path={Page.HOME} element={<Home onPageChange={(p: Page | string) => navigate(p)} onKostSelect={handleKostSelect} user={user} listings={listings} loading={loadingListings} />} />
-              <Route path={Page.LISTINGS} element={<Listings onKostClick={handleKostSelect} listings={listings} loading={loadingListings} user={user} onFilterToggle={setHideNavbar} />} />
-              <Route path="/kost-dekat/:campusSlug" element={<Listings onKostClick={handleKostSelect} listings={listings} loading={loadingListings} user={user} onFilterToggle={setHideNavbar} />} />
-              <Route path="/kost-area/:areaSlug" element={<Listings onKostClick={handleKostSelect} listings={listings} loading={loadingListings} user={user} onFilterToggle={setHideNavbar} />} />
+              <Route path={Page.HOME} element={
+                user?.role === 'owner' ? <Navigate to={Page.DASHBOARD_MITRA} replace /> :
+                user?.role === 'admin' ? <Navigate to={Page.DASHBOARD_ADMIN} replace /> :
+                user?.role === 'survey_agent' ? <Navigate to={Page.DASHBOARD_AGENT} replace /> :
+                <Home onPageChange={(p: Page | string) => navigate(p)} onKostSelect={handleKostSelect} user={user} listings={listings} loading={loadingListings} />
+              } />
+              <Route path={Page.LISTINGS} element={
+                user?.role === 'owner' ? <Navigate to={Page.DASHBOARD_MITRA} replace /> :
+                <Listings onKostClick={handleKostSelect} listings={listings} loading={loadingListings} user={user} onFilterToggle={setHideNavbar} />
+              } />
+              <Route path="/kost-dekat/:campusSlug" element={
+                user?.role === 'owner' ? <Navigate to={Page.DASHBOARD_MITRA} replace /> :
+                <Listings onKostClick={handleKostSelect} listings={listings} loading={loadingListings} user={user} onFilterToggle={setHideNavbar} />
+              } />
+              <Route path="/kost-area/:areaSlug" element={
+                user?.role === 'owner' ? <Navigate to={Page.DASHBOARD_MITRA} replace /> :
+                <Listings onKostClick={handleKostSelect} listings={listings} loading={loadingListings} user={user} onFilterToggle={setHideNavbar} />
+              } />
             <Route path="/products/*" element={
+              user?.role === 'owner' ? <Navigate to={Page.DASHBOARD_MITRA} replace /> :
               <Products
                 user={user}
                 onLoginRedirect={() => navigate(Page.LOGIN)}
@@ -694,10 +713,14 @@ const App: React.FC = () => {
                 }}
               />
             } />
-            <Route path={Page.OWNER} element={<Owner user={user} />} />
+            <Route path={Page.OWNER} element={
+              user?.role === 'owner' ? <Navigate to={Page.DASHBOARD_MITRA} replace /> :
+              <Owner user={user} />
+            } />
             <Route path={Page.ABOUT} element={<About />} />
             <Route path={Page.CONTACT} element={<Contact />} />
             <Route path={Page.SURVEY_SERVICE} element={
+              user?.role === 'owner' ? <Navigate to={Page.DASHBOARD_MITRA} replace /> :
               <SurveyService 
                 user={user} 
                 onPageChange={(p: Page) => navigate(p)} 
@@ -718,7 +741,10 @@ const App: React.FC = () => {
               />
             } />
             <Route path={Page.TERMS} element={<Terms />} />
-            <Route path={Page.KOSTMANAGER} element={<KostManagerLanding user={user} />} />
+            <Route path={Page.KOSTMANAGER} element={
+              user?.role === 'owner' ? <Navigate to={Page.DASHBOARD_MITRA} replace /> :
+              <KostManagerLanding user={user} />
+            } />
             <Route path={Page.ARTICLES} element={<Articles />} />
             <Route path={Page.ARTICLE_DETAIL} element={<Articles />} />
             <Route path={Page.SURVEY_CHECKOUT} element={

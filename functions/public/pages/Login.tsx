@@ -242,6 +242,7 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
     e.preventDefault();
     setLoading(true);
     setErrorMsg('');
+    localStorage.setItem('portal_view', activeRole);
 
     try {
       const { data, error } = await supabase.auth.signInWithPassword({
@@ -609,6 +610,7 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
   const handleGoogleLogin = async () => {
     setLoading(true);
     setErrorMsg('');
+    localStorage.setItem('portal_view', activeRole);
 
     try {
       const { error } = await supabase.auth.signInWithOAuth({

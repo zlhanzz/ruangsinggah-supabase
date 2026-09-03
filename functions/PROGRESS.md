@@ -2,6 +2,31 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 304. Isolasi Lingkungan Penuh Portal Pemilik Kost (Role Isolation & Anti-Tembus Beranda User) (`App.tsx`, `Login.tsx`, `Navbar.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  - Saat login sebagai Pemilik Kost (Mitra), pengguna seringkali mendarat atau tembus ke tampilan Beranda pencari kost (`Page.HOME` / `/`), dan harus membuka menu profil terlebih dahulu untuk mengakses Dashboard Mitra. Pengguna meminta agar lingkungan pemilik kost terisolasi sepenuhnya dan langsung diarahkan ke portal dashboard pemilik kost tanpa akses tembus ke tampilan pencari kost.
+- **Implementasi Solusi**:
+  1. **Penghapusan Downgrade Role & Otentikasi Terisolasi (`App.tsx`)**:
+     - Menghapus logika pemaksaan role pemilik diturunkan menjadi user (`if (portalView === 'user' && role === 'owner') role = 'user'`).
+     - Menyimpan `localStorage.setItem('portal_view', 'owner')` secara konsisten ketika akun pemilik kost terdeteksi.
+     - Mengarahkan pemilik kost secara instan dan otomatis ke `Page.DASHBOARD_MITRA` (`/dashboard-mitra`) saat proses `fetchUserData` selesai jika berada di halaman user biasa.
+  2. **Penguncian Rute Publik (Route Guarding)**:
+     - Memasang proteksi isolasi pada `<Route path={Page.HOME} ... />`, `/listings`, `/products/*`, `/owner`, `/survey-service`, dan `/kostmanager` di `<Routes>` agar langsung me-redirect akun `owner` ke `Page.DASHBOARD_MITRA`.
+     - Memastikan redirect login/OAuth Google langsung mendarat di Dashboard Mitra.
+  3. **Penyelarasan Navigasi Khusus Pemilik Kost (`Navbar.tsx`)**:
+     - Klik logo RuangSinggah di navbar langsung mengarah ke `Page.DASHBOARD_MITRA` bagi pemilik kost.
+     - Navigasi desktop khusus pemilik kost menampilkan link operasional: *Dashboard Mitra*, *Chat Penyewa*, dan *Profil Mitra*.
+     - Menu dropdown profil khusus pemilik kost menyajikan *Dashboard Mitra*, *Chat Penyewa*, *Profil Mitra*, dan *Keluar*.
+     - Navigasi bawah (bottom navigation bar mobile) bagi pemilik kost menampilkan 3 menu khusus: *Dashboard*, *Chat*, dan *Profil*.
+- **File Tersentuh**:
+  - `functions/public/App.tsx`
+  - `functions/public/pages/Login.tsx`
+  - `functions/public/components/Navbar.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi Vite `cmd /c npm run build` di `functions/public/` lulus 100% (✓ 2509 modules transformed, built in 34.41s, 0 error).
+
 ### 303. Penerapan Portal Pemilihan Akses Masuk & Daftar (Pencari Kost vs Pemilik Kost) (`Login.tsx`) (September 2026)
 - **Permintaan & Masalah**:
   - Pengguna merasa sistem *toggle chip* peran di dalam form login membingungkan bagi pengguna baru, dan meminta agar disediakan layar gerbang portal pemilihan peran di awal sebelum masuk ke form login/daftar, dengan dua kartu terpisah yang jelas untuk Pencari Kost dan Pemilik Kost.

@@ -1,55 +1,56 @@
-# IMPLEMENTATION PLAN: Portal Pemilihan Akses Masuk (Pencari Kost vs Pemilik Kost) di Login.tsx
+# IMPLEMENTATION PLAN: Isolasi Lingkungan Penuh Portal Pemilik Kost (Role Isolation)
 
 ## 1. Analisis Masalah & Kebutuhan
 - **Masalah Saat Ini**:
-  - Halaman login saat ini menggunakan sistem tombol *toggle chip* (`Segmented Tab Pemilih Peran`) di dalam form login yang membingungkan pengguna baru mengenai hak akses dan alur pendaftaran.
-- **Kebutuhan Pengguna**:
-  - Menggantikan sistem chip tersebut dengan **Layar Gerbang Pemilihan Peran (Role Selection Portal)** sebelum pengguna masuk ke formulir autentikasi.
-  - Menampilkan 2 kartu gerbang interaktif yang jelas dan elegan sesuai screenshot referensi:
-    1. **Kartu 1: Pencari Kost**
-       - Badge: `[ PENCARI HUNIAN KOST ]` (Oranye).
-       - Judul: `Pencari Kost`.
-       - Deskripsi: Penjelasan kemudahan mencari, membandingkan, dan menyewa kost.
-       - Checklist Fitur: Akses 1.200+ database, Layanan Jasa Survey, dan Booking aman.
-       - Tombol Aksi: `Lanjutkan sebagai Pencari →` (Oranye).
-    2. **Kartu 2: Pemilik Kost**
-       - Badge: `[ MITRA & PENGELOLA ]` (Biru/Indigo).
-       - Judul: `Pemilik Kost`.
-       - Deskripsi: Pengelolaan kamar, inventaris, pantauan okupansi, dan pemasaran ke ribuan mahasiswa.
-       - Checklist Fitur: Pasang listing gratis, Sistem KostManager, Rekap laporan sewa & dompet.
-       - Tombol Aksi: `Lanjutkan sebagai Pemilik →` (Navy/Indigo).
-  - Setelah memilih peran, pengguna diarahkan ke formulir Login / Daftar yang dikhususkan untuk peran tersebut, dilengkapi tombol navigasi `← Ganti Peran` untuk kembali ke portal pemilihan peran jika diperlukan.
+  - Saat login sebagai Pemilik Kost (baik melalui email/kata sandi maupun Google OAuth), mitra seringkali mendarat atau tembus ke tampilan Beranda pencari kost (`Page.HOME` / `/`).
+  - Mitra harus membuka profil terlebih dahulu untuk dapat mengakses Dashboard Mitra.
+  - Hal ini terjadi karena:
+    1. Di `App.tsx` (`fetchUserData()`), terdapat logika yang memaksakan role pemilik diturunkan menjadi `user` (`if (portalView === 'user' && role === 'owner') role = 'user'`).
+    2. Logika redirect saat login hanya aktif jika URL saat itu tepat di `/login`, sehingga redirect Google OAuth ke `window.location.origin` (`/`) atau reload halaman di `/` tetap merender antarmuka pencari kost.
+    3. Navigasi desktop & bottom bar mobile di `Navbar.tsx` masih menampilkan menu pencari kost (*Cari Kost*, *Data Kost*, *Jasa Survey*, *Orders*) alih-alih navigasi operasional mitra kost.
+- **Tujuan Pengembangan**:
+  - Mewujudkan **Isolasi Lingkungan Penuh (Role Isolation)** bagi Pemilik Kost:
+    1. Ketika login sebagai Pemilik Kost atau ketika akun terdeteksi memiliki role `owner`/`mitra`, sistem **secara instan dan otomatis mengarahkan mitra ke `Page.DASHBOARD_MITRA` (`/dashboard-mitra`)**.
+    2. Rute pencari kost publik (Beranda `/`, `/listings`, `/products`, `/kostmanager`, dll.) langsung di-redirect ke `Page.DASHBOARD_MITRA` jika diakses oleh pemilik kost yang sedang login.
+    3. `Navbar.tsx` menyesuaikan navigasi desktop dan mobile khusus untuk lingkungan pemilik kost (Dashboard, Kelola Kost, Chat Penyewa, Profil Mitra, Logout) dan klik logo mengarah ke Dashboard Mitra.
 
 ---
 
 ## 2. Dampak Perubahan
 - **File Tersentuh**:
-  - `functions/public/pages/Login.tsx` (Penambahan state `isRoleSelected`, render layar portal pemilihan akses, pembaruan layout form login tanpa chip lama, dan penambahan tombol ganti peran)
+  - `functions/public/App.tsx`:
+    - Menghapus paksaan downgrade role pemilik di `fetchUserData()`.
+    - Menambahkan auto-redirect rute publik (`/`, `/listings`, `/products`, `/owner`, `/kostmanager`, `/survey-service`) ke `Page.DASHBOARD_MITRA` jika `user?.role === 'owner'`.
+    - Memastikan redirect Google OAuth dan sesi mount langsung masuk ke `/dashboard-mitra`.
+  - `functions/public/pages/Login.tsx`:
+    - Memastikan pilihan `Pemilik Kost` menyimpan `portal_view = 'owner'` dan mengarahkan pengguna langsung ke `Page.DASHBOARD_MITRA` setelah autentikasi berhasil.
+  - `functions/public/components/Navbar.tsx`:
+    - Mengisolasi navigasi khusus pemilik kost: Logo menuju `Page.DASHBOARD_MITRA`, menu desktop & mobile bottom nav menampilkan link operasional mitra (Dashboard, Kelola Kost, Chat, Profil Mitra).
 
 ---
 
 ## 3. Langkah-Langkah Eksekusi
-1. **Penambahan State Navigasi Portal (`isRoleSelected`)**:
-   - Menambahkan state `isRoleSelected` (default `false` jika belum ada pilihan atau tidak ada query params khusus, dan `true` jika ada parameter `role=owner`, `role=user`, `upgrade_to_owner`, atau `mode=recovery`).
-2. **Penyusunan Antarmuka Layar Portal Pemilihan Peran**:
-   - Membangun Header: Badge `PORTAL AKSES MASUK & DAFTAR`, Judul `Pilih Akses Masuk Anda di RuangSinggah`, Subtitle penjelas.
-   - Membangun Grid 2 Kartu Peran (Pencari Kost & Pemilik Kost) dengan ikon vector `lucide-react`, checklist fitur, dan tombol `Lanjutkan sebagai...`.
-3. **Penyusunan Formulir Login/Daftar Terpersonalisasi**:
-   - Menghapus chip selector lama dari dalam form login.
-   - Menambahkan badge peran aktif dan tombol `← Ganti Peran` di bagian atas kartu form login.
-   - Mempertahankan 100% fungsionalitas email/password, Google OAuth, OTP WhatsApp, Forgot Password, dan Upgrade Role modal.
+1. **Perbaikan Otentikasi & State Role di `App.tsx`**:
+   - Menghapus logika `if (portalView === 'user' && role === 'owner') role = 'user'`.
+   - Mengupdate sinkronisasi `localStorage.setItem('portal_view', 'owner')` saat akun pemilik kost berhasil diverifikasi.
+   - Menambahkan guard redirect di `fetchUserData()`: jika role adalah `owner` dan lokasi saat ini adalah `/login`, `/`, atau rute publik user, langsung navigate ke `Page.DASHBOARD_MITRA`.
+2. **Proteksi & Isolasi Rute di `<Routes>` (`App.tsx`)**:
+   - Memasang perlindungan pada `<Route path={Page.HOME} ... />` dan rute publik lainnya agar me-redirect akun `owner` ke `Page.DASHBOARD_MITRA`.
+3. **Penyelarasan Navigasi di `Navbar.tsx`**:
+   - Memperbarui desktop nav items saat `user?.role === 'owner'` (Dashboard Mitra, Kelola Kost, Chat, Profil Mitra).
+   - Memperbarui bottom navigation mobile saat `user?.role === 'owner'` (Dashboard, Kelola Kost, Chat, Profil).
+   - Memastikan logo RuangSinggah di navbar mengarahkan pemilik ke `Page.DASHBOARD_MITRA`.
 4. **Kompilasi & Build**:
    - Menjalankan `cmd /c npm run build` di `functions/public/` untuk memastikan 0 error kompilasi.
 5. **Pencatatan Progres & Git Push**:
-   - Mencatat progres nomor 303 di `functions/PROGRESS.md`.
+   - Mencatat progres nomor 304 di `functions/PROGRESS.md`.
    - Memperbarui `WALKTHROUGH.md`.
    - Melakukan commit dan push ke branch `bukan-productions`.
 
 ---
 
 ## 4. Rencana Verifikasi
-- Membuka halaman `/login` di browser tanpa parameter:
-  - Memverifikasi munculnya layar portal pemilihan akses 2 kartu (Pencari Kost vs Pemilik Kost).
-  - Mengklik `Lanjutkan sebagai Pencari` $\rightarrow$ formulir login/daftar Pencari Kost terbuka tanpa chip switcher lama.
-  - Mengklik `← Ganti Peran` $\rightarrow$ kembali ke portal pemilihan akses.
-  - Mengklik `Lanjutkan sebagai Pemilik` $\rightarrow$ formulir login/daftar Pemilik Kost terbuka dengan validasi OTP WhatsApp mitra.
+- Melakukan login sebagai akun Pemilik Kost (`owner`):
+  - Memverifikasi setelah klik masuk / login Google, pengguna langsung diarahkan ke `/dashboard-mitra` (Dashboard Pemilik Kost) tanpa mendarat di beranda user.
+  - Memverifikasi jika pemilik kost mengetik rute `/`, `/listings`, atau `/products`, sistem otomatis mengunci dan mengarahkannya kembali ke `/dashboard-mitra`.
+  - Memverifikasi tampilan navbar desktop dan bottom bar mobile menyajikan menu khusus pemilik kost.

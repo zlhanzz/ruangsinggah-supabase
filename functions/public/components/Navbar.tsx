@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Page } from '../types';
-import { Bell, MessageSquare, Home, Search, ClipboardList, User } from 'lucide-react';
+import { Bell, MessageSquare, Home, Search, ClipboardList, User, Building2, Layers } from 'lucide-react';
 import NotificationDropdown from './NotificationDropdown';
 import { notificationService } from '../notificationService';
 
@@ -22,7 +22,15 @@ const Navbar: React.FC<NavbarProps> = ({ activePage, onPageChange, user, onLogou
   const mobileProfileRef = useRef<HTMLDivElement>(null);
   const notificationsRef = useRef<HTMLDivElement>(null);
 
-  const navItems = [
+  const isOwner = user?.role === 'owner' || user?.role === 'mitra';
+  const isAdmin = user?.role === 'admin';
+  const isAgent = user?.role === 'survey_agent';
+
+  const navItems = isOwner ? [
+    { label: 'Dashboard Mitra', id: Page.DASHBOARD_MITRA },
+    { label: 'Chat Penyewa', id: Page.CHAT },
+    { label: 'Profil Mitra', id: Page.PROFILE },
+  ] : [
     { label: 'Cari Kost', id: Page.LISTINGS },
     { label: 'Data Kost', id: Page.PRODUCTS },
     { label: 'Jasa Survey', id: Page.SURVEY_SERVICE },
@@ -80,7 +88,6 @@ const Navbar: React.FC<NavbarProps> = ({ activePage, onPageChange, user, onLogou
 
   const handleNavClick = (pageId: Page) => {
     // No dynamic restrictions here; page-level logic handles auth where needed
-
     onPageChange(pageId);
   };
 
@@ -89,7 +96,10 @@ const Navbar: React.FC<NavbarProps> = ({ activePage, onPageChange, user, onLogou
       <nav className="sticky top-0 z-50 bg-white/90 backdrop-blur-md border-b border-gray-100">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between h-20 items-center">
-            <div className="flex-shrink-0 flex items-center cursor-pointer" onClick={() => onPageChange(Page.HOME)}>
+            <div 
+              className="flex-shrink-0 flex items-center cursor-pointer" 
+              onClick={() => onPageChange(isOwner ? Page.DASHBOARD_MITRA : (isAdmin ? Page.DASHBOARD_ADMIN : (isAgent ? Page.DASHBOARD_AGENT : Page.HOME)))}
+            >
               <img src="/logo.png" alt="RuangSinggah.id" className="h-10 sm:h-12 w-auto mr-1.5" width="48" height="48" fetchPriority="high" />
               <span className="text-[#ff7a00] font-extrabold text-2xl tracking-tight">RuangSinggah</span>
               <span className="text-[#0b1c30] font-bold text-2xl">.id</span>
@@ -126,7 +136,7 @@ const Navbar: React.FC<NavbarProps> = ({ activePage, onPageChange, user, onLogou
                     >
                       {user.role === 'admin' 
                         ? (isAdminPage ? 'Mode User' : 'Admin Panel') 
-                        : (user.role === 'survey_agent' ? 'Agent Panel' : 'Owner Panel')}
+                        : (user.role === 'survey_agent' ? 'Agent Panel' : 'Dashboard Mitra')}
                     </button>
                   )}
 
@@ -197,59 +207,93 @@ const Navbar: React.FC<NavbarProps> = ({ activePage, onPageChange, user, onLogou
                       <div className="absolute right-0 mt-2 w-48 bg-white rounded-xl shadow-xl border border-gray-100 py-1 animate-in fade-in slide-in-from-top-2">
                         <div className="px-4 py-3 border-b border-gray-50">
                           <p className="text-[10px] font-black uppercase text-gray-400 tracking-widest">
-                            {user.role === 'admin' ? 'Login Sebagai Admin' : 'Login Sebagai'}
+                            {isOwner ? 'Login Sebagai Mitra Kost' : (user.role === 'admin' ? 'Login Sebagai Admin' : 'Login Sebagai')}
                           </p>
                           <p className="text-sm font-bold text-gray-900 truncate">{user.email}</p>
                         </div>
-                        <button
-                          onClick={() => {
-                            onPageChange(Page.PROFILE);
-                            setIsProfileOpen(false);
-                          }}
-                          className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-orange-50 hover:text-orange-600"
-                        >
-                          Profil Saya
-                        </button>
-                        <button
-                          onClick={() => {
-                            onPageChange(Page.CHAT);
-                            setIsProfileOpen(false);
-                          }}
-                          className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-orange-50 hover:text-orange-600 border-t border-gray-50"
-                        >
-                          Pesan / Chat
-                        </button>
-                        <button
-                          onClick={() => {
-                            onPageChange(Page.MY_BOOKINGS);
-                            setIsProfileOpen(false);
-                          }}
-                          className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-orange-50 hover:text-orange-600 border-t border-gray-50"
-                        >
-                          Kost Saya
-                        </button>
-                        {['admin', 'survey_agent', 'owner', 'mitra'].includes(user.role) && (
-                          <button
-                            onClick={() => {
-                              const targetPage = user.role === 'admin' 
-                                ? (isAdminPage ? Page.HOME : Page.DASHBOARD_ADMIN) 
-                                : (user.role === 'survey_agent' ? Page.DASHBOARD_AGENT : Page.DASHBOARD_MITRA);
-                              onPageChange(targetPage);
-                              setIsProfileOpen(false);
-                            }}
-                            className="block w-full text-left px-4 py-2 text-sm text-blue-600 hover:bg-blue-50 font-bold border-t border-gray-50"
-                          >
-                            {user.role === 'admin' 
-                              ? (isAdminPage ? 'Tampilan User' : 'Dashboard Admin') 
-                              : (user.role === 'survey_agent' ? 'Dashboard Agen' : 'Dashboard Pemilik')}
-                          </button>
+                        {isOwner ? (
+                          <>
+                            <button
+                              onClick={() => {
+                                onPageChange(Page.DASHBOARD_MITRA);
+                                setIsProfileOpen(false);
+                              }}
+                              className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-orange-50 hover:text-orange-600 font-bold"
+                            >
+                              Dashboard Mitra
+                            </button>
+                            <button
+                              onClick={() => {
+                                onPageChange(Page.CHAT);
+                                setIsProfileOpen(false);
+                              }}
+                              className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-orange-50 hover:text-orange-600 border-t border-gray-50"
+                            >
+                              Chat Penyewa
+                            </button>
+                            <button
+                              onClick={() => {
+                                onPageChange(Page.PROFILE);
+                                setIsProfileOpen(false);
+                              }}
+                              className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-orange-50 hover:text-orange-600 border-t border-gray-50"
+                            >
+                              Profil Mitra
+                            </button>
+                          </>
+                        ) : (
+                          <>
+                            <button
+                              onClick={() => {
+                                onPageChange(Page.PROFILE);
+                                setIsProfileOpen(false);
+                              }}
+                              className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-orange-50 hover:text-orange-600"
+                            >
+                              Profil Saya
+                            </button>
+                            <button
+                              onClick={() => {
+                                onPageChange(Page.CHAT);
+                                setIsProfileOpen(false);
+                              }}
+                              className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-orange-50 hover:text-orange-600 border-t border-gray-50"
+                            >
+                              Pesan / Chat
+                            </button>
+                            <button
+                              onClick={() => {
+                                onPageChange(Page.MY_BOOKINGS);
+                                setIsProfileOpen(false);
+                              }}
+                              className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-orange-50 hover:text-orange-600 border-t border-gray-50"
+                            >
+                              Kost Saya
+                            </button>
+                            {['admin', 'survey_agent'].includes(user.role) && (
+                              <button
+                                onClick={() => {
+                                  const targetPage = user.role === 'admin' 
+                                    ? (isAdminPage ? Page.HOME : Page.DASHBOARD_ADMIN) 
+                                    : Page.DASHBOARD_AGENT;
+                                  onPageChange(targetPage);
+                                  setIsProfileOpen(false);
+                                }}
+                                className="block w-full text-left px-4 py-2 text-sm text-blue-600 hover:bg-blue-50 font-bold border-t border-gray-50"
+                              >
+                                {user.role === 'admin' 
+                                  ? (isAdminPage ? 'Tampilan User' : 'Dashboard Admin') 
+                                  : 'Dashboard Agen'}
+                              </button>
+                            )}
+                          </>
                         )}
                         <button
                           onClick={() => {
                             if (onLogout) onLogout();
                             setIsProfileOpen(false);
                           }}
-                          className="block w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 font-medium"
+                          className="block w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 font-medium border-t border-gray-50"
                         >
                           Keluar
                         </button>
@@ -413,94 +457,151 @@ const Navbar: React.FC<NavbarProps> = ({ activePage, onPageChange, user, onLogou
         </div>
       </nav>
 
-      {/* Mobile Bottom Navigation Bar (5 Items: Home, Search, Chat, Orders, Profile) */}
+      {/* Mobile Bottom Navigation Bar */}
       {!hideBottomNav && !isAdminPage && !activePage.startsWith('/dashboard') && !activePage.startsWith(Page.DASHBOARD_MITRA) && !activePage.startsWith(Page.DASHBOARD_AGENT) && !activePage.startsWith(Page.DASHBOARD_OWNER) && (
         <div className="md:hidden fixed bottom-0 left-0 right-0 w-full z-[100] bg-white border-t border-gray-100 shadow-[0_-4px_24px_rgba(0,0,0,0.06)] pb-[max(0.6rem,env(safe-area-inset-bottom))]">
           <div className="flex items-center justify-around py-2 px-1">
-            {/* 1. Home */}
-            <button
-              onClick={() => onPageChange(Page.HOME)}
-              className={`flex-1 flex flex-col items-center justify-center gap-1 py-1 transition-all active:scale-95 cursor-pointer ${
-                activePage === Page.HOME || activePage === '' ? 'text-[#ff7a00]' : 'text-[#334155] hover:text-[#0b1c30]'
-              }`}
-            >
-              <Home 
-                size={23} 
-                strokeWidth={activePage === Page.HOME || activePage === '' ? 2.6 : 2.2} 
-                className={activePage === Page.HOME || activePage === '' ? 'text-[#ff7a00] fill-[#ff7a00]/10' : 'text-[#334155]'} 
-              />
-              <span className={`text-[11px] tracking-tight ${activePage === Page.HOME || activePage === '' ? 'font-extrabold text-[#ff7a00]' : 'font-bold text-[#334155]'}`}>
-                Home
-              </span>
-            </button>
+            {isOwner ? (
+              <>
+                {/* 1. Dashboard Mitra */}
+                <button
+                  onClick={() => onPageChange(Page.DASHBOARD_MITRA)}
+                  className={`flex-1 flex flex-col items-center justify-center gap-1 py-1 transition-all active:scale-95 cursor-pointer ${
+                    activePage.startsWith(Page.DASHBOARD_MITRA) ? 'text-[#ff7a00]' : 'text-[#334155] hover:text-[#0b1c30]'
+                  }`}
+                >
+                  <Home 
+                    size={23} 
+                    strokeWidth={activePage.startsWith(Page.DASHBOARD_MITRA) ? 2.6 : 2.2} 
+                    className={activePage.startsWith(Page.DASHBOARD_MITRA) ? 'text-[#ff7a00] fill-[#ff7a00]/10' : 'text-[#334155]'} 
+                  />
+                  <span className={`text-[11px] tracking-tight ${activePage.startsWith(Page.DASHBOARD_MITRA) ? 'font-extrabold text-[#ff7a00]' : 'font-bold text-[#334155]'}`}>
+                    Dashboard
+                  </span>
+                </button>
 
-            {/* 2. Search */}
-            <button
-              onClick={() => onPageChange(Page.LISTINGS)}
-              className={`flex-1 flex flex-col items-center justify-center gap-1 py-1 transition-all active:scale-95 cursor-pointer ${
-                activePage.startsWith(Page.LISTINGS) || activePage.startsWith('/kost-dekat') || activePage.startsWith('/kost-area') || activePage.startsWith(Page.PRODUCTS) ? 'text-[#ff7a00]' : 'text-[#334155] hover:text-[#0b1c30]'
-              }`}
-            >
-              <Search 
-                size={23} 
-                strokeWidth={activePage.startsWith(Page.LISTINGS) || activePage.startsWith('/kost-dekat') || activePage.startsWith('/kost-area') || activePage.startsWith(Page.PRODUCTS) ? 2.6 : 2.2} 
-                className={activePage.startsWith(Page.LISTINGS) || activePage.startsWith('/kost-dekat') || activePage.startsWith('/kost-area') || activePage.startsWith(Page.PRODUCTS) ? 'text-[#ff7a00]' : 'text-[#334155]'} 
-              />
-              <span className={`text-[11px] tracking-tight ${activePage.startsWith(Page.LISTINGS) || activePage.startsWith('/kost-dekat') || activePage.startsWith('/kost-area') || activePage.startsWith(Page.PRODUCTS) ? 'font-extrabold text-[#ff7a00]' : 'font-bold text-[#334155]'}`}>
-                Search
-              </span>
-            </button>
+                {/* 2. Chat Penyewa */}
+                <button
+                  onClick={() => onPageChange(Page.CHAT)}
+                  className={`flex-1 flex flex-col items-center justify-center gap-1 py-1 transition-all active:scale-95 cursor-pointer ${
+                    activePage.startsWith(Page.CHAT) ? 'text-[#ff7a00]' : 'text-[#334155] hover:text-[#0b1c30]'
+                  }`}
+                >
+                  <MessageSquare 
+                    size={23} 
+                    strokeWidth={activePage.startsWith(Page.CHAT) ? 2.6 : 2.2} 
+                    className={activePage.startsWith(Page.CHAT) ? 'text-[#ff7a00] fill-[#ff7a00]/10' : 'text-[#334155]'} 
+                  />
+                  <span className={`text-[11px] tracking-tight ${activePage.startsWith(Page.CHAT) ? 'font-extrabold text-[#ff7a00]' : 'font-bold text-[#334155]'}`}>
+                    Chat
+                  </span>
+                </button>
 
-            {/* 3. Chat */}
-            <button
-              onClick={() => onPageChange(user ? Page.CHAT : Page.LOGIN)}
-              className={`flex-1 flex flex-col items-center justify-center gap-1 py-1 transition-all active:scale-95 cursor-pointer ${
-                activePage.startsWith(Page.CHAT) ? 'text-[#ff7a00]' : 'text-[#334155] hover:text-[#0b1c30]'
-              }`}
-            >
-              <MessageSquare 
-                size={23} 
-                strokeWidth={activePage.startsWith(Page.CHAT) ? 2.6 : 2.2} 
-                className={activePage.startsWith(Page.CHAT) ? 'text-[#ff7a00] fill-[#ff7a00]/10' : 'text-[#334155]'} 
-              />
-              <span className={`text-[11px] tracking-tight ${activePage.startsWith(Page.CHAT) ? 'font-extrabold text-[#ff7a00]' : 'font-bold text-[#334155]'}`}>
-                Chat
-              </span>
-            </button>
+                {/* 3. Profil Mitra */}
+                <button
+                  onClick={() => onPageChange(Page.PROFILE)}
+                  className={`flex-1 flex flex-col items-center justify-center gap-1 py-1 transition-all active:scale-95 cursor-pointer ${
+                    activePage.startsWith(Page.PROFILE) || activePage.startsWith(Page.MITRA_PROFILE) ? 'text-[#ff7a00]' : 'text-[#334155] hover:text-[#0b1c30]'
+                  }`}
+                >
+                  <User 
+                    size={23} 
+                    strokeWidth={activePage.startsWith(Page.PROFILE) || activePage.startsWith(Page.MITRA_PROFILE) ? 2.6 : 2.2} 
+                    className={activePage.startsWith(Page.PROFILE) || activePage.startsWith(Page.MITRA_PROFILE) ? 'text-[#ff7a00] fill-[#ff7a00]/10' : 'text-[#334155]'} 
+                  />
+                  <span className={`text-[11px] tracking-tight ${activePage.startsWith(Page.PROFILE) || activePage.startsWith(Page.MITRA_PROFILE) ? 'font-extrabold text-[#ff7a00]' : 'font-bold text-[#334155]'}`}>
+                    Profil
+                  </span>
+                </button>
+              </>
+            ) : (
+              <>
+                {/* 1. Home */}
+                <button
+                  onClick={() => onPageChange(Page.HOME)}
+                  className={`flex-1 flex flex-col items-center justify-center gap-1 py-1 transition-all active:scale-95 cursor-pointer ${
+                    activePage === Page.HOME || activePage === '' ? 'text-[#ff7a00]' : 'text-[#334155] hover:text-[#0b1c30]'
+                  }`}
+                >
+                  <Home 
+                    size={23} 
+                    strokeWidth={activePage === Page.HOME || activePage === '' ? 2.6 : 2.2} 
+                    className={activePage === Page.HOME || activePage === '' ? 'text-[#ff7a00] fill-[#ff7a00]/10' : 'text-[#334155]'} 
+                  />
+                  <span className={`text-[11px] tracking-tight ${activePage === Page.HOME || activePage === '' ? 'font-extrabold text-[#ff7a00]' : 'font-bold text-[#334155]'}`}>
+                    Home
+                  </span>
+                </button>
 
-            {/* 4. Orders */}
-            <button
-              onClick={() => onPageChange(user ? Page.MY_BOOKINGS : Page.LOGIN)}
-              className={`flex-1 flex flex-col items-center justify-center gap-1 py-1 transition-all active:scale-95 cursor-pointer ${
-                activePage.startsWith(Page.MY_BOOKINGS) ? 'text-[#ff7a00]' : 'text-[#334155] hover:text-[#0b1c30]'
-              }`}
-            >
-              <ClipboardList 
-                size={23} 
-                strokeWidth={activePage.startsWith(Page.MY_BOOKINGS) ? 2.6 : 2.2} 
-                className={activePage.startsWith(Page.MY_BOOKINGS) ? 'text-[#ff7a00]' : 'text-[#334155]'} 
-              />
-              <span className={`text-[11px] tracking-tight ${activePage.startsWith(Page.MY_BOOKINGS) ? 'font-extrabold text-[#ff7a00]' : 'font-bold text-[#334155]'}`}>
-                Orders
-              </span>
-            </button>
+                {/* 2. Search */}
+                <button
+                  onClick={() => onPageChange(Page.LISTINGS)}
+                  className={`flex-1 flex flex-col items-center justify-center gap-1 py-1 transition-all active:scale-95 cursor-pointer ${
+                    activePage.startsWith(Page.LISTINGS) || activePage.startsWith('/kost-dekat') || activePage.startsWith('/kost-area') || activePage.startsWith(Page.PRODUCTS) ? 'text-[#ff7a00]' : 'text-[#334155] hover:text-[#0b1c30]'
+                  }`}
+                >
+                  <Search 
+                    size={23} 
+                    strokeWidth={activePage.startsWith(Page.LISTINGS) || activePage.startsWith('/kost-dekat') || activePage.startsWith('/kost-area') || activePage.startsWith(Page.PRODUCTS) ? 2.6 : 2.2} 
+                    className={activePage.startsWith(Page.LISTINGS) || activePage.startsWith('/kost-dekat') || activePage.startsWith('/kost-area') || activePage.startsWith(Page.PRODUCTS) ? 'text-[#ff7a00]' : 'text-[#334155]'} 
+                  />
+                  <span className={`text-[11px] tracking-tight ${activePage.startsWith(Page.LISTINGS) || activePage.startsWith('/kost-dekat') || activePage.startsWith('/kost-area') || activePage.startsWith(Page.PRODUCTS) ? 'font-extrabold text-[#ff7a00]' : 'font-bold text-[#334155]'}`}>
+                    Search
+                  </span>
+                </button>
 
-            {/* 5. Profile */}
-            <button
-              onClick={() => onPageChange(user ? Page.PROFILE : Page.LOGIN)}
-              className={`flex-1 flex flex-col items-center justify-center gap-1 py-1 transition-all active:scale-95 cursor-pointer ${
-                activePage.startsWith(Page.PROFILE) || activePage.startsWith(Page.MITRA_PROFILE) || activePage.startsWith(Page.LOGIN) ? 'text-[#ff7a00]' : 'text-[#334155] hover:text-[#0b1c30]'
-              }`}
-            >
-              <User 
-                size={23} 
-                strokeWidth={activePage.startsWith(Page.PROFILE) || activePage.startsWith(Page.MITRA_PROFILE) || activePage.startsWith(Page.LOGIN) ? 2.6 : 2.2} 
-                className={activePage.startsWith(Page.PROFILE) || activePage.startsWith(Page.MITRA_PROFILE) || activePage.startsWith(Page.LOGIN) ? 'text-[#ff7a00] fill-[#ff7a00]/10' : 'text-[#334155]'} 
-              />
-              <span className={`text-[11px] tracking-tight ${activePage.startsWith(Page.PROFILE) || activePage.startsWith(Page.MITRA_PROFILE) || activePage.startsWith(Page.LOGIN) ? 'font-extrabold text-[#ff7a00]' : 'font-bold text-[#334155]'}`}>
-                Profile
-              </span>
-            </button>
+                {/* 3. Chat */}
+                <button
+                  onClick={() => onPageChange(user ? Page.CHAT : Page.LOGIN)}
+                  className={`flex-1 flex flex-col items-center justify-center gap-1 py-1 transition-all active:scale-95 cursor-pointer ${
+                    activePage.startsWith(Page.CHAT) ? 'text-[#ff7a00]' : 'text-[#334155] hover:text-[#0b1c30]'
+                  }`}
+                >
+                  <MessageSquare 
+                    size={23} 
+                    strokeWidth={activePage.startsWith(Page.CHAT) ? 2.6 : 2.2} 
+                    className={activePage.startsWith(Page.CHAT) ? 'text-[#ff7a00] fill-[#ff7a00]/10' : 'text-[#334155]'} 
+                  />
+                  <span className={`text-[11px] tracking-tight ${activePage.startsWith(Page.CHAT) ? 'font-extrabold text-[#ff7a00]' : 'font-bold text-[#334155]'}`}>
+                    Chat
+                  </span>
+                </button>
+
+                {/* 4. Orders */}
+                <button
+                  onClick={() => onPageChange(user ? Page.MY_BOOKINGS : Page.LOGIN)}
+                  className={`flex-1 flex flex-col items-center justify-center gap-1 py-1 transition-all active:scale-95 cursor-pointer ${
+                    activePage.startsWith(Page.MY_BOOKINGS) ? 'text-[#ff7a00]' : 'text-[#334155] hover:text-[#0b1c30]'
+                  }`}
+                >
+                  <ClipboardList 
+                    size={23} 
+                    strokeWidth={activePage.startsWith(Page.MY_BOOKINGS) ? 2.6 : 2.2} 
+                    className={activePage.startsWith(Page.MY_BOOKINGS) ? 'text-[#ff7a00]' : 'text-[#334155]'} 
+                  />
+                  <span className={`text-[11px] tracking-tight ${activePage.startsWith(Page.MY_BOOKINGS) ? 'font-extrabold text-[#ff7a00]' : 'font-bold text-[#334155]'}`}>
+                    Orders
+                  </span>
+                </button>
+
+                {/* 5. Profile */}
+                <button
+                  onClick={() => onPageChange(user ? Page.PROFILE : Page.LOGIN)}
+                  className={`flex-1 flex flex-col items-center justify-center gap-1 py-1 transition-all active:scale-95 cursor-pointer ${
+                    activePage.startsWith(Page.PROFILE) || activePage.startsWith(Page.MITRA_PROFILE) || activePage.startsWith(Page.LOGIN) ? 'text-[#ff7a00]' : 'text-[#334155] hover:text-[#0b1c30]'
+                  }`}
+                >
+                  <User 
+                    size={23} 
+                    strokeWidth={activePage.startsWith(Page.PROFILE) || activePage.startsWith(Page.MITRA_PROFILE) || activePage.startsWith(Page.LOGIN) ? 2.6 : 2.2} 
+                    className={activePage.startsWith(Page.PROFILE) || activePage.startsWith(Page.MITRA_PROFILE) || activePage.startsWith(Page.LOGIN) ? 'text-[#ff7a00] fill-[#ff7a00]/10' : 'text-[#334155]'} 
+                  />
+                  <span className={`text-[11px] tracking-tight ${activePage.startsWith(Page.PROFILE) || activePage.startsWith(Page.MITRA_PROFILE) || activePage.startsWith(Page.LOGIN) ? 'font-extrabold text-[#ff7a00]' : 'font-bold text-[#334155]'}`}>
+                    Profile
+                  </span>
+                </button>
+              </>
+            )}
           </div>
         </div>
       )}

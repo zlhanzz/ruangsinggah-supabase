@@ -1,38 +1,44 @@
-# WALKTHROUGH: Penerapan Portal Pemilihan Akses Masuk (Pencari Kost vs Pemilik Kost)
+# WALKTHROUGH: Isolasi Lingkungan Penuh Portal Pemilik Kost (Role Isolation)
 
 ## 1. Ringkasan Pekerjaan
-Telah berhasil diimplementasikan **Portal Pemilihan Akses Masuk & Daftar** pada [`Login.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/Login.tsx) menggantikan sistem toggle chip lama:
+Telah berhasil diimplementasikan **Isolasi Lingkungan Penuh (Role Isolation)** bagi Pemilik Kost (Mitra) pada [`App.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/App.tsx), [`Login.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/Login.tsx), dan [`Navbar.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/components/Navbar.tsx):
 
-1. **Layar Gerbang Pemilihan Peran (Role Selection Portal)**:
-   - **Badge**: `[ 🟠 PORTAL AKSES MASUK & DAFTAR ]` dengan animasi pulse.
-   - **Judul**: `Pilih Akses Masuk Anda di RuangSinggah` dan subtitle informatif.
-   - **Kartu Pencari Kost (Oranye)**:
-     - Ikon `Compass` berbingkai squircle oranye.
-     - Tag: `[ PENCARI HUNIAN KOST ]`.
-     - Deskripsi pencarian, perbandingan fasilitas, dan sewa kamar nyaman.
-     - Checklist: *Akses 1.200+ database kost terverifikasi*, *Layanan Jasa Survey Lapangan langsung*, *Booking aman & transparansi biaya sewa*.
-     - Tombol Aksi: `Lanjutkan sebagai Pencari →`.
-   - **Kartu Pemilik Kost (Biru/Indigo)**:
-     - Ikon `Building2` berbingkai squircle indigo.
-     - Tag: `[ MITRA & PENGELOLA ]`.
-     - Deskripsi kelola kamar, inventaris properti, pantau okupansi, dan pemasaran kamar.
-     - Checklist: *Pasang listing & promosi properti gratis*, *Sistem KostManager & verifikasi survey*, *Rekap laporan sewa & dompet penghasilan*.
-     - Tombol Aksi: `Lanjutkan sebagai Pemilik →`.
+1. **Otentikasi & Redirect Otomatis ke Dashboard Mitra**:
+   - Menghapus logika pemaksaan role pemilik kost yang sebelumnya diturunkan menjadi `user` jika `portal_view` bernilai `'user'` di `fetchUserData()`.
+   - Mengunci dan menyimpan `localStorage.setItem('portal_view', 'owner')` ketika akun pemilik kost terautentikasi.
+   - Mengarahkan akun pemilik kost secara otomatis ke **`Page.DASHBOARD_MITRA` (`/dashboard-mitra`)** saat selesai login atau saat me-load aplikasi dari halaman user biasa.
 
-2. **Pembaruan Formulir Masuk / Daftar**:
-   - Menghapus sistem *segmented toggle chip* lama dari form login.
-   - Menambahkan header informasi peran aktif (`Pencari Kost` / `Pemilik / Mitra Kost`) dengan tombol **`← Ganti Peran`** (`RotateCcw`) untuk kembali ke portal pemilihan peran.
-   - Mempertahankan 100% fungsionalitas email/password, Google OAuth, OTP WhatsApp untuk pemilik kost, recovery/reset password, dan modal upgrade akun.
+2. **Penguncian & Proteksi Rute Publik (Route Locking)**:
+   - Rute publik pencari kost:
+     - Beranda (`/`)
+     - Cari Kost (`/listings`, `/kost-dekat/:campusSlug`, `/kost-area/:areaSlug`)
+     - Data Kost (`/products/*`)
+     - Jadi Mitra (`/owner`)
+     - Jasa Survey (`/survey-service`)
+     - KostManager (`/kostmanager`)
+   - Seluruh rute di atas secara otomatis me-redirect akun pemilik kost ke `Page.DASHBOARD_MITRA` jika pemilik mencoba membukanya saat sesi aktif.
+
+3. **Isolasi Antarmuka Navigasi (`Navbar.tsx`)**:
+   - **Klik Logo**: Mengarahkan pemilik kost ke `Page.DASHBOARD_MITRA` (bukan Beranda user).
+   - **Desktop Nav Menu**: Menampilkan menu operasional mitra (*Dashboard Mitra*, *Chat Penyewa*, *Profil Mitra*).
+   - **Desktop Profile Dropdown**: Menyajikan badge `Login Sebagai Mitra Kost`, *Dashboard Mitra*, *Chat Penyewa*, *Profil Mitra*, dan *Keluar*.
+   - **Mobile Bottom Navigation Bar**: Menampilkan 3 tombol khusus (*Dashboard*, *Chat*, *Profil*) saat pemilik kost berada di luar dashboard mitra.
 
 ---
 
 ## 2. Rincian Perubahan Berkas
 
+### [`App.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/App.tsx)
+- Menghapus logika downgrade role pemilik `if (portalView === 'user' && role === 'owner') role = 'user'`.
+- Menambahkan auto-redirect pemilik kost ke `Page.DASHBOARD_MITRA` pada `fetchUserData()`.
+- Memasang `<Navigate to={Page.DASHBOARD_MITRA} replace />` pada seluruh rute pencari kost publik jika `user?.role === 'owner'`.
+
 ### [`Login.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/Login.tsx)
-- Menambahkan state `isRoleSelected` untuk mengontrol transisi antara portal pilihan peran dan formulir login/daftar.
-- Menggantikan ikon lama di `PasswordInput` dengan komponen pure vector SVG dari `lucide-react` (`Eye` & `EyeOff`).
-- Menyajikan layar portal 2 kartu interaktif ketika `!isRoleSelected`.
-- Menyajikan header status peran aktif dan tombol `Ganti Peran` di dalam form login ketika `isRoleSelected`.
+- Menambahkan penyimpanan `localStorage.setItem('portal_view', activeRole)` pada `handleLogin` dan `handleGoogleLogin`.
+
+### [`Navbar.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/components/Navbar.tsx)
+- Mengimpor ikon pure vector SVG `Building2` dan `Layers` dari `lucide-react`.
+- Menyesuaikan `navItems`, `onClick` logo, label tombol panel, isi dropdown profil, dan navigasi bawah mobile khusus untuk pemilik kost (`isOwner`).
 
 ---
 
@@ -43,21 +49,24 @@ cmd /c npm run build
 ```
 **Output:**
 ```text
+vite v6.4.1 building for production...
+transforming...
 ✓ 2509 modules transformed.
-✓ built in 29.42s
+rendering chunks...
+computing gzip size...
+✓ built in 34.41s
 Exit code: 0 (0 error)
 ```
 
 ---
 
 ## 4. Panduan Verifikasi Pengguna
-1. Buka menu **Login / Masuk** (`/login`) di browser tanpa query params:
-   - Muncul layar portal pemilihan peran dengan 2 kartu: **Pencari Kost** dan **Pemilik Kost**.
-2. Klik **Lanjutkan sebagai Pencari**:
-   - Anda masuk ke form login/daftar Pencari Kost.
-   - Perhatikan bahwa chip switcher yang membingungkan sudah tidak ada.
-   - Terdapat tombol `Ganti Peran` di bagian atas formulir.
-3. Klik **Ganti Peran**:
-   - Layar kembali ke portal pemilihan peran.
-4. Klik **Lanjutkan sebagai Pemilik**:
-   - Anda masuk ke form login/daftar Pemilik Kost lengkap dengan alur verifikasi nomor WhatsApp dan kode referral agen jika mendaftar baru.
+1. Buka halaman **Login** (`/login`) dan pilih **Pemilik Kost**.
+2. Lakukan login menggunakan akun Pemilik Kost (via Email atau Google OAuth):
+   - Setelah login berhasil, perhatikan bahwa Anda **langsung mendarat di Portal Dashboard Mitra (`/dashboard-mitra`)**, bukan di Beranda pencari kost.
+3. Coba ketik URL beranda (`/`) atau `/listings` di address bar browser:
+   - Sistem secara otomatis mengunci dan me-redirect Anda kembali ke `/dashboard-mitra`.
+4. Perhatikan navigasi Navbar:
+   - Klik logo RuangSinggah di pojok kiri atas mengarahkan Anda ke Dashboard Mitra.
+   - Menu atas dan dropdown profil menyajikan menu khusus mitra (*Dashboard Mitra*, *Chat Penyewa*, *Profil Mitra*).
+   - Pada layar HP/mobile, bottom bar menyajikan menu mitra (*Dashboard*, *Chat*, *Profil*).
