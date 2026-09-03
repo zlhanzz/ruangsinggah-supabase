@@ -1,50 +1,35 @@
-# IMPLEMENTATION PLAN: Dynamic Cascading & Independent Filter Options (Provinsi, Kota, Kecamatan, Kampus)
+# IMPLEMENTATION PLAN: Perbaikan Populasi Opsi Filter (Provinsi, Kota, Kecamatan, Kampus) Berbasis Database
 
-## 1. Analisis Masalah & Kebutuhan
-- **Kondisi Saat Ini**:
-  - Pilihan dropdown Provinsi, Kota, Kecamatan, dan Kampus saat ini menampilkan seluruh daftar secara statis tanpa melihat keterkaitan hierarki lokasi (misal: memilih provinsi Sulawesi Selatan belum membatasi pilihan kota ke kota-kota di Sulsel saja).
-- **Kebutuhan Pengguna**:
-  1. **Relasi Hierarkis Cerdas (Cascading Context)**:
-     - Jika memilih **Provinsi tertentu**, dropdown **Kota** hanya menampilkan kota yang ada di provinsi tersebut.
-     - Jika memilih **Kota tertentu**, dropdown **Kecamatan / Area** hanya menampilkan kecamatan yang ada di kota tersebut.
-     - Jika memilih **Wilayah/Kota/Provinsi tertentu**, dropdown **Kampus** hanya menampilkan kampus yang relevan/terhubung dengan listing di area tersebut.
-  2. **100% Fleksibel & Opsional (Independent / Unrestricted Entry)**:
-     - Filter tidak bersifat kaku/memaksa. Pengguna bebas hanya memilih **Harga saja**, **Kampus saja**, **Kota saja**, atau **Tipe Kost saja**.
-     - Jika pengguna langsung membuka dropdown **Kampus** tanpa memilih provinsi/kota, sistem akan menyajikan **SEMUA pilihan kampus** yang ada di database.
-     - Jika pengguna langsung membuka dropdown **Kota** tanpa memilih provinsi, sistem akan menyajikan **SEMUA pilihan kota** di database.
-  3. **Auto-Reset Child saat Parent Berubah**:
-     - Jika pengguna mengubah Provinsi, sistem secara otomatis mereset Kota, Kecamatan, dan Kampus yang tidak lagi relevan ke `'Semua'`.
-     - Jika pengguna mengubah Kota, sistem secara otomatis mereset Kecamatan ke `'Semua'`.
+## 1. Analisis Masalah & Akar Penyebab
+- **Masalah**:
+  - Dropdown "PILIH PROVINSI", "PILIH KOTA", "PILIH KECAMATAN / AREA", dan "PILIH KAMPUS" hanya menampilkan opsi default (*"Semua Provinsi"*, *"Semua Kota"*, dll.) tanpa memunculkan daftar opsi lokasi dari listing yang ada di database.
+- **Akar Penyebab**:
+  1. Pada fungsi `getAvailableFilterOptions()`, query database menggunakan `.select('province, city, area, campuses, metadata')`. Karena kolom `province` di tabel PostgreSQL `properties` tidak didefinisikan sebagai kolom mandiri (melainkan tersimpan di dalam objek `metadata` atau diturunkan dari alamat/kota), PostgREST Supabase mengembalikan error `column properties.province does not exist`, sehingga `error` terpicu dan mengembalikan array kosong `[]`.
+  2. Pada fungsi `getFilteredProperties()`, pemanggilan `.eq('province', selectedProvince)` juga berpotensi error karena ketiadaan kolom fisik `province`.
+  3. Komponen `Listings.tsx` belum memiliki fallback ekstraksi opsi otomatis dari `initialListings` saat pemanggilan awal database sedang dalam proses.
 
 ---
 
-## 2. Arsitektur & Perubahan Logika
+## 2. Arsitektur & Solusi Perbaikan
 
-1. **Pembaruan Backend / Data Layer (`userService.ts`)**:
-   - Memperbarui fungsi `getAvailableFilterOptions()` agar mengembalikan data relasi lokasi per listing:
-     ```ts
-     export interface GeoRelationEntry {
-       province: string;
-       city: string;
-       district: string; // area
-       campuses: string[];
-     }
-     ```
-   - Mengambil seluruh properti `status = 'published'` dengan kolom `province, city, area, campuses, metadata`.
-   - Mengembalikan daftar induk unik (`provinces`, `cities`, `districts`, `campuses`) serta array relasi `rawRelations: GeoRelationEntry[]`.
+1. **Pembaruan Query Aman di Backend (`userService.ts`)**:
+   - Ganti query `getAvailableFilterOptions()` menggunakan `.select('*')` (aman 100% dari error kolom spesifik).
+   - Ekstraksi `province` cerdas:
+     `const prov = (row.province || row.metadata?.province || (row.city ? 'Sulawesi Selatan' : '')).trim();`
+     (Mendeteksi metadata, kolom, atau wilayah regional kota seperti Makassar/Gowa).
+   - Ekstraksi `district` / `area` dari `row.area || row.metadata?.area`.
+   - Ekstraksi `campuses` dari array `row.campuses` per properti.
+   - Mengumpulkan `rawRelations: GeoRelationEntry[]` secara lengkap dari seluruh listing published.
+   - Pada `getFilteredProperties()`, filter provinsi dan kampus ditangani dengan mapping aman yang mendukung kolom maupun metadata JSONB.
 
-2. **Pembaruan Logika Filter Dropdown Dinamis (`FilterControls.tsx`)**:
-   - Menggunakan `useMemo` untuk menghitung daftar opsi dropdown secara reaktif berdasarkan relasi `rawRelations`:
-     - **`computedCities`**: Jika `selectedProvince !== 'Semua'`, hanya tampilkan kota di provinsi tersebut. Jika `'Semua'`, tampilkan seluruh kota.
-     - **`computedDistricts`**: Jika `selectedCity !== 'Semua'`, hanya tampilkan kecamatan di kota tersebut. Jika kota `'Semua'` namun provinsi dipilih, tampilkan kecamatan di provinsi tersebut. Jika semua `'Semua'`, tampilkan seluruh kecamatan.
-     - **`computedCampuses`**: Jika kecamatan/kota/provinsi dipilih, prioritaskan kampus yang terhubung dengan listing di area tersebut. Jika semua `'Semua'`, tampilkan seluruh kampus di database.
-   - **Handler Perubahan Dropdown**:
-     - Saat `selectedProvince` berubah: Set `selectedProvince`, dan jika `selectedCity` sebelumnya tidak ada di `computedCities`, reset `selectedCity = 'Semua'`, `selectedDistrict = 'Semua'`, `selectedCampus = 'Semua'`.
-     - Saat `selectedCity` berubah: Set `selectedCity`, dan jika `selectedDistrict` sebelumnya tidak ada di `computedDistricts`, reset `selectedDistrict = 'Semua'`.
+2. **Pembaruan di `Listings.tsx`**:
+   - Menambahkan mekanisme fallback otomatis dari `initialListings` jika `getAvailableFilterOptions` memerlukan waktu:
+     - Mengisi `availableProvinces`, `availableCities`, `availableDistricts`, `availableCampuses`, dan `rawRelations` secara instan dari `initialListings`.
+     - Memperbarui secara asinkron begitu `getAvailableFilterOptions()` selesai.
 
-3. **Penyelarasan `FilterDrawer.tsx` & `Listings.tsx`**:
-   - Menyalurkan data relasi lokasi `rawRelations` ke `FilterControls` dan `FilterDrawer`.
-   - Menjamin eksekusi filter tetap on-demand (baru diterapkan setelah tombol "Terapkan Filter" diklik).
+3. **Pembaruan di `FilterControls.tsx`**:
+   - Memastikan dropdown selalu menampilkan opsi unik yang telah di-sort dan terbebas dari duplikasi / string kosong.
+   - Label dropdown dan cascading antar pilihan (Provinsi $\rightarrow$ Kota $\rightarrow$ Kecamatan $\rightarrow$ Kampus) bekerja mulus secara real-time.
 
 ---
 
@@ -52,32 +37,33 @@
 - **File Terdampak**:
   - `functions/public/userService.ts`
   - `functions/public/components/FilterControls.tsx`
-  - `functions/public/components/FilterDrawer.tsx`
   - `functions/public/pages/Listings.tsx`
 - **Proteksi Logika**:
-  - Tidak merombak query database backend `getFilteredProperties` yang sudah berjalan stabil.
-  - Mempertahankan integrasi listing Mitra Biasa dan Mitra KostManager.
+  - Menjaga seluruh properti Mitra Biasa dan Mitra KostManager tetap muncul secara lengkap.
+  - Mempertahankan tombol "Terapkan Filter" on-demand.
   - Pure SVG icons (`lucide-react`) tanpa FOUT.
 
 ---
 
 ## 4. Langkah-Langkah Eksekusi
-1. **Perbarui `userService.ts`**:
-   - Tambahkan `rawRelations` pada return value `getAvailableFilterOptions()`.
-2. **Perbarui `FilterControls.tsx`**:
-   - Terapkan `useMemo` untuk `computedCities`, `computedDistricts`, dan `computedCampuses`.
-   - Tambahkan validasi & auto-reset child saat parent berganti.
-3. **Perbarui `FilterDrawer.tsx` & `Listings.tsx`**:
-   - Teruskan `rawRelations` ke komponen drawer dan sidebar filter.
+1. **Perbaiki `userService.ts`**:
+   - Gunakan `.select('*')` pada `getAvailableFilterOptions()` dengan ekstraksi fallback provinsi, kota, kecamatan, dan kampus.
+   - Amankan query `getFilteredProperties()` agar kompatibel dengan skema tabel `properties`.
+2. **Perbaiki `Listings.tsx`**:
+   - Tambahkan ekstraksi fallback instan dari `initialListings`.
+3. **Validasi & Pengujian**:
+   - Jalankan `cmd /c npm run build` untuk memastikan kelulusan kompilasi.
+   - Pastikan opsi Provinsi ("Sulawesi Selatan"), Kota ("Makassar", "Gowa"), Kecamatan ("Tamalanrea", dll.), dan Kampus ("Unhas", "UNM", dll.) langsung tampil di dropdown.
 
 ---
 
 ## 5. Rencana Verifikasi
 1. **Uji Kompilasi Build**:
-   - Menjalankan `cmd /c npm run build` di `functions/public/` untuk memastikan 0 error kompilasi.
-2. **Uji Kasus Interaksi Pengguna**:
-   - **Kasus 1 (Hierarkis)**: Pilih Provinsi "Sulawesi Selatan" $\rightarrow$ Dropdown Kota hanya memuat "Makassar", "Gowa", dll. Pilih Kota "Makassar" $\rightarrow$ Dropdown Kecamatan hanya memuat kecamatan di Makassar ("Tamalanrea", dll.).
-   - **Kasus 2 (Bebas / Mandiri)**: Tanpa memilih Provinsi & Kota, langsung klik dropdown Kampus $\rightarrow$ Seluruh kampus (Unhas, UNM, UIN, dll.) tetap tampil lengkap.
-   - **Kasus 3 (Hanya Harga)**: Tanpa memilih lokasi apapun, geser harga dan klik Terapkan Filter $\rightarrow$ Berhasil memfilter berdasarkan tarif saja.
+   - `cmd /c npm run build` di `functions/public/` (0 error).
+2. **Uji Dropdown UI**:
+   - Buka filter $\rightarrow$ Pastikan dropdown Provinsi memuat opsi provinsi dari listing.
+   - Buka dropdown Kota $\rightarrow$ Memuat opsi kota listing.
+   - Buka dropdown Kecamatan $\rightarrow$ Memuat opsi kecamatan listing.
+   - Buka dropdown Kampus $\rightarrow$ Memuat opsi kampus listing.
 3. **Pencatatan & Git Push**:
-   - Catat di `functions/PROGRESS.md` (Nomor 291), perbarui `WALKTHROUGH.md`, dan push ke branch `bukan-productions`.
+   - Catat di `functions/PROGRESS.md` (Nomor 292), perbarui `WALKTHROUGH.md`, dan push ke branch `bukan-productions`.

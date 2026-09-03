@@ -76,6 +76,51 @@ const Listings: React.FC<ListingsProps> = ({ onKostClick, listings: initialListi
     return () => { isMounted = false; };
   }, []);
 
+  // Fallback immediate extraction from initialListings
+  useEffect(() => {
+    if (initialListings && initialListings.length > 0) {
+      const provs = new Set<string>();
+      const cits = new Set<string>();
+      const dists = new Set<string>();
+      const camps = new Set<string>();
+      const rels: any[] = [];
+
+      initialListings.forEach(k => {
+        const city = (k.city || '').trim();
+        const prov = (k.province || (city ? 'Sulawesi Selatan' : '') || 'Sulawesi Selatan').trim();
+        const dist = (k.area || '').trim();
+        const itemCampuses: string[] = [];
+
+        if (prov) provs.add(prov);
+        if (city) cits.add(city);
+        if (dist) dists.add(dist);
+
+        if (Array.isArray(k.campuses)) {
+          k.campuses.forEach(c => {
+            if (c?.name && c.name.trim() !== '') {
+              const cName = c.name.trim();
+              camps.add(cName);
+              itemCampuses.push(cName);
+            }
+          });
+        }
+
+        rels.push({
+          province: prov,
+          city: city,
+          district: dist,
+          campuses: itemCampuses
+        });
+      });
+
+      setAvailableProvinces(prev => (prev.length === 0 && provs.size > 0 ? Array.from(provs).sort() : prev));
+      setAvailableCities(prev => (prev.length === 0 && cits.size > 0 ? Array.from(cits).sort() : prev));
+      setAvailableDistricts(prev => (prev.length === 0 && dists.size > 0 ? Array.from(dists).sort() : prev));
+      setAvailableCampuses(prev => (prev.length === 0 && camps.size > 0 ? Array.from(camps).sort() : prev));
+      setRawRelations(prev => (prev.length === 0 && rels.length > 0 ? rels : prev));
+    }
+  }, [initialListings]);
+
   // Sync route parameters & URL query params into filters on initial load
   useEffect(() => {
     const qSearch = queryParams.get('search');

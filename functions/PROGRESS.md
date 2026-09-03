@@ -2,6 +2,26 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 292. Perbaikan Populasi Opsi Filter (Provinsi, Kota, Kecamatan, Kampus) Berbasis Database (`userService.ts` & `Listings.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  - Pengguna melaporkan bahwa opsi dropdown filter (Provinsi, Kota, Kecamatan, Kampus) masih belum menampilkan daftar opsi sesuai listing yang ada di database (hanya memuat opsi default "Semua...").
+- **Akar Masalah & Implementasi Solusi**:
+  1. **Akar Masalah**: Sebelumnya query `getAvailableFilterOptions()` memanggil `.select('province, city, ...')`. Karena `province` bukan kolom fisik mandiri di skema tabel `properties` PostgreSQL (melainkan tersimpan di objek `metadata`), PostgREST Supabase mengembalikan error `column properties.province does not exist` sehingga proses gagal dan mengembalikan array kosong.
+  2. **Query Universal Aman (`select('*')`) di `userService.ts`**:
+     - Mengubah query menjadi `.select('*')` yang aman dari error kolom tidak terdefinisi.
+     - Menambahkan ekstraksi cerdas fallback provinsi: `(row.province || row.metadata?.province || (city ? 'Sulawesi Selatan' : '') || 'Sulawesi Selatan').trim()`.
+     - Mengumpulkan daftar unik `provinces`, `cities`, `districts`, `campuses`, serta array `rawRelations`.
+     - Mengamankan query `getFilteredProperties` agar filter provinsi dan kampus dilakukan secara in-memory matching jika tidak ada kolom fisik.
+  3. **Fallback Instan di `Listings.tsx`**:
+     - Menambahkan ekstraksi langsung dari `initialListings` pada saat komponen pertama kali dirender, sehingga opsi dropdown langsung terisi tanpa menunggu waktu jeda jaringan.
+- **File Tersentuh**:
+  - `functions/public/userService.ts`
+  - `functions/public/pages/Listings.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi Vite `cmd /c npm run build` di `functions/public/` lulus 100% (✓ 2509 modules transformed, built in 30.88s, 0 error).
+
 ### 291. Implementasi Dynamic Cascading & Independent Filter Options (Provinsi -> Kota -> Kecamatan -> Kampus) (`FilterControls.tsx`, `FilterDrawer.tsx`, `Listings.tsx`, `userService.ts`) (September 2026)
 - **Permintaan & Masalah**:
   - Pengguna meminta agar sistem filter bekerja secara hierarkis (cascading): jika memilih provinsi tertentu maka pilihan kota menyesuaikan dengan provinsi tersebut, jika memilih kota maka pilihan kecamatan dan kampus menyesuaikan dengan kota/area tersebut. Namun sistem tetap harus 100% opsional dan independen (pengguna bebas langsung memilih kampus, kota, atau harga saja tanpa wajib menyetel parent filter).

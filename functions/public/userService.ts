@@ -221,22 +221,17 @@ export async function getFilteredProperties(params: PropertyFilterParams = {}): 
       query = query.eq('type', params.typeFilter);
     }
 
-    // 3. Province Filter
-    if (params.selectedProvince && params.selectedProvince !== 'Semua') {
-      query = query.eq('province', params.selectedProvince);
-    }
-
-    // 4. City Filter
+    // 3. City Filter
     if (params.selectedCity && params.selectedCity !== 'Semua') {
       query = query.eq('city', params.selectedCity);
     }
 
-    // 5. District / Area Filter
+    // 4. District / Area Filter
     if (params.selectedDistrict && params.selectedDistrict !== 'Semua') {
       query = query.eq('area', params.selectedDistrict);
     }
 
-    // 6. Max Price Filter
+    // 5. Max Price Filter
     if (params.maxPrice && params.maxPrice < 5000000) {
       query = query.lte('price', params.maxPrice);
     }
@@ -244,9 +239,12 @@ export async function getFilteredProperties(params: PropertyFilterParams = {}): 
     // Sort newest updated first
     query = query.order('updated_at', { ascending: false });
 
-    // 7. Server-Side Pagination Range (if no custom campus post-filter needed)
     const isCampusFiltered = params.selectedCampus && params.selectedCampus !== 'Semua';
-    if (!isCampusFiltered && params.page && params.limit) {
+    const isProvinceFiltered = params.selectedProvince && params.selectedProvince !== 'Semua';
+    const isCustomFiltered = isCampusFiltered || isProvinceFiltered;
+
+    // Server-side range only if no in-memory custom filters
+    if (!isCustomFiltered && params.page && params.limit) {
       const from = (params.page - 1) * params.limit;
       const to = from + params.limit - 1;
       query = query.range(from, to);
@@ -258,18 +256,29 @@ export async function getFilteredProperties(params: PropertyFilterParams = {}): 
 
     let mappedKosts = data.map(transformPropertyRow);
 
-    // If Campus filter is active, perform campus matching
+    // Filter province if selected
+    if (isProvinceFiltered) {
+      const targetProv = params.selectedProvince!.toLowerCase();
+      mappedKosts = mappedKosts.filter(k => 
+        (k.province || 'sulawesi selatan').toLowerCase().includes(targetProv)
+      );
+    }
+
+    // Filter campus if selected
     if (isCampusFiltered) {
       const targetCampus = params.selectedCampus!.toLowerCase();
       mappedKosts = mappedKosts.filter(k => 
         k.campuses && k.campuses.some(c => c.name && c.name.toLowerCase().includes(targetCampus))
       );
-      const totalCampusCount = mappedKosts.length;
+    }
+
+    if (isCustomFiltered) {
+      const totalCustomCount = mappedKosts.length;
       if (params.page && params.limit) {
         const from = (params.page - 1) * params.limit;
         mappedKosts = mappedKosts.slice(from, from + params.limit);
       }
-      return { kosts: mappedKosts, totalCount: totalCampusCount };
+      return { kosts: mappedKosts, totalCount: totalCustomCount };
     }
 
     return {
@@ -303,7 +312,7 @@ export async function getAvailableFilterOptions(): Promise<{
   try {
     const { data, error } = await supabase
       .from('properties')
-      .select('province, city, area, campuses, metadata')
+      .select('*')
       .eq('status', 'published');
 
     if (error || !data) return { provinces: [], cities: [], districts: [], campuses: [], rawRelations: [] };
@@ -315,9 +324,9 @@ export async function getAvailableFilterOptions(): Promise<{
     const rawRelations: GeoRelationEntry[] = [];
 
     data.forEach((row: any) => {
-      const prov = (row.province || row.metadata?.province || '').trim();
-      const city = (row.city || '').trim();
-      const area = (row.area || '').trim();
+      const city = (row.city || row.metadata?.city || '').trim();
+      const prov = (row.province || row.metadata?.province || (city ? 'Sulawesi Selatan' : '') || 'Sulawesi Selatan').trim();
+      const area = (row.area || row.metadata?.area || '').trim();
       const itemCampuses: string[] = [];
 
       if (prov !== '') provinces.add(prov);
