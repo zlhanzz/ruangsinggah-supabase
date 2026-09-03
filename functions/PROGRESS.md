@@ -2,6 +2,31 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 291. Implementasi Dynamic Cascading & Independent Filter Options (Provinsi -> Kota -> Kecamatan -> Kampus) (`FilterControls.tsx`, `FilterDrawer.tsx`, `Listings.tsx`, `userService.ts`) (September 2026)
+- **Permintaan & Masalah**:
+  - Pengguna meminta agar sistem filter bekerja secara hierarkis (cascading): jika memilih provinsi tertentu maka pilihan kota menyesuaikan dengan provinsi tersebut, jika memilih kota maka pilihan kecamatan dan kampus menyesuaikan dengan kota/area tersebut. Namun sistem tetap harus 100% opsional dan independen (pengguna bebas langsung memilih kampus, kota, atau harga saja tanpa wajib menyetel parent filter).
+- **Implementasi Solusi**:
+  1. **Metadata Relasi Geografi & Kampus Database (`userService.ts`)**:
+     - Menambahkan interface `GeoRelationEntry` (`province, city, district, campuses`) dan menyertakan `rawRelations` pada output fungsi `getAvailableFilterOptions()`.
+  2. **Cascading Cerdas & Opsi Bebas (`FilterControls.tsx`)**:
+     - Menggunakan `useMemo` untuk menghitung `computedCities`, `computedDistricts`, dan `computedCampuses` secara dinamis dari `rawRelations`:
+       - **Kota**: Menyaring kota berdasarkan `selectedProvince` jika dipilih, atau menampilkan seluruh kota jika `selectedProvince === 'Semua'`.
+       - **Kecamatan / Area**: Menyaring kecamatan berdasarkan `selectedCity` atau `selectedProvince` jika dipilih, atau menampilkan seluruh kecamatan jika tidak disetel.
+       - **Kampus**: Menyaring kampus berdasarkan kecamatan/kota/provinsi terpilih, atau menampilkan seluruh kampus yang terdata di database jika tidak disetel.
+     - **Auto-Reset Cerdas**: Mengatur handler perubahan Provinsi dan Kota agar otomatis mereset child dropdown jika pilihan sebelumnya sudah tidak valid di parent yang baru.
+  3. **Integrasi UI Sidebar Desktop & Mobile Drawer (`Listings.tsx` & `FilterDrawer.tsx`)**:
+     - Mengalirkan `rawRelations` ke kedua komponen filter kontrol.
+     - Mempertahankan tombol "Terapkan Filter" on-demand.
+- **File Tersentuh**:
+  - `functions/public/userService.ts`
+  - `functions/public/components/FilterControls.tsx`
+  - `functions/public/components/FilterDrawer.tsx`
+  - `functions/public/pages/Listings.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi Vite `cmd /c npm run build` di `functions/public/` lulus 100% (✓ 2509 modules transformed, built in 26.96s, 0 error).
+
 ### 290. Penambahan Filter Provinsi & Kecamatan Serta Implementasi Tombol "Terapkan Filter" On-Demand (`FilterControls.tsx`, `FilterDrawer.tsx`, `Listings.tsx`, `userService.ts`) (September 2026)
 - **Permintaan & Masalah**:
   - Pengguna meminta penambahan filter kategori Provinsi dan Kecamatan/Area, serta meminta agar sistem tidak langsung bereaksi saat pengguna sedang mengatur filter/mengetik pencarian (menggunakan tombol "Terapkan Filter" aktif on-demand).

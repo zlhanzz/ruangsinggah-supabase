@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { FORMAT_CURRENCY } from '../constants';
-import { Filter, RotateCcw, Check } from 'lucide-react';
+import { Filter, RotateCcw } from 'lucide-react';
+import { GeoRelationEntry } from '../userService';
 
 export interface FilterState {
   searchTerm: string;
@@ -19,6 +20,7 @@ interface FilterControlsProps {
   availableCities: string[];
   availableDistricts?: string[];
   availableCampuses: string[];
+  rawRelations?: GeoRelationEntry[];
   onReset: () => void;
   onApply?: () => void;
   showApplyButton?: boolean;
@@ -31,10 +33,114 @@ const FilterControls: React.FC<FilterControlsProps> = ({
   availableCities = [],
   availableDistricts = [],
   availableCampuses = [],
+  rawRelations = [],
   onReset,
   onApply,
   showApplyButton = true
 }) => {
+  // 1. Dynamic Dependent Cities (Cascading from selectedProvince if chosen, otherwise all cities)
+  const computedCities = useMemo(() => {
+    if (!filters.selectedProvince || filters.selectedProvince === 'Semua' || rawRelations.length === 0) {
+      return availableCities;
+    }
+    const matching = new Set<string>();
+    rawRelations.forEach(r => {
+      if (r.province === filters.selectedProvince && r.city) {
+        matching.add(r.city);
+      }
+    });
+    const result = Array.from(matching).sort();
+    return result.length > 0 ? result : availableCities;
+  }, [filters.selectedProvince, rawRelations, availableCities]);
+
+  // 2. Dynamic Dependent Districts (Cascading from selectedCity / selectedProvince if chosen, otherwise all districts)
+  const computedDistricts = useMemo(() => {
+    if (rawRelations.length === 0) return availableDistricts;
+
+    const matching = new Set<string>();
+    if (filters.selectedCity && filters.selectedCity !== 'Semua') {
+      rawRelations.forEach(r => {
+        if (r.city === filters.selectedCity && r.district) {
+          matching.add(r.district);
+        }
+      });
+    } else if (filters.selectedProvince && filters.selectedProvince !== 'Semua') {
+      rawRelations.forEach(r => {
+        if (r.province === filters.selectedProvince && r.district) {
+          matching.add(r.district);
+        }
+      });
+    } else {
+      return availableDistricts;
+    }
+
+    const result = Array.from(matching).sort();
+    return result.length > 0 ? result : availableDistricts;
+  }, [filters.selectedCity, filters.selectedProvince, rawRelations, availableDistricts]);
+
+  // 3. Dynamic Dependent Campuses (Cascading from selectedDistrict / selectedCity / selectedProvince, otherwise all campuses)
+  const computedCampuses = useMemo(() => {
+    if (rawRelations.length === 0) return availableCampuses;
+
+    const matching = new Set<string>();
+    if (filters.selectedDistrict && filters.selectedDistrict !== 'Semua') {
+      rawRelations.forEach(r => {
+        if (r.district === filters.selectedDistrict && Array.isArray(r.campuses)) {
+          r.campuses.forEach(c => matching.add(c));
+        }
+      });
+    } else if (filters.selectedCity && filters.selectedCity !== 'Semua') {
+      rawRelations.forEach(r => {
+        if (r.city === filters.selectedCity && Array.isArray(r.campuses)) {
+          r.campuses.forEach(c => matching.add(c));
+        }
+      });
+    } else if (filters.selectedProvince && filters.selectedProvince !== 'Semua') {
+      rawRelations.forEach(r => {
+        if (r.province === filters.selectedProvince && Array.isArray(r.campuses)) {
+          r.campuses.forEach(c => matching.add(c));
+        }
+      });
+    } else {
+      return availableCampuses;
+    }
+
+    const result = Array.from(matching).sort();
+    return result.length > 0 ? result : availableCampuses;
+  }, [filters.selectedDistrict, filters.selectedCity, filters.selectedProvince, rawRelations, availableCampuses]);
+
+  // Handlers with Auto-Reset on Parent Change
+  const handleProvinceChange = (newProvince: string) => {
+    const updates: Partial<FilterState> = { selectedProvince: newProvince };
+
+    if (newProvince !== 'Semua' && rawRelations.length > 0) {
+      const validCities = new Set(
+        rawRelations.filter(r => r.province === newProvince).map(r => r.city).filter(Boolean)
+      );
+      if (filters.selectedCity !== 'Semua' && !validCities.has(filters.selectedCity)) {
+        updates.selectedCity = 'Semua';
+        updates.selectedDistrict = 'Semua';
+      }
+    }
+
+    setFilters(updates);
+  };
+
+  const handleCityChange = (newCity: string) => {
+    const updates: Partial<FilterState> = { selectedCity: newCity };
+
+    if (newCity !== 'Semua' && rawRelations.length > 0) {
+      const validDistricts = new Set(
+        rawRelations.filter(r => r.city === newCity).map(r => r.district).filter(Boolean)
+      );
+      if (filters.selectedDistrict !== 'Semua' && !validDistricts.has(filters.selectedDistrict)) {
+        updates.selectedDistrict = 'Semua';
+      }
+    }
+
+    setFilters(updates);
+  };
+
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' && onApply) {
       onApply();
@@ -77,7 +183,7 @@ const FilterControls: React.FC<FilterControlsProps> = ({
         <select 
           className="w-full bg-white border border-gray-200 rounded-xl px-4 py-2.5 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-orange-500/20 appearance-none text-gray-900 cursor-pointer transition-all" 
           value={filters.selectedProvince || 'Semua'} 
-          onChange={(e) => setFilters({ selectedProvince: e.target.value })}
+          onChange={(e) => handleProvinceChange(e.target.value)}
         >
           <option value="Semua">Semua Provinsi</option>
           {availableProvinces.map(prov => (
@@ -88,14 +194,16 @@ const FilterControls: React.FC<FilterControlsProps> = ({
 
       {/* Pilih Kota */}
       <div className="space-y-1.5">
-        <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest">Pilih Kota</label>
+        <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest">
+          Pilih Kota {filters.selectedProvince !== 'Semua' && <span className="text-orange-600">({filters.selectedProvince})</span>}
+        </label>
         <select 
           className="w-full bg-white border border-gray-200 rounded-xl px-4 py-2.5 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-orange-500/20 appearance-none text-gray-900 cursor-pointer transition-all" 
           value={filters.selectedCity} 
-          onChange={(e) => setFilters({ selectedCity: e.target.value })}
+          onChange={(e) => handleCityChange(e.target.value)}
         >
           <option value="Semua">Semua Kota</option>
-          {availableCities.map(city => (
+          {computedCities.map(city => (
             <option key={city} value={city}>{city}</option>
           ))}
         </select>
@@ -103,14 +211,16 @@ const FilterControls: React.FC<FilterControlsProps> = ({
 
       {/* Pilih Kecamatan / Area */}
       <div className="space-y-1.5">
-        <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest">Pilih Kecamatan / Area</label>
+        <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest">
+          Pilih Kecamatan / Area {filters.selectedCity !== 'Semua' && <span className="text-orange-600">({filters.selectedCity})</span>}
+        </label>
         <select 
-          className="w-full bg-white border border-gray-200 rounded-xl px-4 py-2.5 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-orange-500/20 appearance-none text-gray-900 cursor-pointer transition-all disabled:bg-gray-50 disabled:text-gray-400" 
+          className="w-full bg-white border border-gray-200 rounded-xl px-4 py-2.5 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-orange-500/20 appearance-none text-gray-900 cursor-pointer transition-all" 
           value={filters.selectedDistrict || 'Semua'} 
           onChange={(e) => setFilters({ selectedDistrict: e.target.value })}
         >
           <option value="Semua">Semua Kecamatan</option>
-          {availableDistricts.map(district => (
+          {computedDistricts.map(district => (
             <option key={district} value={district}>{district}</option>
           ))}
         </select>
@@ -125,7 +235,7 @@ const FilterControls: React.FC<FilterControlsProps> = ({
           onChange={(e) => setFilters({ selectedCampus: e.target.value })}
         >
           <option value="Semua">Semua Kampus</option>
-          {availableCampuses.map(campus => (
+          {computedCampuses.map(campus => (
             <option key={campus} value={campus}>{campus}</option>
           ))}
         </select>

@@ -1,5 +1,6 @@
 import React from 'react';
 import FilterControls, { FilterState } from './FilterControls';
+import { GeoRelationEntry } from '../userService';
 
 interface FilterDrawerProps {
   isOpen: boolean;
@@ -12,6 +13,7 @@ interface FilterDrawerProps {
   availableCities: string[];
   availableDistricts?: string[];
   availableCampuses: string[];
+  rawRelations?: GeoRelationEntry[];
 }
 
 const FilterDrawer: React.FC<FilterDrawerProps> = ({ 
@@ -24,7 +26,8 @@ const FilterDrawer: React.FC<FilterDrawerProps> = ({
   availableProvinces = [],
   availableCities,
   availableDistricts = [],
-  availableCampuses
+  availableCampuses,
+  rawRelations = []
 }) => {
   if (!isOpen) return null;
 
@@ -54,6 +57,7 @@ const FilterDrawer: React.FC<FilterDrawerProps> = ({
           availableCities={availableCities}
           availableDistricts={availableDistricts}
           availableCampuses={availableCampuses}
+          rawRelations={rawRelations}
           onReset={onReset}
           onApply={onApply}
           showApplyButton={true}

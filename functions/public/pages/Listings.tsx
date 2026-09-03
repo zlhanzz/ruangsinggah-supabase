@@ -53,18 +53,20 @@ const Listings: React.FC<ListingsProps> = ({ onKostClick, listings: initialListi
   const [availableCities, setAvailableCities] = useState<string[]>([]);
   const [availableDistricts, setAvailableDistricts] = useState<string[]>([]);
   const [availableCampuses, setAvailableCampuses] = useState<string[]>([]);
+  const [rawRelations, setRawRelations] = useState<any[]>([]);
 
-  // Fetch available filter options (Provinces, Cities, Districts, Campuses) on mount
+  // Fetch available filter options (Provinces, Cities, Districts, Campuses, Relations) on mount
   useEffect(() => {
     let isMounted = true;
     const loadOptions = async () => {
       try {
-        const { provinces, cities, districts, campuses } = await getAvailableFilterOptions();
+        const { provinces, cities, districts, campuses, rawRelations: relations } = await getAvailableFilterOptions();
         if (isMounted) {
           if (provinces.length > 0) setAvailableProvinces(provinces);
           if (cities.length > 0) setAvailableCities(cities);
           if (districts.length > 0) setAvailableDistricts(districts);
           if (campuses.length > 0) setAvailableCampuses(campuses);
+          if (relations && relations.length > 0) setRawRelations(relations);
         }
       } catch (err) {
         console.error('Failed to load filter options:', err);
@@ -347,6 +349,7 @@ const Listings: React.FC<ListingsProps> = ({ onKostClick, listings: initialListi
                       availableCities={availableCities}
                       availableDistricts={availableDistricts}
                       availableCampuses={availableCampuses}
+                      rawRelations={rawRelations}
                       onReset={handleResetFilters}
                       onApply={handleApplyFilters}
                       showApplyButton={true}
@@ -366,6 +369,7 @@ const Listings: React.FC<ListingsProps> = ({ onKostClick, listings: initialListi
                availableCities={availableCities}
                availableDistricts={availableDistricts}
                availableCampuses={availableCampuses}
+               rawRelations={rawRelations}
             />
 
             {/* RESULTS GRID & PAGINATION */}

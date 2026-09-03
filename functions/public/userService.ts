@@ -282,14 +282,23 @@ export async function getFilteredProperties(params: PropertyFilterParams = {}): 
   }
 }
 
+export interface GeoRelationEntry {
+  province: string;
+  city: string;
+  district: string;
+  campuses: string[];
+}
+
 /**
- * Fetch unique provinces, cities, districts/areas, and campuses available in the database for dropdown filter options
+ * Fetch unique provinces, cities, districts/areas, and campuses available in the database for dropdown filter options,
+ * along with raw relational entries for cascading dependency.
  */
 export async function getAvailableFilterOptions(): Promise<{
   provinces: string[];
   cities: string[];
   districts: string[];
   campuses: string[];
+  rawRelations: GeoRelationEntry[];
 }> {
   try {
     const { data, error } = await supabase
@@ -297,42 +306,52 @@ export async function getAvailableFilterOptions(): Promise<{
       .select('province, city, area, campuses, metadata')
       .eq('status', 'published');
 
-    if (error || !data) return { provinces: [], cities: [], districts: [], campuses: [] };
+    if (error || !data) return { provinces: [], cities: [], districts: [], campuses: [], rawRelations: [] };
 
     const provinces = new Set<string>();
     const cities = new Set<string>();
     const districts = new Set<string>();
     const campuses = new Set<string>();
+    const rawRelations: GeoRelationEntry[] = [];
 
     data.forEach((row: any) => {
-      const prov = row.province || row.metadata?.province;
-      if (prov && prov.trim() !== '') {
-        provinces.add(prov.trim());
-      }
-      if (row.city && row.city.trim() !== '') {
-        cities.add(row.city.trim());
-      }
-      if (row.area && row.area.trim() !== '') {
-        districts.add(row.area.trim());
-      }
+      const prov = (row.province || row.metadata?.province || '').trim();
+      const city = (row.city || '').trim();
+      const area = (row.area || '').trim();
+      const itemCampuses: string[] = [];
+
+      if (prov !== '') provinces.add(prov);
+      if (city !== '') cities.add(city);
+      if (area !== '') districts.add(area);
+
       if (Array.isArray(row.campuses)) {
         row.campuses.forEach((c: any) => {
           if (c?.name && c.name.trim() !== '') {
-            campuses.add(c.name.trim());
+            const cName = c.name.trim();
+            campuses.add(cName);
+            itemCampuses.push(cName);
           }
         });
       }
+
+      rawRelations.push({
+        province: prov,
+        city: city,
+        district: area,
+        campuses: itemCampuses
+      });
     });
 
     return {
       provinces: Array.from(provinces).sort(),
       cities: Array.from(cities).sort(),
       districts: Array.from(districts).sort(),
-      campuses: Array.from(campuses).sort()
+      campuses: Array.from(campuses).sort(),
+      rawRelations
     };
   } catch (error: any) {
     console.error('Error fetching available filter options:', error);
-    return { provinces: [], cities: [], districts: [], campuses: [] };
+    return { provinces: [], cities: [], districts: [], campuses: [], rawRelations: [] };
   }
 }
 
