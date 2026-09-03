@@ -2,6 +2,24 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 284. Redesain Mobile Bottom Navigation Bar Presisi Mockup Google Stitch (`Navbar.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  - Pengguna merasa ikon dan teks pada bottom navbar mobile sebelumnya terlalu kecil, tipis, dan berwarna abu-abu pudar sehingga sulit dilihat dan dioperasikan di layar HP.
+- **Implementasi Solusi**:
+  1. **Peningkatan Proporsi Ikon & Stroke (`Navbar.tsx`)**:
+     - Memperbesar ukuran ikon dari 21px menjadi 23px (`size={23}`) dengan ketebalan stroke tegas `strokeWidth={2.2}` (inaktif) dan `strokeWidth={2.6}` (aktif).
+  2. **Harmonisasi Warna Kontras Tinggi Google Stitch**:
+     - *Inaktif*: Menggunakan warna dark slate tegas `text-[#334155]` dengan label `font-bold text-[11px]` (jelas dan tajam).
+     - *Aktif*: Menggunakan warna signature oranye `text-[#ff7a00]` dengan background fill halus `fill-[#ff7a00]/10` dan label `font-extrabold text-[11px]`.
+  3. **Container & Area Sentuh (*Tap Target*)**:
+     - Memberikan padding `py-2 px-1` dengan shadow halus `shadow-[0_-4px_24px_rgba(0,0,0,0.06)]` dan safe-area inset yang nyaman disentuh.
+- **File Tersentuh**:
+  - `functions/public/components/Navbar.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi Vite `cmd /c npm run build` di `functions/public/` lulus 100% (✓ 2509 modules transformed, built in 32.86s, 0 error).
+
 ### 283. Penambahan Menu Chat / Pesan pada Mobile Bottom Navigation Bar & Dropdown Profil (`Navbar.tsx`) (September 2026)
 - **Permintaan & Masalah**:
   - Pengguna meminta penambahan menu **Chat / Pesan** pada bottom navigation bar versi mobile agar pengguna dapat langsung mengakses dan meninjau seluruh riwayat percakapan yang pernah dilakukan dengan pemilik kost maupun admin/pengelola.
