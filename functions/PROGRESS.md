@@ -2,6 +2,25 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 300. Penyajian Kuantitas Kamar Tersedia Dinamis pada Tipe Kamar Listing Mitra Biasa (`KostDetail.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  - Pada listing properti milik Mitra Biasa (Non-KostManager), badge ketersediaan kamar pada kartu tipe kamar di sidebar dan badan utama listing sebelumnya hanya menampilkan teks statis `"Tersedia"`, sehingga calon penyewa tidak mendapatkan informasi kuantitas kamar kosong/tersedia secara jelas.
+- **Implementasi Solusi**:
+  1. **Parser Kuantitas Kamar Tersedia (`parentRoomGroups`)**:
+     - Memperbarui parser tipe kamar untuk `!kost.isManaged` agar membaca kuantitas kamar dari `availableRoomCount`, `availableRooms`, `availableCount`, dan `totalRooms` secara presisi.
+  2. **Pembaruan Tampilan Badge Ketersediaan**:
+     - **Kartu Tipe Kamar di Sidebar**: Menampilkan `${group.availableCount} Kamar Tersedia` (atau `Penuh` jika habis/0).
+     - **Header Seksian Fasilitas Kamar di Kolom Utama**: Menampilkan badge `${activeGroup.availableCount} Kamar Tersedia` (atau `Penuh`).
+     - **Tab Switcher Tipe Kamar**: Menampilkan badge mini `${grp.availableCount} Tersedia` pada masing-masing tab selector.
+  3. **Konsistensi Alur Pemesanan**:
+     - Mempertahankan alur di mana listing Mitra Biasa langsung memilih tipe kamar untuk pengajuan sewa, sedangkan listing KostManager menyediakan pemilihan unit/nomor kamar individual.
+- **File Tersentuh**:
+  - `functions/public/pages/KostDetail.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi Vite `cmd /c npm run build` di `functions/public/` lulus 100% (✓ 2509 modules transformed, built in 22.90s, 0 error).
+
 ### 299. Penerapan Fitur Tombol 'Bagikan' & 'Simpan' (Wishlist) Serta Peremajaan Header Card Listing (`KostDetail.tsx`) (September 2026)
 - **Permintaan & Masalah**:
   - Pengguna menginginkan tombol aksi cepat **Bagikan** dan **Simpan** (Favorit / Wishlist) pada kartu informasi utama listing halaman detail kost, serta peremajaan visual header card agar tampil modern dan selaras dengan referensi desain ruangsinggah.

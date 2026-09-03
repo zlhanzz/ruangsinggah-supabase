@@ -694,14 +694,18 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
         const rName = rt.name || `Tipe ${idx + 1}`;
         const matchedNorm = normalizedRooms.find(r => r.variantIdx === idx);
 
+        const rawAvailCount = Number(rt.availableRoomCount ?? rt.availableRooms ?? rt.availableCount ?? (isAvail ? 1 : 0));
+        const finalAvailCount = isAvail ? (rawAvailCount > 0 ? rawAvailCount : 1) : 0;
+        const totalCount = Number(rt.totalRooms ?? rt.roomCount ?? rt.totalCount ?? rt.quantity ?? (finalAvailCount > 0 ? finalAvailCount : 1));
+
         return {
           typeName: rName,
           minPrice: Number(rt.pricing?.find((p: any) => p.period === 'bulanan')?.price || rt.pricing?.[0]?.price || rt.price || kost.price || 0),
           size: rt.size || '3x3',
           roomFacilities: rt.roomFacilities || [],
-          availableCount: isAvail ? 1 : 0,
-          totalCount: 1,
-          isAvailable: isAvail,
+          availableCount: finalAvailCount,
+          totalCount: totalCount,
+          isAvailable: isAvail && finalAvailCount > 0,
           rooms: [{
             id: rt.id || `room_${idx}`,
             variantIdx: idx,
@@ -1840,6 +1844,16 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
                                 {grp.size}
                               </span>
                             )}
+                            <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-md flex items-center gap-1 ${
+                              isSelected
+                                ? 'bg-orange-600 text-white'
+                                : grp.isAvailable
+                                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                  : 'bg-rose-50 text-rose-700 border border-rose-200'
+                            }`}>
+                              <span className={`w-1 h-1 rounded-full ${grp.isAvailable ? (isSelected ? 'bg-white' : 'bg-emerald-500') : (isSelected ? 'bg-white' : 'bg-rose-500')}`}></span>
+                              <span>{grp.isAvailable ? `${grp.availableCount} Tersedia` : 'Penuh'}</span>
+                            </span>
                           </button>
                         );
                       })}
@@ -1867,7 +1881,7 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
                                   activeGroup.isAvailable ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
                                 }`}>
                                   <span className={`w-1.5 h-1.5 rounded-full ${activeGroup.isAvailable ? 'bg-green-600' : 'bg-red-600'}`}></span>
-                                  {activeGroup.isAvailable ? 'Tersedia' : 'Penuh'}
+                                  {activeGroup.isAvailable ? `${activeGroup.availableCount} Kamar Tersedia` : 'Penuh'}
                                 </span>
                               </div>
                               <p className="text-xs font-bold text-orange-600 mt-0.5">
@@ -2418,14 +2432,11 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
                                 {group.typeName}
                               </span>
                               {/* Availability Badge */}
-                              <div className={`text-[9px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1 ${group.isAvailable ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
-                                }`}>
+                              <div className={`text-[9px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1 ${
+                                group.isAvailable ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+                              }`}>
                                 <div className={`w-1.5 h-1.5 rounded-full ${group.isAvailable ? 'bg-green-600' : 'bg-red-600'}`}></div>
-                                {kost.isManaged ? (
-                                  group.isAvailable ? `${group.availableCount} Kamar Tersedia` : 'Penuh'
-                                ) : (
-                                  group.isAvailable ? 'Tersedia' : 'Penuh'
-                                )}
+                                <span>{group.isAvailable ? `${group.availableCount} Kamar Tersedia` : 'Penuh'}</span>
                               </div>
                             </div>
 
