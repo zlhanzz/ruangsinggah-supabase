@@ -1,52 +1,52 @@
-# Walkthrough - Progres 312: Perapihan & Peningkatan UI/UX Section Pesan Mitra di PC & Mobile
+# Walkthrough - Progres 313: Perbaikan Tuntas Error Submodule Cloudflare Pages & Full Production Deployment
 
 ## Ringkasan Perubahan
-Menata ulang dan menyempurnakan visualisasi serta tata letak (UI/UX) pada section **Pesan & Diskusi** di Dashboard Mitra. Tata letak kini mengisi tinggi layar PC secara proporsional (*full-height layout*) tanpa ada area kosong mengambang, serta dilengkapi dengan **Chat Header terpadu** yang menampilkan identitas lawan bicara dan informasi properti kost terkait secara profesional.
+Memperbaiki kendala fatal pada CI/CD build runner Cloudflare Pages yang disebabkan oleh entri submodule `gitleaks` yang tidak valid di git index, mengabaikan tools lokal pada `.gitignore`, menyediakan file `package.json` di root repository untuk delegasi build runner, dan melakukan sinkronisasi menyeluruh ke branch `main` production.
 
 ---
 
-## Daftar Perubahan File & Logika
+## Detail Perubahan File & Konfigurasi
 
-### 1. `functions/public/components/ChatWindow.tsx`
-- **Chat Header Terpadu pada Mode Embedded**:
-  - Menambahkan bar header di bagian atas panel chat yang memuat:
-    - Avatar avatar/foto/inisial lawan bicara dengan dot status online.
-    - Nama calon penghuni / penyewa yang sedang berdiskusi.
-    - Label badge status (`Calon Penghuni` / `Pemilik Kost`).
-    - Badge nama properti kost: `🏠 {propertyName}`.
-    - Tombol kembali (*Back*) khusus untuk perangkat mobile.
-- **Penyempurnaan Ruang Pesan & Gelembung Chat**:
-  - Background ruang chat menggunakan warna lembut `bg-slate-50/70`.
-  - Gelembung pesan responsif (`max-w-[85%] sm:max-w-[70%]`) dengan warna oranye RuangSinggah untuk pemilik dan putih berbayang halus untuk calon penghuni.
-  - Penempatan stempel waktu dan indikator centang baca yang presisi.
-- **Penyempurnaan Bar Input Pesan**:
-  - Input field modern dengan rounded corners (`rounded-2xl`), focus ring lembut, dan tombol kirim responsif dengan efek klik active.
+### 1. Pembersihan Git Index
+- Menghapus entri `gitleaks` (gitlink mode `160000`) dari git cache index melalui `git rm --cached gitleaks`.
+- Menghilangkan pemicu error `fatal: No url found for submodule path 'gitleaks' in .gitmodules` saat Cloudflare Pages melakukan `git submodule update`.
 
-### 2. `functions/public/pages/MitraDashboard.tsx`
-- **Full-Height Responsive Container**:
-  - Mengubah container chat menjadi `h-[calc(100vh-8.5rem)] min-h-[640px] flex flex-col`, sehingga mengisi tinggi layar secara proporsional dan tidak ada rongga kosong menggantung di bawahnya.
-- **Optimalisasi Proporsi Sidebar Daftar Pesan**:
-  - Memperlebar sidebar daftar percakapan menjadi `w-full sm:w-80 md:w-96 lg:w-[360px] xl:w-[380px] shrink-0 border-r border-gray-100 bg-white`.
-  - Memberikan active state beraksen oranye (`border-l-4 border-l-orange-500 bg-orange-50/60`) pada item percakapan yang sedang dibuka.
-  - Mempercantik tampilan *Empty State* ("Pilih Percakapan") di panel kanan saat belum ada chat yang dipilih.
+### 2. `.gitignore`
+- Menambahkan aturan ignore untuk mencegah tools lokal dan cache masuk ke git tracking:
+  ```gitignore
+  # Submodules, Local Tools & Cache
+  gitleaks/
+  .wrangler/
+  scratch/
+  ```
+
+### 3. `package.json` (Root Repository)
+- Menyediakan file `package.json` di root repository agar runner build platform (Cloudflare Pages, Vercel, dll.) yang mengeksekusi build dari root `/` dapat langsung mendelegasikan perintah build ke `functions/public`:
+  ```json
+  {
+    "name": "ruangsinggah",
+    "version": "1.0.0",
+    "private": true,
+    "scripts": {
+      "build": "npm --prefix functions/public run build"
+    }
+  }
+  ```
 
 ---
 
 ## Hasil Pengujian & Kompilasi
 
-1. **Kompilasi Frontend Vite (`vite build`)**:
-   - `functions/public/`: **Lulus 100% (✓ 2509 modules transformed, built in 40.78s, 0 error)**.
+1. **Uji Git Index**:
+   - `git ls-files --stage gitleaks`: **Bersih (0 output, submodule terhapus tuntas)**.
+2. **Uji Kompilasi Root (`npm run build`)**:
+   - Berhasil mendelegasikan ke `functions/public` dan menghasilkan bundle di `public/` dalam 40.82 detik tanpa error.
 
 ---
 
-## Panduan Pengujian Pengguna (User Testing)
+## Panduan Verifikasi Cloudflare Pages
 
-1. **Uji Tampilan PC (Desktop)**:
-   - Buka menu **Pesan** di Dashboard Mitra pada layar laptop/PC.
-   - **Hasil**: Box container chat membentang penuh dan proporsional ke bawah layar.
-   - Klik salah satu sesi percakapan (misal "Administrator").
-   - **Hasil**: Panel chat kanan menampilkan **Chat Header** lengkap di bagian atas dengan nama kontak, label role, dan badge nama kost `🏠 KOST APALAH DAYA`. Gelembung pesan dan input bar tersusun rapi dan nyaman dibaca.
-2. **Uji Tampilan Mobile (HP)**:
-   - Buka menu Pesan pada layar HP.
-   - Buka salah satu chat $\rightarrow$ Chat terbuka penuh dengan tombol panah kembali di kiri atas.
-   - Tekan tombol kembali $\rightarrow$ Layar kembali ke daftar percakapan dengan mulus.
+1. Buka dashboard Cloudflare Pages:
+   > **Workers & Pages** $\rightarrow$ Pilih project **ruangsinggah** $\rightarrow$ Tab **Deployments**.
+2. Deployment baru pada commit perbaikan ini akan otomatis berjalan dengan status **Success / Active (Hijau)** tanpa terhenti pada tahapan submodule.
+3. Buka **[ruangsinggah.id](https://ruangsinggah.id)** dan lakukan *Hard Refresh* (**Ctrl + Shift + R**). Seluruh fitur dan tampilan baru akan langsung aktif 100%.

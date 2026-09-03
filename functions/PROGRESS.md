@@ -2,6 +2,30 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 313. Perbaikan Tuntas Error Submodule Cloudflare Pages & Full Production Deployment (`.gitignore`, `package.json`, Git Index) (September 2026)
+- **Permintaan & Masalah**:
+  - Cloudflare Pages mengalami kegagalan clone repository (*Failed build*):
+    `fatal: No url found for submodule path 'gitleaks' in .gitmodules`
+    `Failed: error occurred while updating repository submodules`
+  - Folder `gitleaks` sebelumnya terdaftar di git index sebagai *submodule (gitlink 160000)* tanpa adanya entri URL `.gitmodules`, sehingga setiap proses deployment otomatis Cloudflare Pages dibatalkan.
+- **Implementasi Solusi**:
+  1. **Pembersihan Submodule Git Index**:
+     - Menghapus entri `gitleaks` dari tracking git (`git rm --cached gitleaks`).
+  2. **Pembaruan Aturan Ignore (`.gitignore`)**:
+     - Menambahkan aturan ignore untuk `gitleaks/`, `.wrangler/`, dan `scratch/` agar tidak masuk ke git repository.
+  3. **Penyediaan Delegasi Build Root (`package.json`)**:
+     - Membuat file `package.json` di root repository dengan script `"build": "npm --prefix functions/public run build"` sehingga runner build Cloudflare Pages dari root `/` dapat mengompilasi Vite secara otomatis.
+  4. **Penerapan Menyeluruh ke Branch `main`**:
+     - Melakukan commit dan merge seluruh perubahan Progres 301 s/d 313 ke branch `main`, kemudian melakukan push ke `origin main`.
+- **File Tersentuh**:
+  - `.gitignore`
+  - `package.json` (Root)
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - `git ls-files --stage gitleaks` bersih (0 output).
+  - Build delegasi `cmd /c npm run build` dari root sukses 100% (✓ 2509 modules transformed, 0 error).
+
 ### 312. Perapihan & Peningkatan UI/UX Section Pesan Mitra di PC & Mobile (`ChatWindow.tsx`, `MitraDashboard.tsx`) (September 2026)
 - **Permintaan & Masalah**:
   - Tampilan section Pesan pada dashboard Mitra di layar PC terlihat menggantung/mengambang di tengah dengan rongga kosong luas di bawah dan di kanan.

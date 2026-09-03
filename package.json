@@ -1,0 +1,9 @@
+{
+  "name": "ruangsinggah",
+  "version": "1.0.0",
+  "private": true,
+  "description": "RuangSinggah.id Monorepo & Static Site Root",
+  "scripts": {
+    "build": "npm --prefix functions/public run build"
+  }
+}
