@@ -1,23 +1,23 @@
-
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useLocation, useParams } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
 import { Kost } from '../types';
 import KostCard from '../components/KostCard';
-import { getRoomEffectivePrice } from '../userService';
+import { getFilteredProperties, getAvailableFilterOptions } from '../userService';
 import FilterDrawer from '../components/FilterDrawer';
 import FilterControls, { FilterState } from '../components/FilterControls';
+import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Search, Frown, Loader2 } from 'lucide-react';
 
-const slugify = (text: string) => {
-  return text
-    .toString()
-    .toLowerCase()
-    .trim()
-    .replace(/\s+/g, '-')
-    .replace(/[^\w\-]+/g, '')
-    .replace(/\-\-+/g, '-')
-    .replace(/^-+/, '')
-    .replace(/-+$/, '');
+const ITEMS_PER_PAGE = 9; // 3 Baris x 3 Kolom pada Desktop
+
+const defaultFilters: FilterState = {
+  searchTerm: '',
+  typeFilter: 'Semua',
+  selectedProvince: 'Semua',
+  selectedCity: 'Semua',
+  selectedDistrict: 'Semua',
+  selectedCampus: 'Semua',
+  maxPrice: 5000000,
 };
 
 interface ListingsProps {
@@ -29,25 +29,104 @@ interface ListingsProps {
   onFilterToggle?: (isOpen: boolean) => void;
 }
 
-const Listings: React.FC<ListingsProps> = ({ onKostClick, listings = [], loading = false, onDelete, user, onFilterToggle }) => {
+const Listings: React.FC<ListingsProps> = ({ onKostClick, listings: initialListings = [], loading: initialLoading = false, onDelete, user, onFilterToggle }) => {
   const { search } = useLocation();
   const { campusSlug, areaSlug } = useParams<{ campusSlug?: string; areaSlug?: string }>();
   const queryParams = useMemo(() => new URLSearchParams(search), [search]);
+  const resultsTopRef = useRef<HTMLDivElement>(null);
 
-  const [filters, setFilters] = useState<FilterState>({
-    searchTerm: '',
-    typeFilter: 'Semua',
-    selectedCity: 'Semua',
-    selectedCampus: 'Semua',
-    maxPrice: 5000000,
-  });
-  
+  // Draft Filters (Edited in Form without immediate query execution)
+  const [draftFilters, setDraftFilters] = useState<FilterState>(defaultFilters);
+
+  // Applied Filters (Trigger the actual Supabase database query)
+  const [appliedFilters, setAppliedFilters] = useState<FilterState>(defaultFilters);
+
+  // Server-Side Data & Pagination State
+  const [kosts, setKosts] = useState<Kost[]>(initialListings.slice(0, ITEMS_PER_PAGE));
+  const [totalCount, setTotalCount] = useState<number>(initialListings.length);
+  const [loading, setLoading] = useState<boolean>(initialLoading);
+  const [currentPage, setCurrentPage] = useState<number>(1);
   const [isMobileFilterOpen, setIsMobileFilterOpen] = useState(false);
-  
-  // Initialize and sync with URL query parameters & dynamic route parameters (pSEO)
+
+  // Dynamic Filter Options from Database
+  const [availableProvinces, setAvailableProvinces] = useState<string[]>([]);
+  const [availableCities, setAvailableCities] = useState<string[]>([]);
+  const [availableDistricts, setAvailableDistricts] = useState<string[]>([]);
+  const [availableCampuses, setAvailableCampuses] = useState<string[]>([]);
+  const [rawRelations, setRawRelations] = useState<any[]>([]);
+
+  // Fetch available filter options (Provinces, Cities, Districts, Campuses, Relations) on mount
+  useEffect(() => {
+    let isMounted = true;
+    const loadOptions = async () => {
+      try {
+        const { provinces, cities, districts, campuses, rawRelations: relations } = await getAvailableFilterOptions();
+        if (isMounted) {
+          if (provinces.length > 0) setAvailableProvinces(provinces);
+          if (cities.length > 0) setAvailableCities(cities);
+          if (districts.length > 0) setAvailableDistricts(districts);
+          if (campuses.length > 0) setAvailableCampuses(campuses);
+          if (relations && relations.length > 0) setRawRelations(relations);
+        }
+      } catch (err) {
+        console.error('Failed to load filter options:', err);
+      }
+    };
+    loadOptions();
+    return () => { isMounted = false; };
+  }, []);
+
+  // Fallback immediate extraction from initialListings
+  useEffect(() => {
+    if (initialListings && initialListings.length > 0) {
+      const provs = new Set<string>();
+      const cits = new Set<string>();
+      const dists = new Set<string>();
+      const camps = new Set<string>();
+      const rels: any[] = [];
+
+      initialListings.forEach(k => {
+        const city = (k.city || '').trim();
+        const prov = (k.province || (city ? 'Sulawesi Selatan' : '') || 'Sulawesi Selatan').trim();
+        const dist = (k.area || '').trim();
+        const itemCampuses: string[] = [];
+
+        if (prov) provs.add(prov);
+        if (city) cits.add(city);
+        if (dist) dists.add(dist);
+
+        if (Array.isArray(k.campuses)) {
+          k.campuses.forEach(c => {
+            if (c?.name && c.name.trim() !== '') {
+              const cName = c.name.trim();
+              camps.add(cName);
+              itemCampuses.push(cName);
+            }
+          });
+        }
+
+        rels.push({
+          province: prov,
+          city: city,
+          district: dist,
+          campuses: itemCampuses
+        });
+      });
+
+      setAvailableProvinces(prev => (prev.length === 0 && provs.size > 0 ? Array.from(provs).sort() : prev));
+      setAvailableCities(prev => (prev.length === 0 && cits.size > 0 ? Array.from(cits).sort() : prev));
+      setAvailableDistricts(prev => (prev.length === 0 && dists.size > 0 ? Array.from(dists).sort() : prev));
+      setAvailableCampuses(prev => (prev.length === 0 && camps.size > 0 ? Array.from(camps).sort() : prev));
+      setRawRelations(prev => (prev.length === 0 && rels.length > 0 ? rels : prev));
+    }
+  }, [initialListings]);
+
+  // Sync route parameters & URL query params into filters on initial load
   useEffect(() => {
     const qSearch = queryParams.get('search');
+    const qProvince = queryParams.get('province');
     const qCity = queryParams.get('city');
+    const qDistrict = queryParams.get('district');
     const qCampus = queryParams.get('campus');
     const qType = queryParams.get('type');
     const qMaxPrice = queryParams.get('maxPrice');
@@ -55,50 +134,76 @@ const Listings: React.FC<ListingsProps> = ({ onKostClick, listings = [], loading
     let finalCampus = qCampus || 'Semua';
     let finalSearch = qSearch || '';
 
-    if (campusSlug && listings.length > 0) {
-      const matched = listings.reduce((found, k) => {
-        if (found) return found;
-        if (k.campuses) {
-          const c = k.campuses.find(c => slugify(c.name) === campusSlug.toLowerCase());
-          if (c) return c.name;
+    if (campusSlug) {
+      const campusMap: Record<string, string> = {
+        unhas: 'Unhas',
+        unm: 'UNM',
+        umi: 'UMI',
+        unibos: 'Unibos',
+        uin: 'UIN Alauddin',
+        pnup: 'PNUP',
+        unismuh: 'Unismuh'
+      };
+      finalCampus = campusMap[campusSlug.toLowerCase()] || campusSlug;
+    }
+
+    if (areaSlug) {
+      finalSearch = areaSlug.replace(/-/g, ' ');
+    }
+
+    const newFilters: FilterState = {
+      searchTerm: finalSearch || defaultFilters.searchTerm,
+      typeFilter: qType || defaultFilters.typeFilter,
+      selectedProvince: qProvince || defaultFilters.selectedProvince,
+      selectedCity: qCity || defaultFilters.selectedCity,
+      selectedDistrict: qDistrict || defaultFilters.selectedDistrict,
+      selectedCampus: finalCampus !== 'Semua' ? finalCampus : (qCampus || defaultFilters.selectedCampus),
+      maxPrice: qMaxPrice ? parseInt(qMaxPrice) : defaultFilters.maxPrice,
+    };
+
+    setDraftFilters(newFilters);
+    setAppliedFilters(newFilters);
+    setCurrentPage(1);
+  }, [queryParams, campusSlug, areaSlug]);
+
+  // Execute Database Backend Query ONLY when appliedFilters or currentPage changes
+  useEffect(() => {
+    let isCancelled = false;
+    setLoading(true);
+
+    const fetchProperties = async () => {
+      try {
+        const { kosts: fetchedKosts, totalCount: fetchedTotal } = await getFilteredProperties({
+          searchTerm: appliedFilters.searchTerm,
+          typeFilter: appliedFilters.typeFilter,
+          selectedProvince: appliedFilters.selectedProvince,
+          selectedCity: appliedFilters.selectedCity,
+          selectedDistrict: appliedFilters.selectedDistrict,
+          selectedCampus: appliedFilters.selectedCampus,
+          maxPrice: appliedFilters.maxPrice,
+          page: currentPage,
+          limit: ITEMS_PER_PAGE
+        });
+
+        if (!isCancelled) {
+          setKosts(fetchedKosts);
+          setTotalCount(fetchedTotal);
         }
-        return null;
-      }, null as string | null);
-
-      if (matched) {
-        finalCampus = matched;
-      } else {
-        const campusMap: Record<string, string> = {
-          unhas: 'Unhas',
-          unm: 'UNM',
-          umi: 'UMI',
-          unibos: 'Unibos',
-          uin: 'UIN Alauddin',
-          pnup: 'PNUP',
-          unismuh: 'Unismuh'
-        };
-        finalCampus = campusMap[campusSlug.toLowerCase()] || campusSlug;
+      } catch (err) {
+        console.error('Error fetching backend filtered properties:', err);
+      } finally {
+        if (!isCancelled) {
+          setLoading(false);
+        }
       }
-    }
+    };
 
-    if (areaSlug && listings.length > 0) {
-      const matchedArea = listings.find(k => k.area && slugify(k.area) === areaSlug.toLowerCase())?.area;
-      if (matchedArea) {
-        finalSearch = matchedArea;
-      } else {
-        finalSearch = areaSlug.replace(/-/g, ' ');
-      }
-    }
+    fetchProperties();
 
-    setFilters(prev => ({
-      ...prev,
-      searchTerm: finalSearch || prev.searchTerm,
-      selectedCity: qCity || prev.selectedCity,
-      selectedCampus: finalCampus !== 'Semua' ? finalCampus : (qCampus || prev.selectedCampus),
-      typeFilter: qType || prev.typeFilter,
-      maxPrice: qMaxPrice ? parseInt(qMaxPrice) : prev.maxPrice,
-    }));
-  }, [queryParams, campusSlug, areaSlug, listings]);
+    return () => {
+      isCancelled = true;
+    };
+  }, [appliedFilters, currentPage]);
 
   useEffect(() => {
     if (onFilterToggle) onFilterToggle(isMobileFilterOpen);
@@ -107,100 +212,73 @@ const Listings: React.FC<ListingsProps> = ({ onKostClick, listings = [], loading
     };
   }, [isMobileFilterOpen, onFilterToggle]);
 
-  const updateFilters = (newFilters: Partial<FilterState>) => {
-    setFilters(prev => ({ ...prev, ...newFilters }));
+  const updateDraftFilters = (newFilters: Partial<FilterState>) => {
+    setDraftFilters(prev => ({ ...prev, ...newFilters }));
   };
 
-  // Dynamically extract available cities from listings
-  const availableCities = useMemo(() => {
-    const cities = new Set(listings.map(k => k.city).filter(c => c && c.trim() !== ''));
-    return Array.from(cities).sort();
-  }, [listings]);
+  const handleApplyFilters = () => {
+    setAppliedFilters({ ...draftFilters });
+    setCurrentPage(1);
+    setIsMobileFilterOpen(false);
 
-  // Dynamically extract available campuses based on selected city
-  const availableCampuses = useMemo(() => {
-    let relevantListings = listings;
-    if (filters.selectedCity !== 'Semua') {
-      relevantListings = listings.filter(k => k.city === filters.selectedCity);
+    if (resultsTopRef.current) {
+      resultsTopRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
-    const campuses = new Set<string>();
-    relevantListings.forEach(k => {
-      if (k.campuses) {
-        k.campuses.forEach(c => {
-          if (c.name && c.name.trim() !== '') {
-            campuses.add(c.name);
-          }
-        });
-      }
-    });
-    return Array.from(campuses).sort();
-  }, [listings, filters.selectedCity]);
+  };
 
-  const filteredKosts = useMemo(() => {
-    let result = [...listings];
+  const handleResetFilters = () => {
+    setDraftFilters(defaultFilters);
+    setAppliedFilters(defaultFilters);
+    setCurrentPage(1);
+    setIsMobileFilterOpen(false);
+  };
 
-    if (filters.searchTerm) {
-      const searchLower = filters.searchTerm.toLowerCase();
-      result = result.filter(k => 
-        k.title.toLowerCase().includes(searchLower) || 
-        k.address.toLowerCase().includes(searchLower) ||
-        (k.area && k.area.toLowerCase().includes(searchLower))
-      );
+  // Pagination calculations based on backend total count
+  const totalPages = Math.max(1, Math.ceil(totalCount / ITEMS_PER_PAGE));
+  const startIndex = totalCount > 0 ? (currentPage - 1) * ITEMS_PER_PAGE + 1 : 0;
+  const endIndex = Math.min(currentPage * ITEMS_PER_PAGE, totalCount);
+
+  const handlePageChange = (page: number) => {
+    if (page < 1 || page > totalPages || page === currentPage) return;
+    setCurrentPage(page);
+    
+    // Smooth scroll to top of results
+    if (resultsTopRef.current) {
+      resultsTopRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    } else {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
     }
+  };
 
-    if (filters.typeFilter !== 'Semua') {
-      result = result.filter(k => k.type === filters.typeFilter);
+  // Generate pagination numbers array with smart ellipsis
+  const getPaginationNumbers = () => {
+    const delta = 1;
+    const range: (number | string)[] = [];
+    const left = Math.max(2, currentPage - delta);
+    const right = Math.min(totalPages - 1, currentPage + delta);
+
+    range.push(1);
+    if (left > 2) range.push('...');
+    for (let i = left; i <= right; i++) {
+      if (i > 1 && i < totalPages) range.push(i);
     }
+    if (right < totalPages - 1) range.push('...');
+    if (totalPages > 1) range.push(totalPages);
 
-    if (filters.selectedCity !== 'Semua') {
-      result = result.filter(k => k.city === filters.selectedCity);
-    }
-
-    if (filters.selectedCampus !== 'Semua') {
-      result = result.filter(k => 
-        k.campuses && k.campuses.some(c => c.name === filters.selectedCampus)
-      );
-    }
-
-    result = result.filter(k => {
-      let prices: number[] = [];
-      if (k.roomTypes && k.roomTypes.length > 0) {
-        const effectivePrices = k.roomTypes.map(getRoomEffectivePrice);
-        const monthlyBased = effectivePrices.filter(p => p.priority <= 4);
-        if (monthlyBased.length > 0) {
-          prices = monthlyBased.map(p => p.price);
-        } else {
-          prices = effectivePrices.map(p => p.price);
-        }
-      } else {
-        prices = [Number(k.price) || 0];
-      }
-      const minVariantPrice = Math.min(...prices);
-      return minVariantPrice <= filters.maxPrice;
-    });
-
-    return result;
-  }, [filters, listings]);
+    return range;
+  };
 
   const activeFilterCount = useMemo(() => {
     let count = 0;
-    if (filters.searchTerm) count++;
-    if (filters.typeFilter !== 'Semua') count++;
-    if (filters.selectedCity !== 'Semua') count++;
-    if (filters.selectedCampus !== 'Semua') count++;
-    if (filters.maxPrice < 5000000) count++;
+    if (appliedFilters.searchTerm) count++;
+    if (appliedFilters.typeFilter !== 'Semua') count++;
+    if (appliedFilters.selectedProvince !== 'Semua') count++;
+    if (appliedFilters.selectedCity !== 'Semua') count++;
+    if (appliedFilters.selectedDistrict !== 'Semua') count++;
+    if (appliedFilters.selectedCampus !== 'Semua') count++;
+    if (appliedFilters.maxPrice < 5000000) count++;
     return count;
-  }, [filters]);
-
-  const resetFilters = () => {
-    setFilters({
-      searchTerm: '',
-      typeFilter: 'Semua',
-      selectedCity: 'Semua',
-      selectedCampus: 'Semua',
-      maxPrice: 5000000,
-    });
-  };
+  }, [appliedFilters]);
 
   const seoMetadata = useMemo(() => {
     let title = "Cari Kost Murah Makassar Terverifikasi - RuangSinggah.id";
@@ -217,10 +295,9 @@ const Listings: React.FC<ListingsProps> = ({ onKostClick, listings = [], loading
         pnup: 'PNUP (Politeknik Negeri Ujung Pandang)',
         unismuh: 'Unismuh (Universitas Muhammadiyah Makassar)'
       };
-      // Get readable name
       let campusName = campusSlug;
-      if (filters.selectedCampus && filters.selectedCampus !== 'Semua') {
-        campusName = filters.selectedCampus;
+      if (appliedFilters.selectedCampus && appliedFilters.selectedCampus !== 'Semua') {
+        campusName = appliedFilters.selectedCampus;
       } else {
         campusName = campusMap[campusSlug.toLowerCase()] || campusSlug.toUpperCase();
       }
@@ -230,28 +307,27 @@ const Listings: React.FC<ListingsProps> = ({ onKostClick, listings = [], loading
       canonical = `https://ruangsinggah.id/kost-dekat/${campusSlug.toLowerCase()}`;
     } else if (areaSlug) {
       let areaName = areaSlug.replace(/-/g, ' ');
-      if (filters.searchTerm) {
-        areaName = filters.searchTerm;
+      if (appliedFilters.searchTerm) {
+        areaName = appliedFilters.searchTerm;
       }
-      // Capitalize
       areaName = areaName.replace(/\b\w/g, c => c.toUpperCase());
 
       title = `Kost Area ${areaName} Makassar Murah Terverifikasi - RuangSinggah.id`;
       description = `Daftar kost murah terdekat di area ${areaName} Makassar. Temukan hunian kos putra, putri, campur dengan fasilitas lengkap dan terverifikasi lapangan di RuangSinggah.id.`;
       canonical = `https://ruangsinggah.id/kost-area/${areaSlug.toLowerCase()}`;
-    } else if (filters.selectedCampus !== 'Semua') {
-      title = `Kost Dekat Kampus ${filters.selectedCampus} Makassar Murah - RuangSinggah.id`;
-      description = `Cari kost dekat kampus ${filters.selectedCampus} Makassar. Dapatkan kos putra, putri, campur terverifikasi lapangan di RuangSinggah.id.`;
-    } else if (filters.searchTerm) {
-      title = `Kost Dekat ${filters.searchTerm} Makassar Murah - RuangSinggah.id`;
-      description = `Temukan kost murah terdekat di sekitar ${filters.searchTerm} Makassar. Ulasan jujur, bebas penipuan, verifikasi lapangan 100% di RuangSinggah.id.`;
+    } else if (appliedFilters.selectedCampus !== 'Semua') {
+      title = `Kost Dekat Kampus ${appliedFilters.selectedCampus} Makassar Murah - RuangSinggah.id`;
+      description = `Cari kost dekat kampus ${appliedFilters.selectedCampus} Makassar. Dapatkan kos putra, putri, campur terverifikasi lapangan di RuangSinggah.id.`;
+    } else if (appliedFilters.searchTerm) {
+      title = `Kost Dekat ${appliedFilters.searchTerm} Makassar Murah - RuangSinggah.id`;
+      description = `Temukan kost murah terdekat di sekitar ${appliedFilters.searchTerm} Makassar. Ulasan jujur, bebas penipuan, verifikasi lapangan 100% di RuangSinggah.id.`;
     }
 
     return { title, description, canonical };
-  }, [campusSlug, areaSlug, filters.selectedCampus, filters.searchTerm]);
+  }, [campusSlug, areaSlug, appliedFilters.selectedCampus, appliedFilters.searchTerm]);
 
   return (
-    <div className="min-h-screen bg-white">
+    <div className="min-h-screen bg-white font-sans">
       <Helmet>
         <title>{seoMetadata.title}</title>
         <meta name="description" content={seoMetadata.description} />
@@ -270,47 +346,58 @@ const Listings: React.FC<ListingsProps> = ({ onKostClick, listings = [], loading
         <meta name="twitter:description" content={seoMetadata.description} />
         <meta name="twitter:image" content="https://ruangsinggah.id/logo.png" />
       </Helmet>
-       {/* MOBILE STICKY FILTER BAR */}
+
+      {/* MOBILE STICKY FILTER BAR */}
       <div className="lg:hidden sticky top-[80px] z-40 bg-white/95 backdrop-blur-md px-4 py-3 border-b border-gray-100 shadow-sm transition-all">
         <button 
-          onClick={() => setIsMobileFilterOpen(true)}
-          className="w-full bg-white border border-gray-200 rounded-full py-3 px-5 shadow-sm active:scale-[0.98] transition-all flex items-center gap-4"
+          onClick={() => {
+            setDraftFilters(appliedFilters);
+            setIsMobileFilterOpen(true);
+          }}
+          className="w-full bg-white border border-gray-200 rounded-full py-3 px-5 shadow-sm active:scale-[0.98] transition-all flex items-center gap-4 cursor-pointer"
         >
-           <div className="text-orange-500 shrink-0">
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
-              </svg>
+           <div className="text-[#ff7a00] shrink-0">
+              <Search className="w-5 h-5 stroke-[2.5]" />
            </div>
            <div className="text-left flex-1">
-               <p className="text-xs font-black uppercase tracking-tight text-gray-900 leading-none mb-1">CARI KOST SEKARANG</p>
+               <p className="text-xs font-black uppercase tracking-tight text-gray-900 leading-none mb-1">CARI & FILTER KOST</p>
                <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest leading-none truncate">
-                  {activeFilterCount > 0 ? `${activeFilterCount} Filter Aktif` : 'FILTER KOTA & KAMPUS...'}
+                  {activeFilterCount > 0 ? `${activeFilterCount} Filter Aktif` : 'PROVINSI, KOTA, KECAMATAN, KAMPUS...'}
                </p>
            </div>
            {activeFilterCount > 0 && (
-             <div className="bg-orange-500 text-white w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-black shrink-0">
+             <div className="bg-[#ff7a00] text-white w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-black shrink-0">
                {activeFilterCount}
              </div>
            )}
         </button>
       </div>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 lg:pt-12 pb-12">
+      <div ref={resultsTopRef} className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 lg:pt-12 pb-16">
         <div className="flex flex-col lg:flex-row gap-8 items-start">
             
             {/* DESKTOP SIDEBAR FILTER */}
             <aside className="hidden lg:block w-1/4 sticky top-24 z-30">
-                <div className="bg-gray-50/50 rounded-[2rem] border border-gray-100 p-6">
-                    <div className="mb-6 pb-6 border-b border-gray-100">
+                <div className="bg-gray-50/50 rounded-[2rem] border border-gray-100 p-6 shadow-xs">
+                    <div className="mb-5 pb-4 border-b border-gray-100 flex items-center justify-between">
                         <h3 className="text-lg font-black uppercase tracking-tight text-gray-900">Filter</h3>
+                        {activeFilterCount > 0 && (
+                          <span className="bg-orange-50 border border-orange-200 text-[#ff7a00] text-[10px] font-black px-2.5 py-0.5 rounded-full">
+                            {activeFilterCount} Aktif
+                          </span>
+                        )}
                     </div>
                     <FilterControls 
-                      filters={filters}
-                      setFilters={updateFilters}
+                      filters={draftFilters}
+                      setFilters={updateDraftFilters}
+                      availableProvinces={availableProvinces}
                       availableCities={availableCities}
+                      availableDistricts={availableDistricts}
                       availableCampuses={availableCampuses}
-                      onReset={resetFilters}
-                      showApplyButton={false}
+                      rawRelations={rawRelations}
+                      onReset={handleResetFilters}
+                      onApply={handleApplyFilters}
+                      showApplyButton={true}
                     />
                 </div>
             </aside>
@@ -319,56 +406,147 @@ const Listings: React.FC<ListingsProps> = ({ onKostClick, listings = [], loading
             <FilterDrawer 
                isOpen={isMobileFilterOpen}
                onClose={() => setIsMobileFilterOpen(false)}
-               onApply={() => setIsMobileFilterOpen(false)}
-               filters={filters}
-               setFilters={updateFilters}
-               onReset={resetFilters}
+               onApply={handleApplyFilters}
+               filters={draftFilters}
+               setFilters={updateDraftFilters}
+               onReset={handleResetFilters}
+               availableProvinces={availableProvinces}
                availableCities={availableCities}
+               availableDistricts={availableDistricts}
                availableCampuses={availableCampuses}
+               rawRelations={rawRelations}
             />
 
-            {/* RESULTS GRID */}
+            {/* RESULTS GRID & PAGINATION */}
             <main className="w-full lg:w-3/4">
                 <div className="flex justify-between items-end mb-6">
                    <div>
                       <h2 className="text-xl lg:text-3xl font-black text-gray-900 uppercase tracking-tight">Hasil Pencarian</h2>
                       <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-1">
-                          {filters.selectedCity !== 'Semua' ? filters.selectedCity : 'Semua Kota'} 
-                          {filters.selectedCampus !== 'Semua' ? ` • ${filters.selectedCampus}` : ''}
+                          {appliedFilters.selectedProvince !== 'Semua' ? `${appliedFilters.selectedProvince} • ` : ''}
+                          {appliedFilters.selectedCity !== 'Semua' ? appliedFilters.selectedCity : 'Semua Kota'} 
+                          {appliedFilters.selectedDistrict !== 'Semua' ? ` • Kec. ${appliedFilters.selectedDistrict}` : ''}
+                          {appliedFilters.selectedCampus !== 'Semua' ? ` • ${appliedFilters.selectedCampus}` : ''}
                       </p>
                    </div>
-                   <span className="bg-gray-900 text-white px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest shadow-lg">
-                      {filteredKosts.length} Unit
-                   </span>
+                   <div className="flex items-center gap-2">
+                     {loading && <Loader2 className="w-4 h-4 text-[#ff7a00] animate-spin shrink-0" />}
+                     <span className="bg-gray-900 text-white px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest shadow-md">
+                        {totalCount} Unit
+                     </span>
+                   </div>
                 </div>
 
-                {loading ? (
+                {loading && kosts.length === 0 ? (
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
                         {[1, 2, 3, 4, 5, 6].map((n) => (
                             <div key={n} className="bg-white rounded-2xl border border-gray-100 overflow-hidden h-full flex flex-col animate-pulse">
-                                <div className="bg-gray-200 aspect-[4/3] w-full"></div>
+                                <div className="bg-slate-200 aspect-[4/3] w-full"></div>
                                 <div className="p-5 space-y-3">
-                                    <div className="h-4 bg-gray-200 rounded w-3/4"></div>
-                                    <div className="h-3 bg-gray-200 rounded w-1/2"></div>
-                                    <div className="h-8 bg-gray-200 rounded w-full mt-4"></div>
+                                    <div className="h-4 bg-slate-200 rounded w-3/4"></div>
+                                    <div className="h-3 bg-slate-200 rounded w-1/2"></div>
+                                    <div className="h-8 bg-slate-200 rounded w-full mt-4"></div>
                                 </div>
                             </div>
                         ))}
                     </div>
-                ) : filteredKosts.length > 0 ? (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                        {filteredKosts.map(kost => (
-                            <KostCard key={kost.id} kost={kost} onClick={onKostClick} onDelete={onDelete} />
-                        ))}
-                    </div>
+                ) : kosts.length > 0 ? (
+                    <>
+                      {/* Property Cards Grid (Server Filtered & Paginated) */}
+                      <div className={`grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 transition-opacity duration-200 ${loading ? 'opacity-60' : 'opacity-100'}`}>
+                          {kosts.map(kost => (
+                              <KostCard key={kost.id} kost={kost} onClick={onKostClick} onDelete={onDelete} />
+                          ))}
+                      </div>
+
+                      {/* MODERN PAGINATION CONTROLS */}
+                      {totalPages > 1 && (
+                        <div className="mt-12 pt-8 border-t border-gray-100 flex flex-col sm:flex-row items-center justify-between gap-4">
+                          
+                          {/* Info Text */}
+                          <p className="text-xs font-bold text-gray-500 order-2 sm:order-1">
+                            Menampilkan <span className="text-gray-900 font-extrabold">{startIndex}-{endIndex}</span> dari <span className="text-gray-900 font-extrabold">{totalCount}</span> Unit Kost
+                          </p>
+
+                          {/* Page Buttons */}
+                          <div className="flex items-center gap-1.5 order-1 sm:order-2">
+                            {/* First Page */}
+                            <button
+                              onClick={() => handlePageChange(1)}
+                              disabled={currentPage === 1}
+                              title="Halaman Pertama"
+                              className="p-2 rounded-xl border border-gray-200 text-gray-500 hover:bg-gray-50 hover:text-gray-900 disabled:opacity-30 disabled:hover:bg-transparent disabled:cursor-not-allowed transition-all cursor-pointer"
+                            >
+                              <ChevronsLeft className="w-4 h-4" />
+                            </button>
+
+                            {/* Prev Page */}
+                            <button
+                              onClick={() => handlePageChange(currentPage - 1)}
+                              disabled={currentPage === 1}
+                              title="Sebelumnya"
+                              className="px-3 py-2 rounded-xl border border-gray-200 text-xs font-bold text-gray-600 hover:bg-gray-50 hover:text-gray-900 disabled:opacity-30 disabled:hover:bg-transparent disabled:cursor-not-allowed transition-all flex items-center gap-1 cursor-pointer"
+                            >
+                              <ChevronLeft className="w-4 h-4" />
+                              <span className="hidden md:inline">Sebelumnya</span>
+                            </button>
+
+                            {/* Page Numbers */}
+                            <div className="flex items-center gap-1">
+                              {getPaginationNumbers().map((pageNum, idx) => (
+                                typeof pageNum === 'number' ? (
+                                  <button
+                                    key={idx}
+                                    onClick={() => handlePageChange(pageNum)}
+                                    className={`w-9 h-9 rounded-xl text-xs font-extrabold transition-all cursor-pointer flex items-center justify-center ${
+                                      currentPage === pageNum
+                                        ? 'bg-[#ff7a00] text-white shadow-md shadow-orange-500/20 scale-105'
+                                        : 'bg-white border border-gray-200 text-gray-700 hover:bg-orange-50 hover:text-[#ff7a00] hover:border-orange-200'
+                                    }`}
+                                  >
+                                    {pageNum}
+                                  </button>
+                                ) : (
+                                  <span key={idx} className="w-6 text-center text-xs font-bold text-gray-400">
+                                    ...
+                                  </span>
+                                )
+                              ))}
+                            </div>
+
+                            {/* Next Page */}
+                            <button
+                              onClick={() => handlePageChange(currentPage + 1)}
+                              disabled={currentPage === totalPages}
+                              title="Berikutnya"
+                              className="px-3 py-2 rounded-xl border border-gray-200 text-xs font-bold text-gray-600 hover:bg-gray-50 hover:text-gray-900 disabled:opacity-30 disabled:hover:bg-transparent disabled:cursor-not-allowed transition-all flex items-center gap-1 cursor-pointer"
+                            >
+                              <span className="hidden md:inline">Berikutnya</span>
+                              <ChevronRight className="w-4 h-4" />
+                            </button>
+
+                            {/* Last Page */}
+                            <button
+                              onClick={() => handlePageChange(totalPages)}
+                              disabled={currentPage === totalPages}
+                              title="Halaman Terakhir"
+                              className="p-2 rounded-xl border border-gray-200 text-gray-500 hover:bg-gray-50 hover:text-gray-900 disabled:opacity-30 disabled:hover:bg-transparent disabled:cursor-not-allowed transition-all cursor-pointer"
+                            >
+                              <ChevronsRight className="w-4 h-4" />
+                            </button>
+                          </div>
+
+                        </div>
+                      )}
+                    </>
                 ) : (
                     <div className="text-center py-20 bg-gray-50 rounded-[2rem] border border-dashed border-gray-200">
                         <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center mx-auto mb-4 shadow-sm text-gray-300">
-                            <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                            <Frown className="w-8 h-8 text-gray-400 stroke-[1.5]" />
                         </div>
                         <p className="text-gray-900 font-black text-sm uppercase tracking-tight">Tidak ada kost ditemukan</p>
                         <p className="text-gray-400 text-xs mt-1">Coba kurangi filter atau cari area lain</p>
-                        <button onClick={resetFilters} className="mt-4 text-orange-500 text-xs font-bold uppercase tracking-widest hover:underline">Reset Filter</button>
+                        <button onClick={handleResetFilters} className="mt-4 text-[#ff7a00] text-xs font-bold uppercase tracking-widest hover:underline cursor-pointer">Reset Filter</button>
                     </div>
                 )}
             </main>

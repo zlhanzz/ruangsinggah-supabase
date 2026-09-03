@@ -6,11 +6,19 @@ import { FORMAT_CURRENCY } from '../constants';
 import BookingModal from '../components/BookingModal';
 import PaymentGateway from '../components/PaymentGateway';
 import ChatWindow from '../components/ChatWindow';
-import { incrementPropertyView } from '../userService';
+import { incrementPropertyView, createBookingRequest, submitPropertyReport, uploadReportEvidence } from '../userService';
+import { notifyAdminPropertyReport } from '../emailService';
 import { getOrCreateChatSession, SYSTEM_ADMIN_ID } from '../chatService';
-import { createBookingRequest } from '../userService';
 import { supabase } from '../supabase';
-import { Bed, Home, Camera, Sparkles, CheckCircle2, ChevronDown, Layers } from 'lucide-react';
+import { 
+  Bed, Home, Camera, Sparkles, CheckCircle2, ChevronDown, Layers, Flag, 
+  ShieldAlert, AlertTriangle, AlertCircle, X, Check, Upload, Image as ImageIcon, Send, 
+  Phone, User as UserIcon, MessageSquare, Clock, Wifi, CookingPot, Car, 
+  Bike, Bath, ShieldCheck, KeyRound, Shirt, Sun, Building2, Armchair, 
+  Wind, Tv, Droplets, Utensils, Refrigerator, Lock, MapPin, Navigation, 
+  GraduationCap, RotateCcw
+} from 'lucide-react';
+import { createKostSlug } from '../utils/slugUtils';
 
 interface KostDetailProps {
   kost: Kost;
@@ -19,6 +27,7 @@ interface KostDetailProps {
   user?: any;
   onLoginRedirect?: () => void;
   validateProfile?: () => boolean;
+  hideBookingAndChat?: boolean;
 }
 
 const InfoSection: React.FC<{ title: string; children: React.ReactNode; defaultOpen?: boolean; className?: string }> = ({ title, children, defaultOpen = true, className = "" }) => {
@@ -49,7 +58,7 @@ const InfoSection: React.FC<{ title: string; children: React.ReactNode; defaultO
 
 
 
-const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user, onLoginRedirect, validateProfile }) => {
+const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user, onLoginRedirect, validateProfile, hideBookingAndChat = false }) => {
   const [currentPhoto, setCurrentPhoto] = useState(0);
   const [selectedParentTypeIdx, setSelectedParentTypeIdx] = useState(0);
   const [selectedVariantIdx, setSelectedVariantIdx] = useState(0);
@@ -80,7 +89,7 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
     return (img as any).url || (img as any).thumbnail || 'https://ruangsinggah.id/logo.png';
   })();
 
-  const canonicalUrl = `https://ruangsinggah.id/kost/${kost.id}`;
+  const canonicalUrl = `https://ruangsinggah.id/kost/${createKostSlug(kost)}`;
 
   const jsonLd = {
     '@context': 'https://schema.org',
@@ -112,12 +121,12 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
   };
   // === END SEO ===
 
-  // Auto-track view
+  // Auto-track view (only when not in isolated preview mode)
   useEffect(() => {
-    if (kost.id) {
+    if (kost.id && !hideBookingAndChat) {
       incrementPropertyView(kost.id);
     }
-  }, [kost.id]);
+  }, [kost.id, hideBookingAndChat]);
 
   const [selectedPeriod, setSelectedPeriod] = useState<PricingPeriod>('bulanan');
   const [isBookingModalOpen, setIsBookingModalOpen] = useState(false);
@@ -127,6 +136,157 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
   const [showChatWindow, setShowChatWindow] = useState(false);
   const [activeChatSession, setActiveChatSession] = useState<any>(null);
   const [isSubmittingChat, setIsSubmittingChat] = useState(false);
+
+  // --- LAPOR IKLAN KOST STATES ---
+  const [isReportModalOpen, setIsReportModalOpen] = useState(false);
+  const [reportCategory, setReportCategory] = useState<string>('fraud');
+  const [reportDescription, setReportDescription] = useState('');
+  const [reporterName, setReporterName] = useState(user?.displayName || user?.name || '');
+  const [reporterPhone, setReporterPhone] = useState(user?.phoneNumber || user?.phone || '');
+  const [reportEvidenceFile, setReportEvidenceFile] = useState<File | null>(null);
+  const [reportEvidencePreview, setReportEvidencePreview] = useState<string>('');
+  const [isSubmittingReport, setIsSubmittingReport] = useState(false);
+  const [reportSuccess, setReportSuccess] = useState(false);
+
+  useEffect(() => {
+    if (user) {
+      if (!reporterName) setReporterName(user.displayName || user.name || '');
+      if (!reporterPhone) setReporterPhone(user.phoneNumber || user.phone || '');
+    }
+  }, [user]);
+
+  const compressImageToWebP = async (file: File, quality = 0.82, maxDimension = 1920): Promise<File> => {
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+          let { width, height } = img;
+          if (width > maxDimension || height > maxDimension) {
+            if (width > height) {
+              height = Math.round((height * maxDimension) / width);
+              width = maxDimension;
+            } else {
+              width = Math.round((width * maxDimension) / height);
+              height = maxDimension;
+            }
+          }
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          if (ctx) {
+            ctx.drawImage(img, 0, 0, width, height);
+            canvas.toBlob(
+              (blob) => {
+                if (blob) {
+                  const newFile = new File([blob], file.name.replace(/\.[^/.]+$/, "") + ".webp", {
+                    type: "image/webp",
+                    lastModified: Date.now()
+                  });
+                  resolve(newFile);
+                } else {
+                  resolve(file);
+                }
+              },
+              'image/webp',
+              quality
+            );
+          } else {
+            resolve(file);
+          }
+        };
+        img.src = e.target?.result as string;
+      };
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const handleEvidenceChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+      const compressed = await compressImageToWebP(file, 0.82, 1920);
+      setReportEvidenceFile(compressed);
+      setReportEvidencePreview(URL.createObjectURL(compressed));
+    } catch (err) {
+      console.error("Compression failed, using original:", err);
+      setReportEvidenceFile(file);
+      setReportEvidencePreview(URL.createObjectURL(file));
+    }
+  };
+
+  const handleOpenReportModal = () => {
+    setReportSuccess(false);
+    setReportCategory('fraud');
+    setReportDescription('');
+    setReportEvidenceFile(null);
+    setReportEvidencePreview('');
+    setIsReportModalOpen(true);
+  };
+
+  const categoryOptions = [
+    { id: 'fraud', label: 'Indikasi Penipuan / Minta Transfer di Luar Sistem', icon: '🚨' },
+    { id: 'mismatch', label: 'Harga atau Fasilitas Tidak Sesuai Realita', icon: '🏷️' },
+    { id: 'fake_location', label: 'Lokasi Titik Peta Palsu / Tidak Akurat', icon: '📍' },
+    { id: 'closed_or_full', label: 'Kost Sudah Penuh / Tidak Beroperasi', icon: '🚫' },
+    { id: 'inappropriate', label: 'Foto / Konten Tidak Pantas', icon: '🔞' },
+    { id: 'other', label: 'Lainnya / Masalah Lain', icon: '📝' }
+  ];
+
+  const handleSubmitReport = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!reportDescription.trim()) {
+      alert("Harap tuliskan penjelasan kendala atau rincian masalah yang ditemukan.");
+      return;
+    }
+    if (!reporterPhone.trim()) {
+      alert("Harap masukkan nomor WhatsApp aktif Anda untuk konfirmasi.");
+      return;
+    }
+
+    setIsSubmittingReport(true);
+    try {
+      let evidenceUrl = '';
+      if (reportEvidenceFile) {
+        evidenceUrl = await uploadReportEvidence(reportEvidenceFile, kost.id);
+      }
+
+      const selectedCatObj = categoryOptions.find(c => c.id === reportCategory);
+      const catLabel = selectedCatObj ? `${selectedCatObj.icon} ${selectedCatObj.label}` : reportCategory;
+
+      await submitPropertyReport({
+        propertyId: kost.id,
+        propertyName: kost.title || (kost as any).namaKost || 'Kost',
+        reporterId: user?.id || user?.uid,
+        reporterName: reporterName.trim() || 'Pengguna',
+        reporterPhone: reporterPhone.trim(),
+        category: reportCategory,
+        categoryLabel: catLabel,
+        description: reportDescription.trim(),
+        evidenceUrls: evidenceUrl ? [evidenceUrl] : []
+      });
+
+      // Send async non-blocking notification to Admin email
+      notifyAdminPropertyReport({
+        propertyName: kost.title || (kost as any).namaKost || 'Kost',
+        propertyId: kost.id,
+        categoryLabel: catLabel,
+        description: reportDescription.trim(),
+        reporterName: reporterName.trim() || 'Pengguna',
+        reporterPhone: reporterPhone.trim(),
+        ownerName: (kost as any).ownerName || (kost as any).users?.name || '-',
+        evidenceUrl: evidenceUrl || '-'
+      }).catch(err => console.warn("Email alert failed (non-critical):", err));
+
+      setReportSuccess(true);
+    } catch (err: any) {
+      alert("Gagal mengirim laporan: " + (err.message || err));
+    } finally {
+      setIsSubmittingReport(false);
+    }
+  };
 
   const defaultRoom: RoomType = {
     name: 'Standard Room',
@@ -165,6 +325,8 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
   interface PhotoItem {
     url: string;
     label: string;
+    category?: string;
+    caption?: string;
     isRoom: boolean;
     roomName?: string;
   }
@@ -181,33 +343,77 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
       .trim();
   };
 
-  // Extract all property-level photos with their surveyed category labels (Only if present in database)
+  // Helper map from photosMeta if available from database
+  const photosMetaMap = useMemo(() => {
+    const map = new Map<string, { label?: string; category?: string; caption?: string }>();
+    if (Array.isArray(kost.photosMeta)) {
+      kost.photosMeta.forEach(pm => {
+        const u = pm.url || pm.original;
+        if (u) {
+          map.set(u, {
+            label: pm.label || pm.category,
+            category: pm.category || pm.label,
+            caption: pm.caption
+          });
+        }
+      });
+    }
+    return map;
+  }, [kost.photosMeta]);
+
+  // Extract all property-level photos with their surveyed category labels and captions (Only if present in database)
   const propertyPhotos: PhotoItem[] = (kost.imageUrls || []).map((img: any, idx: number) => {
     const url = typeof img === 'string' ? img : (img?.url || img?.original || img?.thumbnail || '');
     let label = '';
-    if (typeof img === 'object' && (img.label || img.category || img.caption || img.title)) {
-      label = img.label || img.category || img.caption || img.title;
-    } else if (Array.isArray(kost.photoCategories) && kost.photoCategories[idx]) {
-      label = kost.photoCategories[idx];
-    } else if (Array.isArray((kost as any).photo_categories) && (kost as any).photo_categories[idx]) {
-      label = (kost as any).photo_categories[idx];
-    } else if (kost.categorizedPhotos && typeof kost.categorizedPhotos === 'object') {
-      for (const [catName, catUrls] of Object.entries(kost.categorizedPhotos)) {
-        if (Array.isArray(catUrls) && catUrls.includes(url)) {
-          label = catName;
-          break;
+    let category = '';
+    let caption = '';
+
+    const meta = photosMetaMap.get(url);
+    if (meta) {
+      label = meta.label || '';
+      category = meta.category || '';
+      caption = meta.caption || '';
+    }
+
+    if (!label && typeof img === 'object') {
+      label = img.label || img.category || img.title || '';
+      category = img.category || img.label || '';
+      caption = img.caption || '';
+    }
+
+    if (!label) {
+      if (Array.isArray(kost.photoCategories) && kost.photoCategories[idx]) {
+        label = kost.photoCategories[idx];
+      } else if (Array.isArray((kost as any).photo_categories) && (kost as any).photo_categories[idx]) {
+        label = (kost as any).photo_categories[idx];
+      } else if (kost.categorizedPhotos && typeof kost.categorizedPhotos === 'object') {
+        for (const [catName, catUrls] of Object.entries(kost.categorizedPhotos)) {
+          if (Array.isArray(catUrls) && catUrls.includes(url)) {
+            label = catName;
+            break;
+          }
         }
-      }
-    } else if ((kost as any).categorized_photos && typeof (kost as any).categorized_photos === 'object') {
-      for (const [catName, catUrls] of Object.entries((kost as any).categorized_photos)) {
-        if (Array.isArray(catUrls) && (catUrls as any[]).includes(url)) {
-          label = catName;
-          break;
+      } else if ((kost as any).categorized_photos && typeof (kost as any).categorized_photos === 'object') {
+        for (const [catName, catUrls] of Object.entries((kost as any).categorized_photos)) {
+          if (Array.isArray(catUrls) && (catUrls as any[]).includes(url)) {
+            label = catName;
+            break;
+          }
         }
       }
     }
 
-    return { url, label: cleanPhotoCategoryLabel(label), isRoom: false };
+    const cleanLabel = cleanPhotoCategoryLabel(label || category);
+    const cleanCategory = cleanPhotoCategoryLabel(category || label);
+    const finalCaption = caption && caption.trim() ? caption.trim() : cleanLabel;
+
+    return { 
+      url, 
+      label: cleanLabel, 
+      category: cleanCategory, 
+      caption: finalCaption, 
+      isRoom: false 
+    };
   }).filter(p => !!p.url);
 
   // Normalize all individual room units and extract their photos with survey category labels
@@ -266,31 +472,58 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
     const isAvail = rt.isAvailable !== false && rt.status?.toLowerCase() !== 'terisi' && rt.status?.toLowerCase() !== 'penuh';
     const rName = rt.name ? (String(rt.name).trim().toLowerCase().startsWith('kamar') ? rt.name : `Kamar ${rt.name}`) : `Kamar ${rtIdx + 1}`;
     const rawImages = rt.images || rt.image_urls || [];
-    const roomPhotoItems: PhotoItem[] = rawImages.map((img: any, imgIdx: number) => {
-      const url = typeof img === 'string' ? img : (img?.url || img?.original || '');
-      let label = '';
-      if (typeof img === 'object' && (img.label || img.category || img.caption || img.title)) {
-        label = img.label || img.category || img.caption || img.title;
-      } else if (Array.isArray(rt.photoCategories) && rt.photoCategories[imgIdx]) {
-        label = rt.photoCategories[imgIdx];
-      } else if (Array.isArray(rt.photo_categories) && rt.photo_categories[imgIdx]) {
-        label = rt.photo_categories[imgIdx];
-      } else if (rt.categorizedPhotos && typeof rt.categorizedPhotos === 'object') {
-        for (const [catName, catUrls] of Object.entries(rt.categorizedPhotos)) {
-          if (Array.isArray(catUrls) && catUrls.includes(url)) {
-            label = catName;
-            break;
+
+    // --- FALLBACK: Untuk kost biasa (non-managed), jika rt.images kosong,
+    // coba ekstrak foto dari propertyPhotos yang labelnya mengandung nama tipe kamar ini.
+    // Contoh: foto berlabel "Interior Kamar: Standard" atau "Kamar Mandi: VIP" akan dicocokkan
+    // ke roomType dengan name "Standard" atau "VIP".
+    const buildRoomPhotoItemsFromRaw = (): PhotoItem[] => {
+      return rawImages.map((img: any, imgIdx: number) => {
+        const url = typeof img === 'string' ? img : (img?.url || img?.original || '');
+        let label = '';
+        if (typeof img === 'object' && (img.label || img.category || img.caption || img.title)) {
+          label = img.label || img.category || img.caption || img.title;
+        } else if (Array.isArray(rt.photoCategories) && rt.photoCategories[imgIdx]) {
+          label = rt.photoCategories[imgIdx];
+        } else if (Array.isArray(rt.photo_categories) && rt.photo_categories[imgIdx]) {
+          label = rt.photo_categories[imgIdx];
+        } else if (rt.categorizedPhotos && typeof rt.categorizedPhotos === 'object') {
+          for (const [catName, catUrls] of Object.entries(rt.categorizedPhotos)) {
+            if (Array.isArray(catUrls) && catUrls.includes(url)) {
+              label = catName;
+              break;
+            }
           }
         }
-      }
+        if (!label) {
+          const defaultRoomCats = ['Interior Kamar', 'Kamar Mandi', 'Tempat Tidur', 'Lemari / Storage'];
+          label = defaultRoomCats[imgIdx] || `Foto Kamar ${imgIdx + 1}`;
+        }
+        return { url, label: cleanPhotoCategoryLabel(label), isRoom: true, roomName: rName };
+      }).filter((p: PhotoItem) => !!p.url);
+    };
 
-      if (!label) {
-        const defaultRoomCats = ['Interior Kamar', 'Kamar Mandi', 'Tempat Tidur', 'Lemari / Storage'];
-        label = defaultRoomCats[imgIdx] || `Foto Kamar ${imgIdx + 1}`;
-      }
+    let roomPhotoItems: PhotoItem[] = buildRoomPhotoItemsFromRaw();
 
-      return { url, label: cleanPhotoCategoryLabel(label), isRoom: true, roomName: rName };
-    }).filter(p => !!p.url);
+    // Fallback: jika foto unit kosong dan ini adalah kost biasa (non-managed),
+    // gunakan propertyPhotos yang labelnya relevan dengan nama tipe kamar ini.
+    if (roomPhotoItems.length === 0 && !kost.isManaged && rt.name) {
+      const rtNameLower = String(rt.name).trim().toLowerCase();
+      // Coba cocokkan: "Interior Kamar: Standard" mengandung "standard" → match dengan rt.name "Standard"
+      const matchedFromPropertyPhotos = propertyPhotos.filter(pp => {
+        const lbl = (pp.label || pp.category || '').toLowerCase();
+        return lbl.includes(rtNameLower);
+      });
+
+      if (matchedFromPropertyPhotos.length > 0) {
+        // Tandai sebagai foto kamar (isRoom: true) dengan roomName tipe ini
+        roomPhotoItems = matchedFromPropertyPhotos.map(pp => ({
+          ...pp,
+          isRoom: true,
+          roomName: rName
+        }));
+      }
+    }
 
     return [{
       id: rt.id || `room_${rtIdx}`,
@@ -471,15 +704,19 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
   const currentParentGroup = parentRoomGroups[selectedParentTypeIdx] || parentRoomGroups[0];
   const selectedChildRoom = currentParentGroup?.rooms.find(r => r.variantIdx === selectedVariantIdx) || currentParentGroup?.rooms[0];
 
-  // Filter only empty/available rooms
-  const emptyRooms = normalizedRooms.filter(r => r.isAvailable);
+  // Filter rooms for photo navigation bar:
+  // - KostManager: hanya tampilkan unit kamar yang masih kosong/tersedia
+  // - Kost biasa (non-managed): tampilkan semua tipe kamar yang memiliki foto (tidak peduli status)
+  const emptyRooms = kost.isManaged
+    ? normalizedRooms.filter(r => r.isAvailable)
+    : normalizedRooms.filter(r => r.photoItems && r.photoItems.length > 0);
 
   // Active room if a specific room filter is selected
   const activeFilteredRoom = activePhotoFilter !== 'all'
     ? normalizedRooms.find(r => r.id === activePhotoFilter || r.name === activePhotoFilter || r.rawName === activePhotoFilter)
     : null;
 
-  // Only show room photo navigation bar if there are valid room units with distinct room photos
+  // Only show room photo navigation bar if there are rooms with distinct photos
   const hasDistinctRoomPhotos = emptyRooms.some(r => r.photoItems && r.photoItems.length > 0 && r.images && r.images.length > 0);
   const showRoomPhotoNav = emptyRooms.length > 0 && hasDistinctRoomPhotos;
 
@@ -648,12 +885,106 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
 
   // Check if location data is valid (non-zero coordinates)
   const hasValidLocation = kost.location && (kost.location.lat !== 0 || kost.location.lng !== 0);
-  const hasCampuses = kost.campuses && kost.campuses.length > 0;
-  const hasPublicFacilities = kost.publicFacilities && kost.publicFacilities.length > 0;
+
+  // Pisahkan dan hilangkan duplikasi fasilitas publik dan kampus terdekat (Universal Safe Normalizer)
+  const publicFacilitiesList = useMemo(() => {
+    const raw = kost.publicFacilities || [];
+    return raw
+      .map((item: any) => {
+        if (!item) return null;
+        if (typeof item === 'string' && item.trim().length > 0) {
+          return { name: item.trim(), distance: '-', walkDuration: '', motoDuration: '', carDuration: '' };
+        }
+        if (typeof item === 'object' && item.name && typeof item.name === 'string' && item.name.trim().length > 0) {
+          return {
+            ...item,
+            name: item.name.trim()
+          };
+        }
+        return null;
+      })
+      .filter((item): item is NonNullable<typeof item> => Boolean(item && item.name));
+  }, [kost.publicFacilities]);
+
+  const campusList = useMemo(() => {
+    const raw = kost.campuses || [];
+    const normalized = raw
+      .map((item: any) => {
+        if (!item) return null;
+        if (typeof item === 'string' && item.trim().length > 0) {
+          return { name: item.trim(), distance: '-', walkDuration: '', motoDuration: '', carDuration: '' };
+        }
+        if (typeof item === 'object' && item.name && typeof item.name === 'string' && item.name.trim().length > 0) {
+          return {
+            ...item,
+            name: item.name.trim()
+          };
+        }
+        return null;
+      })
+      .filter((item): item is NonNullable<typeof item> => Boolean(item && item.name));
+
+    if (publicFacilitiesList.length === 0) return normalized;
+    const publicNames = new Set(
+      publicFacilitiesList.map(p => (p.name || '').toLowerCase().trim())
+    );
+    return normalized.filter(c => !publicNames.has((c.name || '').toLowerCase().trim()));
+  }, [kost.campuses, publicFacilitiesList]);
+
+  const hasCampuses = campusList.length > 0;
+  const hasPublicFacilities = publicFacilitiesList.length > 0;
   const hasLocationSection = hasValidLocation || hasCampuses || hasPublicFacilities;
 
-  const googleMapsUrl = `https://www.google.com/maps/search/?api=1&query=${kost.location?.lat || 0},${kost.location?.lng || 0}`;
-  const embedMapsUrl = `https://maps.google.com/maps?q=${kost.location?.lat || 0},${kost.location?.lng || 0}&z=16&output=embed`;
+  // --- INTERACTIVE IN-APP ROUTE PREVIEW STATE ---
+  interface ActiveRouteInfo {
+    name: string;
+    lat: number;
+    lng: number;
+    type: 'campus' | 'facility';
+    distance?: string;
+    walkDuration?: string;
+    motoDuration?: string;
+    carDuration?: string;
+  }
+
+  const [activeRoute, setActiveRoute] = useState<ActiveRouteInfo | null>(null);
+  const mapPreviewRef = React.useRef<HTMLDivElement>(null);
+
+  const handleSelectRoute = (dest: ActiveRouteInfo) => {
+    // Jika rute yang sama diklik lagi, toggle off (kembali ke titik kost)
+    if (activeRoute && activeRoute.name === dest.name && activeRoute.lat === dest.lat && activeRoute.lng === dest.lng) {
+      setActiveRoute(null);
+      return;
+    }
+    setActiveRoute(dest);
+    // Smooth scroll ke layar mini map
+    if (mapPreviewRef.current) {
+      mapPreviewRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  };
+
+  const handleResetRoute = () => {
+    setActiveRoute(null);
+  };
+
+  const originLat = kost.location?.lat || 0;
+  const originLng = kost.location?.lng || 0;
+
+  // Dynamic Embed URL: Direction vs Single Pin
+  const currentEmbedUrl = useMemo(() => {
+    if (activeRoute && activeRoute.lat && activeRoute.lng && originLat && originLng) {
+      return `https://maps.google.com/maps?saddr=${originLat},${originLng}&daddr=${activeRoute.lat},${activeRoute.lng}&output=embed`;
+    }
+    return `https://maps.google.com/maps?q=${originLat},${originLng}&z=16&output=embed`;
+  }, [originLat, originLng, activeRoute]);
+
+  // Dynamic External Navigation URL
+  const externalMapsUrl = useMemo(() => {
+    if (activeRoute && activeRoute.lat && activeRoute.lng && originLat && originLng) {
+      return `https://www.google.com/maps/dir/?api=1&origin=${originLat},${originLng}&destination=${activeRoute.lat},${activeRoute.lng}`;
+    }
+    return `https://www.google.com/maps/search/?api=1&query=${originLat},${originLng}`;
+  }, [originLat, originLng, activeRoute]);
 
   const periodLabels: Record<string, string> = {
     'harian': 'Per Hari',
@@ -663,6 +994,222 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
     '6bulanan': 'Per 6 Bulan',
     'tahunan': 'Per Tahun'
   };
+
+  // --- STRUCTURED PUBLIC & ROOM FACILITIES PARSER ---
+  interface StructuredFacilityGroup {
+    id: string;
+    title: string;
+    icon: React.ReactNode;
+    subItems: string[];
+  }
+
+  interface StandaloneFacilityItem {
+    name: string;
+    icon: React.ReactNode;
+  }
+
+  const structuredPublicFacilities = useMemo(() => {
+    const rawFacilities = kost.facilities || [];
+    const extraKitchen = (kost as any).publicKitchenFacilities || (kost as any).public_kitchen_facilities || [];
+    const extraParking = (kost as any).publicParkingFacilities || (kost as any).public_parking_facilities || [];
+
+    const allFacilities = Array.from(new Set([
+      ...rawFacilities,
+      ...extraKitchen,
+      ...extraParking
+    ])).filter(f => f && typeof f === 'string' && f.trim().length > 0);
+
+    const matchedItems = new Set<string>();
+
+    // 1. DAPUR BERSAMA
+    const kitchenKeywords = ['dapur bersama', 'dapur umum', 'dapur'];
+    const kitchenSubOptions = [
+      'kompor', 'kulkas bersama', 'kulkas', 'dispenser air', 'dispenser',
+      'wastafel cuci piring', 'wastafel', 'peralatan masak', 'meja makan bersama', 'meja makan',
+      'kitchen set', 'tabung gas', 'peralatan makan', 'rice cooker', 'microwave'
+    ];
+    
+    const hasKitchenParent = allFacilities.some(f => kitchenKeywords.includes(f.toLowerCase().trim()));
+    const kitchenSubs: string[] = [];
+
+    allFacilities.forEach(f => {
+      const lower = f.toLowerCase().trim();
+      if (kitchenKeywords.includes(lower)) {
+        matchedItems.add(f);
+      } else if (kitchenSubOptions.some(sub => lower === sub || lower.includes(sub))) {
+        if (hasKitchenParent || lower.includes('kompor') || lower.includes('kulkas') || lower.includes('masak') || lower.includes('dispenser') || lower.includes('cuci piring')) {
+          kitchenSubs.push(f);
+          matchedItems.add(f);
+        }
+      }
+    });
+
+    // 2. AREA PARKIR
+    const parkingKeywords = ['area parkir', 'parkir', 'parkiran', 'tempat parkir'];
+    const parkingSubOptions = ['parkir motor', 'parkir mobil', 'parkir sepeda', 'garasi motor', 'garasi mobil', 'parkir gratis', 'parkir luas'];
+    const hasParkingParent = allFacilities.some(f => parkingKeywords.includes(f.toLowerCase().trim()));
+    const parkingSubs: string[] = [];
+
+    allFacilities.forEach(f => {
+      const lower = f.toLowerCase().trim();
+      if (parkingKeywords.includes(lower)) {
+        matchedItems.add(f);
+      } else if (parkingSubOptions.some(sub => lower === sub || lower.includes(sub))) {
+        parkingSubs.push(f);
+        matchedItems.add(f);
+      }
+    });
+
+    // 3. WC UMUM / LUAR
+    const wcKeywords = ['wc umum', 'toilet umum', 'kamar mandi luar', 'wc luar'];
+    const wcSubOptions = ['kloset duduk', 'kloset jongkok', 'shower', 'wastafel', 'bak mandi', 'ember & gayung'];
+    const hasWcParent = allFacilities.some(f => wcKeywords.includes(f.toLowerCase().trim()));
+    const wcSubs: string[] = [];
+
+    allFacilities.forEach(f => {
+      const lower = f.toLowerCase().trim();
+      if (wcKeywords.includes(lower)) {
+        matchedItems.add(f);
+      } else if (hasWcParent && wcSubOptions.some(sub => lower === sub || lower.includes(sub))) {
+        wcSubs.push(f);
+        matchedItems.add(f);
+      }
+    });
+
+    // 4. RUANG TAMU & BERSAMA
+    const livingKeywords = ['ruang tamu', 'ruang tamu bersama', 'ruang santai', 'ruang bersama'];
+    const livingSubOptions = ['sofa', 'tv bersama', 'meja tamu', 'kursi santai'];
+    const hasLivingParent = allFacilities.some(f => livingKeywords.includes(f.toLowerCase().trim()));
+    const livingSubs: string[] = [];
+
+    allFacilities.forEach(f => {
+      const lower = f.toLowerCase().trim();
+      if (livingKeywords.includes(lower)) {
+        matchedItems.add(f);
+      } else if (hasLivingParent && livingSubOptions.some(sub => lower === sub || lower.includes(sub))) {
+        livingSubs.push(f);
+        matchedItems.add(f);
+      }
+    });
+
+    const groups: StructuredFacilityGroup[] = [];
+
+    if (hasKitchenParent || kitchenSubs.length > 0) {
+      groups.push({
+        id: 'dapur',
+        title: 'Dapur Bersama',
+        icon: <CookingPot className="w-5 h-5 text-orange-500" />,
+        subItems: Array.from(new Set(kitchenSubs))
+      });
+    }
+
+    if (hasParkingParent || parkingSubs.length > 0) {
+      groups.push({
+        id: 'parkir',
+        title: 'Area Parkir',
+        icon: <Car className="w-5 h-5 text-orange-500" />,
+        subItems: Array.from(new Set(parkingSubs))
+      });
+    }
+
+    if (hasWcParent || wcSubs.length > 0) {
+      groups.push({
+        id: 'wc',
+        title: 'WC Umum / Luar',
+        icon: <Bath className="w-5 h-5 text-orange-500" />,
+        subItems: Array.from(new Set(wcSubs))
+      });
+    }
+
+    if (hasLivingParent || livingSubs.length > 0) {
+      groups.push({
+        id: 'living',
+        title: 'Ruang Tamu & Bersama',
+        icon: <Armchair className="w-5 h-5 text-orange-500" />,
+        subItems: Array.from(new Set(livingSubs))
+      });
+    }
+
+    const getStandaloneIcon = (name: string): React.ReactNode => {
+      const lower = name.toLowerCase().trim();
+      if (lower.includes('wifi') || lower.includes('internet')) return <Wifi className="w-4 h-4 text-orange-500" />;
+      if (lower.includes('cctv') || lower.includes('kamera')) return <Camera className="w-4 h-4 text-orange-500" />;
+      if (lower.includes('security') || lower.includes('keamanan') || lower.includes('satpam')) return <ShieldCheck className="w-4 h-4 text-orange-500" />;
+      if (lower.includes('24 jam') || lower.includes('akses') || lower.includes('bebas')) return <KeyRound className="w-4 h-4 text-orange-500" />;
+      if (lower.includes('laundry') || lower.includes('cuci')) return <Shirt className="w-4 h-4 text-orange-500" />;
+      if (lower.includes('jemuran') || lower.includes('jemur')) return <Sun className="w-4 h-4 text-orange-500" />;
+      if (lower.includes('mushola') || lower.includes('musholla') || lower.includes('ibadah')) return <Sparkles className="w-4 h-4 text-orange-500" />;
+      if (lower.includes('lift') || lower.includes('elevator')) return <Building2 className="w-4 h-4 text-orange-500" />;
+      if (lower.includes('cleaning') || lower.includes('kebersihan')) return <Sparkles className="w-4 h-4 text-orange-500" />;
+      if (lower.includes('ac')) return <Wind className="w-4 h-4 text-orange-500" />;
+      if (lower.includes('water heater') || lower.includes('air panas')) return <Droplets className="w-4 h-4 text-orange-500" />;
+      if (lower.includes('kolam') || lower.includes('renang')) return <Droplets className="w-4 h-4 text-orange-500" />;
+      if (lower.includes('gym') || lower.includes('fitness')) return <Sparkles className="w-4 h-4 text-orange-500" />;
+      if (lower.includes('rooftop')) return <Sun className="w-4 h-4 text-orange-500" />;
+      if (lower.includes('balkon')) return <Home className="w-4 h-4 text-orange-500" />;
+      return <CheckCircle2 className="w-4 h-4 text-orange-500" />;
+    };
+
+    const standalones: StandaloneFacilityItem[] = [];
+    allFacilities.forEach(f => {
+      if (!matchedItems.has(f)) {
+        standalones.push({
+          name: f,
+          icon: getStandaloneIcon(f)
+        });
+      }
+    });
+
+    return { groups, standalones, totalCount: allFacilities.length };
+  }, [kost.facilities, (kost as any).publicKitchenFacilities, (kost as any).publicParkingFacilities]);
+
+  // Structured Room Facilities for currently selected room
+  const structuredRoomFacilities = useMemo(() => {
+    const rawRoomFacs = selectedRoom.roomFacilities || [];
+    const rawBathFacs = selectedRoom.bathroomFacilities || [];
+    const rawKitchenFacs = selectedRoom.kitchenFacilities || [];
+
+    const isKosongan = rawRoomFacs.some(f => f.toLowerCase().includes('kosongan'));
+
+    const bedroomItems = rawRoomFacs.filter(f => {
+      const lower = f.toLowerCase().trim();
+      return !lower.includes('kamar mandi') && !lower.includes('dapur dalam') && !lower.includes('kosongan');
+    });
+
+    const bathroomItems = Array.from(new Set([
+      ...rawBathFacs,
+      ...rawRoomFacs.filter(f => f.toLowerCase().includes('kamar mandi'))
+    ]));
+
+    const kitchenItems = Array.from(new Set([
+      ...rawKitchenFacs,
+      ...rawRoomFacs.filter(f => f.toLowerCase().includes('dapur dalam'))
+    ]));
+
+    const getRoomItemIcon = (name: string): React.ReactNode => {
+      const lower = name.toLowerCase().trim();
+      if (lower.includes('kasur') || lower.includes('bed')) return <Bed className="w-3.5 h-3.5 text-orange-500 shrink-0" />;
+      if (lower.includes('lemari') || lower.includes('storage')) return <Layers className="w-3.5 h-3.5 text-orange-500 shrink-0" />;
+      if (lower.includes('meja') || lower.includes('kursi')) return <Armchair className="w-3.5 h-3.5 text-orange-500 shrink-0" />;
+      if (lower.includes('ac')) return <Wind className="w-3.5 h-3.5 text-orange-500 shrink-0" />;
+      if (lower.includes('kipas')) return <Wind className="w-3.5 h-3.5 text-orange-500 shrink-0" />;
+      if (lower.includes('tv') || lower.includes('televisi')) return <Tv className="w-3.5 h-3.5 text-orange-500 shrink-0" />;
+      if (lower.includes('kulkas')) return <Refrigerator className="w-3.5 h-3.5 text-orange-500 shrink-0" />;
+      if (lower.includes('water heater') || lower.includes('air panas')) return <Droplets className="w-3.5 h-3.5 text-orange-500 shrink-0" />;
+      if (lower.includes('shower') || lower.includes('mandi') || lower.includes('wc') || lower.includes('kloset') || lower.includes('wastafel') || lower.includes('gayung') || lower.includes('bak')) return <Bath className="w-3.5 h-3.5 text-blue-500 shrink-0" />;
+      if (lower.includes('kompor') || lower.includes('dapur') || lower.includes('kitchen') || lower.includes('dispenser') || lower.includes('cuci piring')) return <CookingPot className="w-3.5 h-3.5 text-amber-500 shrink-0" />;
+      if (lower.includes('jendela') || lower.includes('ventilasi') || lower.includes('balkon')) return <Sun className="w-3.5 h-3.5 text-orange-500 shrink-0" />;
+      return <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />;
+    };
+
+    return {
+      isKosongan,
+      bedroomItems,
+      bathroomItems,
+      kitchenItems,
+      getRoomItemIcon
+    };
+  }, [selectedRoom]);
 
   // Helper to calculate discount percentage
   const calculateDiscount = (scheme: { period: PricingPeriod; price: number }) => {
@@ -744,19 +1291,43 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
       </Helmet>
       {/* ===== END SEO ===== */}
 
+      {/* Banner Mode Pratinjau Pemilik / Admin jika belum published */}
+      {kost.status !== 'published' && (
+        <div className="bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 text-white px-4 py-3 shadow-md border-b border-amber-600">
+          <div className="max-w-7xl mx-auto flex items-center justify-between gap-3 text-xs">
+            <div className="flex items-center gap-2 font-bold">
+              <Clock size={16} className="shrink-0 animate-pulse" />
+              <span>
+                <strong>MODE PRATINJAU:</strong> Listing ini saat ini <strong>{kost.status === 'suspended' ? 'DITANGGUHKAN' : 'DALAM TAHAP PENINJAUAN ADMIN'}</strong> dan belum dapat dilihat oleh publik.
+              </span>
+            </div>
+            <button 
+              onClick={onBack}
+              className="px-3 py-1 bg-white/20 hover:bg-white/30 rounded-lg font-black uppercase text-[10px] tracking-wider shrink-0 transition-colors cursor-pointer"
+            >
+              Kembali
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Mobile Sticky Header */}
       <div className="lg:hidden sticky top-0 z-40 bg-white/90 backdrop-blur-md border-b border-gray-100 px-4 py-4 flex items-center justify-between">
         <button onClick={onBack} className="p-2 hover:bg-gray-100 rounded-full transition-colors">
           <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
         </button>
         <span className="font-bold text-gray-900 truncate max-w-[200px] uppercase tracking-tight text-xs">{kost.title}</span>
-        <button
-          onClick={handleOpenChat}
-          disabled={isSubmittingChat}
-          className="text-orange-500 font-black text-sm uppercase tracking-widest disabled:opacity-50"
-        >
-          {isSubmittingChat ? '...' : 'Tanya'}
-        </button>
+        {hideBookingAndChat ? (
+          <div className="w-8" />
+        ) : (
+          <button
+            onClick={handleOpenChat}
+            disabled={isSubmittingChat}
+            className="text-orange-500 font-black text-sm uppercase tracking-widest disabled:opacity-50"
+          >
+            {isSubmittingChat ? '...' : 'Tanya'}
+          </button>
+        )}
       </div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 lg:py-12">
@@ -791,13 +1362,13 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
                 )}
 
                 {/* Active Photo Info & Counter Badge */}
-                <div className="absolute bottom-6 right-6 bg-black/60 backdrop-blur-md text-white px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-widest border border-white/15 flex items-center gap-2">
-                  <Camera size={12} className="text-orange-400" />
-                  <span>{currentPhoto + 1} / {displayedImages.length} FOTO</span>
+                <div className="absolute bottom-6 right-6 max-w-[85%] bg-black/60 backdrop-blur-md text-white px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-widest border border-white/15 flex items-center gap-2">
+                  <Camera size={12} className="text-orange-400 shrink-0" />
+                  <span className="shrink-0">{currentPhoto + 1} / {displayedImages.length} FOTO</span>
                   {currentPhotoItem?.label ? (
                     <>
-                      <span className="text-white/40">•</span>
-                      <span className={currentPhotoItem.isRoom ? "text-orange-400 font-bold" : "text-emerald-400 font-bold"}>
+                      <span className="text-white/40 shrink-0">•</span>
+                      <span className={`truncate ${currentPhotoItem.isRoom ? "text-orange-400 font-bold" : "text-emerald-400 font-bold"}`}>
                         {currentPhotoItem.isRoom
                           ? (currentPhotoItem.roomName ? `${currentPhotoItem.roomName} - ${currentPhotoItem.label}` : currentPhotoItem.label)
                           : currentPhotoItem.label}
@@ -806,20 +1377,30 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
                   ) : null}
                 </div>
 
-                {/* Active Category Tag Top Left (Only if valid label exists in database) */}
-                {currentPhotoItem && currentPhotoItem.label && (
-                  <div className="absolute top-6 left-6 bg-black/60 backdrop-blur-md text-white px-3.5 py-1.5 rounded-full text-[11px] font-black uppercase tracking-wider shadow-lg border border-white/20 flex items-center gap-1.5">
+                {/* Active Category Tag Top Left */}
+                {currentPhotoItem && (currentPhotoItem.label || currentPhotoItem.category) && (
+                  <div className="absolute top-6 left-6 max-w-[80%] bg-black/60 backdrop-blur-md text-white px-3.5 py-1.5 rounded-full text-[11px] font-black uppercase tracking-wider shadow-lg border border-white/20 flex items-center gap-1.5">
                     {currentPhotoItem.isRoom ? (
                       <>
-                        <Bed size={13} className="text-orange-400" />
-                        <span>{currentPhotoItem.roomName ? `${currentPhotoItem.roomName} • ${currentPhotoItem.label}` : currentPhotoItem.label}</span>
+                        <Bed size={13} className="text-orange-400 shrink-0" />
+                        <span className="truncate">{currentPhotoItem.roomName ? `${currentPhotoItem.roomName} • ${currentPhotoItem.label || currentPhotoItem.category}` : (currentPhotoItem.label || currentPhotoItem.category)}</span>
                       </>
                     ) : (
                       <>
-                        <Sparkles size={13} className="text-orange-400" />
-                        <span>{currentPhotoItem.label}</span>
+                        <Sparkles size={13} className="text-orange-400 shrink-0" />
+                        <span className="truncate">{currentPhotoItem.label || currentPhotoItem.category}</span>
                       </>
                     )}
+                  </div>
+                )}
+
+                {/* Photo Caption Overlay (Bottom Left) - Tampil jika caption ada dan berbeda dari kategori */}
+                {currentPhotoItem?.caption && (
+                  currentPhotoItem.caption.trim().toLowerCase() !== (currentPhotoItem.label || currentPhotoItem.category || '').trim().toLowerCase()
+                ) && (
+                  <div className="absolute bottom-6 left-6 max-w-[55%] hidden sm:flex items-center gap-1.5 bg-black/60 backdrop-blur-md text-white/95 px-3.5 py-2 rounded-2xl text-[11px] font-medium border border-white/15 shadow-md">
+                    <MessageSquare size={13} className="text-orange-400 shrink-0" />
+                    <span className="truncate" title={currentPhotoItem.caption}>{currentPhotoItem.caption}</span>
                   </div>
                 )}
               </div>
@@ -842,13 +1423,13 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
                 </div>
               )}
 
-              {/* Bilah Tombol Navigasi Isolasi Foto Kamar Kosong (Hanya tampil jika ada data foto spesifik unit kamar) */}
+              {/* Bilah Tombol Navigasi Foto Kamar — tampil jika ada foto spesifik per tipe/unit kamar */}
               {showRoomPhotoNav && (
                 <div className="bg-white p-4 rounded-3xl border border-slate-200/80 shadow-2xs space-y-3">
                   <div className="flex flex-wrap items-center justify-between gap-2 px-1">
                     <span className="text-[11px] font-black text-slate-600 uppercase tracking-wider flex items-center gap-1.5">
                       <Camera size={14} className="text-orange-500" />
-                      Pilih Foto Unit Kamar
+                      {kost.isManaged ? 'Pilih Foto Unit Kamar' : 'Pilih Foto Tipe Kamar'}
                     </span>
                     {activePhotoFilter !== 'all' && (
                       <button
@@ -881,7 +1462,7 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
                       <span>Semua Foto</span>
                     </button>
 
-                    {/* Tombol Per Kamar Kosong */}
+                    {/* Tombol per tipe/unit kamar yang memiliki foto */}
                     {emptyRooms.map((room) => {
                       const isSelected = activePhotoFilter === room.id || activePhotoFilter === room.name || activePhotoFilter === room.rawName;
 
@@ -972,15 +1553,73 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
               </InfoSection>
             )}
 
-            {kost.facilities && kost.facilities.length > 0 && (
+            {(structuredPublicFacilities.groups.length > 0 || structuredPublicFacilities.standalones.length > 0) && (
               <InfoSection title="Fasilitas Umum">
-                <div className="flex flex-wrap gap-3">
-                  {kost.facilities.map((facility, index) => (
-                    <span key={index} className="bg-gray-50 text-gray-600 px-5 py-3 rounded-2xl text-xs font-bold border border-gray-100 flex items-center gap-2">
-                      <span className="w-1.5 h-1.5 rounded-full bg-orange-500"></span>
-                      {facility}
-                    </span>
-                  ))}
+                <div className="space-y-4">
+                  {/* 1. Kartu Fasilitas Utama dengan Sub-Kelengkapan (Dapur Bersama, Area Parkir, WC Umum, Ruang Tamu) */}
+                  {structuredPublicFacilities.groups.length > 0 && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                      {structuredPublicFacilities.groups.map(group => (
+                        <div 
+                          key={group.id} 
+                          className="bg-white p-4 sm:p-5 rounded-2xl sm:rounded-3xl border border-gray-100/90 shadow-sm shadow-gray-100/50 flex flex-col justify-between gap-3 hover:border-orange-200 transition-all group"
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-2xl bg-orange-50 text-orange-600 flex items-center justify-center shrink-0 border border-orange-100 group-hover:scale-105 group-hover:bg-orange-500 group-hover:text-white transition-all duration-300">
+                              {group.icon}
+                            </div>
+                            <div>
+                              <h4 className="font-black text-sm text-gray-900 tracking-tight">{group.title}</h4>
+                              <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">
+                                {group.subItems.length > 0 ? `${group.subItems.length} Kelengkapan Tersedia` : 'Fasilitas Bersama'}
+                              </p>
+                            </div>
+                          </div>
+
+                          {/* Chips Sub-Kelengkapan */}
+                          {group.subItems.length > 0 && (
+                            <div className="flex flex-wrap gap-1.5 pt-1 border-t border-gray-50">
+                              {group.subItems.map(sub => (
+                                <span 
+                                  key={sub} 
+                                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-orange-50/70 text-orange-950 text-xs font-bold border border-orange-100/80 hover:bg-orange-100 transition-colors"
+                                >
+                                  <Check className="w-3 h-3 text-orange-500 shrink-0 stroke-[3]" />
+                                  <span>{sub}</span>
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* 2. Grid Fasilitas Mandiri & Spesifikasi Bangunan */}
+                  {structuredPublicFacilities.standalones.length > 0 && (
+                    <div className="space-y-2 pt-1">
+                      {structuredPublicFacilities.groups.length > 0 && (
+                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">
+                          Fasilitas Gedung & Keamanan
+                        </p>
+                      )}
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+                        {structuredPublicFacilities.standalones.map(fac => (
+                          <div 
+                            key={fac.name} 
+                            className="flex items-center gap-2.5 p-3 sm:p-3.5 rounded-2xl bg-white border border-gray-100 shadow-2xs hover:border-orange-200 transition-all group"
+                          >
+                            <div className="w-8 h-8 rounded-xl bg-orange-50 text-orange-600 flex items-center justify-center shrink-0 border border-orange-100/60 group-hover:scale-105 group-hover:bg-orange-500 group-hover:text-white transition-all">
+                              {fac.icon}
+                            </div>
+                            <span className="text-xs font-bold text-gray-800 truncate" title={fac.name}>
+                              {fac.name}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               </InfoSection>
             )}
@@ -1002,141 +1641,333 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
               <InfoSection title="Lokasi & Lingkungan">
                 <div className="space-y-6">
                   {hasValidLocation && (
-                    <div className="bg-white rounded-3xl overflow-hidden shadow-sm border border-gray-100">
-                      <iframe
-                        title="Kost Location"
-                        width="100%"
-                        height="200"
-                        style={{ border: 0 }}
-                        loading="lazy"
-                        allowFullScreen
-                        src={embedMapsUrl}
-                      ></iframe>
+                    <div ref={mapPreviewRef} className="scroll-mt-24">
+                      <div className={`relative bg-white rounded-3xl overflow-hidden shadow-sm border border-gray-100 group transition-all duration-500 ease-in-out ${
+                        activeRoute ? 'h-96 sm:h-[420px] md:h-[460px]' : 'h-60 sm:h-72'
+                      }`}>
+                        {/* Floating Pill: Reset ke Titik Kost (Hanya saat rute aktif) */}
+                        {activeRoute && (
+                          <button
+                            type="button"
+                            onClick={handleResetRoute}
+                            className="absolute top-3 right-3 z-10 px-3 py-1.5 rounded-full bg-gray-900/80 hover:bg-gray-900 text-white backdrop-blur-md text-[11px] font-bold shadow-md transition-all flex items-center gap-1.5 active:scale-95 cursor-pointer border border-white/20 animate-in fade-in zoom-in-95 duration-200"
+                            title="Kembalikan Peta ke Titik Kost"
+                          >
+                            <RotateCcw size={12} className="text-orange-400" />
+                            <span>Titik Kost</span>
+                          </button>
+                        )}
+
+                        <iframe
+                          key={currentEmbedUrl}
+                          title={activeRoute ? `Rute ke ${activeRoute.name}` : "Kost Location"}
+                          width="100%"
+                          height="100%"
+                          style={{ border: 0 }}
+                          loading="lazy"
+                          allowFullScreen
+                          src={currentEmbedUrl}
+                          className="w-full h-full object-cover"
+                        ></iframe>
+                      </div>
                     </div>
-                  )}
-                  {hasValidLocation && (
-                    <a href={googleMapsUrl} target="_blank" rel="noopener noreferrer" className="w-full bg-white border border-gray-200 text-gray-900 py-4 rounded-2xl font-bold text-center hover:bg-gray-50 transition-colors shadow-sm text-sm uppercase tracking-widest flex items-center justify-center gap-2">
-                      <svg className="w-5 h-5 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
-                      Buka Google Maps
-                    </a>
                   )}
 
                   {hasCampuses && (
-                    <div className="space-y-3 pt-2">
-                      <h4 className="font-bold text-gray-900 text-sm uppercase tracking-widest pl-2">Kampus Terdekat</h4>
-                      <div className="flex flex-wrap gap-3">
-                        {kost.campuses!.map((campus, idx) => (
-                          <div key={idx} className="flex-1 min-w-[200px] bg-orange-50 border border-orange-100 rounded-2xl p-4 flex flex-col justify-between items-start gap-4">
-                            <span className="font-bold text-gray-900">{campus.name}</span>
-                            <div className="w-full">
-                              <div className="flex items-center justify-between w-full mb-3">
-                                <span className="font-black text-orange-600 bg-white px-3 py-1.5 rounded-full shadow-sm text-xs">
+                    <div className="space-y-1.5 pt-1">
+                      <div className="flex items-center justify-between pl-1">
+                        <div className="flex items-center gap-1.5">
+                          <GraduationCap size={14} className="text-orange-600" />
+                          <h4 className="font-bold text-gray-900 text-xs uppercase tracking-wider">Kampus Terdekat</h4>
+                        </div>
+                        <span className="text-[10px] font-bold text-gray-400">
+                          {campusList.length} Lokasi
+                        </span>
+                      </div>
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-1.5">
+                        {campusList.map((campus, idx) => {
+                          const kmMatch = campus.distance?.match(/[\d.]+/);
+                          const km = kmMatch ? parseFloat(kmMatch[0]) : 1;
+                          const walkText = campus.walkDuration || `${Math.ceil((km / 4.2) * 60)}m`;
+                          const motoText = campus.motoDuration || `${Math.ceil((km / 28) * 60) + 1}m`;
+                          const carText = campus.carDuration || `${Math.ceil((km / 18) * 60) + 2}m`;
+
+                          const isRouteActive = activeRoute?.name === campus.name && activeRoute?.lat === campus.lat && activeRoute?.lng === campus.lng;
+
+                          return (
+                            <div 
+                              key={idx} 
+                              className={`bg-white border rounded-xl p-2 px-2.5 flex items-center justify-between gap-2.5 transition-all group shadow-2xs ${
+                                isRouteActive ? 'border-orange-500 bg-orange-50/40 ring-1 ring-orange-400' : 'border-gray-100 hover:border-orange-200 hover:bg-orange-50/20'
+                              }`}
+                            >
+                              <div className="flex items-center gap-2 min-w-0 flex-1">
+                                <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform ${
+                                  isRouteActive ? 'bg-orange-500 text-white' : 'bg-orange-50 text-orange-600'
+                                }`}>
+                                  <GraduationCap size={14} />
+                                </div>
+                                <div className="min-w-0 flex-1">
+                                  <div className="font-bold text-gray-900 text-xs truncate leading-tight" title={campus.name}>
+                                    {campus.name}
+                                  </div>
+                                  <div className="flex items-center gap-1.5 text-[10px] font-medium text-gray-500 mt-0.5 whitespace-nowrap">
+                                    <span title="Jalan Kaki">🚶 {walkText}</span>
+                                    <span className="text-gray-300">•</span>
+                                    <span title="Sepeda Motor">🏍️ {motoText}</span>
+                                    <span className="text-gray-300">•</span>
+                                    <span title="Mobil">🚗 {carText}</span>
+                                  </div>
+                                </div>
+                              </div>
+
+                              <div className="flex items-center gap-1.5 shrink-0">
+                                <span className="font-bold text-orange-600 bg-orange-50 border border-orange-100/80 px-2 py-0.5 rounded-lg text-[10px] whitespace-nowrap">
                                   {campus.distance}
                                 </span>
-                                {campus.lat && campus.lng && (
-                                  <a
-                                    href={`https://www.google.com/maps/dir/?api=1&origin=${kost.location?.lat || 0},${kost.location?.lng || 0}&destination=${campus.lat},${campus.lng}`}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="text-[10px] font-black uppercase tracking-widest text-white bg-orange-500 hover:bg-orange-600 px-3 py-1.5 rounded-xl transition-colors"
-                                  >
-                                    Lihat Rute
-                                  </a>
-                                )}
-                              </div>
-                              {(() => {
-                                const walkText = campus.walkDuration || (() => {
-                                  const kmMatch = campus.distance?.match(/[\d.]+/);
-                                  const km = kmMatch ? parseFloat(kmMatch[0]) : 1;
-                                  return `${Math.ceil((km / 4.2) * 60)}m`;
-                                })();
-                                const motoText = campus.motoDuration || (() => {
-                                  const kmMatch = campus.distance?.match(/[\d.]+/);
-                                  const km = kmMatch ? parseFloat(kmMatch[0]) : 1;
-                                  return `${Math.ceil((km / 28) * 60) + 1}m`;
-                                })();
-                                const carText = campus.carDuration || (() => {
-                                  const kmMatch = campus.distance?.match(/[\d.]+/);
-                                  const km = kmMatch ? parseFloat(kmMatch[0]) : 1;
-                                  return `${Math.ceil((km / 18) * 60) + 2}m`;
-                                })();
 
-                                return (
-                                  <div className="flex items-center justify-between gap-2 text-[11px] font-bold text-gray-500 bg-white px-3 py-2 rounded-xl border border-gray-100/50 shadow-2xs">
-                                    <span className="flex items-center gap-1" title="Jalan Kaki">🚶 {walkText}</span>
-                                    <span className="text-gray-200">|</span>
-                                    <span className="flex items-center gap-1" title="Motor">🏍️ {motoText}</span>
-                                    <span className="text-gray-200">|</span>
-                                    <span className="flex items-center gap-1" title="Mobil">🚗 {carText}</span>
-                                  </div>
-                                );
-                              })()}
+                                {campus.lat && campus.lng ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleSelectRoute({
+                                      name: campus.name,
+                                      lat: campus.lat,
+                                      lng: campus.lng,
+                                      type: 'campus',
+                                      distance: campus.distance,
+                                      walkDuration: walkText,
+                                      motoDuration: motoText,
+                                      carDuration: carText
+                                    })}
+                                    className={`flex items-center gap-1 text-[10px] font-bold px-2.5 py-1 rounded-lg transition-all active:scale-95 shadow-2xs cursor-pointer ${
+                                      isRouteActive 
+                                        ? 'bg-orange-500 text-white border border-orange-500 shadow-sm' 
+                                        : 'text-orange-600 hover:text-white bg-orange-50 hover:bg-orange-500 border border-orange-100/60 hover:border-orange-500'
+                                    }`}
+                                    title={isRouteActive ? 'Klik untuk sembunyikan rute' : 'Tampilkan rute pada peta mini di atas'}
+                                  >
+                                    <Navigation size={10} className={`shrink-0 ${isRouteActive ? 'rotate-45' : ''}`} />
+                                    <span>{isRouteActive ? 'Aktif ✓' : 'Rute'}</span>
+                                  </button>
+                                ) : null}
+                              </div>
                             </div>
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     </div>
                   )}
 
                   {hasPublicFacilities && (
-                    <div className="space-y-3 pt-2">
-                      <h4 className="font-bold text-gray-900 text-sm uppercase tracking-widest pl-2">Fasilitas Publik</h4>
-                      <div className="flex flex-wrap gap-3">
-                        {kost.publicFacilities!.map((fac, idx) => (
-                          <div key={idx} className="flex-1 min-w-[200px] bg-blue-50 border border-blue-100 rounded-2xl p-4 flex flex-col justify-between items-start gap-4">
-                            <span className="font-bold text-gray-900">{fac.name}</span>
-                            <div className="w-full">
-                              <div className="flex items-center justify-between w-full mb-3">
-                                <span className="font-black text-blue-600 bg-white px-3 py-1.5 rounded-full shadow-sm text-xs">
+                    <div className="space-y-1.5 pt-1">
+                      <div className="flex items-center justify-between pl-1">
+                        <div className="flex items-center gap-1.5">
+                          <Building2 size={14} className="text-blue-600" />
+                          <h4 className="font-bold text-gray-900 text-xs uppercase tracking-wider">Fasilitas Publik</h4>
+                        </div>
+                        <span className="text-[10px] font-bold text-gray-400">
+                          {publicFacilitiesList.length} Lokasi
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-1.5">
+                        {publicFacilitiesList.map((fac, idx) => {
+                          const kmMatch = fac.distance?.match(/[\d.]+/);
+                          const km = kmMatch ? parseFloat(kmMatch[0]) : 1;
+                          const walkText = fac.walkDuration || `${Math.ceil((km / 4.2) * 60)}m`;
+                          const motoText = fac.motoDuration || `${Math.ceil((km / 28) * 60) + 1}m`;
+                          const carText = fac.carDuration || `${Math.ceil((km / 18) * 60) + 2}m`;
+
+                          const isRouteActive = activeRoute?.name === fac.name && activeRoute?.lat === fac.lat && activeRoute?.lng === fac.lng;
+
+                          return (
+                            <div 
+                              key={idx} 
+                              className={`bg-white border rounded-xl p-2 px-2.5 flex items-center justify-between gap-2.5 transition-all group shadow-2xs ${
+                                isRouteActive ? 'border-blue-500 bg-blue-50/40 ring-1 ring-blue-400' : 'border-gray-100 hover:border-blue-200 hover:bg-blue-50/20'
+                              }`}
+                            >
+                              <div className="flex items-center gap-2 min-w-0 flex-1">
+                                <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform ${
+                                  isRouteActive ? 'bg-blue-600 text-white' : 'bg-blue-50 text-blue-600'
+                                }`}>
+                                  <Building2 size={14} />
+                                </div>
+                                <div className="min-w-0 flex-1">
+                                  <div className="font-bold text-gray-900 text-xs truncate leading-tight" title={fac.name}>
+                                    {fac.name}
+                                  </div>
+                                  <div className="flex items-center gap-1.5 text-[10px] font-medium text-gray-500 mt-0.5 whitespace-nowrap">
+                                    <span title="Jalan Kaki">🚶 {walkText}</span>
+                                    <span className="text-gray-300">•</span>
+                                    <span title="Sepeda Motor">🏍️ {motoText}</span>
+                                    <span className="text-gray-300">•</span>
+                                    <span title="Mobil">🚗 {carText}</span>
+                                  </div>
+                                </div>
+                              </div>
+
+                              <div className="flex items-center gap-1.5 shrink-0">
+                                <span className="font-bold text-blue-600 bg-blue-50 border border-blue-100/80 px-2 py-0.5 rounded-lg text-[10px] whitespace-nowrap">
                                   {fac.distance}
                                 </span>
-                                {fac.lat && fac.lng && (
-                                  <a
-                                    href={`https://www.google.com/maps/dir/?api=1&origin=${kost.location?.lat || 0},${kost.location?.lng || 0}&destination=${fac.lat},${fac.lng}`}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="text-[10px] font-black uppercase tracking-widest text-white bg-blue-500 hover:bg-blue-600 px-3 py-1.5 rounded-xl transition-colors"
-                                  >
-                                    Lihat Rute
-                                  </a>
-                                )}
-                              </div>
-                              {(() => {
-                                const walkText = fac.walkDuration || (() => {
-                                  const kmMatch = fac.distance?.match(/[\d.]+/);
-                                  const km = kmMatch ? parseFloat(kmMatch[0]) : 1;
-                                  return `${Math.ceil((km / 4.2) * 60)}m`;
-                                })();
-                                const motoText = fac.motoDuration || (() => {
-                                  const kmMatch = fac.distance?.match(/[\d.]+/);
-                                  const km = kmMatch ? parseFloat(kmMatch[0]) : 1;
-                                  return `${Math.ceil((km / 28) * 60) + 1}m`;
-                                })();
-                                const carText = fac.carDuration || (() => {
-                                  const kmMatch = fac.distance?.match(/[\d.]+/);
-                                  const km = kmMatch ? parseFloat(kmMatch[0]) : 1;
-                                  return `${Math.ceil((km / 18) * 60) + 2}m`;
-                                })();
 
-                                return (
-                                  <div className="flex items-center justify-between gap-2 text-[11px] font-bold text-gray-500 bg-white px-3 py-2 rounded-xl border border-gray-100/50 shadow-2xs">
-                                    <span className="flex items-center gap-1" title="Jalan Kaki">🚶 {walkText}</span>
-                                    <span className="text-gray-200">|</span>
-                                    <span className="flex items-center gap-1" title="Motor">🏍️ {motoText}</span>
-                                    <span className="text-gray-200">|</span>
-                                    <span className="flex items-center gap-1" title="Mobil">🚗 {carText}</span>
-                                  </div>
-                                );
-                              })()}
+                                {fac.lat && fac.lng ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleSelectRoute({
+                                      name: fac.name,
+                                      lat: fac.lat,
+                                      lng: fac.lng,
+                                      type: 'facility',
+                                      distance: fac.distance,
+                                      walkDuration: walkText,
+                                      motoDuration: motoText,
+                                      carDuration: carText
+                                    })}
+                                    className={`flex items-center gap-1 text-[10px] font-bold px-2.5 py-1 rounded-lg transition-all active:scale-95 shadow-2xs cursor-pointer ${
+                                      isRouteActive 
+                                        ? 'bg-blue-600 text-white border border-blue-600 shadow-sm' 
+                                        : 'text-blue-600 hover:text-white bg-blue-50 hover:bg-blue-600 border border-blue-100/60 hover:border-blue-600'
+                                    }`}
+                                    title={isRouteActive ? 'Klik untuk sembunyikan rute' : 'Tampilkan rute pada peta mini di atas'}
+                                  >
+                                    <Navigation size={10} className={`shrink-0 ${isRouteActive ? 'rotate-45' : ''}`} />
+                                    <span>{isRouteActive ? 'Aktif ✓' : 'Rute'}</span>
+                                  </button>
+                                ) : null}
+                              </div>
                             </div>
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     </div>
                   )}
                 </div>
               </InfoSection>
             )}
+
+            {/* Seksian Ulasan Riil Penghuni Kost */}
+            <InfoSection title="Ulasan Penghuni Kost" defaultOpen={true}>
+              {(() => {
+                const reviews = Array.isArray(kost.reviews) ? kost.reviews : [];
+                const totalRev = reviews.length;
+                const avg = totalRev > 0
+                  ? (reviews.reduce((s: number, r: any) => s + (Number(r.rating) || 0), 0) / totalRev).toFixed(1)
+                  : null;
+
+                const starCounts = [5, 4, 3, 2, 1].map(stars => ({
+                  stars,
+                  count: reviews.filter((r: any) => Math.round(Number(r.rating) || 0) === stars).length,
+                  pct: totalRev > 0 ? (reviews.filter((r: any) => Math.round(Number(r.rating) || 0) === stars).length / totalRev) * 100 : 0
+                }));
+
+                if (totalRev === 0) {
+                  return (
+                    <div className="p-8 text-center bg-gray-50/60 rounded-3xl border border-gray-100 space-y-2">
+                      <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center mx-auto text-amber-400 shadow-xs border border-gray-100">
+                        <Star size={24} className="fill-amber-400 text-amber-400" />
+                      </div>
+                      <h4 className="font-black text-gray-900 text-sm uppercase tracking-tight">Belum Ada Ulasan</h4>
+                      <p className="text-xs text-gray-500 max-w-md mx-auto">
+                        Kost ini belum memiliki ulasan dari penghuni. Ulasan akan tampil secara otomatis setelah penghuni memberikan penilaian pengalaman tinggal mereka.
+                      </p>
+                    </div>
+                  );
+                }
+
+                return (
+                  <div className="space-y-6">
+                    {/* Rating Overview Summary */}
+                    <div className="bg-gray-50/70 p-6 rounded-3xl border border-gray-100 flex flex-col sm:flex-row gap-6 items-center sm:items-stretch">
+                      {/* Left: Score Box */}
+                      <div className="flex flex-col items-center justify-center sm:pr-8 sm:border-r border-gray-200/80 shrink-0">
+                        <span className="text-5xl font-black text-gray-900 tracking-tight">{avg}</span>
+                        <div className="flex gap-1 text-orange-500 my-1.5">
+                          {[1, 2, 3, 4, 5].map(i => (
+                            <Star key={i} size={16} className={`fill-orange-500 ${Number(avg) >= i ? 'text-orange-500' : 'text-gray-200'}`} />
+                          ))}
+                        </div>
+                        <span className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">{totalRev} Ulasan Terverifikasi</span>
+                      </div>
+
+                      {/* Right: Distribution Bars */}
+                      <div className="flex-1 w-full space-y-2 justify-center flex flex-col">
+                        {starCounts.map(item => (
+                          <div key={item.stars} className="flex items-center gap-3 text-xs font-bold text-gray-600">
+                            <span className="w-6 text-right shrink-0">{item.stars} ⭐</span>
+                            <div className="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden">
+                              <div 
+                                className="h-full bg-orange-500 rounded-full transition-all duration-500" 
+                                style={{ width: `${item.pct}%` }} 
+                              />
+                            </div>
+                            <span className="w-8 text-left text-[10px] text-gray-400 shrink-0 font-semibold">{item.count}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Review List */}
+                    <div className="space-y-4">
+                      {reviews.map((rev: any, idx: number) => {
+                        const revDate = rev.date ? new Date(rev.date).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }) : 'Baru saja';
+                        return (
+                          <div key={idx} className="bg-white p-5 rounded-2xl border border-gray-100 shadow-2xs space-y-2.5">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-3">
+                                <div className="w-9 h-9 rounded-full bg-orange-100 text-[#ff7a00] font-black text-xs flex items-center justify-center uppercase">
+                                  {(rev.userName || 'P')[0]}
+                                </div>
+                                <div>
+                                  <div className="flex items-center gap-1.5">
+                                    <h5 className="text-xs font-black text-gray-900">{rev.userName || 'Penghuni Kost'}</h5>
+                                    <span className="bg-emerald-50 text-emerald-700 text-[9px] font-extrabold px-1.5 py-0.5 rounded border border-emerald-200">
+                                      Penghuni Terverifikasi ✓
+                                    </span>
+                                  </div>
+                                  <span className="text-[10px] text-gray-400 font-medium">{revDate}</span>
+                                </div>
+                              </div>
+                              <div className="flex gap-0.5 text-amber-400">
+                                {[1, 2, 3, 4, 5].map(s => (
+                                  <Star key={s} size={13} className={s <= Number(rev.rating) ? 'fill-amber-400 text-amber-400' : 'text-gray-200'} />
+                                ))}
+                              </div>
+                            </div>
+                            {rev.comment && (
+                              <p className="text-xs text-gray-700 leading-relaxed pl-12">
+                                "{rev.comment}"
+                              </p>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })()}
+            </InfoSection>
+
+            {/* Lapor Listing Banner Card */}
+            <div className="bg-gray-50/80 rounded-3xl p-6 border border-gray-100 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+              <div className="flex items-start gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center shrink-0">
+                  <ShieldAlert size={20} />
+                </div>
+                <div className="space-y-0.5">
+                  <h4 className="font-black text-gray-900 text-sm">Menemukan Masalah pada Properti Ini?</h4>
+                  <p className="text-xs text-gray-500">Laporkan jika ada indikasi penipuan, ketidaksesuaian harga, atau fasilitas palsu.</p>
+                </div>
+              </div>
+              <button
+                onClick={handleOpenReportModal}
+                className="px-5 py-2.5 bg-white hover:bg-rose-50 border border-gray-200 hover:border-rose-200 text-gray-700 hover:text-rose-600 rounded-xl text-xs font-black uppercase tracking-wider transition-all whitespace-nowrap active:scale-95 flex items-center gap-1.5 shadow-sm cursor-pointer"
+              >
+                <Flag size={13} /> Laporkan Properti
+              </button>
+            </div>
 
           </div>
 
@@ -1345,64 +2176,149 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
                   </div>
                 )}
 
-                {/* Facilities of Selected Room */}
-                <div className="mb-8 p-6 bg-gray-50 rounded-2xl border border-gray-100">
-                  <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">Fasilitas {selectedRoom.name}</p>
-                  <ul className="space-y-2">
-                    {selectedRoom.roomFacilities?.map((f, i) => (
-                      <li key={i} className="text-xs font-bold text-gray-600 flex items-center gap-2">
-                        <svg className="w-3 h-3 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
-                        {f}
-                      </li>
-                    ))}
-                    {selectedRoom.bathroomFacilities?.map((f, i) => (
-                      <li key={`bath-${i}`} className="text-xs font-bold text-gray-600 flex items-center gap-2">
-                        <svg className="w-3 h-3 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
-                        {f}
-                      </li>
-                    ))}
-                  </ul>
+                {/* Facilities of Selected Room - Structured Display */}
+                <div className="mb-8 p-5 bg-gray-50/80 rounded-2xl border border-gray-100 space-y-3.5">
+                  <div className="flex items-center justify-between">
+                    <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest flex items-center gap-1.5">
+                      <Bed size={13} className="text-orange-500" />
+                      Fasilitas {selectedRoom.name}
+                    </p>
+                    {selectedRoom.size && (
+                      <span className="text-[10px] font-extrabold bg-white px-2 py-0.5 rounded-md border border-gray-200 text-gray-700 shadow-2xs">
+                        {selectedRoom.size}
+                      </span>
+                    )}
+                  </div>
+
+                  {structuredRoomFacilities.isKosongan ? (
+                    <div className="p-3 bg-amber-50/80 border border-amber-200 rounded-xl text-center space-y-1">
+                      <p className="text-xs font-black text-amber-900 flex items-center justify-center gap-1.5">
+                        <AlertCircle size={14} className="text-amber-600 shrink-0" />
+                        Kosongan (Tanpa Perabot)
+                      </p>
+                      <p className="text-[10px] text-amber-700 font-medium leading-relaxed">
+                        Kamar disewakan dalam kondisi kosongan tanpa kasur & perabot kamar.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {/* Sub 1: Perabot Kamar */}
+                      {structuredRoomFacilities.bedroomItems.length > 0 && (
+                        <div className="space-y-1.5">
+                          <span className="text-[9px] font-black text-gray-400 uppercase tracking-wider block">
+                            Perabot & Ruangan
+                          </span>
+                          <div className="grid grid-cols-2 gap-1.5">
+                            {structuredRoomFacilities.bedroomItems.map((item, idx) => (
+                              <div key={idx} className="flex items-center gap-1.5 text-xs font-bold text-gray-700 bg-white px-2.5 py-1.5 rounded-xl border border-gray-100 shadow-2xs">
+                                {structuredRoomFacilities.getRoomItemIcon(item)}
+                                <span className="truncate" title={item}>{item}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Sub 2: Kamar Mandi */}
+                      {structuredRoomFacilities.bathroomItems.length > 0 && (
+                        <div className="space-y-1.5 pt-1 border-t border-gray-200/60">
+                          <span className="text-[9px] font-black text-gray-400 uppercase tracking-wider block">
+                            Kamar Mandi
+                          </span>
+                          <div className="grid grid-cols-2 gap-1.5">
+                            {structuredRoomFacilities.bathroomItems.map((item, idx) => (
+                              <div key={idx} className="flex items-center gap-1.5 text-xs font-bold text-gray-700 bg-white px-2.5 py-1.5 rounded-xl border border-gray-100 shadow-2xs">
+                                <Bath size={13} className="text-blue-500 shrink-0" />
+                                <span className="truncate" title={item}>{item}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Sub 3: Dapur Kamar (jika ada Dapur Dalam) */}
+                      {structuredRoomFacilities.kitchenItems.length > 0 && (
+                        <div className="space-y-1.5 pt-1 border-t border-gray-200/60">
+                          <span className="text-[9px] font-black text-gray-400 uppercase tracking-wider block">
+                            Dapur Pribadi
+                          </span>
+                          <div className="grid grid-cols-2 gap-1.5">
+                            {structuredRoomFacilities.kitchenItems.map((item, idx) => (
+                              <div key={idx} className="flex items-center gap-1.5 text-xs font-bold text-gray-700 bg-white px-2.5 py-1.5 rounded-xl border border-gray-100 shadow-2xs">
+                                <CookingPot size={13} className="text-amber-500 shrink-0" />
+                                <span className="truncate" title={item}>{item}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
 
-                <div className="space-y-3">
-                  {(() => {
-                    const isManaged = Boolean(kost.isManaged);
-                    const isAvailable = isManaged
-                      ? Boolean(selectedChildRoom && selectedChildRoom.isAvailable)
-                      : Boolean(selectedRoom && selectedRoom.isAvailable !== false);
+                {hideBookingAndChat ? (
+                  <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200 text-center space-y-1.5">
+                    <div className="text-xs font-black text-amber-900 flex items-center justify-center gap-1.5">
+                      <Clock size={14} className="text-amber-600" /> Mode Pratinjau Mitra
+                    </div>
+                    <p className="text-[11px] text-amber-700 font-medium leading-relaxed">
+                      Tombol transaksi sewa dan chat calon penyewa dinonaktifkan dalam mode pratinjau mitra.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {(() => {
+                      const isUnpublished = kost.status !== 'published';
+                      const isManaged = Boolean(kost.isManaged);
+                      const isAvailable = isManaged
+                        ? Boolean(selectedChildRoom && selectedChildRoom.isAvailable)
+                        : Boolean(selectedRoom && selectedRoom.isAvailable !== false);
 
-                    const buttonText = isManaged
-                      ? (!selectedChildRoom
-                          ? 'Pilih Kamar'
-                          : !selectedChildRoom.isAvailable
-                            ? 'Kamar Penuh'
-                            : `Ajukan Sewa ${selectedChildRoom.displayName}`)
-                      : (!isAvailable
-                          ? 'Kamar Penuh'
-                          : `Ajukan Sewa (${periodLabels[selectedPeriod] || selectedPeriod})`);
+                      const buttonText = isUnpublished
+                        ? 'Pratinjau (Belum Tayang)'
+                        : isManaged
+                          ? (!selectedChildRoom
+                              ? 'Pilih Kamar'
+                              : !selectedChildRoom.isAvailable
+                                ? 'Kamar Penuh'
+                                : `Ajukan Sewa ${selectedChildRoom.displayName}`)
+                          : (!isAvailable
+                              ? 'Kamar Penuh'
+                              : `Ajukan Sewa (${periodLabels[selectedPeriod] || selectedPeriod})`);
 
-                    return (
-                      <button
-                        onClick={handleBookingClick}
-                        disabled={!isAvailable}
-                        className={`w-full py-4 rounded-2xl font-black text-sm uppercase tracking-widest shadow-xl transition-all active:scale-95 ${
-                          !isAvailable
-                            ? 'bg-gray-200 text-gray-400 cursor-not-allowed shadow-none'
-                            : 'bg-orange-500 text-white shadow-orange-100 hover:bg-orange-600 cursor-pointer'
-                        }`}
-                      >
-                        {buttonText}
-                      </button>
-                    );
-                  })()}
-                  <button
-                    onClick={handleOpenChat}
-                    disabled={isSubmittingChat}
-                    className="w-full bg-white text-gray-900 border-2 border-gray-100 py-4 rounded-2xl font-black text-sm uppercase tracking-widest hover:border-gray-900 transition-all active:scale-95 disabled:opacity-50"
-                  >
-                    {isSubmittingChat ? 'Membuka Chat...' : 'Chat Pemilik'}
-                  </button>
-                </div>
+                      return (
+                        <button
+                          onClick={isUnpublished ? () => alert('Ini adalah mode pratinjau pemilik. Calon penyewa belum dapat mengajukan sewa sampai listing disetujui dan berstatus tayang publik oleh admin.') : handleBookingClick}
+                          disabled={!isAvailable && !isUnpublished}
+                          className={`w-full py-4 rounded-2xl font-black text-sm uppercase tracking-widest shadow-xl transition-all active:scale-95 ${
+                            isUnpublished
+                              ? 'bg-amber-500 text-white shadow-amber-100 hover:bg-amber-600 cursor-pointer'
+                              : !isAvailable
+                                ? 'bg-gray-200 text-gray-400 cursor-not-allowed shadow-none'
+                                : 'bg-orange-500 text-white shadow-orange-100 hover:bg-orange-600 cursor-pointer'
+                          }`}
+                        >
+                          {buttonText}
+                        </button>
+                      );
+                    })()}
+                    <button
+                      onClick={handleOpenChat}
+                      disabled={isSubmittingChat}
+                      className="w-full bg-white text-gray-900 border-2 border-gray-100 py-4 rounded-2xl font-black text-sm uppercase tracking-widest hover:border-gray-900 transition-all active:scale-95 disabled:opacity-50"
+                    >
+                      {isSubmittingChat ? 'Membuka Chat...' : 'Chat Pemilik'}
+                    </button>
+
+                    <button
+                      onClick={handleOpenReportModal}
+                      className="w-full text-gray-400 hover:text-rose-600 font-bold text-xs flex items-center justify-center gap-1.5 py-2 hover:bg-rose-50/50 rounded-xl transition-all cursor-pointer"
+                    >
+                      <Flag size={12} />
+                      <span>Laporkan Properti</span>
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -1473,6 +2389,205 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
           />
         );
       })()}
+
+      {/* MODAL LAPORKAN PROPERTI */}
+      {isReportModalOpen && (
+        <div className="fixed inset-0 z-[150] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-gray-900/70 backdrop-blur-sm animate-in fade-in" onClick={() => setIsReportModalOpen(false)} />
+          <div className="relative bg-white w-full max-w-lg rounded-[2.5rem] shadow-2xl overflow-hidden flex flex-col z-10 animate-in zoom-in-95 duration-200">
+            {/* Header */}
+            <div className="p-6 sm:p-7 border-b border-gray-100 flex items-center justify-between bg-gradient-to-r from-rose-50/50 via-white to-white">
+              <div className="space-y-0.5">
+                <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 bg-rose-50 text-rose-600 rounded-full text-[10px] font-black uppercase tracking-widest">
+                  <ShieldAlert size={12} />
+                  Layanan Pengaduan
+                </div>
+                <h3 className="text-xl font-black text-gray-900 tracking-tight">
+                  Laporkan Properti
+                </h3>
+                <p className="text-xs text-gray-500 font-medium truncate max-w-[280px]">
+                  {kost.title || (kost as any).namaKost}
+                </p>
+              </div>
+              <button
+                onClick={() => setIsReportModalOpen(false)}
+                className="w-9 h-9 rounded-2xl bg-gray-100 hover:bg-gray-200 text-gray-500 flex items-center justify-center transition-colors cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Body */}
+            <div className="p-6 sm:p-7 overflow-y-auto max-h-[75vh]">
+              {reportSuccess ? (
+                <div className="py-8 text-center space-y-4">
+                  <div className="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-3xl flex items-center justify-center mx-auto shadow-inner">
+                    <Check size={32} />
+                  </div>
+                  <div className="space-y-1">
+                    <h4 className="text-lg font-black text-gray-900">Laporan Berhasil Terkirim!</h4>
+                    <p className="text-xs text-gray-500 max-w-xs mx-auto leading-relaxed">
+                      Terima kasih atas kepedulian Anda. Tim Moderasi RuangSinggah akan segera meninjau laporan ini dan mengambil tindakan tegas.
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setIsReportModalOpen(false)}
+                    className="px-6 py-3 bg-gray-900 hover:bg-black text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-md transition-all active:scale-95"
+                  >
+                    Tutup
+                  </button>
+                </div>
+              ) : (
+                <form onSubmit={handleSubmitReport} className="space-y-4 text-left">
+                  {/* Pilihan Kategori */}
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block">
+                      Pilih Masalah Utama <span className="text-rose-500">*</span>
+                    </label>
+                    <div className="space-y-1.5">
+                      {categoryOptions.map(cat => {
+                        const isSelected = reportCategory === cat.id;
+                        return (
+                          <div
+                            key={cat.id}
+                            onClick={() => setReportCategory(cat.id)}
+                            className={`p-3 rounded-2xl border transition-all cursor-pointer flex items-center gap-3 ${
+                              isSelected
+                                ? 'bg-rose-50/50 border-rose-400 ring-2 ring-rose-200'
+                                : 'bg-gray-50/60 hover:bg-gray-50 border-gray-200/80 text-gray-700'
+                            }`}
+                          >
+                            <span className="text-lg">{cat.icon}</span>
+                            <span className={`text-xs font-bold ${isSelected ? 'text-rose-900' : 'text-gray-700'}`}>
+                              {cat.label}
+                            </span>
+                            <input
+                              type="radio"
+                              name="reportCategory"
+                              checked={isSelected}
+                              onChange={() => setReportCategory(cat.id)}
+                              className="ml-auto accent-rose-600"
+                            />
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Penjelasan Detail */}
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block">
+                      Rincian / Kronologi Masalah <span className="text-rose-500">*</span>
+                    </label>
+                    <textarea
+                      required
+                      value={reportDescription}
+                      onChange={e => setReportDescription(e.target.value)}
+                      placeholder="Jelaskan secara singkat apa yang tidak sesuai atau kronologi masalah yang Anda alami..."
+                      className="w-full p-3.5 bg-gray-50 border border-gray-200 rounded-2xl text-xs font-medium focus:bg-white focus:ring-2 focus:ring-rose-500 focus:border-rose-500 outline-none transition-all min-h-[90px]"
+                    />
+                  </div>
+
+                  {/* Info Pelapor (Nama & WhatsApp) */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block">
+                        Nama Anda
+                      </label>
+                      <div className="relative">
+                        <UserIcon size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
+                        <input
+                          type="text"
+                          value={reporterName}
+                          onChange={e => setReporterName(e.target.value)}
+                          placeholder="Nama lengkap"
+                          className="w-full pl-9 pr-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold text-gray-900 focus:bg-white focus:ring-2 focus:ring-rose-500 outline-none transition-all"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block">
+                        No. WhatsApp <span className="text-rose-500">*</span>
+                      </label>
+                      <div className="relative">
+                        <Phone size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
+                        <input
+                          type="tel"
+                          required
+                          value={reporterPhone}
+                          onChange={e => setReporterPhone(e.target.value)}
+                          placeholder="08123456789"
+                          className="w-full pl-9 pr-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold text-gray-900 focus:bg-white focus:ring-2 focus:ring-rose-500 outline-none transition-all"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Unggah Bukti Foto (WebP) */}
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block">
+                      Lampirkan Foto Bukti (Opsional)
+                    </label>
+                    <div className="flex items-center gap-3">
+                      <label className="px-4 py-2.5 bg-gray-100 hover:bg-gray-200 border border-gray-200 rounded-xl text-xs font-bold text-gray-700 flex items-center gap-2 cursor-pointer transition-all active:scale-95">
+                        <Upload size={14} />
+                        <span>{reportEvidenceFile ? 'Ganti Foto' : 'Pilih Foto Bukti'}</span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={handleEvidenceChange}
+                          className="hidden"
+                        />
+                      </label>
+                      {reportEvidencePreview && (
+                        <div className="relative w-12 h-12 rounded-xl overflow-hidden bg-gray-100 border border-gray-200 shadow-sm shrink-0">
+                          <img src={reportEvidencePreview} alt="Bukti" className="w-full h-full object-cover" />
+                          <button
+                            type="button"
+                            onClick={() => { setReportEvidenceFile(null); setReportEvidencePreview(''); }}
+                            className="absolute top-0.5 right-0.5 bg-black/60 text-white rounded-full p-0.5"
+                          >
+                            <X size={10} />
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Submit Button */}
+                  <div className="pt-3 border-t border-gray-100 flex gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setIsReportModalOpen(false)}
+                      className="flex-1 py-3.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-2xl font-black text-xs uppercase tracking-widest transition-all"
+                    >
+                      Batal
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={isSubmittingReport}
+                      className="flex-1 py-3.5 bg-rose-600 hover:bg-rose-700 text-white rounded-2xl font-black text-xs uppercase tracking-widest transition-all shadow-lg shadow-rose-200 active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2"
+                    >
+                      {isSubmittingReport ? (
+                        <>
+                          <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                          <span>Mengirim...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Send size={14} />
+                          <span>Kirim Laporan</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </form>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -91,8 +91,8 @@ const Navbar: React.FC<NavbarProps> = ({ activePage, onPageChange, user, onLogou
           <div className="flex justify-between h-20 items-center">
             <div className="flex-shrink-0 flex items-center cursor-pointer" onClick={() => onPageChange(Page.HOME)}>
               <img src="/logo.png" alt="RuangSinggah.id" className="h-10 sm:h-12 w-auto mr-1.5" width="48" height="48" fetchPriority="high" />
-              <span className="text-orange-500 font-extrabold text-2xl tracking-tight">RuangSinggah</span>
-              <span className="text-gray-900 font-bold text-2xl">.id</span>
+              <span className="text-[#ff7a00] font-extrabold text-2xl tracking-tight">RuangSinggah</span>
+              <span className="text-[#0b1c30] font-bold text-2xl">.id</span>
             </div>
 
             <div className="hidden md:flex items-center space-x-6">
@@ -100,10 +100,11 @@ const Navbar: React.FC<NavbarProps> = ({ activePage, onPageChange, user, onLogou
                 <button
                   key={`${item.id}-${index}`}
                   onClick={() => handleNavClick(item.id)}
-                  className={`${activePage === item.id
-                    ? 'text-orange-600 font-semibold'
-                    : 'text-gray-600 hover:text-orange-500'
-                    } transition-colors duration-200 text-sm font-medium`}
+                  className={`text-sm font-bold transition-all pb-1 cursor-pointer ${
+                    activePage === item.id
+                      ? 'text-[#ff7a00] border-b-2 border-[#ff7a00]'
+                      : 'text-[#584235] hover:text-[#ff7a00]'
+                  }`}
                 >
                   {item.label}
                 </button>
@@ -211,6 +212,15 @@ const Navbar: React.FC<NavbarProps> = ({ activePage, onPageChange, user, onLogou
                         </button>
                         <button
                           onClick={() => {
+                            onPageChange(Page.CHAT);
+                            setIsProfileOpen(false);
+                          }}
+                          className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-orange-50 hover:text-orange-600 border-t border-gray-50"
+                        >
+                          Pesan / Chat
+                        </button>
+                        <button
+                          onClick={() => {
                             onPageChange(Page.MY_BOOKINGS);
                             setIsProfileOpen(false);
                           }}
@@ -248,21 +258,20 @@ const Navbar: React.FC<NavbarProps> = ({ activePage, onPageChange, user, onLogou
                   </div>
                 </div>
               ) : (
-                <button
-                  onClick={() => onPageChange(Page.LOGIN)}
-                  className="text-gray-900 font-bold text-sm hover:text-orange-500 transition-colors"
-                >
-                  Masuk / Daftar
-                </button>
-              )}
-
-              {!user && (
-                <button
-                  onClick={() => onPageChange(Page.CONTACT)}
-                  className="bg-orange-500 text-white px-5 py-2.5 rounded-full font-semibold hover:bg-orange-600 transition-all shadow-md hover:shadow-lg active:scale-95 text-sm"
-                >
-                  Hubungi Kami
-                </button>
+                <div className="flex items-center gap-4">
+                  <button
+                    onClick={() => onPageChange(Page.LOGIN)}
+                    className="text-[#0b1c30] font-bold text-sm hover:text-[#ff7a00] transition-colors cursor-pointer"
+                  >
+                    Masuk
+                  </button>
+                  <button
+                    onClick={() => onPageChange(Page.LOGIN)}
+                    className="bg-[#ff7a00] text-white px-5 py-2 rounded-full font-bold text-sm hover:opacity-90 transition-opacity shadow-xs active:scale-95 cursor-pointer"
+                  >
+                    Daftar
+                  </button>
+                </div>
               )}
             </div>
 
@@ -339,6 +348,15 @@ const Navbar: React.FC<NavbarProps> = ({ activePage, onPageChange, user, onLogou
                       </button>
                       <button
                         onClick={() => {
+                          onPageChange(Page.CHAT);
+                          setIsProfileOpen(false);
+                        }}
+                        className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-orange-50 hover:text-orange-600 border-t border-gray-50"
+                      >
+                        Pesan / Chat
+                      </button>
+                      <button
+                        onClick={() => {
                           onPageChange(Page.MY_BOOKINGS);
                           setIsProfileOpen(false);
                         }}
@@ -395,19 +413,23 @@ const Navbar: React.FC<NavbarProps> = ({ activePage, onPageChange, user, onLogou
         </div>
       </nav>
 
-      {/* Mobile Bottom Navigation Bar (4 Items: Home, Search, Orders, Profile) */}
-      {[Page.HOME, Page.LISTINGS, Page.PRODUCTS, Page.MY_BOOKINGS, Page.CHAT, Page.PROFILE].includes(activePage) && !hideBottomNav && (
-        <div className="md:hidden fixed bottom-0 left-0 right-0 w-full z-[100] bg-white/95 backdrop-blur-md border-t border-gray-100 shadow-[0_-4px_20px_rgba(0,0,0,0.06)] pb-[env(safe-area-inset-bottom)]">
-          <div className="flex items-center justify-around py-1.5 px-2">
+      {/* Mobile Bottom Navigation Bar (5 Items: Home, Search, Chat, Orders, Profile) */}
+      {!hideBottomNav && !isAdminPage && !activePage.startsWith('/dashboard') && !activePage.startsWith(Page.DASHBOARD_MITRA) && !activePage.startsWith(Page.DASHBOARD_AGENT) && !activePage.startsWith(Page.DASHBOARD_OWNER) && (
+        <div className="md:hidden fixed bottom-0 left-0 right-0 w-full z-[100] bg-white border-t border-gray-100 shadow-[0_-4px_24px_rgba(0,0,0,0.06)] pb-[max(0.6rem,env(safe-area-inset-bottom))]">
+          <div className="flex items-center justify-around py-2 px-1">
             {/* 1. Home */}
             <button
               onClick={() => onPageChange(Page.HOME)}
-              className={`flex-1 flex flex-col items-center gap-0.5 py-1 transition-all cursor-pointer ${
-                activePage === Page.HOME ? 'text-orange-500' : 'text-gray-400 hover:text-gray-800'
+              className={`flex-1 flex flex-col items-center justify-center gap-1 py-1 transition-all active:scale-95 cursor-pointer ${
+                activePage === Page.HOME || activePage === '' ? 'text-[#ff7a00]' : 'text-[#334155] hover:text-[#0b1c30]'
               }`}
             >
-              <Home size={22} className={activePage === Page.HOME ? 'stroke-orange-500 stroke-[2.5]' : 'stroke-gray-400'} />
-              <span className={`text-[10px] ${activePage === Page.HOME ? 'font-bold text-orange-500' : 'font-medium text-gray-500'}`}>
+              <Home 
+                size={23} 
+                strokeWidth={activePage === Page.HOME || activePage === '' ? 2.6 : 2.2} 
+                className={activePage === Page.HOME || activePage === '' ? 'text-[#ff7a00] fill-[#ff7a00]/10' : 'text-[#334155]'} 
+              />
+              <span className={`text-[11px] tracking-tight ${activePage === Page.HOME || activePage === '' ? 'font-extrabold text-[#ff7a00]' : 'font-bold text-[#334155]'}`}>
                 Home
               </span>
             </button>
@@ -415,38 +437,67 @@ const Navbar: React.FC<NavbarProps> = ({ activePage, onPageChange, user, onLogou
             {/* 2. Search */}
             <button
               onClick={() => onPageChange(Page.LISTINGS)}
-              className={`flex-1 flex flex-col items-center gap-0.5 py-1 transition-all cursor-pointer ${
-                activePage === Page.LISTINGS ? 'text-orange-500' : 'text-gray-400 hover:text-gray-800'
+              className={`flex-1 flex flex-col items-center justify-center gap-1 py-1 transition-all active:scale-95 cursor-pointer ${
+                activePage.startsWith(Page.LISTINGS) || activePage.startsWith('/kost-dekat') || activePage.startsWith('/kost-area') || activePage.startsWith(Page.PRODUCTS) ? 'text-[#ff7a00]' : 'text-[#334155] hover:text-[#0b1c30]'
               }`}
             >
-              <Search size={22} className={activePage === Page.LISTINGS ? 'stroke-orange-500 stroke-[2.5]' : 'stroke-gray-400'} />
-              <span className={`text-[10px] ${activePage === Page.LISTINGS ? 'font-bold text-orange-500' : 'font-medium text-gray-500'}`}>
+              <Search 
+                size={23} 
+                strokeWidth={activePage.startsWith(Page.LISTINGS) || activePage.startsWith('/kost-dekat') || activePage.startsWith('/kost-area') || activePage.startsWith(Page.PRODUCTS) ? 2.6 : 2.2} 
+                className={activePage.startsWith(Page.LISTINGS) || activePage.startsWith('/kost-dekat') || activePage.startsWith('/kost-area') || activePage.startsWith(Page.PRODUCTS) ? 'text-[#ff7a00]' : 'text-[#334155]'} 
+              />
+              <span className={`text-[11px] tracking-tight ${activePage.startsWith(Page.LISTINGS) || activePage.startsWith('/kost-dekat') || activePage.startsWith('/kost-area') || activePage.startsWith(Page.PRODUCTS) ? 'font-extrabold text-[#ff7a00]' : 'font-bold text-[#334155]'}`}>
                 Search
               </span>
             </button>
 
-            {/* 3. Orders */}
+            {/* 3. Chat */}
             <button
-              onClick={() => onPageChange(Page.MY_BOOKINGS)}
-              className={`flex-1 flex flex-col items-center gap-0.5 py-1 transition-all cursor-pointer ${
-                activePage === Page.MY_BOOKINGS ? 'text-orange-500' : 'text-gray-400 hover:text-gray-800'
+              onClick={() => onPageChange(user ? Page.CHAT : Page.LOGIN)}
+              className={`flex-1 flex flex-col items-center justify-center gap-1 py-1 transition-all active:scale-95 cursor-pointer ${
+                activePage.startsWith(Page.CHAT) ? 'text-[#ff7a00]' : 'text-[#334155] hover:text-[#0b1c30]'
               }`}
             >
-              <ClipboardList size={22} className={activePage === Page.MY_BOOKINGS ? 'stroke-orange-500 stroke-[2.5]' : 'stroke-gray-400'} />
-              <span className={`text-[10px] ${activePage === Page.MY_BOOKINGS ? 'font-bold text-orange-500' : 'font-medium text-gray-500'}`}>
+              <MessageSquare 
+                size={23} 
+                strokeWidth={activePage.startsWith(Page.CHAT) ? 2.6 : 2.2} 
+                className={activePage.startsWith(Page.CHAT) ? 'text-[#ff7a00] fill-[#ff7a00]/10' : 'text-[#334155]'} 
+              />
+              <span className={`text-[11px] tracking-tight ${activePage.startsWith(Page.CHAT) ? 'font-extrabold text-[#ff7a00]' : 'font-bold text-[#334155]'}`}>
+                Chat
+              </span>
+            </button>
+
+            {/* 4. Orders */}
+            <button
+              onClick={() => onPageChange(user ? Page.MY_BOOKINGS : Page.LOGIN)}
+              className={`flex-1 flex flex-col items-center justify-center gap-1 py-1 transition-all active:scale-95 cursor-pointer ${
+                activePage.startsWith(Page.MY_BOOKINGS) ? 'text-[#ff7a00]' : 'text-[#334155] hover:text-[#0b1c30]'
+              }`}
+            >
+              <ClipboardList 
+                size={23} 
+                strokeWidth={activePage.startsWith(Page.MY_BOOKINGS) ? 2.6 : 2.2} 
+                className={activePage.startsWith(Page.MY_BOOKINGS) ? 'text-[#ff7a00]' : 'text-[#334155]'} 
+              />
+              <span className={`text-[11px] tracking-tight ${activePage.startsWith(Page.MY_BOOKINGS) ? 'font-extrabold text-[#ff7a00]' : 'font-bold text-[#334155]'}`}>
                 Orders
               </span>
             </button>
 
-            {/* 4. Profile */}
+            {/* 5. Profile */}
             <button
               onClick={() => onPageChange(user ? Page.PROFILE : Page.LOGIN)}
-              className={`flex-1 flex flex-col items-center gap-0.5 py-1 transition-all cursor-pointer ${
-                activePage === Page.PROFILE || activePage === Page.LOGIN ? 'text-orange-500' : 'text-gray-400 hover:text-gray-800'
+              className={`flex-1 flex flex-col items-center justify-center gap-1 py-1 transition-all active:scale-95 cursor-pointer ${
+                activePage.startsWith(Page.PROFILE) || activePage.startsWith(Page.MITRA_PROFILE) || activePage.startsWith(Page.LOGIN) ? 'text-[#ff7a00]' : 'text-[#334155] hover:text-[#0b1c30]'
               }`}
             >
-              <User size={22} className={activePage === Page.PROFILE || activePage === Page.LOGIN ? 'stroke-orange-500 stroke-[2.5]' : 'stroke-gray-400'} />
-              <span className={`text-[10px] ${activePage === Page.PROFILE || activePage === Page.LOGIN ? 'font-bold text-orange-500' : 'font-medium text-gray-500'}`}>
+              <User 
+                size={23} 
+                strokeWidth={activePage.startsWith(Page.PROFILE) || activePage.startsWith(Page.MITRA_PROFILE) || activePage.startsWith(Page.LOGIN) ? 2.6 : 2.2} 
+                className={activePage.startsWith(Page.PROFILE) || activePage.startsWith(Page.MITRA_PROFILE) || activePage.startsWith(Page.LOGIN) ? 'text-[#ff7a00] fill-[#ff7a00]/10' : 'text-[#334155]'} 
+              />
+              <span className={`text-[11px] tracking-tight ${activePage.startsWith(Page.PROFILE) || activePage.startsWith(Page.MITRA_PROFILE) || activePage.startsWith(Page.LOGIN) ? 'font-extrabold text-[#ff7a00]' : 'font-bold text-[#334155]'}`}>
                 Profile
               </span>
             </button>

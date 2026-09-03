@@ -1,13 +1,15 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { supabase } from '../supabase';
 import KostFormMitra from '../components/KostFormMitra';
-import { Kost, Page } from '../types';
+import { Kost, Page, MitraPromoPopupSetting } from '../types';
 import { FORMAT_CURRENCY, INDONESIAN_BANKS } from '../constants';
 import { getOwnerProperties, getOwnerBookings, updateBookingStatus } from '../userService';
-import { getResidentStatus } from '../adminService';
+import { getResidentStatus, getMitraPromoPopupSetting } from '../adminService';
 import { getMyChatSessions, ChatSession, getOrCreateChatSession } from '../chatService';
 import { getCurrentDate, setMockDate, getMockDateStr, parseDateSafely } from '../utils/timeUtils';
+import { createKostSlug } from '../utils/slugUtils';
+import MitraKostPreviewModal from '../components/mitra/MitraKostPreviewModal';
 import { notifyAdminWithdrawalRequest } from '../emailService';
 import TimeSimulator from '../components/TimeSimulator';
 import { 
@@ -15,9 +17,9 @@ import {
 } from 'recharts';
 import { 
     Zap, Home, ClipboardList, Wallet, User, Users, Compass,
-    Plus, Edit, Eye, Check, MessageSquare, Search, Filter, MoreHorizontal, ArrowUpRight,
+    Plus, Edit, Eye, Check, MessageSquare, Search, Filter, MoreHorizontal, ArrowUpRight, ArrowRight,
     Clock, LogOut, Bell, ChevronRight, TrendingUp, Menu, X, Landmark, CreditCard, Save,
-    Briefcase, GraduationCap, Heart, MapPin, Trash2,
+    Briefcase, GraduationCap, Heart, MapPin, Trash2, FileText,
     Bed, Lock, Send, ShieldCheck, Sparkles, CheckCircle2, AlertCircle, Phone
 } from 'lucide-react';
 import MitraProfile from './MitraProfile';
@@ -136,6 +138,9 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
     }, [tab]);
 
     const handleMenuChange = (menu: MenuKey) => {
+        if (menu === 'properties' && promoPopupSetting?.is_active) {
+            setShowPromoPopup(true);
+        }
         navigate(`${Page.DASHBOARD_MITRA}/${menu}`);
     };
     const [bookingTab, setBookingTab] = useState<'pending' | 'awaiting_payment' | 'completed'>('pending');
@@ -150,6 +155,83 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
     const [stats, setStats] = useState({ totalRevenue: 0, availableBalance: 0, pendingApprovals: 0, totalViews: 1240, ctr: 4.2, activeTenants: 0 });
     const [showKostForm, setShowKostForm] = useState(false);
     const [editingKost, setEditingKost] = useState<Partial<Kost> | null>(null);
+    const [previewingKost, setPreviewingKost] = useState<Kost | null>(null);
+    const [promoPopupSetting, setPromoPopupSetting] = useState<MitraPromoPopupSetting | null>(null);
+    const [showPromoPopup, setShowPromoPopup] = useState(false);
+    const [isStartingFresh, setIsStartingFresh] = useState(false);
+    const draftStorageKey = useMemo(() => uid ? `kost_form_draft_${uid}` : 'kost_form_draft_guest', [uid]);
+    const [activeDraft, setActiveDraft] = useState<{
+        form: Partial<Kost>;
+        step: number;
+        managementOption?: string;
+        lastSaved?: string;
+    } | null>(null);
+
+    // Load promo popup setting on mount and trigger if properties tab is open
+    useEffect(() => {
+        getMitraPromoPopupSetting().then(setting => {
+            setPromoPopupSetting(setting);
+            if (setting?.is_active && (tab === 'properties' || !tab)) {
+                setShowPromoPopup(true);
+            }
+        });
+    }, [tab]);
+
+    // Handle Escape key for popup
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') {
+                setShowPromoPopup(false);
+            }
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, []);
+
+    const checkDraft = useCallback(() => {
+        try {
+            const raw = localStorage.getItem(draftStorageKey);
+            if (raw) {
+                const parsed = JSON.parse(raw);
+                if (parsed && parsed.form && (parsed.form.title || parsed.form.address || parsed.form.price || parsed.step > 0 || (parsed.form.roomTypes && parsed.form.roomTypes.length > 0))) {
+                    setActiveDraft(parsed);
+                    return;
+                }
+            }
+        } catch {}
+        setActiveDraft(null);
+    }, [draftStorageKey]);
+
+    useEffect(() => {
+        checkDraft();
+        const handleDraftSync = () => checkDraft();
+        window.addEventListener('kost_draft_updated', handleDraftSync);
+        window.addEventListener('storage', handleDraftSync);
+        return () => {
+            window.removeEventListener('kost_draft_updated', handleDraftSync);
+            window.removeEventListener('storage', handleDraftSync);
+        };
+    }, [checkDraft]);
+
+    const handleDeleteDraft = (e?: React.MouseEvent) => {
+        if (e) e.stopPropagation();
+        if (window.confirm('Apakah Anda yakin ingin menghapus draft pendaftaran kost ini? Data formulir yang belum disimpan akan dibersihkan.')) {
+            try {
+                localStorage.removeItem(draftStorageKey);
+                setActiveDraft(null);
+                window.dispatchEvent(new Event('kost_draft_updated'));
+            } catch {}
+        }
+    };
+
+    const handleResumeDraft = () => {
+        if (checkVerification()) {
+            setEditingKost(null);
+            setIsStartingFresh(false);
+            setShowKostForm(true);
+        }
+    };
+
     const [dynamicChartData, setDynamicChartData] = useState<any[]>(CHART_DATA);
     const [kmRequests, setKmRequests] = useState<any[]>([]);
 
@@ -195,7 +277,7 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
 
     const handleViewListing = () => {
         if (properties.length > 0) {
-            window.open('/kost/' + properties[0].id, '_blank');
+            setPreviewingKost(properties[0]);
         } else {
             navigate(Page.LISTINGS);
         }
@@ -862,34 +944,6 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                                     );
                                 }
 
-                                if (isVerified) {
-                                    return (
-                                        <div className="bg-gradient-to-r from-orange-600 via-amber-500 to-orange-600 rounded-3xl p-5 lg:p-6 relative overflow-hidden shadow-md border border-orange-500/20">
-                                            <div className="absolute top-0 right-0 w-32 h-32 bg-white rounded-full mix-blend-overlay filter blur-2xl opacity-10 -translate-y-1/2 translate-x-1/2 pointer-events-none"></div>
-                                            <div className="relative z-10 flex flex-col md:flex-row gap-4 items-center justify-between">
-                                                <div className="text-left flex-1">
-                                                    <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 bg-white/20 rounded-full mb-2 shadow-sm backdrop-blur-sm">
-                                                        <Zap size={10} className="text-white animate-pulse" fill="currentColor" />
-                                                        <span className="text-[9px] font-black text-white uppercase tracking-widest">Premium</span>
-                                                    </div>
-                                                    <h3 className="text-base lg:text-lg font-black text-white tracking-tight leading-tight">
-                                                        Gak Punya Waktu Kelola Kost? Upgrade ke KostManager!
-                                                    </h3>
-                                                    <p className="text-xs text-orange-50 leading-relaxed max-w-2xl mt-1 font-medium font-sans">
-                                                        Duduk manis, biarkan tim kami mengurus foto/video profesional, penagihan otomatis, dan promosi penuh untuk mendatangkan penyewa baru.
-                                                    </p>
-                                                </div>
-                                                <button 
-                                                    onClick={() => navigate(Page.KOSTMANAGER)}
-                                                    className="bg-white hover:bg-orange-50 text-orange-600 px-6 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-widest transition-transform active:scale-95 shadow-md shrink-0 flex items-center justify-center gap-2 w-full md:w-auto"
-                                                >
-                                                    Pelajari <ArrowUpRight size={14} />
-                                                </button>
-                                            </div>
-                                        </div>
-                                    );
-                                }
-
                                 return null;
                             })()}
 
@@ -1236,58 +1290,132 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                                     );
                                 }
 
-                                if (isVerified) {
-                                    return (
-                                        <div className="bg-gradient-to-r from-orange-600 via-amber-500 to-orange-600 rounded-3xl p-5 lg:p-6 relative overflow-hidden shadow-md border border-orange-500/20">
-                                            <div className="absolute top-0 right-0 w-32 h-32 bg-white rounded-full mix-blend-overlay filter blur-2xl opacity-10 -translate-y-1/2 translate-x-1/2 pointer-events-none"></div>
-                                            
-                                            <div className="relative z-10 flex flex-col md:flex-row gap-4 items-center justify-between">
-                                                <div className="text-left flex-1">
-                                                    <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 bg-white/20 rounded-full mb-2 shadow-sm backdrop-blur-sm">
-                                                        <Zap size={10} className="text-white animate-pulse" fill="currentColor" />
-                                                        <span className="text-[9px] font-black text-white uppercase tracking-widest">Premium</span>
-                                                    </div>
-                                                    <h3 className="text-base lg:text-lg font-black text-white tracking-tight leading-tight">
-                                                        Gak Punya Waktu Kelola Kost? Upgrade ke KostManager!
-                                                    </h3>
-                                                    <p className="text-xs text-orange-50 leading-relaxed max-w-2xl mt-1 font-medium font-sans">
-                                                        Duduk manis, biarkan tim kami mengurus foto/video profesional, penagihan otomatis, dan promosi penuh untuk mendatangkan penyewa baru.
-                                                    </p>
-                                                </div>
-                                                
-                                                <button 
-                                                    onClick={() => navigate(Page.KOSTMANAGER)}
-                                                    className="bg-white hover:bg-orange-50 text-orange-600 px-6 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-widest transition-transform active:scale-95 shadow-md shrink-0 flex items-center justify-center gap-2 w-full md:w-auto"
-                                                >
-                                                    Pelajari <ArrowUpRight size={14} />
-                                                </button>
-                                            </div>
-                                        </div>
-                                    );
-                                }
-
                                 return null;
                             })()}
 
-                            <div className="flex items-center justify-between">
-                                <div>
-                                    <h3 className="font-black text-gray-900 text-lg">Kost Saya</h3>
-                                    <p className="text-xs text-gray-400 font-bold mt-0.5 uppercase tracking-widest">{properties.length} Properti Aktif</p>
-                                </div>
-                                <button
-                                    onClick={() => { 
-                                        if (checkVerification()) {
-                                            setEditingKost(null); 
-                                            setShowKostForm(true); 
-                                        }
-                                    }}
-                                    className="h-11 px-5 bg-orange-500 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg shadow-orange-100 flex items-center gap-2 active:scale-95 transition-transform cursor-pointer"
-                                >
-                                    <Plus size={16} strokeWidth={3} /> Tambah
-                                </button>
-                            </div>
+                            {(() => {
+                                const publishedCount = properties.filter(p => p.status === 'published').length;
+                                const inReviewCount = properties.filter(p => p.status !== 'published' && p.status !== 'suspended').length;
+                                const suspendedCount = properties.filter(p => p.status === 'suspended').length;
+
+                                return (
+                                    <div className="flex items-center justify-between">
+                                        <div>
+                                            <h3 className="font-black text-gray-900 text-lg">Kost Saya</h3>
+                                            <div className="flex items-center gap-2 mt-0.5 flex-wrap text-xs">
+                                                <span className="font-black text-emerald-600 uppercase tracking-wider">
+                                                    {publishedCount} Properti Tayang
+                                                </span>
+                                                {inReviewCount > 0 && (
+                                                    <span className="font-black text-amber-600 uppercase tracking-wider flex items-center gap-1">
+                                                        • {inReviewCount} Menunggu Review
+                                                    </span>
+                                                )}
+                                                {suspendedCount > 0 && (
+                                                    <span className="font-black text-rose-600 uppercase tracking-wider flex items-center gap-1">
+                                                        • {suspendedCount} Ditangguhkan
+                                                    </span>
+                                                )}
+                                                {activeDraft && (
+                                                    <span className="font-bold text-gray-400 uppercase tracking-wider">
+                                                        • 1 Draft Pengisian
+                                                    </span>
+                                                )}
+                                            </div>
+                                        </div>
+                                        <button
+                                            onClick={() => { 
+                                                if (checkVerification()) {
+                                                    setEditingKost(null); 
+                                                    setIsStartingFresh(true); 
+                                                    setShowKostForm(true); 
+                                                }
+                                            }}
+                                            className="h-11 px-5 bg-orange-500 hover:bg-orange-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg shadow-orange-100 flex items-center gap-2 active:scale-95 transition-transform cursor-pointer"
+                                        >
+                                            <Plus size={16} strokeWidth={3} /> Tambah
+                                        </button>
+                                    </div>
+                                );
+                            })()}
 
                             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+                                {/* ── KARTU DRAFT KHUSUS (DAPAT DILANJUTKAN KAPAN SAJA) ── */}
+                                {activeDraft && (
+                                    <div className="bg-white rounded-3xl border-2 border-dashed border-amber-300 overflow-hidden shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 group flex flex-col justify-between relative bg-gradient-to-b from-amber-50/40 via-white to-white">
+                                        <div className="relative h-52 bg-gradient-to-br from-amber-100 via-orange-50 to-amber-100/60 flex items-center justify-center overflow-hidden border-b border-amber-100">
+                                            {activeDraft.form?.imageUrls && activeDraft.form.imageUrls.length > 0 ? (
+                                                <img src={activeDraft.form.imageUrls[0] as string} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700 opacity-90" alt="" />
+                                            ) : (
+                                                <div className="flex flex-col items-center gap-2 text-amber-700/80 p-6 text-center">
+                                                    <div className="w-14 h-14 rounded-2xl bg-white shadow-sm flex items-center justify-center border border-amber-200 text-amber-500">
+                                                        <FileText size={28} />
+                                                    </div>
+                                                    <span className="text-[11px] font-black uppercase tracking-widest text-amber-800">Draft Belum Selesai</span>
+                                                </div>
+                                            )}
+                                            
+                                            {/* Top Left: Step Info */}
+                                            <div className="absolute top-4 left-4">
+                                                <span className="px-3 py-1 bg-black/65 backdrop-blur-md text-white rounded-full text-[9px] font-black uppercase tracking-widest border border-white/20 flex items-center gap-1.5">
+                                                    <Sparkles size={11} className="text-amber-400" /> Langkah {(activeDraft.step || 0) + 1} dari 6
+                                                </span>
+                                            </div>
+
+                                            {/* Top Right: Status Badge */}
+                                            <div className="absolute top-4 right-4">
+                                                <span className="px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest bg-amber-500 text-white shadow-md border border-amber-400 flex items-center gap-1.5 animate-pulse">
+                                                    <Clock size={12} /> Draft
+                                                </span>
+                                            </div>
+
+                                            <div className="absolute bottom-3 left-4 right-4 flex items-center justify-between text-white">
+                                                <span className="text-[10px] font-bold bg-black/50 backdrop-blur-xs px-2.5 py-0.5 rounded-lg border border-white/10 text-amber-100">
+                                                    Tersimpan Otomatis
+                                                </span>
+                                            </div>
+                                        </div>
+
+                                        <div className="p-5 flex-1 flex flex-col justify-between">
+                                            <div>
+                                                <div className="flex items-center gap-1.5 text-[10px] font-black text-amber-600 uppercase tracking-widest mb-1.5">
+                                                    ● Form Dalam Pengisian
+                                                </div>
+                                                <h4 className="font-black text-gray-900 uppercase tracking-tight truncate group-hover:text-orange-500 transition-colors text-base">
+                                                    {activeDraft.form?.title || '(Draft Kost Tanpa Judul)'}
+                                                </h4>
+                                                <p className="text-xs font-bold text-gray-400 mt-1 flex items-center gap-1 uppercase tracking-widest truncate">
+                                                    <MapPin size={12} className="text-amber-500 shrink-0" />
+                                                    {activeDraft.form?.address || activeDraft.form?.city || 'Lokasi belum ditentukan'}
+                                                </p>
+                                                <div className="mt-4 p-3 bg-amber-50/80 rounded-2xl border border-amber-200/60 text-xs">
+                                                    <p className="text-[11px] text-amber-900 font-semibold leading-relaxed">
+                                                        Pengisian kost ini belum selesai. Klik <strong>Lanjutkan Edit</strong> untuk melengkapi data dan menayangkan kost Anda ke publik.
+                                                    </p>
+                                                </div>
+                                            </div>
+
+                                            {/* Action Buttons */}
+                                            <div className="flex gap-2 mt-5 pt-3 border-t border-amber-100">
+                                                <button
+                                                    onClick={handleResumeDraft}
+                                                    className="flex-1 h-11 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white font-black text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-2 shadow-md shadow-orange-500/20 active:scale-95 cursor-pointer"
+                                                >
+                                                    <ArrowRight size={15} /> Lanjutkan Edit
+                                                </button>
+                                                <button
+                                                    onClick={handleDeleteDraft}
+                                                    className="w-11 h-11 rounded-xl bg-rose-50 border border-rose-100 text-rose-600 flex items-center justify-center hover:bg-rose-500 hover:text-white transition-colors shadow-sm cursor-pointer"
+                                                    title="Hapus Draft"
+                                                >
+                                                    <Trash2 size={16} />
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Properti Aktif */}
                                 {properties.map(p => {
                                     const isKm = Boolean(p.isManaged);
                                     const totalRooms = p.roomTypes?.length || 0;
@@ -1310,9 +1438,23 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                                                 </div>
 
                                                 <div className="absolute top-4 right-4">
-                                                    <span className={`px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest border ${p.status === 'published' ? 'bg-green-500 text-white border-green-400' : 'bg-gray-700 text-white border-gray-600'}`}>
-                                                        {p.status === 'published' ? '● Aktif' : '● Draft'}
-                                                    </span>
+                                                    {p.status === 'published' ? (
+                                                        <span className="px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest bg-emerald-500 text-white border border-emerald-400 shadow-md flex items-center gap-1">
+                                                            <CheckCircle2 size={11} /> Tayang Publik
+                                                        </span>
+                                                    ) : p.status === 'suspended' ? (
+                                                        <span className="px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest bg-rose-500 text-white border border-rose-400 shadow-md flex items-center gap-1">
+                                                            <AlertCircle size={11} /> Ditangguhkan
+                                                        </span>
+                                                    ) : ((p as any).revisionNotes || (p as any).metadata?.revision_notes) ? (
+                                                        <span className="px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest bg-amber-500 text-white border border-amber-400 shadow-md flex items-center gap-1">
+                                                            <AlertCircle size={11} /> Perlu Revisi
+                                                        </span>
+                                                    ) : (
+                                                        <span className="px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest bg-amber-500 text-white border border-amber-400 shadow-md flex items-center gap-1 animate-pulse">
+                                                            <Clock size={11} /> Sedang Ditinjau
+                                                        </span>
+                                                    )}
                                                 </div>
                                                 
                                                 <div className="absolute bottom-4 left-4 right-4 flex items-center justify-between text-white">
@@ -1362,6 +1504,67 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                                                     </div>
                                                 )}
 
+                                                {/* Info Banner Khusus Properti Dalam Tahap Peninjauan / Revisi */}
+                                                {p.status !== 'published' && p.status !== 'suspended' && ((p as any).revisionNotes || (p as any).metadata?.revision_notes) ? (
+                                                    <div className="mt-3.5 p-3.5 bg-amber-50/90 border border-amber-300 rounded-2xl flex items-start gap-2.5 shadow-xs">
+                                                        <div className="w-7 h-7 rounded-xl bg-amber-100 text-amber-600 flex items-center justify-center shrink-0 mt-0.5">
+                                                            <AlertCircle size={15} />
+                                                        </div>
+                                                        <div className="space-y-1">
+                                                            <div className="flex items-center gap-1.5 flex-wrap">
+                                                                <p className="font-black text-amber-950 text-xs uppercase tracking-wide">
+                                                                    Perlu Revisi dari Admin
+                                                                </p>
+                                                                <span className="px-1.5 py-0.5 bg-amber-200/80 text-amber-900 rounded text-[9px] font-black uppercase tracking-wider">
+                                                                    Catatan Evaluasi
+                                                                </span>
+                                                            </div>
+                                                            <p className="text-[11px] text-amber-900 font-semibold leading-relaxed">
+                                                                {(p as any).revisionNotes || (p as any).metadata?.revision_notes}
+                                                            </p>
+                                                            <p className="text-[10px] text-amber-700/90 mt-1">
+                                                                Silakan klik tombol <strong>Edit</strong> untuk memperbaiki data yang diminta, lalu ajukan kembali.
+                                                            </p>
+                                                        </div>
+                                                    </div>
+                                                ) : p.status !== 'published' && p.status !== 'suspended' ? (
+                                                    <div className="mt-3.5 p-3.5 bg-gradient-to-br from-amber-50/90 via-orange-50/40 to-amber-50/90 border border-amber-200/80 rounded-2xl flex items-start gap-2.5 shadow-xs">
+                                                        <div className="w-7 h-7 rounded-xl bg-amber-100 text-amber-600 flex items-center justify-center shrink-0 mt-0.5">
+                                                            <Clock size={15} className="animate-pulse" />
+                                                        </div>
+                                                        <div className="space-y-1">
+                                                            <div className="flex items-center gap-1.5 flex-wrap">
+                                                                <p className="font-black text-amber-950 text-xs uppercase tracking-wide">
+                                                                    Tahap Peninjauan Admin
+                                                                </p>
+                                                                <span className="px-1.5 py-0.5 bg-amber-200/80 text-amber-900 rounded text-[9px] font-black uppercase tracking-wider">
+                                                                    Estimasi 1×24 Jam
+                                                                </span>
+                                                            </div>
+                                                            <p className="text-[11px] text-amber-900/90 font-medium leading-relaxed">
+                                                                Listing Anda telah berhasil diajukan dan sedang diverifikasi oleh tim RuangSinggah. Listing akan <strong>otomatis tayang di pencarian publik</strong> setelah disetujui.
+                                                            </p>
+                                                        </div>
+                                                    </div>
+                                                ) : null}
+
+                                                {/* Info Banner Khusus Properti Ditangguhkan */}
+                                                {p.status === 'suspended' && (
+                                                    <div className="mt-3.5 p-3.5 bg-rose-50 border border-rose-200 rounded-2xl flex items-start gap-2.5 shadow-xs">
+                                                        <div className="w-7 h-7 rounded-xl bg-rose-100 text-rose-600 flex items-center justify-center shrink-0 mt-0.5">
+                                                            <AlertCircle size={15} />
+                                                        </div>
+                                                        <div className="space-y-1">
+                                                            <p className="font-black text-rose-950 text-xs uppercase tracking-wide">
+                                                                Listing Ditangguhkan
+                                                            </p>
+                                                            <p className="text-[11px] text-rose-900/90 font-medium leading-relaxed">
+                                                                {(p as any).metadata?.suspend_reason || 'Listing memerlukan perbaikan data. Silakan klik tombol edit untuk memperbarui data kost Anda.'}
+                                                            </p>
+                                                        </div>
+                                                    </div>
+                                                )}
+
                                                 {/* Action Buttons */}
                                                 {isKm ? (
                                                     <div className="grid grid-cols-2 gap-2 mt-4">
@@ -1387,8 +1590,8 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                                                 ) : (
                                                     <div className="flex gap-2 mt-4">
                                                         <button 
-                                                            onClick={() => navigate(`/kost/${p.id}`)}
-                                                            className="flex-1 h-11 rounded-xl bg-gray-50 text-gray-700 font-bold text-xs hover:bg-gray-100 transition-colors border border-gray-100 flex items-center justify-center gap-1"
+                                                            onClick={() => setPreviewingKost(p)}
+                                                            className="flex-1 h-11 rounded-xl bg-gray-50 text-gray-700 font-bold text-xs hover:bg-gray-100 transition-colors border border-gray-100 flex items-center justify-center gap-1 cursor-pointer"
                                                         >
                                                             <Eye size={14} /> Preview
                                                         </button>
@@ -1417,6 +1620,31 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                                         </div>
                                     );
                                 })}
+
+                                {/* Empty State if no properties and no draft */}
+                                {properties.length === 0 && !activeDraft && (
+                                    <div className="col-span-full py-16 px-4 text-center bg-gray-50/60 border-2 border-dashed border-gray-200 rounded-3xl flex flex-col items-center justify-center">
+                                        <div className="w-16 h-16 rounded-3xl bg-orange-100/60 text-orange-600 flex items-center justify-center mb-4">
+                                            <Home size={30} />
+                                        </div>
+                                        <h4 className="text-base font-black text-gray-800 uppercase tracking-tight">Belum Ada Kost yang Didaftarkan</h4>
+                                        <p className="text-xs text-gray-500 font-medium max-w-sm mt-1 mb-5">
+                                            Mulai daftarkan properti kost Anda untuk menjangkau ribuan calon penyewa di RuangSinggah.
+                                        </p>
+                                        <button
+                                            onClick={() => {
+                                                if (checkVerification()) {
+                                                    setEditingKost(null);
+                                                    setIsStartingFresh(true);
+                                                    setShowKostForm(true);
+                                                }
+                                            }}
+                                            className="h-11 px-6 bg-orange-500 hover:bg-orange-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-md shadow-orange-500/20 flex items-center gap-2 active:scale-95 transition-transform cursor-pointer"
+                                        >
+                                            <Plus size={16} strokeWidth={3} /> Daftarkan Kost Pertama
+                                        </button>
+                                    </div>
+                                )}
                             </div>
                         </div>
                     )}
@@ -1850,12 +2078,26 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
     return (
         <>
             {render}
+            {previewingKost && (
+                <MitraKostPreviewModal
+                    kost={previewingKost}
+                    onClose={() => setPreviewingKost(null)}
+                    onEdit={(k) => {
+                        setPreviewingKost(null);
+                        if (checkVerification()) {
+                            setEditingKost(k);
+                            setShowKostForm(true);
+                        }
+                    }}
+                />
+            )}
             {showKostForm && (
                 <KostFormMitra
                     user={user}
                     editingKost={editingKost}
-                    onClose={() => { setShowKostForm(false); setEditingKost(null); }}
-                    onSuccess={() => { setShowKostForm(false); setEditingKost(null); loadData(); }}
+                    freshStart={isStartingFresh}
+                    onClose={() => { setShowKostForm(false); setEditingKost(null); setIsStartingFresh(false); checkDraft(); }}
+                    onSuccess={() => { setShowKostForm(false); setEditingKost(null); setIsStartingFresh(false); checkDraft(); loadData(); }}
                 />
             )}
             
@@ -2435,6 +2677,113 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                     </div>
                 </div>
             )}
+            {/* ── POP-UP IKLAN GRAFIS PROMO MITRA (KOSTMANAGER) ── */}
+            {showPromoPopup && promoPopupSetting && promoPopupSetting.is_active && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-md animate-in fade-in duration-200">
+                    <div className="relative w-full max-w-lg mx-auto">
+                        {/* Tombol Close Melayang di Sudut Kanan Atas */}
+                        <button
+                            type="button"
+                            onClick={() => setShowPromoPopup(false)}
+                            className="absolute -top-3 -right-3 z-30 w-9 h-9 rounded-full bg-gray-900 text-white border-2 border-white/80 shadow-xl flex items-center justify-center hover:bg-black hover:scale-105 active:scale-95 transition-all cursor-pointer"
+                            title="Tutup Iklan (Esc)"
+                        >
+                            <X size={18} />
+                        </button>
+
+                        {/* Konten Iklan */}
+                        {promoPopupSetting.image_url ? (
+                            /* Model 1: Desain Grafis Banner Yang Diunggah Super Admin */
+                            <div className="relative rounded-3xl overflow-hidden shadow-2xl bg-gray-900 border border-white/20 group">
+                                <div 
+                                    onClick={() => {
+                                        setShowPromoPopup(false);
+                                        navigate(promoPopupSetting.link_url || Page.KOSTMANAGER);
+                                    }}
+                                    className="cursor-pointer overflow-hidden block"
+                                >
+                                    <img 
+                                        src={promoPopupSetting.image_url} 
+                                        alt={promoPopupSetting.alt_text || promoPopupSetting.title || 'Promo KostManager'} 
+                                        className="w-full h-auto max-h-[75vh] object-contain group-hover:scale-[1.02] transition-transform duration-300"
+                                    />
+                                </div>
+                                <div className="bg-gray-950/90 backdrop-blur-sm p-3.5 flex items-center justify-between border-t border-gray-800">
+                                    <p className="text-xs font-bold text-gray-300 truncate pr-2">
+                                        {promoPopupSetting.title || 'Program Unggulan KostManager'}
+                                    </p>
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setShowPromoPopup(false);
+                                            navigate(promoPopupSetting.link_url || Page.KOSTMANAGER);
+                                        }}
+                                        className="px-4 py-1.5 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-black text-xs uppercase tracking-wider shrink-0 shadow-md transition-all active:scale-95 cursor-pointer flex items-center gap-1"
+                                    >
+                                        Pelajari <ArrowUpRight size={13} />
+                                    </button>
+                                </div>
+                            </div>
+                        ) : (
+                            /* Model 2: Fallback Desain Default Visual KostManager */
+                            <div className="bg-gradient-to-br from-orange-600 via-amber-500 to-orange-600 rounded-3xl p-6 lg:p-8 text-white shadow-2xl border border-orange-400/30 overflow-hidden relative">
+                                <div className="absolute top-0 right-0 w-48 h-48 bg-white/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none" />
+                                
+                                <div className="relative z-10 space-y-4">
+                                    <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-white/20 rounded-full shadow-sm backdrop-blur-sm">
+                                        <Zap size={12} className="text-white animate-pulse" fill="currentColor" />
+                                        <span className="text-[10px] font-black text-white uppercase tracking-widest">Program Eksklusif Mitra</span>
+                                    </div>
+
+                                    <h3 className="text-xl lg:text-2xl font-black text-white tracking-tight leading-snug">
+                                        {promoPopupSetting.title || 'Gak Punya Waktu Kelola Kost? Upgrade ke KostManager!'}
+                                    </h3>
+
+                                    <p className="text-xs text-orange-50 leading-relaxed font-medium">
+                                        Duduk manis, biarkan tim kami mengurus foto/video profesional 360°, penagihan sewa otomatis, dan promosi penuh untuk mendatangkan penyewa baru.
+                                    </p>
+
+                                    <div className="space-y-2 py-1 text-xs text-white font-semibold">
+                                        <div className="flex items-center gap-2">
+                                            <CheckCircle2 size={15} className="text-white shrink-0" />
+                                            <span>Foto & Video 360° Profesional RuangSinggah</span>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <CheckCircle2 size={15} className="text-white shrink-0" />
+                                            <span>Penagihan otomatis & rekonsiliasi keuangan</span>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <CheckCircle2 size={15} className="text-white shrink-0" />
+                                            <span>Prioritas tampil di pencarian pencari kost</span>
+                                        </div>
+                                    </div>
+
+                                    <div className="pt-2 flex items-center gap-3">
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setShowPromoPopup(false);
+                                                navigate(promoPopupSetting.link_url || Page.KOSTMANAGER);
+                                            }}
+                                            className="flex-1 py-3 bg-white hover:bg-orange-50 text-orange-600 rounded-xl font-black text-xs uppercase tracking-widest transition-all shadow-lg active:scale-95 flex items-center justify-center gap-1.5 cursor-pointer"
+                                        >
+                                            Pelajari Sekarang <ArrowUpRight size={14} />
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowPromoPopup(false)}
+                                            className="px-4 py-3 bg-black/20 hover:bg-black/30 text-white rounded-xl font-bold text-xs transition-colors cursor-pointer"
+                                        >
+                                            Nanti Saja
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            )}
+
             {/* Time Travel Controller */}
             <TimeSimulator />
         </>

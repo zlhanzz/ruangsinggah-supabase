@@ -1,0 +1,2702 @@
+[
+  {
+    "id": "mks-unhas-tamalanrea",
+    "name": "Universitas Hasanuddin (UNHAS) - Tamalanrea",
+    "city": "Makassar",
+    "gmapsName": "Hasanuddin University",
+    "gmapsAddress": "Jl. Perintis Kemerdekaan No.10, Tamalanrea Indah, Kec. Tamalanrea, Kota Makassar, Sulawesi Selatan 90245, Indonesia",
+    "lat": -5.1341871,
+    "lng": 119.4880786,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "mks-unhas-gowa",
+    "name": "Universitas Hasanuddin (UNHAS) - Kampus Teknik Gowa",
+    "city": "Gowa",
+    "gmapsName": "Faculty of Engineering - Hasanuddin University",
+    "gmapsAddress": "Jl. Malino No.Km.6, Romang Lompoa, Kec. Bontomarannu, Kabupaten Gowa, Sulawesi Selatan 92171, Indonesia",
+    "lat": -5.230259999999999,
+    "lng": 119.502134,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "mks-uim",
+    "name": "Universitas Islam Makassar (UIM)",
+    "city": "Makassar",
+    "gmapsName": "Makassar Islamic University",
+    "gmapsAddress": "Jl. Perintis Kemerdekaan No.KM.9, Tamalanrea Indah, Kec. Tamalanrea, Kota Makassar, Sulawesi Selatan 90245, Indonesia",
+    "lat": -5.1408589,
+    "lng": 119.4806206,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "mks-pnup",
+    "name": "Politeknik Negeri Ujung Pandang (PNUP)",
+    "city": "Makassar",
+    "gmapsName": "PNUP Politeknik Negeri Ujung Pandang",
+    "gmapsAddress": "Jl. Politeknik, Tamalanrea Indah, Kec. Tamalanrea, Kota Makassar, Sulawesi Selatan 90245, Indonesia",
+    "lat": -5.129739,
+    "lng": 119.4818458,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "mks-umi",
+    "name": "Universitas Muslim Indonesia (UMI)",
+    "city": "Makassar",
+    "gmapsName": "Universitas Muslim Indonesia",
+    "gmapsAddress": "Jl. Urip Sumoharjo No.km.5, Panaikang, Kec. Panakkukang, Kota Makassar, Sulawesi Selatan 90231, Indonesia",
+    "lat": -5.136254699999999,
+    "lng": 119.4478299,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "mks-unm-gunungsari",
+    "name": "Universitas Negeri Makassar (UNM) - Gunungsari",
+    "city": "Makassar",
+    "gmapsName": "Universitas Negeri Makassar Kampus Gunung Sari",
+    "gmapsAddress": "Jl. Raya Pendidikan No.22, Tidung, Kec. Rappocini, Kota Makassar, Sulawesi Selatan 90222, Indonesia",
+    "lat": -5.168463399999999,
+    "lng": 119.4349553,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "mks-unm-parangtambung",
+    "name": "Universitas Negeri Makassar (UNM) - Parangtambung",
+    "city": "Makassar",
+    "gmapsName": "Makassar State University, Campus Parangtambung",
+    "gmapsAddress": "RC7H+RJQ, Jl. Mallengkeri Raya, Parang Tambung, Kec. Tamalate, Kota Makassar, Sulawesi Selatan 90224, Indonesia",
+    "lat": -5.1854133,
+    "lng": 119.4291109,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "mks-unm-banta-bantaeng",
+    "name": "Universitas Negeri Makassar (UNM) - Banta-Bantaeng",
+    "city": "Makassar",
+    "gmapsName": "Universitas Negeri Makassar Kampus Bantabantaeng",
+    "gmapsAddress": "RCRH+HRX, Jl. Cilallang, Banta-Bantaeng, Kec. Rappocini, Kota Makassar, Sulawesi Selatan 90222, Indonesia",
+    "lat": -5.158508700000001,
+    "lng": 119.4296165,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "mks-uin-samata",
+    "name": "UIN Alauddin Makassar - Kampus 2 Samata",
+    "city": "Gowa",
+    "gmapsName": "Pintu 1 Kampus II UIN Alauddin Makassar",
+    "gmapsAddress": "QFWW+X95, Romangpolong, Somba Opu, Gowa Regency, South Sulawesi 92113, Indonesia",
+    "lat": -5.202603799999999,
+    "lng": 119.4959726,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "mks-uin-alauddin",
+    "name": "UIN Alauddin Makassar - Kampus 1 Sultan Alauddin",
+    "city": "Makassar",
+    "gmapsName": "UIN Alauddin Makassar Kampus 1",
+    "gmapsAddress": "Jl. Sultan Alauddin No.63, Mangasa, Kec. Tamalate, Kota Makassar, Sulawesi Selatan 90221, Indonesia",
+    "lat": -5.1765188,
+    "lng": 119.4339019,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "mks-unismuh",
+    "name": "Universitas Muhammadiyah Makassar (UNISMUH)",
+    "city": "Makassar",
+    "gmapsName": "Universitas Muhammadiyah Makassar (Unismuh Makassar)",
+    "gmapsAddress": "Jl. Sultan Alauddin No.259, Gn. Sari, Kec. Rappocini, Kota Makassar, Sulawesi Selatan 90221, Indonesia",
+    "lat": -5.182766399999999,
+    "lng": 119.4410929,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "mks-poltekkes",
+    "name": "Poltekkes Kemenkes Makassar (Banta-Bantaeng)",
+    "city": "Makassar",
+    "gmapsName": "Poltekkes Kemenkes Makassar",
+    "gmapsAddress": "Jl. Mon. Emmy Saelan III No.2, Karunrung, Kec. Rappocini, Kota Makassar, Sulawesi Selatan 90221, Indonesia",
+    "lat": -5.1775344,
+    "lng": 119.4459564,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "mks-poltek-ati",
+    "name": "Politeknik ATI Makassar",
+    "city": "Makassar",
+    "gmapsName": "Politeknik ATI Makassar",
+    "gmapsAddress": "Jl. Sunu No.220, Suangga, Kec. Tallo, Kota Makassar, Sulawesi Selatan 90211, Indonesia",
+    "lat": -5.119467,
+    "lng": 119.431446,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "mks-polimarim",
+    "name": "Politeknik Maritim AMI Makassar (POLIMARIM)",
+    "city": "Makassar",
+    "gmapsName": "MARITIME POLYTECHNIC AMI MAKASSAR (POLIMARIM)",
+    "gmapsAddress": "Jl. Nuri Baru No.1, Sambung Jawa, Kec. Mamajang, Kota Makassar, Sulawesi Selatan 90121, Indonesia",
+    "lat": -5.16963,
+    "lng": 119.405468,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "mks-atmajaya",
+    "name": "Universitas Atma Jaya Makassar",
+    "city": "Makassar",
+    "gmapsName": "Universitas Atma Jaya Makassar",
+    "gmapsAddress": "Jl. Tanjung Alang No.23, Maccini Sombala, Kec. Tamalate, Kota Makassar, Sulawesi Selatan 90224, Indonesia",
+    "lat": -5.1703725,
+    "lng": 119.4034959,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "mks-bosowa",
+    "name": "Universitas Bosowa (UNIBOS)",
+    "city": "Makassar",
+    "gmapsName": "Bosowa University",
+    "gmapsAddress": "Sinrijala, Panakkukang, Makassar City, South Sulawesi 90231, Indonesia",
+    "lat": -5.1387363,
+    "lng": 119.4435505,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "mks-unifa",
+    "name": "Universitas Fajar (UNIFA)",
+    "city": "Makassar",
+    "gmapsName": "Fajar University",
+    "gmapsAddress": "Jl. Prof. Abdurahman Basalamah No.101, Karampuang, Kec. Panakkukang, Kota Makassar, Sulawesi Selatan 90231, Indonesia",
+    "lat": -5.1492722,
+    "lng": 119.4500857,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "mks-stie-nobel",
+    "name": "Institut Bisnis dan Keuangan Nobel Indonesia",
+    "city": "Makassar",
+    "gmapsName": "institute teknologi dan bisnis nobel indonesia",
+    "gmapsAddress": "Jl. Sultan Alauddin No.212, Mangasa, Kec. Makassar, Kota Makassar, Sulawesi Selatan 90221, Indonesia",
+    "lat": -5.1787531,
+    "lng": 119.4390442,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "mks-stimik-handayani",
+    "name": "Universitas Handayani Makassar",
+    "city": "Makassar",
+    "gmapsName": "Handayani University",
+    "gmapsAddress": "RCXX+6R7, Jl. Adyaksa Baru No.1, Pandang, Kec. Panakkukang, Kota Makassar, Sulawesi Selatan 90231, Indonesia",
+    "lat": -5.1518774,
+    "lng": 119.4491328,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "mks-stikes-megarezky",
+    "name": "Universitas Mega Rezky Makassar",
+    "city": "Makassar",
+    "gmapsName": "Megarezky University (UNIMERZ)",
+    "gmapsAddress": "Jl. Antang Raya, Antang, Kec. Manggala, Kota Makassar, Sulawesi Selatan 90234, Indonesia",
+    "lat": -5.161741699999999,
+    "lng": 119.4771101,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "mks-ciputra",
+    "name": "Universitas Ciputra Makassar (CPI)",
+    "city": "Makassar",
+    "gmapsName": "UC Makassar | Ciputra School of Business",
+    "gmapsAddress": "Kawasan CitraLand City CPI, Jalan Sunset Boulevard, Kota Makassar, Sulawesi Selatan 90224, Indonesia",
+    "lat": -5.149143599999999,
+    "lng": 119.3951973,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "mks-poltekpar",
+    "name": "Politeknik Pariwisata Makassar (Poltekpar)",
+    "city": "Makassar",
+    "gmapsName": "Politeknik Pariwisata Negeri Makassar",
+    "gmapsAddress": "Jl. Gn. Rinjani Jl. Metro Tj. Bunga No.1, Tj. Merdeka, Kec. Tamalate, Kota Makassar, Sulawesi Selatan 90224, Indonesia",
+    "lat": -5.188734,
+    "lng": 119.3949098,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "pre-ith-parepare",
+    "name": "Institut Teknologi Bacharuddin Jusuf Habibie (ITH Parepare)",
+    "city": "Parepare",
+    "gmapsName": "Institut Teknologi Bacharuddin Jusuf Habibie ( ITH ) Kampus 1 Rektorat",
+    "gmapsAddress": "Jl. Balaikota No.1, Bumi Harapan, Kec. Bacukiki Bar., Kota Parepare, Sulawesi Selatan 91122, Indonesia",
+    "lat": -4.0287652,
+    "lng": 119.6333337,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "mks-mall-panakkukang",
+    "name": "Mall Panakkukang (MP)",
+    "city": "Makassar",
+    "gmapsName": "Mall Panakkukang",
+    "gmapsAddress": "Mall Panakkukang, Masale, Kec. Panakkukang, Kota Makassar, Sulawesi Selatan 90231, Indonesia",
+    "lat": -5.157727,
+    "lng": 119.4476762,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "mks-nipah-park",
+    "name": "Nipah Park Makassar",
+    "city": "Makassar",
+    "gmapsName": "Nipah Mall Makassar",
+    "gmapsAddress": "Jl. Urip Sumoharjo No.23C, Panaikang, Kec. Panakkukang, Kota Makassar, Sulawesi Selatan 90231, Indonesia",
+    "lat": -5.1391139,
+    "lng": 119.4498909,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "mks-trans-studio",
+    "name": "Trans Studio Mall Makassar (TSM)",
+    "city": "Makassar",
+    "gmapsName": "Trans Studio Mall Makassar",
+    "gmapsAddress": "Jl. Metro Tj. Bunga, Maccini Sombala, Kec. Tamalate, Kota Makassar, Sulawesi Selatan 90224, Indonesia",
+    "lat": -5.1592364,
+    "lng": 119.3942716,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "mks-pipo",
+    "name": "Phinisi Point Mall (PiPo)",
+    "city": "Makassar",
+    "gmapsName": "Phinisi Point Mall",
+    "gmapsAddress": "Jl. Metro Tj. Bunga No.2, Panambungan, Kec. Mariso, Kota Makassar, Sulawesi Selatan 90121, Indonesia",
+    "lat": -5.1529364,
+    "lng": 119.4036387,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "mks-mtos",
+    "name": "Makassar Town Square (MToS)",
+    "city": "Makassar",
+    "gmapsName": "Makassar Town Square",
+    "gmapsAddress": "Jl. Perintis Kemerdekaan No.26, Tamalanrea Jaya, Kec. Tamalanrea, Kota Makassar, Sulawesi Selatan 90245, Indonesia",
+    "lat": -5.1449118,
+    "lng": 119.475336,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "mks-mall-ratu-indah",
+    "name": "Mall Ratu Indah (MaRI)",
+    "city": "Makassar",
+    "gmapsName": "Mal Ratu Indah",
+    "gmapsAddress": "Jl. DR. Ratulangi No.35, Mangkura, Kec. Mamajang, Kota Makassar, Sulawesi Selatan 90113, Indonesia",
+    "lat": -5.1533162,
+    "lng": 119.4175908,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "mks-living-plaza-pettarani",
+    "name": "Living Plaza Pettarani",
+    "city": "Makassar",
+    "gmapsName": "INFORMA FURNITURE & INFORMA ELEKTRONIK LIVING PLAZA PETTARANI",
+    "gmapsAddress": "Living Plaza Pettarani, Jl. A. P. Pettarani No.Kav. 1, Tidung, Kec. Rappocini, Kota Makassar, Sulawesi Selatan 90222, Indonesia",
+    "lat": -5.1633125,
+    "lng": 119.4358291,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "mks-kima",
+    "name": "Kawasan Industri Makassar (KIMA Daya)",
+    "city": "Makassar",
+    "gmapsName": "Kawasan Industri Makassar",
+    "gmapsAddress": "Kawasan Industri Makassar, Jl. Kima Raya I No.2, Daya, Kec. Biringkanaya, Kota Makassar, Sulawesi Selatan 90241, Indonesia",
+    "lat": -5.1080458,
+    "lng": 119.5000511,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "mks-pergudangan-parangloe",
+    "name": "Kawasan Pergudangan Parangloe Indah",
+    "city": "Makassar",
+    "gmapsName": "Official Pergudangan Parangloe Indah Makassar",
+    "gmapsAddress": "Bira, Tamalanrea, Makassar City, South Sulawesi 90241, Indonesia",
+    "lat": -5.0977985,
+    "lng": 119.4855777,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "mks-cbd-panakkukang",
+    "name": "Kawasan Bisnis Boulevard & Pengayoman",
+    "city": "Makassar",
+    "gmapsName": "Mall Panakkukang",
+    "gmapsAddress": "Jl. Boulevard No.3, Masale, Kec. Panakkukang, Kota Makassar, Sulawesi Selatan 90231, Indonesia",
+    "lat": -5.1576135,
+    "lng": 119.4464534,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "mks-cbd-pettarani",
+    "name": "Kawasan Perkantoran Jl. A.P. Pettarani",
+    "city": "Makassar",
+    "gmapsName": "Ruko PETTARANI BUSINESS CENTRE",
+    "gmapsAddress": "RCMP+C2H, Tidung, Rappocini, Makassar City, South Sulawesi 90222, Indonesia",
+    "lat": -5.1664286,
+    "lng": 119.4351055,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "mks-cbd-cpi",
+    "name": "Kawasan Bisnis Center Point of Indonesia (CPI)",
+    "city": "Makassar",
+    "gmapsName": "Centre Point of Indonesia (CPI)",
+    "gmapsAddress": "VC24+HVV, Jl. Metro Tj. Bunga, Kota Makassar, Sulawesi Selatan 90112, Indonesia",
+    "lat": -5.148503799999999,
+    "lng": 119.4071628,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "mks-rsup-wahidin",
+    "name": "RSUP Dr. Wahidin Sudirohusodo",
+    "city": "Makassar",
+    "gmapsName": "Rumah Sakit Umum Pusat Dr. Wahidin Sudirohusodo",
+    "gmapsAddress": "Jl. Pintu II No.11, Tamalanrea Jaya, Kec. Tamalanrea, Kota Makassar, Sulawesi Selatan 90245, Indonesia",
+    "lat": -5.134775599999999,
+    "lng": 119.4940408,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "mks-rs-unhas",
+    "name": "Rumah Sakit Universitas Hasanuddin (RS UNHAS)",
+    "city": "Makassar",
+    "gmapsName": "Rumah Sakit Universitas Hasanuddin",
+    "gmapsAddress": "Jl. Perintis Kemerdekaan No.Km. 10, Tamalanrea, Kec. Tamalanrea, Kota Makassar, Sulawesi Selatan 90245, Indonesia",
+    "lat": -5.1333271,
+    "lng": 119.4944026,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "mks-rs-siloam",
+    "name": "Siloam Hospitals Makassar (Metro Tanjung Bunga)",
+    "city": "Makassar",
+    "gmapsName": "Siloam Hospital Makassar",
+    "gmapsAddress": "Jl. Metro Tj. Bunga No.Kav. 9, Tj. Merdeka, Kec. Tamalate, Sulawesi Selatan 90112, Indonesia",
+    "lat": -5.149954699999999,
+    "lng": 119.4073077,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "mks-rs-primaya",
+    "name": "Primaya Hospital Makassar (Eks Awal Bros)",
+    "city": "Makassar",
+    "gmapsName": "PRIMAYA HOSPITAL MAKASSAR",
+    "gmapsAddress": "Jl. Urip Sumoharjo No.43, Karuwisi Utara, Kec. Panakkukang, Kota Makassar, Sulawesi Selatan 90232, Indonesia",
+    "lat": -5.1351315,
+    "lng": 119.4353149,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "mks-rs-primaya-hertasning",
+    "name": "Primaya Hospital Hertasning",
+    "city": "Makassar",
+    "gmapsName": "Primaya Hospital Hertasning(Makassar)",
+    "gmapsAddress": "Jl. Aroeppala No.99c, Karunrung, Kec. Rappocini, Kota Makassar, Sulawesi Selatan 90221, Indonesia",
+    "lat": -5.1767899,
+    "lng": 119.4566549,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "mks-rs-hermina",
+    "name": "RS Hermina Makassar (Toddopuli)",
+    "city": "Makassar",
+    "gmapsName": "Hermina Hospital Makassar",
+    "gmapsAddress": "Jl. Toddopuli Raya Timur No.7, Borong, Kec. Manggala, Kota Makassar, Sulawesi Selatan 90231, Indonesia",
+    "lat": -5.1627496,
+    "lng": 119.4575374,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "mks-rs-labuang-baji",
+    "name": "RSUD Labuang Baji Makassar",
+    "city": "Makassar",
+    "gmapsName": "Labuang Baji General Hospital",
+    "gmapsAddress": "Jl. DR. Ratulangi No.81, Labuang Baji, Kec. Mamajang, Kota Makassar, Sulawesi Selatan 90132, Indonesia",
+    "lat": -5.162474,
+    "lng": 119.4182402,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "mks-rs-daya",
+    "name": "RSUD Daya Kota Makassar",
+    "city": "Makassar",
+    "gmapsName": "Rumah Sakit Umum Daerah Daya Kota Makassar",
+    "gmapsAddress": "Jl. Perintis Kemerdekaan No.14, Daya, Kec. Biringkanaya, Kota Makassar, Sulawesi Selatan 90243, Indonesia",
+    "lat": -5.113787400000001,
+    "lng": 119.511506,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "mks-rs-ibnu-sina",
+    "name": "Rumah Sakit Ibnu Sina YBW UMI",
+    "city": "Makassar",
+    "gmapsName": "Ibnu Sina Hospital YW - Umi",
+    "gmapsAddress": "Jl. Urip Sumoharjo No.264, Karampuang, Kec. Panakkukang, Kota Makassar, Sulawesi Selatan 90231, Indonesia",
+    "lat": -5.1396945,
+    "lng": 119.446234,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "mks-rs-bhayangkara",
+    "name": "RS Bhayangkara Makassar",
+    "city": "Makassar",
+    "gmapsName": "Bhayangkara Makassar Hospital",
+    "gmapsAddress": "Jl. Letnan Jenderal Jl. Andi Mappaodang No.63, Jongaya, Kec. Tamalate, Kota Makassar, Sulawesi Selatan 90223, Indonesia",
+    "lat": -5.1746859,
+    "lng": 119.4158067,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "mks-rs-stella-maris",
+    "name": "RS Stella Maris Makassar",
+    "city": "Makassar",
+    "gmapsName": "Stella Maris Hospital",
+    "gmapsAddress": "Jl. Somba OPU No.273, Maloku, Kec. Ujung Pandang, Kota Makassar, Sulawesi Selatan 90111, Indonesia",
+    "lat": -5.1439021,
+    "lng": 119.4089113,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "mks-pantai-losari",
+    "name": "Kawasan Wisata Pantai Losari",
+    "city": "Makassar",
+    "gmapsName": "Losari Beach",
+    "gmapsAddress": "Losari Beach, South Sulawesi, Indonesia",
+    "lat": -5.1436198,
+    "lng": 119.4074821,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "mks-fort-rotterdam",
+    "name": "Benteng Fort Rotterdam",
+    "city": "Makassar",
+    "gmapsName": "Fort Rotterdam",
+    "gmapsAddress": "No.Road, Jl. Ujung Pandang, Bulo Gading, Kec. Ujung Pandang, Kota Makassar, Sulawesi Selatan 90171, Indonesia",
+    "lat": -5.1340004,
+    "lng": 119.4056311,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "mks-masjid-99-kubah",
+    "name": "Masjid 99 Kubah CPI Makassar",
+    "city": "Makassar",
+    "gmapsName": "Masjid Kubah 99 Asmaul Husna",
+    "gmapsAddress": "Jl. H. Bau No.36, Kunjung Mae, Kec. Mariso, Kota Makassar, Sulawesi Selatan 90125, Indonesia",
+    "lat": -5.143942099999999,
+    "lng": 119.4041411,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "mks-bandara-hasanuddin",
+    "name": "Bandara Internasional Sultan Hasanuddin",
+    "city": "Maros",
+    "gmapsName": "Sultan Hasanuddin International Airport",
+    "gmapsAddress": "Jalan Raya Airport No.1, Baji Mangngai, Kec. Mandai, Kabupaten Maros, Sulawesi Selatan 90552, Indonesia",
+    "lat": -5.0777069,
+    "lng": 119.5493144,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "mks-pelabuhan-soetta",
+    "name": "Pelabuhan Soekarno-Hatta Makassar",
+    "city": "Makassar",
+    "gmapsName": "Port of Makassar",
+    "gmapsAddress": "Port of Makassar, Melayu Baru, Wajo, Makassar City, South Sulawesi, Indonesia",
+    "lat": -5.124777,
+    "lng": 119.407977,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "mks-terminal-daya",
+    "name": "Terminal Regional Daya (Makassar)",
+    "city": "Makassar",
+    "gmapsName": "Terminal Regional Daya Makassar",
+    "gmapsAddress": "Jl. Kapasa Raya, Daya, Kec. Biringkanaya, Kota Makassar, Sulawesi Selatan 90241, Indonesia",
+    "lat": -5.1102817,
+    "lng": 119.5079974,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "mks-terminal-mallengkeri",
+    "name": "Terminal Mallengkeri Makassar",
+    "city": "Makassar",
+    "gmapsName": "Terminal Mallengkeri",
+    "gmapsAddress": "Jl. Mallengkeri Raya, Tamalate, Mangasa, Kec. Makassar, Kota Makassar, Sulawesi Selatan 90221, Indonesia",
+    "lat": -5.1876371,
+    "lng": 119.4402567,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "tng-pkn-stan-bintaro",
+    "name": "Politeknik Keuangan Negara STAN (PKN STAN Bintaro)",
+    "city": "Tangerang Selatan",
+    "gmapsName": "Polytechnic of State Finance STAN",
+    "gmapsAddress": "Jl. Bintaro Utama 3A Sektor V, Jurang Manggu Tim., Kec. Pd. Aren, Kota Tangerang Selatan, Banten 15222, Indonesia",
+    "lat": -6.2679674,
+    "lng": 106.7328548,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "jkt-ui-depok",
+    "name": "Universitas Indonesia (UI) - Kampus Depok",
+    "city": "Depok",
+    "gmapsName": "Universitas Indonesia",
+    "gmapsAddress": "Jl. Lingkar, Pondok Cina, Kecamatan Beji, Kota Depok, Jawa Barat 16424, Indonesia",
+    "lat": -6.3606229,
+    "lng": 106.8272343,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "jkt-ui-salemba",
+    "name": "Universitas Indonesia (UI) - Kampus Salemba",
+    "city": "Jakarta Pusat",
+    "gmapsName": "University of Indonesia Campus Salemba",
+    "gmapsAddress": "Jl. Salemba Raya No.4, RT.1/RW.5, Kenari, Kec. Senen, Kota Jakarta Pusat, Daerah Khusus Ibukota Jakarta 10430, Indonesia",
+    "lat": -6.193974799999999,
+    "lng": 106.8484094,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "jkt-pnj-depok",
+    "name": "Politeknik Negeri Jakarta (PNJ Depok)",
+    "city": "Depok",
+    "gmapsName": "Jakarta State Polytechnic",
+    "gmapsAddress": "Jl. Prof. DR. G.A. Siwabessy, Kukusan, Kecamatan Beji, Kota Depok, Jawa Barat 16425, Indonesia",
+    "lat": -6.3708852,
+    "lng": 106.8244876,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "jkt-unpam-puspitek",
+    "name": "Universitas Pamulang (UNPAM) - Kampus Viktor/Puspitek",
+    "city": "Tangerang Selatan",
+    "gmapsName": "Pamulang University Campus 2 (UNPAM Viktor)",
+    "gmapsAddress": "Jl. Puspitek, Buaran, Kec. Pamulang, Kota Tangerang Selatan, Banten 15310, Indonesia",
+    "lat": -6.346095699999999,
+    "lng": 106.6915144,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "jkt-unpam-pusat",
+    "name": "Universitas Pamulang (UNPAM) - Kampus 1 Pusat",
+    "city": "Tangerang Selatan",
+    "gmapsName": "Pamulang University",
+    "gmapsAddress": "Jl. Suryakencana No.1, Pamulang Bar., Kec. Pamulang, Kota Tangerang Selatan, Banten 15417, Indonesia",
+    "lat": -6.3441676,
+    "lng": 106.7371554,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "jkt-uin-ciputat",
+    "name": "UIN Syarif Hidayatullah Jakarta (Ciputat)",
+    "city": "Tangerang Selatan",
+    "gmapsName": "Syarif Hidayatullah Jakarta Islamic State University",
+    "gmapsAddress": "Jl. Ir H. Juanda No.95, Ciputat, Kec. Ciputat Tim., Kota Tangerang Selatan, Banten 15412, Indonesia",
+    "lat": -6.306661,
+    "lng": 106.756196,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "jkt-uph-karawaci",
+    "name": "Universitas Pelita Harapan (UPH Lippo Karawaci)",
+    "city": "Tangerang",
+    "gmapsName": "Universitas Pelita Harapan",
+    "gmapsAddress": "Jl. Boulevard Diponegoro No.1100, Klp. Dua, Kecamatan Kelapa Dua, Kabupaten Tangerang, Banten 15811, Indonesia",
+    "lat": -6.228372999999999,
+    "lng": 106.6112689,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "jkt-ipb-dramaga",
+    "name": "IPB University - Kampus IPB Dramaga",
+    "city": "Bogor",
+    "gmapsName": "IPB University",
+    "gmapsAddress": "Jl. Raya Dramaga, Babakan, Kec. Dramaga, Kabupaten Bogor, Jawa Barat 16680, Indonesia",
+    "lat": -6.5552739,
+    "lng": 106.7229062,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "jkt-ipb-baranangsiang",
+    "name": "IPB University - Kampus Baranangsiang",
+    "city": "Bogor",
+    "gmapsName": "Kampus IPB Baranangsiang Bogor",
+    "gmapsAddress": "CR24+3M6, Jl. Malabar, RT.05/RW.02, Tegallega, Kecamatan Bogor Tengah, Kota Bogor, Jawa Barat 16128, Indonesia",
+    "lat": -6.5998298,
+    "lng": 106.8066536,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "jkt-binus-kemanggisan",
+    "name": "BINUS University - Kampus Anggrek/Syahdan",
+    "city": "Jakarta Barat",
+    "gmapsName": "BINUS UNIVERSITY - Anggrek Campus",
+    "gmapsAddress": "Jl. Raya Kb. Jeruk No.27, RT.1/RW.9, Kemanggisan, Kec. Palmerah, Kota Jakarta Barat, Daerah Khusus Ibukota Jakarta 11530, Indonesia",
+    "lat": -6.2017585,
+    "lng": 106.7822547,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "jkt-binus-alsut",
+    "name": "BINUS University - Alam Sutera",
+    "city": "Tangerang",
+    "gmapsName": "BINUS @Alam Sutera",
+    "gmapsAddress": "Jl. Jalur Sutera Bar. No.Kav. 21, RT.001/RW.004, Panunggangan, Kec. Pinang, Kota Tangerang, Banten 15143, Indonesia",
+    "lat": -6.2232028,
+    "lng": 106.6490348,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "jkt-trisakti-grogol",
+    "name": "Universitas Trisakti - Kampus A Grogol",
+    "city": "Jakarta Barat",
+    "gmapsName": "Universitas Trisakti",
+    "gmapsAddress": "Jl. Letjen S. Parman No.1, RT.6/RW.16, Grogol, Kec. Grogol petamburan, Kota Jakarta Barat, Daerah Khusus Ibukota Jakarta 11440, Indonesia",
+    "lat": -6.1682748,
+    "lng": 106.7892412,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "jkt-untar-grogol",
+    "name": "Universitas Tarumanagara (UNTAR)",
+    "city": "Jakarta Barat",
+    "gmapsName": "Tarumanagara University",
+    "gmapsAddress": "Jl. Letjen S. Parman No.1, RT.6/RW.16, Tomang, Kec. Grogol petamburan, Kota Jakarta Barat, Daerah Khusus Ibukota Jakarta 11440, Indonesia",
+    "lat": -6.1691793,
+    "lng": 106.7895017,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "jkt-unj-rawamangun",
+    "name": "Universitas Negeri Jakarta (UNJ) - Rawamangun",
+    "city": "Jakarta Timur",
+    "gmapsName": "Jakarta State University",
+    "gmapsAddress": "Jl. R.Mangun Muka Raya No.11, RT.11/RW.14, Rawamangun, Kec. Pulo Gadung, Kota Jakarta Timur, Daerah Khusus Ibukota Jakarta 13220, Indonesia",
+    "lat": -6.194259,
+    "lng": 106.8790439,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "jkt-atmajaya-semanggi",
+    "name": "Unika Atma Jaya Jakarta - Semanggi",
+    "city": "Jakarta Selatan",
+    "gmapsName": "Universitas Katolik Indonesia Atma Jaya",
+    "gmapsAddress": "Jl. Jend. Sudirman No.51, RT.4/RW.4, Karet Semanggi, Kecamatan Setiabudi, Kota Jakarta Selatan, Daerah Khusus Ibukota Jakarta 12930, Indonesia",
+    "lat": -6.2184442,
+    "lng": 106.8153745,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "jkt-atmajaya-pluit",
+    "name": "Unika Atma Jaya Jakarta - Kampus Pluit (Kedokteran)",
+    "city": "Jakarta Utara",
+    "gmapsName": "Atma Jaya Indonesian Catholic University, Pluit Campus",
+    "gmapsAddress": "Jl. Pluit Raya No.2 21, RT.21/RW.8, Penjaringan, Kecamatan Penjaringan, Jkt Utara, Daerah Khusus Ibukota Jakarta 14440, Indonesia",
+    "lat": -6.1259131,
+    "lng": 106.7933265,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "jkt-upn-pondoklabu",
+    "name": "UPN Veteran Jakarta - Pondok Labu",
+    "city": "Jakarta Selatan",
+    "gmapsName": "Universitas Pembangunan Nasional Veteran Jakarta",
+    "gmapsAddress": "Jl. Pd. Labu Raya, Pd. Labu, Kec. Cilandak, Kota Jakarta Selatan, Daerah Khusus Ibukota Jakarta 12450, Indonesia",
+    "lat": -6.315751199999999,
+    "lng": 106.7943302,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "jkt-umn-gading-serpong",
+    "name": "Universitas Multimedia Nusantara (UMN)",
+    "city": "Tangerang",
+    "gmapsName": "Multimedia Nusantara University",
+    "gmapsAddress": "Jalan Scientia Boulevard Gading, Curug Sangereng, Serpong, Kabupaten Tangerang, Banten 15810, Indonesia",
+    "lat": -6.256737999999999,
+    "lng": 106.6183029,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "jkt-prasmul-bsd",
+    "name": "Universitas Prasetiya Mulya - BSD Campus",
+    "city": "Tangerang Selatan",
+    "gmapsName": "Universitas Prasetiya Mulya - BSD Campus",
+    "gmapsAddress": "Edu Town Kavling Edu I No. 1, Jalan BSD Raya Barat 1, Serpong, Pagedangan, Kec. Pagedangan, Kabupaten Tangerang, Banten 15339, Indonesia",
+    "lat": -6.300393,
+    "lng": 106.639976,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "jkt-gunadarma-depok",
+    "name": "Universitas Gunadarma - Kampus D Margonda",
+    "city": "Depok",
+    "gmapsName": "Universitas Gunadarma Kampus D",
+    "gmapsAddress": "Jl. Margonda Raya No.100, Pondok Cina, Kecamatan Beji, Kota Depok, Jawa Barat 16424, Indonesia",
+    "lat": -6.3685214,
+    "lng": 106.8331936,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "jkt-pancasila-lentengagung",
+    "name": "Universitas Pancasila - Srengseng Sawah",
+    "city": "Jakarta Selatan",
+    "gmapsName": "Pancasila University",
+    "gmapsAddress": "Jl. Lenteng Agung Raya No.56, RT.1/RW.3, Srengseng Sawah, Kec. Jagakarsa, Kota Jakarta Selatan, Daerah Khusus Ibukota Jakarta 12630, Indonesia",
+    "lat": -6.3398287,
+    "lng": 106.8332517,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "jkt-mercubuana-meruya",
+    "name": "Universitas Mercu Buana - Meruya",
+    "city": "Jakarta Barat",
+    "gmapsName": "Universitas Mercu Buana",
+    "gmapsAddress": "Jl. Meruya Selatan, RT.4/RW.1, Joglo, Kec. Kembangan, Kota Jakarta Barat, Daerah Khusus Ibukota Jakarta 11650, Indonesia",
+    "lat": -6.209406599999999,
+    "lng": 106.7387405,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "jkt-esaunggul-kebonjeruk",
+    "name": "Universitas Esa Unggul - Kebon Jeruk",
+    "city": "Jakarta Barat",
+    "gmapsName": "Esa Unggul University Jakarta Campus",
+    "gmapsAddress": "Jl. Arjuna Utara No.9, RT.1/RW.2, Duri Kepa, Kec. Kb. Jeruk, Kota Jakarta Barat, Daerah Khusus Ibukota Jakarta 11510, Indonesia",
+    "lat": -6.1858371,
+    "lng": 106.7790429,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "jkt-budiluhur-petukangan",
+    "name": "Universitas Budi Luhur - Petukangan",
+    "city": "Jakarta Selatan",
+    "gmapsName": "Universitas Budi Luhur",
+    "gmapsAddress": "Jl. Ciledug Raya, RT.10/RW.2, Petukangan Utara, Kec. Pesanggrahan, Kota Jakarta Selatan, Daerah Khusus Ibukota Jakarta 12260, Indonesia",
+    "lat": -6.234782399999999,
+    "lng": 106.747327,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "jkt-lspr-sudirman",
+    "name": "LSPR Institute of Communication & Business",
+    "city": "Jakarta Pusat",
+    "gmapsName": "LSPR Communication & Business Institute - Jakarta Campus",
+    "gmapsAddress": "Jl. K.H. Mas Mansyur No.Kav. 35, RT.12/RW.11, Karet Tengsin, Kecamatan Tanah Abang, Kota Jakarta Pusat, Daerah Khusus Ibukota Jakarta 10220, Indonesia",
+    "lat": -6.205181199999999,
+    "lng": 106.8179189,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "jkt-uki-cawang",
+    "name": "Universitas Kristen Indonesia (UKI Cawang)",
+    "city": "Jakarta Timur",
+    "gmapsName": "Universitas Kristen Indonesia",
+    "gmapsAddress": "Jl. Mayor Jendral Sutoyo No.2, RT.5/RW.11, Cawang, Kec. Kramat jati, Kota Jakarta Timur, Daerah Khusus Ibukota Jakarta 13630, Indonesia",
+    "lat": -6.250710499999999,
+    "lng": 106.872064,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "jkt-pertamina-simprug",
+    "name": "Universitas Pertamina (Simprug)",
+    "city": "Jakarta Selatan",
+    "gmapsName": "Universitas Pertamina",
+    "gmapsAddress": "Kompleks Universitas Pertamina, Jl. Teuku Nyak Arief, RT.7/RW.8, Grogol Sel., Kec. Kebayoran Lama, Kota Jakarta Selatan, Daerah Khusus Ibukota Jakarta 12220, Indonesia",
+    "lat": -6.2285678,
+    "lng": 106.789164,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "jkt-alazhar-kebayoran",
+    "name": "Universitas Al-Azhar Indonesia (UAI Kebayoran Baru)",
+    "city": "Jakarta Selatan",
+    "gmapsName": "University of Al Azhar Indonesia",
+    "gmapsAddress": "Jl. Sisingamangaraja, RT.2/RW.1, Selong, Kec. Kby. Baru, Kota Jakarta Selatan, Daerah Khusus Ibukota Jakarta 12110, Indonesia",
+    "lat": -6.2350432,
+    "lng": 106.7992602,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "jkt-unpak-bogor",
+    "name": "Universitas Pakuan (UNPAK Bogor)",
+    "city": "Bogor",
+    "gmapsName": "Pakuan University",
+    "gmapsAddress": "Jl. Pakuan, RT.02/RW.06, Tegallega, Kecamatan Bogor Tengah, Kota Bogor, Jawa Barat 16129, Indonesia",
+    "lat": -6.599466,
+    "lng": 106.8117897,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "jkt-grand-indonesia",
+    "name": "Grand Indonesia & Plaza Indonesia",
+    "city": "Jakarta Pusat",
+    "gmapsName": "Plaza Indonesia",
+    "gmapsAddress": "Jl. M.H. Thamrin No.28-30, RT.9/RW.5, Gondangdia, Kec. Menteng, Kota Jakarta Pusat, Daerah Khusus Ibukota Jakarta 10350, Indonesia",
+    "lat": -6.1935977,
+    "lng": 106.8219468,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "jkt-senayan-city",
+    "name": "Senayan City & Plaza Senayan",
+    "city": "Jakarta Pusat",
+    "gmapsName": "Senayan City Mall",
+    "gmapsAddress": "Jl. Asia Afrika No.19, RT.1/RW.3, Gelora, Kecamatan Tanah Abang, Kota Jakarta Pusat, Daerah Khusus Ibukota Jakarta 10270, Indonesia",
+    "lat": -6.2271953,
+    "lng": 106.7970117,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "jkt-central-park",
+    "name": "Central Park Mall & Mall Taman Anggrek",
+    "city": "Jakarta Barat",
+    "gmapsName": "Central Park Mall",
+    "gmapsAddress": "Jl. Letjen S. Parman No.Kav.28, RT.12/RW.6, Tj. Duren Sel., Kec. Grogol petamburan, Kota Jakarta Barat, Daerah Khusus Ibukota Jakarta 11470, Indonesia",
+    "lat": -6.176165,
+    "lng": 106.791929,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "jkt-gandaria-city",
+    "name": "Gandaria City Mall (Gancit)",
+    "city": "Jakarta Selatan",
+    "gmapsName": "Gandaria City",
+    "gmapsAddress": "Jl. Sultan Iskandar Muda, RT.10/RW.6, Kby. Lama Utara, Kec. Kebayoran Lama, Kota Jakarta Selatan, Daerah Khusus Ibukota Jakarta 12240, Indonesia",
+    "lat": -6.244107899999999,
+    "lng": 106.7838696,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "jkt-pondok-indah-mall",
+    "name": "Pondok Indah Mall (PIM 1, 2, 3)",
+    "city": "Jakarta Selatan",
+    "gmapsName": "Pondok Indah Mall 1",
+    "gmapsAddress": "Jl. Metro Pondok Indah No.Kav. 4, RT.1/RW.16, Pd. Pinang, Kec. Kebayoran Lama, Kota Jakarta Selatan, Daerah Khusus Ibukota Jakarta 12310, Indonesia",
+    "lat": -6.2652166,
+    "lng": 106.7843165,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "jkt-kota-kasablanka",
+    "name": "Kota Kasablanka (Kokas)",
+    "city": "Jakarta Selatan",
+    "gmapsName": "Kota Kasablanka",
+    "gmapsAddress": "Jl. Raya Casablanca No.Kav 88, RT.14/RW.5, Menteng Dalam, Kec. Tebet, Kota Jakarta Selatan, Daerah Khusus Ibukota Jakarta 12870, Indonesia",
+    "lat": -6.224029900000001,
+    "lng": 106.8424799,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "jkt-kelapa-gading",
+    "name": "Mall Kelapa Gading (MKG 1-5)",
+    "city": "Jakarta Utara",
+    "gmapsName": "Summarecon Mall Kelapa Gading",
+    "gmapsAddress": "Jl. Boulevard Raya, RT.13/RW.18, Klp. Gading Tim., Kec. Klp. Gading, Jkt Utara, Daerah Khusus Ibukota Jakarta 14240, Indonesia",
+    "lat": -6.157444099999999,
+    "lng": 106.9084598,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "jkt-aeon-bsd",
+    "name": "AEON Mall BSD City",
+    "city": "Tangerang Selatan",
+    "gmapsName": "AEON Mall BSD City",
+    "gmapsAddress": "Jl. BSD Raya Utama, Pagedangan, Kec. Pagedangan, Kabupaten Tangerang, Banten 15339, Indonesia",
+    "lat": -6.3048614,
+    "lng": 106.6432633,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "jkt-aeon-tanjung-barat",
+    "name": "AEON Mall Tanjung Barat",
+    "city": "Jakarta Selatan",
+    "gmapsName": "AEON Mall Tanjung Barat",
+    "gmapsAddress": "Jl. Raya Tj. Barat No.163, RT.12/RW.4, Tj. Bar., Kec. Jagakarsa, Kota Jakarta Selatan, Daerah Khusus Ibukota Jakarta 12530, Indonesia",
+    "lat": -6.306613,
+    "lng": 106.8402099,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "jkt-summarecon-serpong",
+    "name": "Summarecon Mall Serpong (SMS)",
+    "city": "Tangerang",
+    "gmapsName": "Summarecon Mall Serpong",
+    "gmapsAddress": "Sentra Gading Serpong, Jl. Boulevard Raya Gading Serpong, Klp. Dua, Kecamatan Kelapa Dua, Kabupaten Tangerang, Banten 15810, Indonesia",
+    "lat": -6.241086699999999,
+    "lng": 106.6283384,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "jkt-bxc-bintaro",
+    "name": "Bintaro Jaya Xchange Mall (BXc)",
+    "city": "Tangerang Selatan",
+    "gmapsName": "Bintaro Jaya Xchange Mall",
+    "gmapsAddress": "Bintaro Jaya Sektor 7, Jl. Lkr. Jaya, Pd. Jaya, Kec. Pd. Aren, Kota Tangerang Selatan, Banten 15220, Indonesia",
+    "lat": -6.2854481,
+    "lng": 106.7285448,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "jkt-summarecon-bekasi",
+    "name": "Summarecon Mall Bekasi (SMB)",
+    "city": "Bekasi",
+    "gmapsName": "Summarecon Mall Bekasi",
+    "gmapsAddress": "Jl. Boulevard Ahmad Yani No.Blok M, RT.006/RW.002, Marga Mulya, Kec. Bekasi Utara, Kota Bks, Jawa Barat 17142, Indonesia",
+    "lat": -6.225963999999999,
+    "lng": 107.0007049,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "jkt-margo-city",
+    "name": "Margo City Mall Depok",
+    "city": "Depok",
+    "gmapsName": "MARGOCITY",
+    "gmapsAddress": "Jl. Margonda Raya No.358, Kemiri Muka, Kecamatan Beji, Kota Depok, Jawa Barat 16423, Indonesia",
+    "lat": -6.372967,
+    "lng": 106.8344235,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "jkt-cbd-scbd",
+    "name": "Kawasan Bisnis SCBD Sudirman",
+    "city": "Jakarta Selatan",
+    "gmapsName": "Sudirman Central Business District",
+    "gmapsAddress": "Gedung Artha Graha, Jl. Jend. Sudirman kav 52-53 No.Kav 52-53, RT.5/RW.3, Senayan, Kec. Kby. Baru, Kota Jakarta Selatan, Daerah Khusus Ibukota Jakarta 12190, Indonesia",
+    "lat": -6.2245908,
+    "lng": 106.8110858,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "jkt-cbd-kuningan",
+    "name": "Kawasan Rasuna Said / Kuningan CBD",
+    "city": "Jakarta Selatan",
+    "gmapsName": "Rasuna Epicentrum",
+    "gmapsAddress": "Jl. H. R. Rasuna Said, RT.17/RW.1, Menteng Atas, Kecamatan Setiabudi, Kota Jakarta Selatan, Daerah Khusus Ibukota Jakarta 12940, Indonesia",
+    "lat": -6.2188195,
+    "lng": 106.8369317,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "jkt-cbd-mega-kuningan",
+    "name": "Kawasan Mega Kuningan",
+    "city": "Jakarta Selatan",
+    "gmapsName": "Mega Kuningan",
+    "gmapsAddress": "Kuningan, East Kuningan, Setiabudi, South Jakarta City, Jakarta, Indonesia",
+    "lat": -6.22465,
+    "lng": 106.82709,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "jkt-cbd-tb-simatupang",
+    "name": "Koridor Bisnis TB Simatupang",
+    "city": "Jakarta Selatan",
+    "gmapsName": "Arkadia Green Park",
+    "gmapsAddress": "Jl. TB Simatupang No.Kav. 88, RT.1/RW.1, Kebagusan, Ps. Minggu, Kota Jakarta Selatan, Daerah Khusus Ibukota Jakarta 12520, Indonesia",
+    "lat": -6.302,
+    "lng": 106.8328595,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "jkt-cbd-bsd-green-office",
+    "name": "BSD Green Office Park & Digital Hub",
+    "city": "Tangerang Selatan",
+    "gmapsName": "Digital Hub BSD City",
+    "gmapsAddress": "MMV3+7J6, Jl. BSD Raya Barat, Sampora, Kec. Cisauk, Kabupaten Tangerang, Banten 15345, Indonesia",
+    "lat": -6.3068408,
+    "lng": 106.6540235,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "jkt-ind-jababeka",
+    "name": "Kawasan Industri Jababeka Cikarang",
+    "city": "Bekasi",
+    "gmapsName": "Kawasan Industri Jababeka 1",
+    "gmapsAddress": "P44W+C9F, Jl. Jababeka Raya, Pasirgombong, Kec. Cikarang Utara, Kabupaten Bekasi, Jawa Barat 17530, Indonesia",
+    "lat": -6.2939346,
+    "lng": 107.1459356,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "jkt-ind-mm2100",
+    "name": "Kawasan Industri MM2100 Cibitung",
+    "city": "Bekasi",
+    "gmapsName": "KAWASAN INDUSTRI MM2100",
+    "gmapsAddress": "KAWASAN INDUSTRI MM2100, Blk. C1 No.18, RT.005/RW.3, Sukajaya, Kec. Cibitung, Kabupaten Bekasi, Jawa Barat 17520, Indonesia",
+    "lat": -6.244173099999999,
+    "lng": 107.1403339,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "jkt-ind-kiic-karawang",
+    "name": "Kawasan Industri KIIC Karawang",
+    "city": "Karawang",
+    "gmapsName": "Karawang International Industrial City",
+    "gmapsAddress": "Margakaya, Telukjambe Barat, Karawang, West Java 41361, Indonesia",
+    "lat": -6.3594374,
+    "lng": 107.2742534,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "jkt-ind-surya-cipta",
+    "name": "Kawasan Industri Surya Cipta Karawang",
+    "city": "Karawang",
+    "gmapsName": "Suryacipta City of Industry",
+    "gmapsAddress": "Jl. Surya Utama No.Kav. C, RW.1, Kutamekar, Kec. Ciampel, Karawang, Jawa Barat 41363, Indonesia",
+    "lat": -6.374017599999999,
+    "lng": 107.3276353,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "jkt-ind-giic-deltamas",
+    "name": "Kawasan Industri GIIC Deltamas (Pusat EV Hyundai/Wuling)",
+    "city": "Bekasi",
+    "gmapsName": "Kawasan GIIC",
+    "gmapsAddress": "Jalan Tol Jakarta-Cikampek No.Km.37, Hegarmukti, Kec. Cikarang Pusat, Cikarang, Jawa Barat 17330, Indonesia",
+    "lat": -6.3709142,
+    "lng": 107.195119,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "jkt-ind-ejip",
+    "name": "Kawasan Industri EJIP Cikarang Selatan",
+    "city": "Bekasi",
+    "gmapsName": "Jalan Kawasan Industri Ejip",
+    "gmapsAddress": "Jl. Kawasan Industri Ejip, Cikarang Sel., Kabupaten Bekasi, Jawa Barat 17530, Indonesia",
+    "lat": -6.3297275,
+    "lng": 107.1074512,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "jkt-ind-pulogadung",
+    "name": "Kawasan Industri Pulogadung (JIEP)",
+    "city": "Jakarta Timur",
+    "gmapsName": "Kawasan Industri Pulogadung",
+    "gmapsAddress": "Kw. Industri Pulogadung, Jl. Pulogadung No.8, RW.3, Rw. Terate, Kec. Pulo Gadung, Kota Jakarta Timur, Daerah Khusus Ibukota Jakarta 13920, Indonesia",
+    "lat": -6.188692,
+    "lng": 106.9169124,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "jkt-ind-manis-tangerang",
+    "name": "Kawasan Industri Manis & Jatake Tangerang",
+    "city": "Tangerang",
+    "gmapsName": "Manis Industrial Zone",
+    "gmapsAddress": "RT.002/RW.004, Manis Jaya, Kec. Jatiuwung, Kota Tangerang, Banten 15136, Indonesia",
+    "lat": -6.2119971,
+    "lng": 106.5732874,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "jkt-rsup-rscm",
+    "name": "RSUP Nasional Dr. Cipto Mangunkusumo (RSCM)",
+    "city": "Jakarta Pusat",
+    "gmapsName": "Rumah Sakit Nasional Dr. Cipto Mangunkusumo",
+    "gmapsAddress": "Jl. Pangeran Diponegoro No.71, RW.5, Kenari, Kec. Senen, Kota Jakarta Pusat, Daerah Khusus Ibukota Jakarta 10430, Indonesia",
+    "lat": -6.1976362,
+    "lng": 106.8470251,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "jkt-rs-fatmawati",
+    "name": "RSUP Fatmawati Jakarta Selatan",
+    "city": "Jakarta Selatan",
+    "gmapsName": "Fatmawati General Hospital",
+    "gmapsAddress": "Jl. RS. Fatmawati Raya, RT.4/RW.9, Cilandak Bar., Kec. Cilandak, Kota Jakarta Selatan, Daerah Khusus Ibukota Jakarta 12430, Indonesia",
+    "lat": -6.295063799999999,
+    "lng": 106.7962141,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "jkt-rs-harapan-kita",
+    "name": "RS Jantung & Anak Harapan Kita (Slipi)",
+    "city": "Jakarta Barat",
+    "gmapsName": "RS Jantung dan Pembuluh Darah Harapan Kita (Pusat Jantung Nasional Harapan Kita)",
+    "gmapsAddress": "Jl. Letjen S. Parman Jl. Tol S. Parman No.Kav. 87, RT.1/RW.8, Slipi, Kec. Palmerah, Kota Jakarta Barat, Daerah Khusus Ibukota Jakarta 11420, Indonesia",
+    "lat": -6.1856043,
+    "lng": 106.7981435,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "jkt-rspad-gatot-soebroto",
+    "name": "RSPAD Gatot Soebroto (Senen)",
+    "city": "Jakarta Pusat",
+    "gmapsName": "GATOT Soebroto Army Hospital",
+    "gmapsAddress": "Jl. Abdul Rahman Saleh No.24, RT.10/RW.5, Senen, Kec. Senen, Kota Jakarta Pusat, Daerah Khusus Ibukota Jakarta 10410, Indonesia",
+    "lat": -6.1761199,
+    "lng": 106.8377488,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "jkt-rs-pon-cawang",
+    "name": "RS Pusat Otak Nasional (RS PON Cawang)",
+    "city": "Jakarta Timur",
+    "gmapsName": "Prof. Dr. Mahar Mardjono National Brain Center Hospital",
+    "gmapsAddress": "Jl. Letjen M.T. Haryono No.Kav.11, RT.1/RW.6, Cawang, Kec. Kramat jati, Kota Jakarta Timur, Daerah Khusus Ibukota Jakarta 13630, Indonesia",
+    "lat": -6.2461066,
+    "lng": 106.8704664,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "jkt-rs-persahabatan",
+    "name": "RSUP Persahabatan Rawamangun",
+    "city": "Jakarta Timur",
+    "gmapsName": "RSUP Persahabatan",
+    "gmapsAddress": "Jl. Persahabatan Raya No.1, RT.16/RW.13, Rawamangun, Kec. Pulo Gadung, Kota Jakarta Timur, Daerah Khusus Ibukota Jakarta 13230, Indonesia",
+    "lat": -6.2039865,
+    "lng": 106.8838663,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "jkt-rs-siloam-karawaci",
+    "name": "Siloam Hospitals Lippo Village Karawaci",
+    "city": "Tangerang",
+    "gmapsName": "Siloam International Hospitals Lippo Village",
+    "gmapsAddress": "Siloam Lippo Karawaci, Jl. Jend. Sudirman No.6, Bencongan, Kecamatan Kelapa Dua, Kabupaten Tangerang, Banten 15810, Indonesia",
+    "lat": -6.225232200000001,
+    "lng": 106.5979611,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "jkt-rs-mayapada-lebakbulus",
+    "name": "Mayapada Hospital Jakarta Selatan / Tangerang",
+    "city": "Jakarta Selatan",
+    "gmapsName": "Mayapada Hospital South Jakarta",
+    "gmapsAddress": "Jl. Lebak Bulus I No.Kav 29, RT.6/RW.4, Cilandak Bar., Kec. Cilandak, Kota Jakarta Selatan, Daerah Khusus Ibukota Jakarta 12430, Indonesia",
+    "lat": -6.298245,
+    "lng": 106.7862215,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "jkt-rs-pondok-indah",
+    "name": "RS Pondok Indah (RSPI Puri / Pondok Indah)",
+    "city": "Jakarta Selatan",
+    "gmapsName": "RSPI - Pondok Indah",
+    "gmapsAddress": "Jln. Metro Duta Kav UE, RT.4/RW.14, Pd. Pinang, Kec. Kebayoran Lama, Kota Jakarta Selatan, Daerah Khusus Ibukota Jakarta 12310, Indonesia",
+    "lat": -6.2836097,
+    "lng": 106.7815005,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "jkt-rs-ui-depok",
+    "name": "Rumah Sakit Universitas Indonesia (RSUI Depok)",
+    "city": "Depok",
+    "gmapsName": "Rumah Sakit Universitas Indonesia (RSUI)",
+    "gmapsAddress": "Jl. Prof. DR. Bahder Djohan, Pondok Cina, Kecamatan Beji, Kota Depok, Jawa Barat 16424, Indonesia",
+    "lat": -6.372953799999999,
+    "lng": 106.8289475,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "jkt-bandara-soetta",
+    "name": "Bandara Internasional Soekarno-Hatta (CGK)",
+    "city": "Tangerang",
+    "gmapsName": "Soekarno–Hatta International Airport",
+    "gmapsAddress": "Jl. Raya Bandara Soekarno Hatta, RT.001/RW.010, Pajang, Kec. Benda, Kota Tangerang, Banten 15125, Indonesia",
+    "lat": -6.124843299999999,
+    "lng": 106.6601026,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "jkt-bandara-halim",
+    "name": "Bandara Halim Perdanakusuma (HLP)",
+    "city": "Jakarta Timur",
+    "gmapsName": "Halim Perdanakusuma International Airport",
+    "gmapsAddress": "Cililitan, Kramat Jati, East Jakarta City, Jakarta 13610, Indonesia",
+    "lat": -6.2653379,
+    "lng": 106.8855528,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "jkt-stasiun-whoosh-halim",
+    "name": "Stasiun Kereta Cepat Whoosh Halim",
+    "city": "Jakarta Timur",
+    "gmapsName": "Whoosh Station Jakarta",
+    "gmapsAddress": "Jl. Akses St. Halim, RT.13/RW.15, Halim Perdanakusuma, Kec. Makasar, Kota Jakarta Timur, Daerah Khusus Ibukota Jakarta 13610, Indonesia",
+    "lat": -6.246141,
+    "lng": 106.8842811,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "jkt-stasiun-gambir",
+    "name": "Stasiun Kereta Api Gambir",
+    "city": "Jakarta Pusat",
+    "gmapsName": "Gambir",
+    "gmapsAddress": "Jl. Medan Merdeka Tim. No.1, Gambir, Kecamatan Gambir, Kota Jakarta Pusat, Daerah Khusus Ibukota Jakarta 10110, Indonesia",
+    "lat": -6.176565099999999,
+    "lng": 106.8305901,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "jkt-stasiun-pasar-senen",
+    "name": "Stasiun Kereta Api Pasar Senen",
+    "city": "Jakarta Pusat",
+    "gmapsName": "Stasiun Pasar Senen",
+    "gmapsAddress": "Jl. Pasar Senen No.14, Senen, Kec. Senen, Kota Jakarta Pusat, Daerah Khusus Ibukota Jakarta 10410, Indonesia",
+    "lat": -6.174700000000001,
+    "lng": 106.84435,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "bdg-ipdn-jatinangor",
+    "name": "Institut Pemerintahan Dalam Negeri (IPDN Jatinangor)",
+    "city": "Sumedang",
+    "gmapsName": "Institut Pemerintahan Dalam Negeri",
+    "gmapsAddress": "Jl. Ir. Soekarno No.20, Cibeusi, Kec. Jatinangor, Kabupaten Sumedang, Jawa Barat 45363, Indonesia",
+    "lat": -6.9334226,
+    "lng": 107.7638357,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "bdg-poltekpar-nhi",
+    "name": "Politeknik Pariwisata NHI Bandung (Enhaii Setiabudi)",
+    "city": "Bandung",
+    "gmapsName": "NHI Bandung Tourism Polytechnic",
+    "gmapsAddress": "Jl. Dr. Setiabudi No.186, Hegarmanah, Kec. Cidadap, Kota Bandung, Jawa Barat 40141, Indonesia",
+    "lat": -6.868305599999999,
+    "lng": 107.5945167,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "bdg-itb-ganesha",
+    "name": "Institut Teknologi Bandung (ITB) - Kampus Ganesha",
+    "city": "Bandung",
+    "gmapsName": "Institut Teknologi Bandung",
+    "gmapsAddress": "Jl. Ganesha No.10, Lb. Siliwangi, Kecamatan Coblong, Kota Bandung, Jawa Barat 40132, Indonesia",
+    "lat": -6.890361700000001,
+    "lng": 107.6101912,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "bdg-itb-jatinangor",
+    "name": "Institut Teknologi Bandung (ITB) - Kampus Jatinangor",
+    "city": "Sumedang",
+    "gmapsName": "Institut Teknologi Bandung, Jatinangor Campus",
+    "gmapsAddress": "Jl. Let. Jend. Purn. Dr. (HC) Mashudi, Jl. Bandung - Palimanan No.1, Sayang, Kec. Jatinangor, Kabupaten Sumedang, Jawa Barat 45363, Indonesia",
+    "lat": -6.9337767,
+    "lng": 107.768358,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "bdg-unpad-dipatiukur",
+    "name": "Universitas Padjadjaran (UNPAD) - Dipatiukur",
+    "city": "Bandung",
+    "gmapsName": "Unpad Dipatiukur",
+    "gmapsAddress": "Jl. Dipati Ukur No.35, Lebakgede, Kecamatan Coblong, Kota Bandung, Jawa Barat 40132, Indonesia",
+    "lat": -6.893418899999999,
+    "lng": 107.6172933,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "bdg-unpad-jatinangor",
+    "name": "Universitas Padjadjaran (UNPAD) - Jatinangor",
+    "city": "Sumedang",
+    "gmapsName": "Universitas Padjadjaran",
+    "gmapsAddress": "Jl. Raya Bandung Sumedang KM.21, Hegarmanah, Kec. Jatinangor, Kabupaten Sumedang, Jawa Barat 45363, Indonesia",
+    "lat": -6.926132099999999,
+    "lng": 107.7746881,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "bdg-upi-setiabudi",
+    "name": "Universitas Pendidikan Indonesia (UPI) - Setiabudi",
+    "city": "Bandung",
+    "gmapsName": "Indonesia University of Education",
+    "gmapsAddress": "Jl. Dr. Setiabudi No.229, Isola, Kec. Sukasari, Kota Bandung, Jawa Barat 40154, Indonesia",
+    "lat": -6.8613013,
+    "lng": 107.5920834,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "bdg-telkom-university",
+    "name": "Telkom University (Tel-U Dayeuhkolot)",
+    "city": "Bandung",
+    "gmapsName": "Telkom University",
+    "gmapsAddress": "Jl. Telekomunikasi No.1, Sukapura, Kec. Dayeuhkolot, Kabupaten Bandung, Jawa Barat 40257, Indonesia",
+    "lat": -6.973416299999999,
+    "lng": 107.630406,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "bdg-unpar-ciumbuleuit",
+    "name": "Universitas Katolik Parahyangan (UNPAR)",
+    "city": "Bandung",
+    "gmapsName": "Universitas Katolik Parahyangan",
+    "gmapsAddress": "Jl. Ciumbuleuit No.94, Hegarmanah, Kec. Cidadap, Kota Bandung, Jawa Barat 40141, Indonesia",
+    "lat": -6.8753737,
+    "lng": 107.6048696,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "bdg-unpas-tamansari",
+    "name": "Universitas Pasundan (UNPAS) - Tamansari & Setiabudi",
+    "city": "Bandung",
+    "gmapsName": "Universitas Pasundan",
+    "gmapsAddress": "Jl. Dr. Setiabudi No.193, Gegerkalong, Kec. Sukasari, Kota Bandung, Jawa Barat 40153, Indonesia",
+    "lat": -6.866502,
+    "lng": 107.593245,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "bdg-unisba-tamansari",
+    "name": "Universitas Islam Bandung (UNISBA)",
+    "city": "Bandung",
+    "gmapsName": "Bandung Islamic University",
+    "gmapsAddress": "Jl. Tamansari No.20, Tamansari, Kec. Bandung Wetan, Kota Bandung, Jawa Barat 40116, Indonesia",
+    "lat": -6.9037137,
+    "lng": 107.6082357,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "bdg-maranatha-suriasumantri",
+    "name": "Universitas Kristen Maranatha",
+    "city": "Bandung",
+    "gmapsName": "Universitas Kristen Maranatha",
+    "gmapsAddress": "Jl. Prof. drg. Soeria Soemantri No.65, Sukawarna, Kec. Sukajadi, Kota Bandung, Jawa Barat 40164, Indonesia",
+    "lat": -6.8858967,
+    "lng": 107.5805279,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "bdg-widyatama-cikutra",
+    "name": "Universitas Widyatama (Cikutra)",
+    "city": "Bandung",
+    "gmapsName": "Universitas Widyatama",
+    "gmapsAddress": "Jl. Sekejati V Gg. Pelita II No.204A, Sukapada, Kec. Cibeunying Kidul, Kota Bandung, Jawa Barat 40125, Indonesia",
+    "lat": -6.8980096,
+    "lng": 107.6452788,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "bdg-itenas-pku",
+    "name": "Institut Teknologi Nasional (ITENAS Bandung)",
+    "city": "Bandung",
+    "gmapsName": "Bandung National Institute of Technology (ITENAS)",
+    "gmapsAddress": "Jl. Khp Hasan Mustopa No.23, Neglasari, Kec. Cibeunying Kaler, Kota Bandung, Jawa Barat 40124, Indonesia",
+    "lat": -6.897198299999999,
+    "lng": 107.636371,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "bdg-polban-sarijadi",
+    "name": "Politeknik Negeri Bandung (POLBAN)",
+    "city": "Bandung Barat",
+    "gmapsName": "Politeknik Negeri Bandung",
+    "gmapsAddress": "Jl. Ciwaruga, Ciwaruga, Kec. Parongpong, Kabupaten Bandung Barat, Jawa Barat 40559, Indonesia",
+    "lat": -6.8722074,
+    "lng": 107.5737725,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "bdg-paris-van-java",
+    "name": "Paris Van Java Resort Mall (PVJ)",
+    "city": "Bandung",
+    "gmapsName": "Paris Van Java",
+    "gmapsAddress": "Jl. Sukajadi No.131-139, Cipedes, Kec. Sukajadi, Kota Bandung, Jawa Barat 40162, Indonesia",
+    "lat": -6.889564099999999,
+    "lng": 107.5960068,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "bdg-23-paskal",
+    "name": "23 Paskal Shopping Center",
+    "city": "Bandung",
+    "gmapsName": "23 Paskal Shopping Center",
+    "gmapsAddress": "Komplek Paskal Hypersquare, Jl. Pasir Kaliki No.25-27, Kb. Jeruk, Kec. Andir, Kota Bandung, Jawa Barat 40241, Indonesia",
+    "lat": -6.915083800000001,
+    "lng": 107.597611,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "bdg-ciwalk",
+    "name": "Cihampelas Walk (Ciwalk)",
+    "city": "Bandung",
+    "gmapsName": "Ciwalk",
+    "gmapsAddress": "Jl. Cihampelas No.160, Cipaganti, Kecamatan Coblong, Kota Bandung, Jawa Barat 40131, Indonesia",
+    "lat": -6.894317399999999,
+    "lng": 107.6050141,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "bdg-trans-studio",
+    "name": "Trans Studio Mall Bandung (TSM)",
+    "city": "Bandung",
+    "gmapsName": "Trans Studio Mall",
+    "gmapsAddress": "Trans Studio Mall, Jl. Trans Studio No.289, Cibangkong, Kec. Batununggal, Kota Bandung, Jawa Barat 40273, Indonesia",
+    "lat": -6.9255837,
+    "lng": 107.6366974,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "bdg-summarecon-mall-bandung",
+    "name": "Summarecon Mall Bandung (Gedebage)",
+    "city": "Bandung",
+    "gmapsName": "Summarecon Mall Bandung (SUMMABA)",
+    "gmapsAddress": "Jl. Grand Bulevar No.1, Cisaranten Kidul, Kec. Gedebage, Kota Bandung, Jawa Barat 40295, Indonesia",
+    "lat": -6.955178399999999,
+    "lng": 107.697701,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "bdg-cbd-asia-afrika",
+    "name": "Kawasan Perkantoran Jl. Asia Afrika / Braga",
+    "city": "Bandung",
+    "gmapsName": "Menara Asia Afrika",
+    "gmapsAddress": "Jl. Asia Afrika No.133-137, Kb. Pisang, Kec. Sumur Bandung, Kota Bandung, Jawa Barat 40112, Indonesia",
+    "lat": -6.921948299999999,
+    "lng": 107.6161111,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "bdg-rsup-hasan-sadikin",
+    "name": "RSUP Dr. Hasan Sadikin Bandung (RSHS)",
+    "city": "Bandung",
+    "gmapsName": "RSUP Dr. Hasan Sadikin Bandung",
+    "gmapsAddress": "Jl. Pasteur No.38, Pasteur, Kec. Sukajadi, Kota Bandung, Jawa Barat 40161, Indonesia",
+    "lat": -6.8981416,
+    "lng": 107.5983245,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "bdg-rs-borromeus",
+    "name": "RS Santo Borromeus Bandung (Dago)",
+    "city": "Bandung",
+    "gmapsName": "Saint Borromeus Hospital",
+    "gmapsAddress": "Jl. Ir. H. Juanda No.100, Lebakgede, Kecamatan Coblong, Kota Bandung, Jawa Barat 40132, Indonesia",
+    "lat": -6.893995500000001,
+    "lng": 107.6136797,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "bdg-rs-immanuel",
+    "name": "RS Immanuel Bandung (Kopo)",
+    "city": "Bandung",
+    "gmapsName": "Immanuel Hospital Bandung",
+    "gmapsAddress": "Jl. Raya Kopo No.161, Situsaeur, Kec. Bojongloa Kidul, Kota Bandung, Jawa Barat 40233, Indonesia",
+    "lat": -6.9349582,
+    "lng": 107.5965099,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "bdg-stasiun-bandung",
+    "name": "Stasiun Kereta Api Bandung (Hall & Kiaracondong)",
+    "city": "Bandung",
+    "gmapsName": "Bandung Station",
+    "gmapsAddress": "Jl. Stasiun Barat, Kb. Jeruk, Kec. Andir, Kota Bandung, Jawa Barat 40181, Indonesia",
+    "lat": -6.914646599999999,
+    "lng": 107.6024376,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "bdg-stasiun-whoosh-padalarang",
+    "name": "Stasiun Whoosh Kereta Cepat Padalarang Hub",
+    "city": "Bandung Barat",
+    "gmapsName": "Whoosh Station Padalarang",
+    "gmapsAddress": "5F5W+4F2 Stasiun Kereta Cepat, Kertajaya, Kec. Padalarang, Kabupaten Bandung Barat, Jawa Barat 40553, Indonesia",
+    "lat": -6.8422332,
+    "lng": 107.4961386,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "bdg-stasiun-whoosh-tegalluar",
+    "name": "Stasiun Whoosh Kereta Cepat Tegalluar",
+    "city": "Bandung",
+    "gmapsName": "Kereta Cepat Whoosh Tegalluar",
+    "gmapsAddress": "2PP7+4WR, Cibiru Hilir, Cileunyi, Bandung Regency, West Java 40626, Indonesia",
+    "lat": -6.9646471,
+    "lng": 107.7147695,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "jog-stie-ykpn-seturan",
+    "name": "STIE YKPN & Kawasan Mahasiswa Seturan",
+    "city": "Sleman",
+    "gmapsName": "STIE YKPN Business School",
+    "gmapsAddress": "Jl. Seturan Raya Jl. Raya Kledokan, Kledokan, Caturtunggal, Kec. Depok, Kabupaten Sleman, Daerah Istimewa Yogyakarta 55281, Indonesia",
+    "lat": -7.769025800000001,
+    "lng": 110.410216,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "jog-ugm-bulaksumur",
+    "name": "Universitas Gadjah Mada (UGM) - Bulaksumur",
+    "city": "Sleman",
+    "gmapsName": "Universitas Gadjah Mada",
+    "gmapsAddress": "Bulaksumur, Caturtunggal, Kec. Depok, Kabupaten Sleman, Daerah Istimewa Yogyakarta 55281, Indonesia",
+    "lat": -7.7708604,
+    "lng": 110.3778693,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "jog-uny-karangmalang",
+    "name": "Universitas Negeri Yogyakarta (UNY)",
+    "city": "Sleman",
+    "gmapsName": "Universitas Negeri Yogyakarta",
+    "gmapsAddress": "Jl. Colombo No.1, Karang Malang, Caturtunggal, Kec. Depok, Kabupaten Sleman, Daerah Istimewa Yogyakarta 55281, Indonesia",
+    "lat": -7.773724499999999,
+    "lng": 110.386251,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "jog-uii-terpadu-kaliurang",
+    "name": "Universitas Islam Indonesia (UII) - Jl. Kaliurang KM 14.5",
+    "city": "Sleman",
+    "gmapsName": "Universitas Islam Indonesia",
+    "gmapsAddress": "Jl. Kaliurang No.Km. 14,5, Krawitan, Umbulmartani, Kec. Ngemplak, Kabupaten Sleman, Daerah Istimewa Yogyakarta 55584, Indonesia",
+    "lat": -7.6876501,
+    "lng": 110.4142365,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "jog-umy-ringroad",
+    "name": "Universitas Muhammadiyah Yogyakarta (UMY)",
+    "city": "Bantul",
+    "gmapsName": "Muhammadiyah University of Yogyakarta",
+    "gmapsAddress": "Jl. Brawijaya, Geblagan, Tamantirto, Kec. Kasihan, Kabupaten Bantul, Daerah Istimewa Yogyakarta 55183, Indonesia",
+    "lat": -7.811209799999999,
+    "lng": 110.3209661,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "jog-uin-sunan-kalijaga",
+    "name": "UIN Sunan Kalijaga Yogyakarta",
+    "city": "Sleman",
+    "gmapsName": "UIN Sunan Kalijaga Yogyakarta",
+    "gmapsAddress": "Jl. Laksda Adisucipto, Papringan, Caturtunggal, Kec. Depok, Kabupaten Sleman, Daerah Istimewa Yogyakarta 55281, Indonesia",
+    "lat": -7.7847839,
+    "lng": 110.3943589,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "jog-upn-veteran-condongcatur",
+    "name": "UPN Veteran Yogyakarta - Condongcatur",
+    "city": "Sleman",
+    "gmapsName": "UPN \"Veteran\" Yogyakarta",
+    "gmapsAddress": "Jl. Padjajaran Jl. Ring Road Utara No.104, Ngropoh, Condongcatur, Kec. Depok, Kabupaten Sleman, Daerah Istimewa Yogyakarta 55283, Indonesia",
+    "lat": -7.762232500000001,
+    "lng": 110.4092788,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "jog-atmajaya-babarsari",
+    "name": "Universitas Atma Jaya Yogyakarta (UAJY) - Babarsari",
+    "city": "Sleman",
+    "gmapsName": "Universitas Atma Jaya Kampus II Thomas Aquinas",
+    "gmapsAddress": "Jl. Babarsari No.44, Janti, Caturtunggal, Kec. Depok, Kabupaten Sleman, Daerah Istimewa Yogyakarta 55281, Indonesia",
+    "lat": -7.7804399,
+    "lng": 110.4141109,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "jog-sanatadharma-mrican",
+    "name": "Universitas Sanata Dharma (USD) - Mrican & Paingan",
+    "city": "Sleman",
+    "gmapsName": "Universitas Sanata Dharma Kampus 2 Mrican",
+    "gmapsAddress": "Jl. Affandi Jl. Stm.Mrican, Santren, Caturtunggal, Kec. Depok, Kabupaten Sleman, Daerah Istimewa Yogyakarta 55281, Indonesia",
+    "lat": -7.775294100000001,
+    "lng": 110.3894117,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "jog-uad-kampus-4",
+    "name": "Universitas Ahmad Dahlan (UAD) - Kampus 4 Ringroad Selatan",
+    "city": "Bantul",
+    "gmapsName": "Universitas Ahmad Dahlan Kampus 4",
+    "gmapsAddress": "Jl. Ki Ageng Pemanahan, Kragilan, Tamanan, Kec. Banguntapan, Kabupaten Bantul, Daerah Istimewa Yogyakarta 55191, Indonesia",
+    "lat": -7.833377,
+    "lng": 110.3831413,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "jog-amikom-condongcatur",
+    "name": "Universitas AMIKOM Yogyakarta",
+    "city": "Sleman",
+    "gmapsName": "University of Amikom Yogyakarta",
+    "gmapsAddress": "Jl. Ring Road Utara, Ngringin, Condongcatur, Kec. Depok, Kabupaten Sleman, Daerah Istimewa Yogyakarta 55281, Indonesia",
+    "lat": -7.7600602,
+    "lng": 110.4091356,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "jog-isi-sewon",
+    "name": "Institut Seni Indonesia (ISI Yogyakarta) - Sewon",
+    "city": "Bantul",
+    "gmapsName": "Indonesian Institute of Arts Yogyakarta",
+    "gmapsAddress": "Jl. Parangtritis Km. 6,5, Glondong, Panggungharjo, Kec. Sewon, Kabupaten Bantul, Daerah Istimewa Yogyakarta 55188, Indonesia",
+    "lat": -7.851621499999999,
+    "lng": 110.3565341,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "jog-pakuwon-mall-jogja",
+    "name": "Pakuwon Mall Jogja (Eks Hartono Mall)",
+    "city": "Sleman",
+    "gmapsName": "Pakuwon Mall Jogja",
+    "gmapsAddress": "Jl. Ring Road Utara, Kaliwaru, Condongcatur, Kec. Depok, Kabupaten Sleman, Daerah Istimewa Yogyakarta 55281, Indonesia",
+    "lat": -7.7587075,
+    "lng": 110.3991502,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "jog-plaza-ambarrukmo",
+    "name": "Plaza Ambarrukmo (Amplaz)",
+    "city": "Sleman",
+    "gmapsName": "Ambarrukmo Plaza",
+    "gmapsAddress": "Jl. Laksda Adisucipto No.80, Ambarukmo, Caturtunggal, Kec. Depok, Kabupaten Sleman, Daerah Istimewa Yogyakarta 55281, Indonesia",
+    "lat": -7.782760199999999,
+    "lng": 110.4009891,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "jog-jogja-city-mall",
+    "name": "Jogja City Mall (JCM Jl. Magelang)",
+    "city": "Sleman",
+    "gmapsName": "Jogja City Mall",
+    "gmapsAddress": "Jl. Magelang No.Km. 6, No. 18, Kutu Patran, Sinduadi, Kec. Mlati, Kabupaten Sleman, Daerah Istimewa Yogyakarta 55284, Indonesia",
+    "lat": -7.7534179,
+    "lng": 110.3605267,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "jog-malioboro",
+    "name": "Kawasan Malioboro & Titik Nol KM Jogja",
+    "city": "Yogyakarta",
+    "gmapsName": "Titik Nol Kilometer Yogyakarta",
+    "gmapsAddress": "Jl. Pangurakan No.1, Ngupasan, Kec. Gondomanan, Kota Yogyakarta, Daerah Istimewa Yogyakarta 55122, Indonesia",
+    "lat": -7.801396599999999,
+    "lng": 110.3647641,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "jog-rsup-dr-sardjito",
+    "name": "RSUP Dr. Sardjito Yogyakarta",
+    "city": "Sleman",
+    "gmapsName": "Dr. Sardjito General Hospital",
+    "gmapsAddress": "Jl. Kesehatan Jl. Kesehatan Sendowo No.1, Sendowo, Sinduadi, Kec. Mlati, Kabupaten Sleman, Daerah Istimewa Yogyakarta 55281, Indonesia",
+    "lat": -7.7686163,
+    "lng": 110.3734742,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "jog-rs-panti-rapih",
+    "name": "RS Panti Rapih Yogyakarta",
+    "city": "Yogyakarta",
+    "gmapsName": "Panti Rapih Hospital",
+    "gmapsAddress": "Jl. Cik Di Tiro No.30, Samirono, Terban, Kec. Gondokusuman, Kota Yogyakarta, Daerah Istimewa Yogyakarta 55223, Indonesia",
+    "lat": -7.777237299999999,
+    "lng": 110.376169,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "jog-rs-bethesda",
+    "name": "RS Bethesda Yogyakarta (Jl. Jend. Sudirman)",
+    "city": "Yogyakarta",
+    "gmapsName": "Bethesda Hospital Yogyakarta",
+    "gmapsAddress": "Jl. Jend. Sudirman No.70, Kotabaru, Kec. Gondokusuman, Kota Yogyakarta, Daerah Istimewa Yogyakarta 55224, Indonesia",
+    "lat": -7.783340399999999,
+    "lng": 110.3782171,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "jog-rs-jih",
+    "name": "Jogja International Hospital (RS JIH Ringroad Utara)",
+    "city": "Sleman",
+    "gmapsName": "JIH Hospital",
+    "gmapsAddress": "Jl. Ring Road Utara No.160, Perumnas Condong Catur, Condongcatur, Kec. Depok, Kabupaten Sleman, Daerah Istimewa Yogyakarta 55283, Indonesia",
+    "lat": -7.7575571,
+    "lng": 110.4035724,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "jog-stasiun-tugu",
+    "name": "Stasiun Kereta Api Tugu Yogyakarta & Lempuyangan",
+    "city": "Yogyakarta",
+    "gmapsName": "Stasiun Tugu Yogyakarta",
+    "gmapsAddress": "Jalan Margo Utomo 1 (pintu timur) atau, Jl. Ps. Kembang pintu selatan No.42, Sosromenduran, Gedong Tengen, Kota Yogyakarta, Daerah Istimewa Yogyakarta 55271, Indonesia",
+    "lat": -7.789310299999999,
+    "lng": 110.3629814,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "sby-pens-sukolilo",
+    "name": "Politeknik Elektronika Negeri Surabaya (PENS)",
+    "city": "Surabaya",
+    "gmapsName": "Politeknik Elektronika Negeri Surabaya (PENS)",
+    "gmapsAddress": "Politeknik Elektronika Surabaya, Jl. Raya ITS, Keputih, Kec. Sukolilo, Surabaya, Jawa Timur 60111, Indonesia",
+    "lat": -7.2758243,
+    "lng": 112.7937575,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "sby-ppns-sukolilo",
+    "name": "Politeknik Perkapalan Negeri Surabaya (PPNS)",
+    "city": "Surabaya",
+    "gmapsName": "Politeknik Perkapalan Negeri Surabaya",
+    "gmapsAddress": "Sepuluh Nopember Institute of Technology, Jl. Teknik Kimia, Keputih, Kec. Sukolilo, Surabaya, Jawa Timur 60111, Indonesia",
+    "lat": -7.2773791,
+    "lng": 112.7958875,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "sby-its-sukolilo",
+    "name": "Institut Teknologi Sepuluh Nopember (ITS) - Sukolilo",
+    "city": "Surabaya",
+    "gmapsName": "Sepuluh Nopember Institute of Technology",
+    "gmapsAddress": "Jl. Raya ITS, Keputih, Kec. Sukolilo, Surabaya, Jawa Timur 60111, Indonesia",
+    "lat": -7.2802494,
+    "lng": 112.7932161,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "sby-unair-kampus-c",
+    "name": "Universitas Airlangga (UNAIR) - Kampus C Mulyorejo",
+    "city": "Surabaya",
+    "gmapsName": "Airlangga University - Campus MERR (C)",
+    "gmapsAddress": "Jl. Dr. Ir. H. Soekarno, Mulyorejo, Kec. Mulyorejo, Surabaya, Jawa Timur 60115, Indonesia",
+    "lat": -7.268709099999999,
+    "lng": 112.7842309,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "sby-unair-kampus-b",
+    "name": "Universitas Airlangga (UNAIR) - Kampus B Dharmawangsa",
+    "city": "Surabaya",
+    "gmapsName": "Universitas Airlangga - Campus B",
+    "gmapsAddress": "Jl. Airlangga No.4 - 6, Airlangga, Kec. Gubeng, Surabaya, Jawa Timur 60115, Indonesia",
+    "lat": -7.2721345,
+    "lng": 112.7586672,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "sby-unesa-lidah-wetan",
+    "name": "Universitas Negeri Surabaya (UNESA) - Lidah Wetan",
+    "city": "Surabaya",
+    "gmapsName": "Universitas Negeri Surabaya",
+    "gmapsAddress": "Jl. Raya Kampus Unesa, Lidah Wetan, Kec. Lakarsantri, Surabaya, Jawa Timur 60213, Indonesia",
+    "lat": -7.300865799999999,
+    "lng": 112.6726695,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "sby-ubaya-tenggilis",
+    "name": "Universitas Surabaya (UBAYA) - Tenggilis",
+    "city": "Surabaya",
+    "gmapsName": "University of Surabaya Tenggilis Campus",
+    "gmapsAddress": "Jl. Raya Kalirungkut, Kali Rungkut, Kec. Rungkut, Surabaya, Jawa Timur 60293, Indonesia",
+    "lat": -7.3201029,
+    "lng": 112.7679368,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "sby-petra-siwalankerto",
+    "name": "Universitas Kristen Petra (UK Petra)",
+    "city": "Surabaya",
+    "gmapsName": "Petra Christian University",
+    "gmapsAddress": "Jl. Siwalankerto No.121-131, Siwalankerto, Kec. Wonocolo, Surabaya, Jawa Timur 60236, Indonesia",
+    "lat": -7.339037299999999,
+    "lng": 112.7369834,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "sby-upn-jatim",
+    "name": "UPN Veteran Jawa Timur (Rungkut Madya)",
+    "city": "Surabaya",
+    "gmapsName": "Universitas Pembangunan Nasional “Veteran” Jawa Timur",
+    "gmapsAddress": "Jl. Rungkut Madya, Gn. Anyar, Kec. Gn. Anyar, Surabaya, Jawa Timur 60294, Indonesia",
+    "lat": -7.333721199999999,
+    "lng": 112.7883247,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "sby-ciputra-citraland",
+    "name": "Universitas Ciputra Surabaya (UC)",
+    "city": "Surabaya",
+    "gmapsName": "Universitas Ciputra Surabaya",
+    "gmapsAddress": "CitraLand CBD Boulevard, Jl. Waterpark Boulevard, Made, Kec. Sambikerep, Surabaya, Jawa Timur 60219, Indonesia",
+    "lat": -7.2855908,
+    "lng": 112.631599,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "jbr-unej-tegalboto",
+    "name": "Universitas Jember (UNEJ) - Kampus Tegalboto",
+    "city": "Jember",
+    "gmapsName": "University of Jember",
+    "gmapsAddress": "Jl. Kalimantan No.37, Krajan Timur, Sumbersari, Kec. Sumbersari, Kabupaten Jember, Jawa Timur 68121, Indonesia",
+    "lat": -8.165157599999999,
+    "lng": 113.716413,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "mlg-ub-ketawanggede",
+    "name": "Universitas Brawijaya (UB) - Ketawanggede",
+    "city": "Malang",
+    "gmapsName": "Universitas Brawijaya",
+    "gmapsAddress": "Universitas Brawijaya, Ketawanggede, Kec. Lowokwaru, Kota Malang, Jawa Timur 65145, Indonesia",
+    "lat": -7.949624999999999,
+    "lng": 112.61195,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "mlg-um-sumbersari",
+    "name": "Universitas Negeri Malang (UM)",
+    "city": "Malang",
+    "gmapsName": "Malang State University",
+    "gmapsAddress": "Jl. Cakrawala No.5, Sumbersari, Kec. Lowokwaru, Kota Malang, Jawa Timur 65145, Indonesia",
+    "lat": -7.960409299999999,
+    "lng": 112.6185939,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "mlg-umm-kampus-3",
+    "name": "Universitas Muhammadiyah Malang (UMM) - Kampus 3 Tlogomas",
+    "city": "Malang",
+    "gmapsName": "University of Muhammadiyah Malang Campus III",
+    "gmapsAddress": "Jl. Raya Tlogomas No.246, Babatan, Tegalgondo, Kec. Lowokwaru, Kota Malang, Jawa Timur 65144, Indonesia",
+    "lat": -7.921516899999999,
+    "lng": 112.5973649,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "mlg-polinema",
+    "name": "Politeknik Negeri Malang (POLINEMA)",
+    "city": "Malang",
+    "gmapsName": "State Polytechnic of Malang",
+    "gmapsAddress": "Jl. Soekarno Hatta No.9, Jatimulyo, Kec. Lowokwaru, Kota Malang, Jawa Timur 65141, Indonesia",
+    "lat": -7.9468912,
+    "lng": 112.6161209,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "mlg-unisma",
+    "name": "Universitas Islam Malang (UNISMA Dinoyo)",
+    "city": "Malang",
+    "gmapsName": "Islamic University of Malang",
+    "gmapsAddress": "Jl. Mayjen Hariyono Jl. Tata Surya No.193, Dinoyo, Kec. Lowokwaru, Kota Malang, Jawa Timur 65144, Indonesia",
+    "lat": -7.936656999999999,
+    "lng": 112.6072999,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "mlg-itn",
+    "name": "Institut Teknologi Nasional (ITN Malang Kampus 1 & 2)",
+    "city": "Malang",
+    "gmapsName": "Institut Teknologi Nasional Malang",
+    "gmapsAddress": "Jl. Sigura - Gura No.2, Sumbersari, Kec. Lowokwaru, Kota Malang, Jawa Timur 65152, Indonesia",
+    "lat": -7.957801699999999,
+    "lng": 112.6122156,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "sby-tunjungan-plaza",
+    "name": "Tunjungan Plaza (TP 1-6)",
+    "city": "Surabaya",
+    "gmapsName": "Tunjungan Plaza",
+    "gmapsAddress": "Tunjungan plaza, Jl. Jenderal Basuki Rachmat No.8-12 Lt 5, Kedungdoro, Kec. Tegalsari, Surabaya, Jawa Timur 60261, Indonesia",
+    "lat": -7.2631711,
+    "lng": 112.7400711,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "sby-pakuwon-mall",
+    "name": "Pakuwon Mall & PTC Surabaya Barat",
+    "city": "Surabaya",
+    "gmapsName": "Pakuwon Trade Centre",
+    "gmapsAddress": "Jl. Pakuwon Indah No.2, Babatan, Kec. Wiyung, Surabaya, Jawa Timur 60213, Indonesia",
+    "lat": -7.290529200000001,
+    "lng": 112.6738446,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "sby-galaxy-mall",
+    "name": "Galaxy Mall Surabaya (GM 1, 2, 3)",
+    "city": "Surabaya",
+    "gmapsName": "Galaxy Mall 1",
+    "gmapsAddress": "PQFJ+Q3M Galaxy Mall, Mulyorejo, Kec. Mulyorejo, Surabaya, Jawa Timur 60115, Indonesia",
+    "lat": -7.2759917,
+    "lng": 112.7820038,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "sby-ind-sier-rungkut",
+    "name": "Kawasan Industri SIER Rungkut Surabaya",
+    "city": "Surabaya",
+    "gmapsName": "Kawasan Industri SIER",
+    "gmapsAddress": "Jl Rungkut Industri Raya 10, Jl. Rungkut Industri III No.60, Rungkut Kidul, Kec. Rungkut, Surabaya, Jawa Timur 60293, Indonesia",
+    "lat": -7.330151099999999,
+    "lng": 112.759089,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "sby-ind-jiipe-gresik",
+    "name": "Kawasan Industri JIIPE Manyar Gresik (Freeport Smelter)",
+    "city": "Gresik",
+    "gmapsName": "JIIPE Gresik",
+    "gmapsAddress": "Jalan Raya Manyar KM 11 Manyarejo, Manyarsidorukun, Manyar Sido Rukun, Kec. Manyar, Kabupaten Gresik, Jawa Timur 61151, Indonesia",
+    "lat": -7.0859254,
+    "lng": 112.603026,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "sby-rsup-dr-soetomo",
+    "name": "RSUD Dr. Soetomo Surabaya",
+    "city": "Surabaya",
+    "gmapsName": "Dr. Soetomo Regional General Hospital",
+    "gmapsAddress": "Jl. Prof. DR. Moestopo No.6-8, Airlangga, Kec. Gubeng, Surabaya, Jawa Timur 60286, Indonesia",
+    "lat": -7.2682064,
+    "lng": 112.7580663,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "sby-rs-national-hospital",
+    "name": "National Hospital Surabaya Barat",
+    "city": "Surabaya",
+    "gmapsName": "National Hospital",
+    "gmapsAddress": "Jl. Boulevard Famili Sel. No.Kav. 1, Babatan, Kec. Wiyung, Surabaya, Jawa Timur 60227, Indonesia",
+    "lat": -7.299401,
+    "lng": 112.6764499,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "mlg-rs-saiful-anwar",
+    "name": "RSUD Dr. Saiful Anwar Malang (RSSA)",
+    "city": "Malang",
+    "gmapsName": "RSUD Dr. SAIFUL ANWAR PROVINSI JAWA TIMUR",
+    "gmapsAddress": "Jl. Jaksa Agung Suprapto No.2, Klojen, Kec. Klojen, Kota Malang, Jawa Timur 65112, Indonesia",
+    "lat": -7.9723621,
+    "lng": 112.6314101,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "mlg-mall-olympic-garden",
+    "name": "Mall Olympic Garden (MOG Malang)",
+    "city": "Malang",
+    "gmapsName": "Mall Olympic Garden (MOG)",
+    "gmapsAddress": "Jl. Kawi No.24, Kauman, Kec. Klojen, Kota Malang, Jawa Timur 65116, Indonesia",
+    "lat": -7.976779799999999,
+    "lng": 112.6239489,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "sby-bandara-juanda",
+    "name": "Bandara Internasional Juanda (SUB)",
+    "city": "Sidoarjo",
+    "gmapsName": "Juanda International Airport",
+    "gmapsAddress": "Bandara Juanda Surabaya, Parkir Area Inap, Kepuh, Betro, Kec. Sedati, Kabupaten Sidoarjo, Jawa Timur 61253, Indonesia",
+    "lat": -7.3809678,
+    "lng": 112.792629,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "smg-undip-tembalang",
+    "name": "Universitas Diponegoro (UNDIP) - Kampus Tembalang",
+    "city": "Semarang",
+    "gmapsName": "Diponegoro University",
+    "gmapsAddress": "Jl. Prof. Soedarto, Tembalang, Kec. Tembalang, Kota Semarang, Jawa Tengah 50275, Indonesia",
+    "lat": -7.051962499999999,
+    "lng": 110.4408916,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "smg-polines-tembalang",
+    "name": "Politeknik Negeri Semarang (POLINES Tembalang)",
+    "city": "Semarang",
+    "gmapsName": "Semarang State Polytechnic",
+    "gmapsAddress": "Jl. Prof. Soedarto, Tembalang, Kec. Tembalang, Kota Semarang, Jawa Tengah 50275, Indonesia",
+    "lat": -7.0526424,
+    "lng": 110.4344203,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "smg-unnes-segaran",
+    "name": "Universitas Negeri Semarang (UNNES) - Sekaran",
+    "city": "Semarang",
+    "gmapsName": "UNNES - Universitas Negeri Semarang",
+    "gmapsAddress": "Jl. Raya Banaran, Sekaran, Kec. Gn. Pati, Kota Semarang, Jawa Tengah 50229, Indonesia",
+    "lat": -7.0506356,
+    "lng": 110.3924228,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "smg-udinus-pendrikan",
+    "name": "Universitas Dian Nuswantoro (UDINUS Semarang)",
+    "city": "Semarang",
+    "gmapsName": "Universitas Dian Nuswantoro",
+    "gmapsAddress": "Jl. Imam Bonjol No.207, Pendrikan Kidul, Kec. Semarang Tengah, Kota Semarang, Jawa Tengah 50131, Indonesia",
+    "lat": -6.982637100000001,
+    "lng": 110.4090357,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "smg-unissula-kaligawe",
+    "name": "Universitas Islam Sultan Agung (UNISSULA)",
+    "city": "Semarang",
+    "gmapsName": "Unissula - Universitas Islam Sultan Agung",
+    "gmapsAddress": "Jl. Kaligawe Raya No.Km.4, Terboyo Kulon, Kec. Genuk, Kota Semarang, Jawa Tengah 50112, Indonesia",
+    "lat": -6.955617699999999,
+    "lng": 110.4580934,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "slo-uns-kentingan",
+    "name": "Universitas Sebelas Maret (UNS) - Kentingan Solo",
+    "city": "Surakarta",
+    "gmapsName": "Sebelas Maret University",
+    "gmapsAddress": "Kentingan Jl. Ir. Sutami No.36A, Jebres, Kec. Jebres, Kota Surakarta, Jawa Tengah 57126, Indonesia",
+    "lat": -7.5594886,
+    "lng": 110.8563295,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "slo-ums-pabelan",
+    "name": "Universitas Muhammadiyah Surakarta (UMS) - Pabelan",
+    "city": "Sukoharjo",
+    "gmapsName": "Universitas Muhammadiyah Surakarta",
+    "gmapsAddress": "Jl. A. Yani, Mendungan, Pabelan, Kec. Kartasura, Kabupaten Sukoharjo, Jawa Tengah 57169, Indonesia",
+    "lat": -7.558133900000001,
+    "lng": 110.7716824,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "slt-uksw-salatiga",
+    "name": "Universitas Kristen Satya Wacana (UKSW Salatiga)",
+    "city": "Salatiga",
+    "gmapsName": "Satya Wacana Christian University",
+    "gmapsAddress": "Jl. Diponegoro No.52-60, Salatiga, Kec. Sidorejo, Kota Salatiga, Jawa Tengah 50711, Indonesia",
+    "lat": -7.3192664,
+    "lng": 110.4994938,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "pwt-unsoed-grendeng",
+    "name": "Universitas Jenderal Soedirman (UNSOED) - Purwokerto",
+    "city": "Banyumas",
+    "gmapsName": "Universitas Jenderal Soedirman",
+    "gmapsAddress": "Jl. Profesor DR. HR Boenyamin No.708, Dukuhbandong, Grendeng, Kec. Purwokerto Utara, Kabupaten Banyumas, Jawa Tengah 53122, Indonesia",
+    "lat": -7.4040925,
+    "lng": 109.246316,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "smg-ind-kik-kendal",
+    "name": "Kawasan Industri Kendal (KIK Park by the Bay)",
+    "city": "Kendal",
+    "gmapsName": "PT. Kawasan Industri Kendal",
+    "gmapsAddress": "Jl. Raya Arteri No No.KM. 19, Brangsong Utara, Brangsong, Kec. Brangsong, Kabupaten Kendal, Jawa Tengah 51371, Indonesia",
+    "lat": -6.9372747,
+    "lng": 110.24583,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "smg-rsup-dr-kariadi",
+    "name": "RSUP Dr. Kariadi Semarang",
+    "city": "Semarang",
+    "gmapsName": "Central General Hospital Dr. Kariadi",
+    "gmapsAddress": "Jl. DR. Sutomo No.16, Randusari, Kec. Semarang Sel., Kota Semarang, Jawa Tengah 50244, Indonesia",
+    "lat": -6.9942118,
+    "lng": 110.4074897,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "slo-rs-moewardi",
+    "name": "RSUD Dr. Moewardi Surakarta (Solo)",
+    "city": "Surakarta",
+    "gmapsName": "Rumah Sakit Umum Daerah (RSUD) Dr.Moewardi",
+    "gmapsAddress": "Jl. Kolonel Sutarto No.132, Jebres, Kec. Jebres, Kota Surakarta, Jawa Tengah 57126, Indonesia",
+    "lat": -7.558704799999998,
+    "lng": 110.8418721,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "pwt-rs-margono",
+    "name": "RSUD Prof. Dr. Margono Soekarjo Purwokerto",
+    "city": "Banyumas",
+    "gmapsName": "RSUD Prof. Dr. Margono Soekarjo Purwokerto",
+    "gmapsAddress": "Jl. Dr. Gumbreg No.1, Kebontebu, Berkoh, Kec. Purwokerto Sel., Kabupaten Banyumas, Jawa Tengah 53146, Indonesia",
+    "lat": -7.4374273,
+    "lng": 109.2673789,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "smg-mall-paragon",
+    "name": "Pollux Mall Paragon Semarang",
+    "city": "Semarang",
+    "gmapsName": "Pollux Mall Paragon",
+    "gmapsAddress": "Jl. Pemuda No.118, Sekayu, Kec. Semarang Tengah, Kota Semarang, Jawa Tengah 50132, Indonesia",
+    "lat": -6.979088099999999,
+    "lng": 110.4159424,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "slo-the-park-solo-baru",
+    "name": "The Park Mall & Pakuwon Mall Solo Baru",
+    "city": "Sukoharjo",
+    "gmapsName": "The Park Mall Solo Baru",
+    "gmapsAddress": "Jl. Ir. Soekarno, Dusun II, Madegondo, Kec. Grogol, Kabupaten Sukoharjo, Jawa Tengah 57552, Indonesia",
+    "lat": -7.5989637,
+    "lng": 110.8162172,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "ach-usk-darussalam",
+    "name": "Universitas Syiah Kuala (USK Banda Aceh)",
+    "city": "Banda Aceh",
+    "gmapsName": "Syiah Kuala University",
+    "gmapsAddress": "Jl. Teuku Nyak Arief No.441, Kopelma Darussalam, Kec. Syiah Kuala, Kota Banda Aceh, Aceh 23111, Indonesia",
+    "lat": 5.5700635,
+    "lng": 95.3697285,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "ach-rsud-za",
+    "name": "RSUD Dr. Zainoel Abidin Banda Aceh (RSUZA)",
+    "city": "Banda Aceh",
+    "gmapsName": "RSUD Dr. Zainoel Abidin",
+    "gmapsAddress": "Jl. Moh. Daud Beureuh No.108, Bandar Baru, Kec. Kuta Alam, Kota Banda Aceh, Aceh 24415, Indonesia",
+    "lat": 5.564449,
+    "lng": 95.3369931,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "mdn-usu-padang-bulan",
+    "name": "Universitas Sumatera Utara (USU) - Padang Bulan",
+    "city": "Medan",
+    "gmapsName": "Universitas Sumatera Utara",
+    "gmapsAddress": "Jl. Tri Dharma No.9, Padang Bulan, Kec. Medan Baru, Kota Medan, Sumatera Utara 20222, Indonesia",
+    "lat": 3.561676,
+    "lng": 98.65634229999999,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "mdn-unimed",
+    "name": "Universitas Negeri Medan (UNIMED)",
+    "city": "Medan",
+    "gmapsName": "Medan State University",
+    "gmapsAddress": "Jl. William Iskandar Ps. V, Kenangan Baru, Kec. Percut Sei Tuan, Kabupaten Deli Serdang, Sumatera Utara 20221, Indonesia",
+    "lat": 3.608151099999999,
+    "lng": 98.71680669999999,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "mdn-unpri",
+    "name": "Universitas Prima Indonesia (UNPRI Medan)",
+    "city": "Medan",
+    "gmapsName": "Universitas Prima Indonesia",
+    "gmapsAddress": "Jl. Sampul No.3, Sei Putih Bar., Kec. Medan Petisah, Kota Medan, Sumatera Utara 20118, Indonesia",
+    "lat": 3.5988387,
+    "lng": 98.6527098,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "mdn-sun-plaza",
+    "name": "Sun Plaza Medan & Podomoro City Deli",
+    "city": "Medan",
+    "gmapsName": "Sun Plaza",
+    "gmapsAddress": "Jl. KH. Zainul Arifin No.7, Madras Hulu, Kec. Medan Polonia, Kota Medan, Sumatera Utara 20152, Indonesia",
+    "lat": 3.5821772,
+    "lng": 98.6717012,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "mdn-ind-kim",
+    "name": "Kawasan Industri Medan (KIM 1-4 Mabar)",
+    "city": "Medan",
+    "gmapsName": "Kawasan Industri Medan",
+    "gmapsAddress": "Kawasan Industri Medan, Jl. Pulau Galang, Mabar, Medan Deli, Medan City, North Sumatra 20242, Indonesia",
+    "lat": 3.6646883,
+    "lng": 98.672253,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "mdn-rsup-adam-malik",
+    "name": "RSUP H. Adam Malik Medan",
+    "city": "Medan",
+    "gmapsName": "General Hospital H. Adam Malik",
+    "gmapsAddress": "Jl. Bunga Lau No.17, Kemenangan Tani, Kec. Medan Tuntungan, Kota Medan, Sumatera Utara 20136, Indonesia",
+    "lat": 3.5182954,
+    "lng": 98.60837819999999,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "plb-unsri-indralaya",
+    "name": "Universitas Sriwijaya (UNSRI) - Kampus Indralaya",
+    "city": "Ogan Ilir",
+    "gmapsName": "Sriwijaya University - Indralaya Campus",
+    "gmapsAddress": "Jl. Raya Palembang - Prabumulih No.KM. 32, Indralaya Indah, Kec. Indralaya, Kabupaten Ogan Ilir, Sumatera Selatan 30862, Indonesia",
+    "lat": -3.2169352,
+    "lng": 104.6486663,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "plb-unsri-palembang",
+    "name": "Universitas Sriwijaya (UNSRI) - Bukit Besar Palembang",
+    "city": "Palembang",
+    "gmapsName": "Sriwijaya University",
+    "gmapsAddress": "Jl. Srijaya Negara, Bukit Lama, Kec. Ilir Bar. I, Kota Palembang, Sumatera Selatan 30128, Indonesia",
+    "lat": -2.9849846,
+    "lng": 104.7333709,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "plb-rsup-mohammad-hoesin",
+    "name": "RSUP Dr. Mohammad Hoesin Palembang (RSMH)",
+    "city": "Palembang",
+    "gmapsName": "Central General Hospital Dr. Mohammad Hoesin",
+    "gmapsAddress": "Jl. Jend. Sudirman Km. 3,5, Sekip Jaya, Kec. Kemuning, Kota Palembang, Sumatera Selatan 30126, Indonesia",
+    "lat": -2.9664071,
+    "lng": 104.7502143,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "pdg-unand-limau-manis",
+    "name": "Universitas Andalas (UNAND) - Limau Manis Padang",
+    "city": "Padang",
+    "gmapsName": "Andalas University",
+    "gmapsAddress": "Jl. Lingkar Universitas Andalas, Limau Manis, Kec. Pauh, Kota Padang, Sumatera Barat 25175, Indonesia",
+    "lat": -0.9152305999999999,
+    "lng": 100.4581059,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "pdg-unp-air-tawar",
+    "name": "Universitas Negeri Padang (UNP Air Tawar)",
+    "city": "Padang",
+    "gmapsName": "Padang State University",
+    "gmapsAddress": "Jl. Prof. Dr. Hamka, Air Tawar Bar., Kec. Padang Utara, Kota Padang, Sumatera Barat 25171, Indonesia",
+    "lat": -0.8969727000000001,
+    "lng": 100.3502358,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "pku-unri-panam",
+    "name": "Universitas Riau (UNRI) - Kampus Bina Widya Panam",
+    "city": "Pekanbaru",
+    "gmapsName": "University of Riau",
+    "gmapsAddress": "Kampus Bina Widya, Jl. Bangau Sakti KM. 12,5, Simpang Baru, Kec. Tampan, Kota Pekanbaru, Riau 28293, Indonesia",
+    "lat": 0.4763777,
+    "lng": 101.3806464,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "pku-pcr-rumbai",
+    "name": "Politeknik Caltex Riau (PCR Rumbai Pekanbaru)",
+    "city": "Pekanbaru",
+    "gmapsName": "Politeknik Caltex Riau",
+    "gmapsAddress": "Jl. Umban Sari No.1, Umban Sari, Rumbai, Kota Pekanbaru, Riau 28265, Indonesia",
+    "lat": 0.5709752,
+    "lng": 101.4260969,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "pku-uir",
+    "name": "Universitas Islam Riau (UIR Pekanbaru)",
+    "city": "Pekanbaru",
+    "gmapsName": "Universitas Islam Riau (UIR)",
+    "gmapsAddress": "Jl. Kaharuddin Nst No.113, Simpang Tiga, Bukit Raya, Kota Pekanbaru, Riau 28284, Indonesia",
+    "lat": 0.4470177,
+    "lng": 101.4539475,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "lpg-unila-gedong-meneng",
+    "name": "Universitas Lampung (UNILA) - Bandar Lampung",
+    "city": "Bandar Lampung",
+    "gmapsName": "Lampung University",
+    "gmapsAddress": "Jl. Prof. Dr. Ir. Sumantri Brojonegoro No.1, Gedong Meneng, Kec. Rajabasa, Kota Bandar Lampung, Lampung 35141, Indonesia",
+    "lat": -5.3642946,
+    "lng": 105.2430467,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "lpg-itera",
+    "name": "Institut Teknologi Sumatera (ITERA Lampung)",
+    "city": "Lampung Selatan",
+    "gmapsName": "Institut Teknologi Sumatera",
+    "gmapsAddress": "Jl. Terusan Ryacudu, Way Hui, Kec. Jati Agung, Kabupaten Lampung Selatan, Lampung 35365, Indonesia",
+    "lat": -5.3602126,
+    "lng": 105.3150034,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "btm-ind-batamindo",
+    "name": "Kawasan Industri Batamindo Industrial Park (Mukakuning)",
+    "city": "Batam",
+    "gmapsName": "Batamindo Industrial Park",
+    "gmapsAddress": "Mukakuning, Muka Kuning, Sei Beduk, Batam City, Riau Islands 29433, Indonesia",
+    "lat": 1.0682244,
+    "lng": 104.0251284,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "btm-uib",
+    "name": "Universitas Internasional Batam (UIB)",
+    "city": "Batam",
+    "gmapsName": "Batam International University",
+    "gmapsAddress": "Baloi-Sei Ladi, Jl. Gajah Mada, Tiban Indah, Kec. Sekupang, Kota Batam, Kepulauan Riau 29426, Indonesia",
+    "lat": 1.1195431,
+    "lng": 104.0030429,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "jmb-unja-mendalo",
+    "name": "Universitas Jambi (UNJA) - Kampus Utama Mendalo",
+    "city": "Muaro Jambi",
+    "gmapsName": "University of Jambi",
+    "gmapsAddress": "Jl. Jambi - Muara Bulian No.KM. 15, Mendalo Darat, Kec. Jambi Luar Kota, Kabupaten Muaro Jambi, Jambi 36657, Indonesia",
+    "lat": -1.612342,
+    "lng": 103.5181549,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "bkl-unib-kandang-limun",
+    "name": "Universitas Bengkulu (UNIB) - Kandang Limun",
+    "city": "Bengkulu",
+    "gmapsName": "University of Bengkulu",
+    "gmapsAddress": "Jl. WR. Supratman, Kandang Limun, Kec. Muara Bangka Hulu, Sumatera, Bengkulu 38371, Indonesia",
+    "lat": -3.7595199,
+    "lng": 102.272388,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "dps-unud-jimbaran",
+    "name": "Universitas Udayana (UNUD) - Kampus Bukit Jimbaran",
+    "city": "Badung",
+    "gmapsName": "Udayana University Campus Sudirman",
+    "gmapsAddress": "Jalan Raya Kampus UNUD Bukit, Jimbaran, Kec. Kuta Sel., Kabupaten Badung, Bali 80361, Indonesia",
+    "lat": -8.673233,
+    "lng": 115.2191008,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "dps-unud-sudirman",
+    "name": "Universitas Udayana (UNUD) - Kampus Sudirman Denpasar",
+    "city": "Denpasar",
+    "gmapsName": "Udayana University Campus Sudirman",
+    "gmapsAddress": "Jalan Raya Kampus UNUD Bukit, Jimbaran, Kec. Kuta Sel., Kabupaten Badung, Bali 80361, Indonesia",
+    "lat": -8.673233,
+    "lng": 115.2191008,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "dps-warmadewa",
+    "name": "Universitas Warmadewa (Denpasar)",
+    "city": "Denpasar",
+    "gmapsName": "Universitas Warmadewa",
+    "gmapsAddress": "Jl. Terompong No.24, Sumerta Kelod, Kec. Denpasar Tim., Kota Denpasar, Bali 80239, Indonesia",
+    "lat": -8.659343699999999,
+    "lng": 115.2425976,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "dps-pnb-jimbaran",
+    "name": "Politeknik Negeri Bali (PNB Jimbaran)",
+    "city": "Badung",
+    "gmapsName": "Politeknik Negeri Bali",
+    "gmapsAddress": "Kampus Bukit, Jimbaran, Kec. Kuta Sel., Kabupaten Badung, Bali 80364, Indonesia",
+    "lat": -8.798698,
+    "lng": 115.162487,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "dps-beachwalk-kuta",
+    "name": "Beachwalk Shopping Center Kuta",
+    "city": "Badung",
+    "gmapsName": "Beachwalk Shopping Center",
+    "gmapsAddress": "Jl. Pantai Kuta, Kuta, Kec. Kuta, Kabupaten Badung, Bali 80361, Indonesia",
+    "lat": -8.7169483,
+    "lng": 115.168807,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "dps-living-world-bali",
+    "name": "Living World Denpasar (Gatot Subroto)",
+    "city": "Denpasar",
+    "gmapsName": "Living World Mall Denpasar",
+    "gmapsAddress": "Jl. Gatot Subroto Tim., Tonja, Kec. Denpasar Utara, Kota Denpasar, Bali 80235, Indonesia",
+    "lat": -8.634148099999999,
+    "lng": 115.232232,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "dps-rsup-prof-ngoerah",
+    "name": "RSUP Prof. Ngoerah (Eks RSUP Sanglah Denpasar)",
+    "city": "Denpasar",
+    "gmapsName": "Prof. dr. I.G.N.G. Ngoerah General Hospital",
+    "gmapsAddress": "Jl. Diponegoro, Dauh Puri Klod, Kec. Denpasar Bar., Kota Denpasar, Bali 80113, Indonesia",
+    "lat": -8.6756306,
+    "lng": 115.2116041,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "dps-bandara-ngurah-rai",
+    "name": "Bandara Internasional I Gusti Ngurah Rai (DPS)",
+    "city": "Badung",
+    "gmapsName": "I Gusti Ngurah Rai International Airport",
+    "gmapsAddress": "Jl. Airport Ngurah Rai, Tuban, Kec. Kuta Sel., Kabupaten Badung, Bali 80361, Indonesia",
+    "lat": -8.7469933,
+    "lng": 115.1681655,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "lop-unram-mataram",
+    "name": "Universitas Mataram (UNRAM Lombok)",
+    "city": "Mataram",
+    "gmapsName": "University of Mataram",
+    "gmapsAddress": "Jl. Majapahit No.62, Gomong, Kec. Selaparang, Kota Mataram, Nusa Tenggara Bar. 83115, Indonesia",
+    "lat": -8.587232600000002,
+    "lng": 116.092239,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "lop-epicentrum-mall",
+    "name": "Lombok Epicentrum Mall (LEM Mataram)",
+    "city": "Mataram",
+    "gmapsName": "Lombok Epicentrum Mall",
+    "gmapsAddress": "Jl. Sriwijaya No.333, Punia, Kec. Mataram, Kota Mataram, Nusa Tenggara Bar. 83127, Indonesia",
+    "lat": -8.593795799999999,
+    "lng": 116.1046848,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "kpg-undana-penfui",
+    "name": "Universitas Nusa Cendana (UNDANA Kupang)",
+    "city": "Kupang",
+    "gmapsName": "Universitas nusa cendana",
+    "gmapsAddress": "Jl. Matani Raya, Lasiana, Kec. Klp. Lima, Kota Kupang, Nusa Tenggara Tim., Indonesia",
+    "lat": -10.1532115,
+    "lng": 123.658357,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "kpg-lippo-plaza",
+    "name": "Lippo Plaza Kupang (Fatubesi)",
+    "city": "Kupang",
+    "gmapsName": "Lippo Plaza Kupang",
+    "gmapsAddress": "Jl. Veteran, Fatululi, Kec. Oebobo, Kota Kupang, Nusa Tenggara Tim., Indonesia",
+    "lat": -10.158877,
+    "lng": 123.6112188,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "plu-untad-bumi-tadulako",
+    "name": "Universitas Tadulako (UNTAD Palu - Tondo)",
+    "city": "Palu",
+    "gmapsName": "Tadulako University",
+    "gmapsAddress": "Jl. Soekarno Hatta No.KM. 9, Tondo, Kec. Mantikulore, Kota Palu, Sulawesi Tengah 94148, Indonesia",
+    "lat": -0.8364322,
+    "lng": 119.8936937,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "plu-rsud-undata",
+    "name": "RSUD Undata Palu",
+    "city": "Palu",
+    "gmapsName": "RSUD Undata Palu",
+    "gmapsAddress": "4VRM+VJ7, Jl. Trans Sulawesi, Talise, Kec. Mantikulore, Kota Palu, Sulawesi Tengah 94119, Indonesia",
+    "lat": -0.8578439999999999,
+    "lng": 119.8840467,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "plu-grand-mall",
+    "name": "Palu Grand Mall (PGM Cumi-Cumi)",
+    "city": "Palu",
+    "gmapsName": "Palu Grand Mall",
+    "gmapsAddress": "Grand Mall, Jl. Cumi-Cumi No.77 LT. GF UNIT G - 0150, BUMI BAHARI, Kec. Palu Bar., Kota Palu, Sulawesi Tengah 94221, Indonesia",
+    "lat": -0.8828722999999999,
+    "lng": 119.8427211,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "kdi-uho-andounohu",
+    "name": "Universitas Halu Oleo (UHO Kendari)",
+    "city": "Kendari",
+    "gmapsName": "Halu Oleo University",
+    "gmapsAddress": "Jl. HEA Mokodompit, Anduonohu, Kec. Kambu, Kota Kendari, Sulawesi Tenggara 93232, Indonesia",
+    "lat": -4.0084962,
+    "lng": 122.5207543,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "kdi-the-park",
+    "name": "The Park Kendari (Bonggoeya)",
+    "city": "Kendari",
+    "gmapsName": "The Park Kendari",
+    "gmapsAddress": "Bende, Kadia, Kendari City, South East Sulawesi 93461, Indonesia",
+    "lat": -3.9839285,
+    "lng": 122.5195292,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "kdi-rsud-bahteramas",
+    "name": "RSUD Bahteramas Provinsi Sultra",
+    "city": "Kendari",
+    "gmapsName": "RSUD Bahteramas Provinsi Sulawesi Tenggara",
+    "gmapsAddress": "Jl. Kapten Piere Tendean No.50, Watubangga, Kec. Baruga, Kota Kendari, Sulawesi Tenggara 93116, Indonesia",
+    "lat": -4.0348871,
+    "lng": 122.4915333,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "gto-ung-dulomo",
+    "name": "Universitas Negeri Gorontalo (UNG)",
+    "city": "Gorontalo",
+    "gmapsName": "Gorontalo State University",
+    "gmapsAddress": "Jl. Jend. Sudirman No.6, Dulalowo Tim., Kec. Kota Tengah, Kota Gorontalo, Gorontalo 96128, Indonesia",
+    "lat": 0.5565167999999999,
+    "lng": 123.0636827,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "mdo-unsrat-manado",
+    "name": "Universitas Sam Ratulangi (UNSRAT Manado)",
+    "city": "Manado",
+    "gmapsName": "University of Sam Ratulangi",
+    "gmapsAddress": "Bahu, Malalayang, Manado City, North Sulawesi, Indonesia",
+    "lat": 1.4583346,
+    "lng": 124.8284261,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "mdo-mantos",
+    "name": "Manado Town Square (MANTOS 1, 2, 3)",
+    "city": "Manado",
+    "gmapsName": "Manado Town Square",
+    "gmapsAddress": "Jl. Piere Tendean, Kota Manado, Sulawesi Utara 95114, Indonesia",
+    "lat": 1.4721762,
+    "lng": 124.8315594,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "mdo-rsup-kandou",
+    "name": "RSUP Prof. Dr. R. D. Kandou Manado",
+    "city": "Manado",
+    "gmapsName": "RSUP Prof. dr. R. D. Kandou Manado",
+    "gmapsAddress": "Jl. Raya Tanawangko No.56, Malalayang Satu Barat, Kec. Malalayang, Kota Manado, Sulawesi Utara, Indonesia",
+    "lat": 1.4538115,
+    "lng": 124.8081814,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "bpn-itk-karang-joang",
+    "name": "Institut Teknologi Kalimantan (ITK Balikpapan)",
+    "city": "Balikpapan",
+    "gmapsName": "Kalimantan Institute of Technology",
+    "gmapsAddress": "Jl. Soekarno Hatta No.KM 15, Karang Joang, Kec. Balikpapan Utara, Kota Balikpapan, Kalimantan Timur 76127, Indonesia",
+    "lat": -1.1499495,
+    "lng": 116.8621836,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "ikn-kipp-nusantara",
+    "name": "KIPP Ibu Kota Nusantara (IKN Nusantara)",
+    "city": "Penajam Paser Utara",
+    "gmapsName": "Ibu Kota Nusantara",
+    "gmapsAddress": "2PG5+QC, Pemaluan, Sepaku, Penajam North Paser Regency, East Kalimantan 76147, Indonesia",
+    "lat": -0.9730555999999999,
+    "lng": 116.7086111,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "bpn-pentacity",
+    "name": "Pentacity Shopping Venue & E-Walk Balikpapan",
+    "city": "Balikpapan",
+    "gmapsName": "Pentacity Mall",
+    "gmapsAddress": "Pentacity Mall Balikpapan, Jl. Jenderal Sudirman No.47, Gn. Bahagia, Kecamatan Balikpapan Selatan, Kota Balikpapan, Kalimantan Timur 76114, Indonesia",
+    "lat": -1.2741692,
+    "lng": 116.8570296,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "bpn-rs-kanujoso",
+    "name": "RSUD Kanujoso Djatiwibowo Balikpapan",
+    "city": "Balikpapan",
+    "gmapsName": "Hospital Dr. Kanujoso Djatiwibowo",
+    "gmapsAddress": "Jl. MT Haryono No.656, Batu Ampar, Kec. Balikpapan Utara, Kota Balikpapan, Kalimantan Timur 76115, Indonesia",
+    "lat": -1.2246425,
+    "lng": 116.8683817,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "smd-unmul-gunung-kelua",
+    "name": "Universitas Mulawarman (UNMUL Samarinda)",
+    "city": "Samarinda",
+    "gmapsName": "Mulawarman University",
+    "gmapsAddress": "Jl. Kuaro, Gn. Kelua, Kec. Samarinda Ulu, Kota Samarinda, Kalimantan Timur 75117, Indonesia",
+    "lat": -0.4684587,
+    "lng": 117.1539974,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "smd-big-mall",
+    "name": "Big Mall Samarinda (Jl. Untung Suropati)",
+    "city": "Samarinda",
+    "gmapsName": "Big Mall Samarinda",
+    "gmapsAddress": "Jl. Untung Suropati No.08, Karang Asam Ulu, Kec. Sungai Kunjang, Kota Samarinda, Kalimantan Timur 75243, Indonesia",
+    "lat": -0.5262742,
+    "lng": 117.1159382,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "bjm-ulm-banjarmasin",
+    "name": "Universitas Lambung Mangkurat (ULM Banjarmasin & Banjarbaru)",
+    "city": "Banjarmasin",
+    "gmapsName": "Lambung Mangkurat University - Campus I Banjarmasin",
+    "gmapsAddress": "Jl. Brigjend H. Hasan Basri Jl. Kayu Tangi, Pangeran, Kec. Banjarmasin Utara, Kota Banjarmasin, Kalimantan Selatan 70123, Indonesia",
+    "lat": -3.2978893,
+    "lng": 114.5852128,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "bjm-duta-mall",
+    "name": "Duta Mall Banjarmasin",
+    "city": "Banjarmasin",
+    "gmapsName": "Duta Mall Banjarmasin",
+    "gmapsAddress": "Jl. A. Yani No.98, Melayu, Kec. Banjarmasin Tengah, Kota Banjarmasin, Kalimantan Selatan 70232, Indonesia",
+    "lat": -3.3230203,
+    "lng": 114.603136,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "ptk-untan-pontianak",
+    "name": "Universitas Tanjungpura (UNTAN Pontianak)",
+    "city": "Pontianak",
+    "gmapsName": "Tanjungpura University, Pontianak, Indonesia.",
+    "gmapsAddress": "Jl. Profesor Dokter H. Hadari Nawawi, Bansir Laut, Kec. Pontianak Tenggara, Kota Pontianak, Kalimantan Barat 78124, Indonesia",
+    "lat": -0.0607255,
+    "lng": 109.3449467,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "trk-ubt-tarakan",
+    "name": "Universitas Borneo Tarakan (UBT Kaltara)",
+    "city": "Tarakan",
+    "gmapsName": "Borneo University Tarakan",
+    "gmapsAddress": "No.1, Jl. Amal Lama No.Kel, Pantai Amal, Kec. Tarakan Tim., Kota Tarakan, Kalimantan Utara, Indonesia",
+    "lat": 3.3034873,
+    "lng": 117.6490634,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "amb-unpatti-ambon",
+    "name": "Universitas Pattimura (UNPATTI Ambon)",
+    "city": "Ambon",
+    "gmapsName": "University of Pattimura",
+    "gmapsAddress": "85WW+573, Jl. Ir. M. Putuhena, Poka, Kec. Tlk. Ambon, Kota Ambon, Maluku, Indonesia",
+    "lat": -3.6546187,
+    "lng": 128.1956754,
+    "method": "findPlaceFromQuery"
+  },
+  {
+    "id": "jay-uncen-jayapura",
+    "name": "Universitas Cenderawasih (UNCEN Jayapura - Abepura & Waena)",
+    "city": "Jayapura",
+    "gmapsName": "Cendrawasih University",
+    "gmapsAddress": "Jl. Kamp Wolker, Yabansai, Kec. Heram, Kota Jayapura, Papua 99224, Indonesia",
+    "lat": -2.5822916,
+    "lng": 140.6558919,
+    "method": "findPlaceFromQuery"
+  }
+]

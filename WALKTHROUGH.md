@@ -1,66 +1,61 @@
-# WALKTHROUGH: Modernisasi UI/UX Beranda (Home) & Bottom Navigation Bar Mobile dengan Desain Google Stitch
+# WALKTHROUGH: Sistem Rating & Ulasan Riil Terverifikasi dari Penghuni Kost
 
 ## 1. Ringkasan Pekerjaan
-Telah berhasil dilakukan modernisasi dan penyegaran tampilan antarmuka (UI/UX) pada **Halaman Beranda (Home)** dan **Bottom Navigation Bar Mobile** menggunakan kerangka dan token styling **Google Stitch**. Seluruh konten riil (logo RuangSinggah.id, data listing Supabase, filter pencarian, dan sistem autentikasi) tetap dipertahankan 100% utuh dan berfungsi normal.
+Telah berhasil diimplementasikan sistem rating dan ulasan riil 100% yang bersumber langsung dari penghuni kost:
+- **Penghapusan Rating Dummy**: Nilai statis 5.0 pada kartu listing (`KostCard.tsx`) telah dihapus. Kost yang belum memiliki ulasan kini menampilkan status informatif `⭐ Baru`. Kost yang sudah memiliki ulasan menampilkan skor rata-rata riil beserta total ulasan (`⭐ 4.8 (5)`).
+- **Modul Ulasan Penghuni di `MyKost.tsx`**: Penghuni kost yang sedang aktif menyewa kini memiliki tombol dan modal interaktif untuk memberikan rating bintang 1–5 serta testimoni pengalaman tinggal di kost tersebut.
+- **Tampilan Seksian Ulasan di `KostDetail.tsx`**: Menambahkan seksian *Ulasan Penghuni Kost* dengan skor rata-rata, diagram sebaran bintang, dan daftar testimoni penghuni terverifikasi.
 
 ---
 
-## 2. Rincian Perubahan Komponen & File
+## 2. Rincian Perubahan Berkas
 
-### A. `functions/public/index.css`
-- Mengintegrasikan CSS design tokens Google Stitch (`--primary`, `--primary-container: #ff7a00`, `--background: #f8f9ff`, `--tertiary: #6d3bd7`, dsb.).
-- Menyediakan utility classes tipografi (`.text-headline-md`, `.text-headline-lg`, `.text-body-md`, `.text-label-bold`, dsb.).
+### A. [`KostCard.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/components/KostCard.tsx)
+- Menghapus nilai fallback `5.0`.
+- Menghitung `avgRating` dan `reviewCount` dari properti `reviews`.
+- Menampilkan badge `⭐ Baru` jika belum ada ulasan sama sekali.
 
-### B. `functions/public/components/Navbar.tsx`
-- **Desktop Navbar**:
-  - Tautan navigasi: `Cari Kost`, `Data Kost`, `Jasa Survey`, `Jadi Mitra` dengan garis oranye penanda aktif.
-  - Tombol Masuk / Daftar pill oranye `#ff7a00` yang modern.
-- **Mobile Bottom Navigation Bar (4 Menu)**:
-  1. 🏠 **Home** (`Page.HOME`)
-  2. 🔍 **Search** (`Page.LISTINGS`)
-  3. 📄 **Orders** (`Page.MY_BOOKINGS`)
-  4. 👤 **Profile** (`Page.PROFILE` / `Page.LOGIN`)
-  - 100% menggunakan SVG bundled lokal `lucide-react` (Bebas FOUT).
+### B. [`MyKost.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/MyKost.tsx)
+- Menambahkan pemuatan ulasan user pada properti terkait ke dalam state `userReviewMap`.
+- Menambahkan tombol aksi **"Beri Ulasan & Rating Kost"** / **"Edit Ulasan & Rating Kost"** di daftar sewa aktif.
+- Menambahkan modal interaktif formulir ulasan dengan rating bintang interaktif 1–5 dan textarea testimoni.
 
-### C. `functions/public/pages/Home.tsx`
-- **Desktop Search Bar**: Floating horizontal pill bar dengan 4 segmen (Lokasi/Nama, Kota, Kampus, Jenis Kost) dan tombol cari bulat gelap.
-- **Mobile Search Bar**: Compact pill trigger dengan label *"CARI KOST SEKARANG"* dan tombol *"FILTER"* untuk membuka `FilterDrawer`.
-- **Rekomendasi Utama**: Section header dengan aksen oranye `— REKOMENDASI UTAMA`, judul `KOST PILIHAN HARI INI`, dan tombol `LIHAT SEMUA >`.
+### C. [`KostDetail.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/KostDetail.tsx)
+- Menambahkan `InfoSection` **"Ulasan Penghuni Kost"** yang menampilkan:
+  - Skor rata-rata rating properti
+  - Diagram bar persentase sebaran bintang
+  - Kartu ulasan setiap penghuni terverifikasi (avatar, nama, tanggal ulasan, dan komentar)
+  - Pesan informatif jika belum ada ulasan.
 
-### D. `functions/public/components/QuickActionMenu.tsx`
-- Header: `• Menu Utama & Fitur` dengan dot oranye.
-- 4 Kartu Aksi Cepat dengan warna pastel elegan: Cari Kost (oranye), Data Kost (biru), Jasa Survey (hijau), Jadi Mitra (ungu).
-
-### E. `functions/public/components/KostCard.tsx`
-- Kartu listing rounded-3xl yang clean dengan badge kategori, badge verified oranye, bintang rating, icon lokasi MapPin, dan tombol `DETAIL` hitam elegan.
+### D. [`userService.ts`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/userService.ts)
+- Mengoptimalkan fungsi `addPropertyReview()` dengan dukungan upsert per user dan kalkulasi rata-rata rating baru.
 
 ---
 
 ## 3. Hasil Pengujian & Kompilasi
 
-- **Uji Kompilasi TypeScript / Vite**:
-  ```bash
-  cmd /c npm run build
-  ```
-  **Hasil:**
-  ```text
-  ✓ 2504 modules transformed.
-  ✓ built in 1m 10s
-  Exit code: 0 (0 error)
-  ```
+```bash
+cmd /c npm run build
+```
+**Output:**
+```text
+✓ 2509 modules transformed.
+✓ built in 25.71s
+Exit code: 0 (0 error)
+```
 
 ---
 
-## 4. Panduan Pengujian untuk Pengguna
+## 4. Panduan Pengujian User
 
-1. **Uji Tampilan Desktop (PC)**:
-   - Buka `localhost:5173` di browser.
-   - Perhatikan header navbar, search bar horizontal floating pill, menu 4 fitur utama, dan grid kartu kost rekomendasi yang rapi dan elegan.
-   - Coba lakukan pencarian atau klik filter untuk memastikan fungsionalitas pencarian berjalan normal.
-2. **Uji Tampilan Mobile (HP / Mode Responsif)**:
-   - Aktifkan mode responsive mobile (Inspect Element $\rightarrow$ Mobile View).
-   - Periksa Bottom Navigation Bar di bagian bawah layar:
-     - Terdapat 4 menu: **Home**, **Search**, **Orders**, dan **Profile**.
-     - Coba klik menu **Profile**: aplikasi akan mengarahkan ke halaman profil (atau halaman login jika belum login).
-     - Coba klik menu **Search**: aplikasi akan membuka katalog cari kost.
-     - Coba klik menu **Orders**: aplikasi akan membuka halaman kost saya/pemesanan.
+1. **Uji Tampilan Kartu Kost di Halaman Listing (`/listings`)**:
+   - Kost yang belum memiliki ulasan sekarang menampilkan badge `⭐ Baru` (bukan rating palsu 5.0).
+   - Kost yang memiliki ulasan akan menampilkan angka rata-rata asli beserta jumlah ulasannya (misal `⭐ 4.8 (3)`).
+2. **Uji Form Ulasan Penghuni di Menu Kost Saya (`/my-kost`)**:
+   - Masuk ke tab **Kost Aktif**.
+   - Klik tombol **"Beri Ulasan & Rating Kost"**.
+   - Pilih bintang (1 sampai 5 bintang) dan tulis testimoni pengalaman tinggal.
+   - Klik **"Kirim Ulasan"** $\rightarrow$ Notifikasi sukses muncul dan status tombol berubah menjadi *"Edit Ulasan & Rating"*.
+3. **Uji Halaman Detail Kost (`/kost/:id`)**:
+   - Buka halaman detail kost yang telah diberi ulasan.
+   - Scroll ke seksian **"Ulasan Penghuni Kost"** $\rightarrow$ Skor rating rata-rata, diagram sebaran bintang, dan ulasan Anda langsung tampil secara rapi dan presisi!

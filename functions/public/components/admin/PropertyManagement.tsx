@@ -1,0 +1,1110 @@
+import React, { useState, useEffect, useMemo } from 'react';
+import {
+    BasicPropertyInfo, updatePropertyStatus, freezeProperty, unfreezeProperty,
+    togglePropertyVerification, PropertyReportItem, getPropertyReports, updatePropertyReportStatus,
+    requestPropertyRevision
+} from '../../adminService';
+import PropertyReviewModal from './PropertyReviewModal';
+import { createKostSlug } from '../../utils/slugUtils';
+import {
+    Building2, Home, Search, Filter, Sparkles, ShieldCheck, CheckCircle2,
+    AlertCircle, Clock, X, Phone, ExternalLink, Eye, Trash2, Snowflake,
+    Check, MapPin, Bed, User, RefreshCcw, SlidersHorizontal, ArrowRight,
+    HelpCircle, ChevronRight, AlertTriangle, ShieldAlert, ArrowLeftRight,
+    Camera, Video, BookOpen, Wifi, Map, DollarSign, Calendar, Flag, MessageSquare
+} from 'lucide-react';
+
+interface PropertyManagementProps {
+    adminListings: BasicPropertyInfo[];
+    loading: boolean;
+    refreshData: () => Promise<void> | void;
+    FORMAT_CURRENCY: (val: number) => string;
+    onTransferProperty: (property: BasicPropertyInfo) => void;
+    onDeleteProperty: (id: string, name: string) => void;
+}
+
+type TabType = 'all' | 'kostmanager' | 'self_listing' | 'pending_draft' | 'suspended' | 'reports';
+
+const PropertyManagement: React.FC<PropertyManagementProps> = ({
+    adminListings,
+    loading,
+    refreshData,
+    FORMAT_CURRENCY,
+    onTransferProperty,
+    onDeleteProperty
+}) => {
+    // ── Filter & Search States ────────────────────────────────────────────────
+    const [currentTab, setCurrentTab] = useState<TabType>('all');
+    const [searchQuery, setSearchQuery] = useState('');
+    const [typeFilter, setTypeFilter] = useState<'all' | 'Putra' | 'Putri' | 'Campur'>('all');
+    const [cityFilter, setCityFilter] = useState<string>('all');
+    const [reportStatusFilter, setReportStatusFilter] = useState<'all' | 'pending' | 'resolved' | 'dismissed'>('all');
+    const [isRefreshing, setIsRefreshing] = useState(false);
+
+    // ── Reports State ─────────────────────────────────────────────────────────
+    const [reports, setReports] = useState<PropertyReportItem[]>([]);
+    const [selectedEvidenceForZoom, setSelectedEvidenceForZoom] = useState<string | null>(null);
+
+    // ── Action Modals State ───────────────────────────────────────────────────
+    const [selectedPropertyForReview, setSelectedPropertyForReview] = useState<BasicPropertyInfo | null>(null);
+    const [propertyToFreeze, setPropertyToFreeze] = useState<BasicPropertyInfo | null>(null);
+    const [freezeReason, setFreezeReason] = useState('');
+    const [relatedReportIdForFreeze, setRelatedReportIdForFreeze] = useState<string | null>(null);
+    const [isProcessingAction, setIsProcessingAction] = useState(false);
+
+    // Load Reports on Mount
+    const loadReportsData = async () => {
+        try {
+            const data = await getPropertyReports();
+            setReports(data);
+        } catch (e) {
+            console.error('Error loading reports:', e);
+        }
+    };
+
+    useEffect(() => {
+        loadReportsData();
+    }, []);
+
+    // Dynamic unique cities for dropdown
+    const availableCities = useMemo(() => {
+        const cities = adminListings
+            .map(p => p.city)
+            .filter((c): c is string => Boolean(c && c.trim() !== ''));
+        return Array.from(new Set(cities)).sort();
+    }, [adminListings]);
+
+    // Active reports count mapped by property ID
+    const pendingReportsCountMap = useMemo(() => {
+        const map: Record<string, number> = {};
+        reports.forEach(r => {
+            if (r.status === 'pending') {
+                map[r.property_id] = (map[r.property_id] || 0) + 1;
+            }
+        });
+        return map;
+    }, [reports]);
+
+    // ── Metric Counters ───────────────────────────────────────────────────────
+    const stats = useMemo(() => {
+        const total = adminListings.length;
+        const kmCount = adminListings.filter(p => p.isManaged).length;
+        const selfCount = adminListings.filter(p => !p.isManaged).length;
+        const publishedCount = adminListings.filter(p => p.status === 'published').length;
+        const pendingOrDraftCount = adminListings.filter(p => p.status === 'draft' || p.status === 'pending_review' || !p.status).length;
+        const suspendedCount = adminListings.filter(p => p.status === 'suspended').length;
+        const pendingReportsCount = reports.filter(r => r.status === 'pending').length;
+
+        return {
+            total,
+            kmCount,
+            selfCount,
+            publishedCount,
+            pendingOrDraftCount,
+            suspendedCount,
+            pendingReportsCount
+        };
+    }, [adminListings, reports]);
+
+    // ── Filtered Listings ─────────────────────────────────────────────────────
+    const filteredListings = useMemo(() => {
+        return adminListings.filter(item => {
+            // Tab condition
+            if (currentTab === 'kostmanager' && !item.isManaged) return false;
+            if (currentTab === 'self_listing' && item.isManaged) return false;
+            if (currentTab === 'pending_draft' && item.status !== 'draft' && item.status !== 'pending_review' && item.status) return false;
+            if (currentTab === 'suspended' && item.status !== 'suspended') return false;
+
+            // Property type filter
+            if (typeFilter !== 'all' && item.type?.toLowerCase() !== typeFilter.toLowerCase()) return false;
+
+            // City filter
+            if (cityFilter !== 'all' && item.city?.toLowerCase() !== cityFilter.toLowerCase()) return false;
+
+            // Search query filter
+            if (searchQuery.trim()) {
+                const q = searchQuery.toLowerCase();
+                const matchTitle = (item.title || item.namaKost || '').toLowerCase().includes(q);
+                const matchOwner = (item.ownerName || '').toLowerCase().includes(q);
+                const matchPhone = (item.ownerPhone || item.omnichannelContactPhone || '').includes(q);
+                const matchCity = (item.city || '').toLowerCase().includes(q);
+                const matchArea = (item.area || '').toLowerCase().includes(q);
+                const matchAddress = (item.address || '').toLowerCase().includes(q);
+                if (!matchTitle && !matchOwner && !matchPhone && !matchCity && !matchArea && !matchAddress) {
+                    return false;
+                }
+            }
+
+            return true;
+        });
+    }, [adminListings, currentTab, typeFilter, cityFilter, searchQuery]);
+
+    // ── Filtered Reports ──────────────────────────────────────────────────────
+    const filteredReports = useMemo(() => {
+        return reports.filter(r => {
+            if (reportStatusFilter !== 'all' && r.status !== reportStatusFilter) return false;
+
+            if (searchQuery.trim()) {
+                const q = searchQuery.toLowerCase();
+                const matchProp = (r.propertyName || '').toLowerCase().includes(q);
+                const matchReporter = (r.reporter_name || '').toLowerCase().includes(q);
+                const matchPhone = (r.reporter_phone || '').includes(q);
+                const matchDesc = (r.description || '').toLowerCase().includes(q);
+                const matchCat = (r.category || '').toLowerCase().includes(q);
+                if (!matchProp && !matchReporter && !matchPhone && !matchDesc && !matchCat) return false;
+            }
+
+            return true;
+        });
+    }, [reports, reportStatusFilter, searchQuery]);
+
+    // ── Action Handlers ───────────────────────────────────────────────────────
+    const handleRefresh = async () => {
+        setIsRefreshing(true);
+        try {
+            await Promise.all([refreshData(), loadReportsData()]);
+        } finally {
+            setIsRefreshing(false);
+        }
+    };
+
+    const handlePublish = async (prop: BasicPropertyInfo) => {
+        if (!window.confirm(`Publikasikan listing "${prop.title || prop.namaKost}" agar aktif tayang di katalog publik?`)) return;
+        setIsProcessingAction(true);
+        try {
+            await updatePropertyStatus(prop.id, 'published');
+            await refreshData();
+            if (selectedPropertyForReview?.id === prop.id) {
+                setSelectedPropertyForReview(prev => prev ? { ...prev, status: 'published' } : null);
+            }
+            alert('Listing berhasil dipublikasikan!');
+        } catch (e: any) {
+            alert('Gagal mempublikasikan listing: ' + (e.message || e));
+        } finally {
+            setIsProcessingAction(false);
+        }
+    };
+
+    const handleUnpublishToDraft = async (prop: BasicPropertyInfo) => {
+        if (!window.confirm(`Jadikan listing "${prop.title || prop.namaKost}" sebagai Draft (disembunyikan dari katalog)?`)) return;
+        setIsProcessingAction(true);
+        try {
+            await updatePropertyStatus(prop.id, 'draft');
+            await refreshData();
+            if (selectedPropertyForReview?.id === prop.id) {
+                setSelectedPropertyForReview(prev => prev ? { ...prev, status: 'draft' } : null);
+            }
+            alert('Listing dialihkan ke status Draft.');
+        } catch (e: any) {
+            alert('Gagal mengubah status: ' + (e.message || e));
+        } finally {
+            setIsProcessingAction(false);
+        }
+    };
+
+    const handleRequestRevision = async (prop: BasicPropertyInfo, notes: string) => {
+        setIsProcessingAction(true);
+        try {
+            await requestPropertyRevision(prop.id, notes);
+            await refreshData();
+            if (selectedPropertyForReview?.id === prop.id) {
+                setSelectedPropertyForReview(prev => prev ? {
+                    ...prev,
+                    status: 'draft',
+                    revisionNotes: notes,
+                    revisionRequestedAt: new Date().toISOString()
+                } : null);
+            }
+            alert('Catatan evaluasi revisi berhasil dikirimkan ke mitra dan status dialihkan ke Draft.');
+        } catch (e: any) {
+            alert('Gagal mengirim catatan revisi: ' + (e.message || e));
+        } finally {
+            setIsProcessingAction(false);
+        }
+    };
+
+    const handleOpenFreeze = (prop: BasicPropertyInfo, reasonPrefill = '', reportId?: string) => {
+        setPropertyToFreeze(prop);
+        setFreezeReason(reasonPrefill || prop.suspendReason || '');
+        setRelatedReportIdForFreeze(reportId || null);
+    };
+
+    const handleConfirmFreeze = async () => {
+        if (!propertyToFreeze) return;
+        if (!freezeReason.trim()) {
+            alert('Harap masukkan alasan pembekuan / catatan penalti agar mitra dapat memperbaikinya.');
+            return;
+        }
+
+        setIsProcessingAction(true);
+        try {
+            await freezeProperty(propertyToFreeze.id, freezeReason.trim());
+            
+            // If this freeze was triggered by a user report, mark the report as resolved with action_taken
+            if (relatedReportIdForFreeze) {
+                await updatePropertyReportStatus(
+                    relatedReportIdForFreeze,
+                    'resolved',
+                    `Listing dibekukan oleh admin dengan catatan: ${freezeReason.trim()}`,
+                    'frozen'
+                );
+                await loadReportsData();
+            }
+
+            await refreshData();
+            if (selectedPropertyForReview?.id === propertyToFreeze.id) {
+                setSelectedPropertyForReview(prev => prev ? { ...prev, status: 'suspended', suspendReason: freezeReason.trim() } : null);
+            }
+            setPropertyToFreeze(null);
+            setFreezeReason('');
+            setRelatedReportIdForFreeze(null);
+            alert('Listing berhasil dibekukan.');
+        } catch (e: any) {
+            alert('Gagal membekukan listing: ' + (e.message || e));
+        } finally {
+            setIsProcessingAction(false);
+        }
+    };
+
+    const handleUnfreeze = async (prop: BasicPropertyInfo) => {
+        if (!window.confirm(`Buka pembekuan listing "${prop.title || prop.namaKost}" dan aktifkan kembali ke katalog?`)) return;
+        setIsProcessingAction(true);
+        try {
+            await unfreezeProperty(prop.id);
+            await refreshData();
+            if (selectedPropertyForReview?.id === prop.id) {
+                setSelectedPropertyForReview(prev => prev ? { ...prev, status: 'published', suspendReason: '' } : null);
+            }
+            alert('Pembekuan berhasil dibuka, listing kembali aktif!');
+        } catch (e: any) {
+            alert('Gagal membuka pembekuan: ' + (e.message || e));
+        } finally {
+            setIsProcessingAction(false);
+        }
+    };
+
+    const handleToggleVerification = async (prop: BasicPropertyInfo) => {
+        const nextState = !prop.isVerified;
+        const actionLabel = nextState ? 'memberikan centang biru (Terverifikasi)' : 'mencabut status verifikasi';
+        if (!window.confirm(`Yakin ingin ${actionLabel} pada listing "${prop.title || prop.namaKost}"?`)) return;
+
+        setIsProcessingAction(true);
+        try {
+            await togglePropertyVerification(prop.id, nextState);
+            await refreshData();
+            if (selectedPropertyForReview?.id === prop.id) {
+                setSelectedPropertyForReview(prev => prev ? { ...prev, isVerified: nextState } : null);
+            }
+            alert(`Berhasil memperbarui status verifikasi.`);
+        } catch (e: any) {
+            alert('Gagal mengubah verifikasi: ' + (e.message || e));
+        } finally {
+            setIsProcessingAction(false);
+        }
+    };
+
+    const handleOpenWhatsApp = (phone?: string, kostTitle?: string, isSuspended?: boolean, reason?: string) => {
+        if (!phone) {
+            alert('Nomor WhatsApp tidak tersedia.');
+            return;
+        }
+        let cleanPhone = phone.replace(/\D/g, '');
+        if (cleanPhone.startsWith('0')) cleanPhone = '62' + cleanPhone.slice(1);
+        if (!cleanPhone.startsWith('62')) cleanPhone = '62' + cleanPhone;
+
+        let message = `Halo Bapak/Ibu Pemilik ${kostTitle || 'Kost'}, kami dari Tim Admin RuangSinggah.id ingin berkoordinasi mengenai listing kost Anda.`;
+        if (isSuspended) {
+            message = `Halo Bapak/Ibu Pemilik ${kostTitle || 'Kost'}, kami dari Tim Admin RuangSinggah.id memberitahukan bahwa listing Anda sementara dibekukan dengan catatan: "${reason || 'Perlu penyesuaian data'}". Mohon lengkapi dan perbaiki data di Dashboard Mitra Anda agar dapat kami aktifkan kembali. Terima kasih.`;
+        }
+
+        const url = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`;
+        window.open(url, '_blank');
+    };
+
+    const handleWhatsAppReporter = (phone: string, kostTitle: string, category: string) => {
+        let cleanPhone = phone.replace(/\D/g, '');
+        if (cleanPhone.startsWith('0')) cleanPhone = '62' + cleanPhone.slice(1);
+        if (!cleanPhone.startsWith('62')) cleanPhone = '62' + cleanPhone;
+
+        const message = `Halo Kak, terima kasih telah melaporkan kendala pada properti "${kostTitle}" di RuangSinggah.id terkait "${category}". Laporan Kakak sedang kami tindaklanjuti bersama pemilik properti.`;
+        const url = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`;
+        window.open(url, '_blank');
+    };
+
+    const handleUpdateReportStatus = async (reportId: string, status: string) => {
+        setIsProcessingAction(true);
+        try {
+            await updatePropertyReportStatus(reportId, status);
+            await loadReportsData();
+            alert(`Status laporan diperbarui ke ${status}.`);
+        } catch (e: any) {
+            alert('Gagal memperbarui status laporan: ' + (e.message || e));
+        } finally {
+            setIsProcessingAction(false);
+        }
+    };
+
+    const handleFreezeFromReport = (report: PropertyReportItem) => {
+        const targetProp = adminListings.find(p => p.id === report.property_id) || {
+            id: report.property_id,
+            title: report.propertyName || 'Kost',
+            namaKost: report.propertyName || 'Kost',
+            status: 'published'
+        } as BasicPropertyInfo;
+
+        const defaultReason = `[Aduan User: ${report.category}] ${report.description}`;
+        handleOpenFreeze(targetProp, defaultReason, report.id);
+    };
+
+    return (
+        <div className="space-y-6 text-left animate-in fade-in duration-300">
+            {/* ── Processing Overlay ── */}
+            {isProcessingAction && (
+                <div className="fixed inset-0 z-[130] flex items-center justify-center bg-gray-900/60 backdrop-blur-sm">
+                    <div className="bg-white p-6 rounded-3xl shadow-2xl flex items-center gap-4 animate-in zoom-in-95">
+                        <div className="animate-spin rounded-full h-8 w-8 border-4 border-orange-500 border-t-transparent" />
+                        <span className="font-black text-gray-900 text-sm">Memproses Perubahan...</span>
+                    </div>
+                </div>
+            )}
+
+            {/* ── Header & Title ── */}
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 sm:p-8 rounded-[2.5rem] border border-gray-100 shadow-sm">
+                <div className="space-y-1">
+                    <div className="inline-flex items-center gap-2 px-3 py-1 bg-orange-50 text-orange-600 rounded-full text-xs font-black uppercase tracking-widest">
+                        <Building2 size={13} />
+                        Pusat Moderasi & Supervisi Listing
+                    </div>
+                    <h1 className="text-2xl sm:text-3xl font-black text-gray-900 tracking-tight">
+                        Pengawasan Kost Masuk
+                    </h1>
+                    <p className="text-xs text-gray-500 font-medium max-w-2xl">
+                        Pantau listing yang diposting langsung oleh para pemilik kost/mitra, tinjau kelayakan data, lakukan verifikasi, pantau aduan pengguna, atau bekukan sementara jika ada data yang perlu direvisi.
+                    </p>
+                </div>
+
+                <div className="flex items-center gap-3">
+                    <button
+                        onClick={handleRefresh}
+                        disabled={isRefreshing || loading}
+                        className="px-5 py-3 rounded-2xl bg-gray-100 hover:bg-gray-200 text-gray-700 font-black text-xs uppercase tracking-widest flex items-center gap-2 transition-all active:scale-95 disabled:opacity-50 cursor-pointer"
+                        title="Segarkan Data"
+                    >
+                        <RefreshCcw size={14} className={isRefreshing || loading ? 'animate-spin' : ''} />
+                        Refresh
+                    </button>
+                </div>
+            </div>
+
+            {/* ── Stat Cards (Ringkasan Metrik) ── */}
+            <div className="grid grid-cols-2 lg:grid-cols-6 gap-3 sm:gap-4">
+                {/* 1. Total Listing */}
+                <div
+                    onClick={() => setCurrentTab('all')}
+                    className={`bg-white p-4 sm:p-5 rounded-3xl border transition-all cursor-pointer shadow-sm hover:shadow-md ${
+                        currentTab === 'all' ? 'border-orange-500 ring-2 ring-orange-500/20' : 'border-gray-100'
+                    }`}
+                >
+                    <div className="flex items-center justify-between mb-2">
+                        <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">Total Properti</span>
+                        <div className="w-7 h-7 rounded-xl bg-gray-100 text-gray-700 flex items-center justify-center">
+                            <Building2 size={14} />
+                        </div>
+                    </div>
+                    <p className="text-2xl font-black text-gray-900 tracking-tight">{stats.total}</p>
+                    <p className="text-[9px] text-gray-400 font-bold mt-1 uppercase tracking-wider">Seluruh Listing</p>
+                </div>
+
+                {/* 2. KostManager (Terverifikasi) */}
+                <div
+                    onClick={() => setCurrentTab('kostmanager')}
+                    className={`bg-white p-4 sm:p-5 rounded-3xl border transition-all cursor-pointer shadow-sm hover:shadow-md ${
+                        currentTab === 'kostmanager' ? 'border-emerald-500 ring-2 ring-emerald-500/20' : 'border-gray-100'
+                    }`}
+                >
+                    <div className="flex items-center justify-between mb-2">
+                        <span className="text-[10px] font-black uppercase tracking-widest text-emerald-600">KostManager</span>
+                        <div className="w-7 h-7 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
+                            <Sparkles size={14} />
+                        </div>
+                    </div>
+                    <p className="text-2xl font-black text-emerald-600 tracking-tight">{stats.kmCount}</p>
+                    <p className="text-[9px] text-emerald-600/80 font-bold mt-1 uppercase tracking-wider">Terverifikasi Survey</p>
+                </div>
+
+                {/* 3. Self Listing (Mandiri) */}
+                <div
+                    onClick={() => setCurrentTab('self_listing')}
+                    className={`bg-white p-4 sm:p-5 rounded-3xl border transition-all cursor-pointer shadow-sm hover:shadow-md ${
+                        currentTab === 'self_listing' ? 'border-blue-500 ring-2 ring-blue-500/20' : 'border-gray-100'
+                    }`}
+                >
+                    <div className="flex items-center justify-between mb-2">
+                        <span className="text-[10px] font-black uppercase tracking-widest text-blue-600">Self Listing</span>
+                        <div className="w-7 h-7 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center">
+                            <Home size={14} />
+                        </div>
+                    </div>
+                    <p className="text-2xl font-black text-blue-600 tracking-tight">{stats.selfCount}</p>
+                    <p className="text-[9px] text-blue-600/80 font-bold mt-1 uppercase tracking-wider">Mandiri Oleh Mitra</p>
+                </div>
+
+                {/* 4. Menunggu Review / Draft */}
+                <div
+                    onClick={() => setCurrentTab('pending_draft')}
+                    className={`bg-white p-4 sm:p-5 rounded-3xl border transition-all cursor-pointer shadow-sm hover:shadow-md ${
+                        currentTab === 'pending_draft' ? 'border-amber-500 ring-2 ring-amber-500/20' : 'border-gray-100'
+                    }`}
+                >
+                    <div className="flex items-center justify-between mb-2">
+                        <span className="text-[10px] font-black uppercase tracking-widest text-amber-600">Draft / Review</span>
+                        <div className="w-7 h-7 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center">
+                            <Clock size={14} />
+                        </div>
+                    </div>
+                    <p className="text-2xl font-black text-amber-600 tracking-tight">{stats.pendingOrDraftCount}</p>
+                    <p className="text-[9px] text-amber-600/80 font-bold mt-1 uppercase tracking-wider">Belum Tayang</p>
+                </div>
+
+                {/* 5. Dibekukan (Penalti / Revisi) */}
+                <div
+                    onClick={() => setCurrentTab('suspended')}
+                    className={`bg-white p-4 sm:p-5 rounded-3xl border transition-all cursor-pointer shadow-sm hover:shadow-md ${
+                        currentTab === 'suspended' ? 'border-rose-500 ring-2 ring-rose-500/20' : 'border-gray-100'
+                    }`}
+                >
+                    <div className="flex items-center justify-between mb-2">
+                        <span className="text-[10px] font-black uppercase tracking-widest text-rose-600">Dibekukan</span>
+                        <div className="w-7 h-7 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center">
+                            <Snowflake size={14} />
+                        </div>
+                    </div>
+                    <p className="text-2xl font-black text-rose-600 tracking-tight">{stats.suspendedCount}</p>
+                    <p className="text-[9px] text-rose-600/80 font-bold mt-1 uppercase tracking-wider">Penalti / Revisi</p>
+                </div>
+
+                {/* 6. Laporan Pengguna (Aduan Masuk) */}
+                <div
+                    onClick={() => setCurrentTab('reports')}
+                    className={`bg-white p-4 sm:p-5 rounded-3xl border transition-all cursor-pointer shadow-sm hover:shadow-md ${
+                        currentTab === 'reports' ? 'border-red-600 ring-2 ring-red-600/20' : 'border-gray-100'
+                    }`}
+                >
+                    <div className="flex items-center justify-between mb-2">
+                        <span className="text-[10px] font-black uppercase tracking-widest text-red-600">Aduan User</span>
+                        <div className="w-7 h-7 rounded-xl bg-red-50 text-red-600 flex items-center justify-center">
+                            <Flag size={14} />
+                        </div>
+                    </div>
+                    <p className="text-2xl font-black text-red-600 tracking-tight">{stats.pendingReportsCount}</p>
+                    <p className="text-[9px] text-red-600/80 font-bold mt-1 uppercase tracking-wider">Perlu Ditinjau</p>
+                </div>
+            </div>
+
+            {/* ── Filter Bar & Tabs ── */}
+            <div className="bg-white p-4 sm:p-6 rounded-[2rem] border border-gray-100 shadow-sm space-y-4">
+                {/* Tabs */}
+                <div className="flex items-center gap-2 overflow-x-auto pb-1 border-b border-gray-100 scrollbar-none">
+                    {[
+                        { id: 'all', label: 'Semua Properti', count: stats.total },
+                        { id: 'kostmanager', label: 'KostManager (Terverifikasi)', count: stats.kmCount, badgeColor: 'bg-emerald-100 text-emerald-700' },
+                        { id: 'self_listing', label: 'Self Listing (Mandiri)', count: stats.selfCount, badgeColor: 'bg-blue-100 text-blue-700' },
+                        { id: 'pending_draft', label: 'Draft / Belum Tayang', count: stats.pendingOrDraftCount, badgeColor: 'bg-amber-100 text-amber-700' },
+                        { id: 'suspended', label: 'Dibekukan / Penalti', count: stats.suspendedCount, badgeColor: 'bg-rose-100 text-rose-700' },
+                        { id: 'reports', label: '🚨 Aduan Pengguna', count: stats.pendingReportsCount, badgeColor: 'bg-red-100 text-red-700 font-extrabold animate-pulse' }
+                    ].map(tab => (
+                        <button
+                            key={tab.id}
+                            onClick={() => setCurrentTab(tab.id as TabType)}
+                            className={`px-4 py-2.5 rounded-2xl text-xs font-black uppercase tracking-widest transition-all whitespace-nowrap flex items-center gap-2 shrink-0 cursor-pointer ${
+                                currentTab === tab.id
+                                    ? 'bg-gray-900 text-white shadow-md'
+                                    : 'text-gray-500 hover:bg-gray-50 hover:text-gray-900'
+                            }`}
+                        >
+                            <span>{tab.label}</span>
+                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                                currentTab === tab.id ? 'bg-white/20 text-white' : (tab.badgeColor || 'bg-gray-100 text-gray-600')
+                            }`}>
+                                {tab.count}
+                            </span>
+                        </button>
+                    ))}
+                </div>
+
+                {/* Search & Dropdown Filters */}
+                <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-center">
+                    <div className={currentTab === 'reports' ? "sm:col-span-8 relative" : "sm:col-span-6 relative"}>
+                        <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+                        <input
+                            type="text"
+                            value={searchQuery}
+                            onChange={e => setSearchQuery(e.target.value)}
+                            placeholder={currentTab === 'reports' ? "Cari nama kost, pelapor, no. WA, atau kategori..." : "Cari nama kost, pemilik, WhatsApp, atau kota..."}
+                            className="w-full pl-11 pr-10 py-3 bg-gray-50 border border-gray-200 rounded-2xl text-xs font-bold text-gray-900 focus:bg-white focus:border-orange-500 focus:ring-2 focus:ring-orange-200 outline-none transition-all"
+                        />
+                        {searchQuery && (
+                            <button
+                                onClick={() => setSearchQuery('')}
+                                className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                            >
+                                <X size={14} />
+                            </button>
+                        )}
+                    </div>
+
+                    {currentTab !== 'reports' ? (
+                        <>
+                            <div className="sm:col-span-3">
+                                <select
+                                    value={typeFilter}
+                                    onChange={e => setTypeFilter(e.target.value as any)}
+                                    className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-2xl text-xs font-bold text-gray-800 focus:bg-white focus:border-orange-500 outline-none transition-all cursor-pointer"
+                                >
+                                    <option value="all">Tipe: Semua (Putra/Putri/Campur)</option>
+                                    <option value="Putra">Kost Putra</option>
+                                    <option value="Putri">Kost Putri</option>
+                                    <option value="Campur">Kost Campur</option>
+                                </select>
+                            </div>
+
+                            <div className="sm:col-span-3">
+                                <select
+                                    value={cityFilter}
+                                    onChange={e => setCityFilter(e.target.value)}
+                                    className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-2xl text-xs font-bold text-gray-800 focus:bg-white focus:border-orange-500 outline-none transition-all cursor-pointer"
+                                >
+                                    <option value="all">Kota: Semua Wilayah</option>
+                                    {availableCities.map(city => (
+                                        <option key={city} value={city}>{city}</option>
+                                    ))}
+                                </select>
+                            </div>
+                        </>
+                    ) : (
+                        <div className="sm:col-span-4">
+                            <select
+                                value={reportStatusFilter}
+                                onChange={e => setReportStatusFilter(e.target.value as any)}
+                                className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-2xl text-xs font-bold text-gray-800 focus:bg-white focus:border-orange-500 outline-none transition-all cursor-pointer"
+                            >
+                                <option value="all">Status: Semua Aduan</option>
+                                <option value="pending">Menunggu Ditinjau (Pending)</option>
+                                <option value="resolved">Telah Ditindaklanjuti (Resolved)</option>
+                                <option value="dismissed">Diabaikan / Tidak Valid (Dismissed)</option>
+                            </select>
+                        </div>
+                    )}
+                </div>
+            </div>
+
+            {/* ── TABEL 1: DAFTAR PROPERTI UTAMA (Jika tab !== 'reports') ── */}
+            {currentTab !== 'reports' && (
+                <div className="bg-white border border-gray-100 rounded-[2.5rem] overflow-hidden shadow-sm">
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-left text-sm text-gray-500">
+                            <thead className="bg-gray-50/80 text-[10px] font-black text-gray-400 uppercase tracking-widest border-b border-gray-100">
+                                <tr>
+                                    <th className="px-6 py-4">Informasi Kost</th>
+                                    <th className="px-6 py-4">Status & Model</th>
+                                    <th className="px-6 py-4">Pemilik / Mitra</th>
+                                    <th className="px-6 py-4">Tarif & Kamar</th>
+                                    <th className="px-6 py-4">Lokasi</th>
+                                    <th className="px-6 py-4 text-right">Moderasi / Aksi</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-100">
+                                {filteredListings.map(item => {
+                                    const isKm = Boolean(item.isManaged);
+                                    const isSuspended = item.status === 'suspended';
+                                    const isPublished = item.status === 'published';
+                                    const isDraft = item.status === 'draft' || item.status === 'pending_review' || !item.status;
+                                    const firstPhoto = item.imageUrls?.[0] || 'https://via.placeholder.com/150';
+                                    const totalRooms = item.roomTypes?.length || 0;
+                                    const pendingReportCount = pendingReportsCountMap[item.id] || 0;
+
+                                    return (
+                                        <tr key={item.id} className="hover:bg-orange-50/20 transition-colors">
+                                            {/* 1. Info Kost */}
+                                            <td className="px-6 py-4">
+                                                <div className="flex items-center gap-3">
+                                                    <div className="relative w-14 h-14 rounded-2xl overflow-hidden bg-gray-100 shrink-0 border border-gray-100 shadow-sm">
+                                                        <img
+                                                            src={firstPhoto}
+                                                            alt={item.title || item.namaKost}
+                                                            className="w-full h-full object-cover"
+                                                        />
+                                                        {isKm && (
+                                                            <div className="absolute top-1 left-1 bg-emerald-600 text-white rounded-md p-0.5 shadow-sm" title="Terkelola KostManager">
+                                                                <Sparkles size={10} />
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                    <div className="space-y-1">
+                                                        <div className="flex items-center gap-1.5 flex-wrap">
+                                                            <p className="font-black text-gray-900 text-sm hover:text-orange-600 transition-colors cursor-pointer" onClick={() => setSelectedPropertyForReview(item)}>
+                                                                {item.title || item.namaKost || 'Kost Tanpa Nama'}
+                                                            </p>
+                                                            {item.isVerified && (
+                                                                <span title="Terverifikasi" className="text-blue-500 inline-flex">
+                                                                    <CheckCircle2 size={14} fill="#3b82f6" className="text-white" />
+                                                                </span>
+                                                            )}
+                                                            {pendingReportCount > 0 && (
+                                                                <span
+                                                                    onClick={() => { setCurrentTab('reports'); setSearchQuery(item.title || item.namaKost || ''); }}
+                                                                    className="px-2 py-0.5 bg-rose-100 hover:bg-rose-200 text-rose-700 rounded-md text-[9px] font-black uppercase tracking-wider inline-flex items-center gap-1 cursor-pointer transition-colors"
+                                                                    title="Ada aduan pengguna, klik untuk melihat"
+                                                                >
+                                                                    <Flag size={10} /> {pendingReportCount} Aduan
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                        <div className="flex items-center gap-2">
+                                                            <span className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded-md text-[10px] font-bold">
+                                                                {item.type || 'Campur'}
+                                                            </span>
+                                                            <span className="text-[11px] text-gray-400 font-medium">
+                                                                {totalRooms} Tipe Kamar
+                                                            </span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </td>
+
+                                            {/* 2. Status & Model */}
+                                            <td className="px-6 py-4">
+                                                <div className="space-y-1.5">
+                                                    <div>
+                                                        {isPublished && (
+                                                            <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-xl text-[10px] font-black uppercase tracking-wider">
+                                                                <CheckCircle2 size={11} /> Aktif / Terbit
+                                                            </span>
+                                                        )}
+                                                        {isDraft && (
+                                                            <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-amber-50 text-amber-700 border border-amber-200 rounded-xl text-[10px] font-black uppercase tracking-wider">
+                                                                <Clock size={11} /> Draft / Pending
+                                                            </span>
+                                                        )}
+                                                        {isSuspended && (
+                                                            <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-rose-50 text-rose-700 border border-rose-200 rounded-xl text-[10px] font-black uppercase tracking-wider" title={item.suspendReason}>
+                                                                <Snowflake size={11} /> Dibekukan
+                                                            </span>
+                                                        )}
+                                                    </div>
+
+                                                    <div>
+                                                        {isKm ? (
+                                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-emerald-600 text-white rounded-lg text-[9px] font-black uppercase tracking-widest shadow-sm">
+                                                                <Sparkles size={10} /> KostManager
+                                                            </span>
+                                                        ) : (
+                                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-blue-50 text-blue-700 border border-blue-100 rounded-lg text-[9px] font-black uppercase tracking-widest">
+                                                                <Home size={10} /> Self Listing
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            </td>
+
+                                            {/* 3. Pemilik / Mitra */}
+                                            <td className="px-6 py-4">
+                                                <div className="space-y-1">
+                                                    <div className="flex items-center gap-1.5">
+                                                        <User size={13} className="text-gray-400" />
+                                                        <p className="font-bold text-gray-900 text-xs truncate max-w-[160px]">
+                                                            {item.ownerName || 'Mitra'}
+                                                        </p>
+                                                        {item.ownerVerificationStatus === 'verified' && (
+                                                            <span className="text-[9px] font-black bg-blue-50 text-blue-600 px-1 py-0.2 rounded" title="Mitra Terverifikasi KTP">
+                                                                KTP ✓
+                                                            </span>
+                                                        )}
+                                                    </div>
+
+                                                    {(item.ownerPhone || item.omnichannelContactPhone) && (
+                                                        <button
+                                                            onClick={() => handleOpenWhatsApp(item.ownerPhone || item.omnichannelContactPhone, item.title || item.namaKost, isSuspended, item.suspendReason)}
+                                                            className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-600 hover:text-emerald-700 hover:underline bg-emerald-50 px-2 py-0.5 rounded-lg border border-emerald-100 transition-colors cursor-pointer"
+                                                        >
+                                                            <Phone size={11} />
+                                                            <span>{item.ownerPhone || item.omnichannelContactPhone}</span>
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            </td>
+
+                                            {/* 4. Tarif & Kamar */}
+                                            <td className="px-6 py-4">
+                                                <p className="font-black text-gray-900 text-xs">
+                                                    {FORMAT_CURRENCY(item.price || 0)}
+                                                </p>
+                                                <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider mt-0.5">
+                                                    Mulai / Bulan
+                                                </p>
+                                            </td>
+
+                                            {/* 5. Lokasi */}
+                                            <td className="px-6 py-4">
+                                                <div className="space-y-0.5">
+                                                    <p className="font-bold text-gray-900 text-xs flex items-center gap-1">
+                                                        <MapPin size={11} className="text-orange-500 shrink-0" />
+                                                        {item.city || 'Kota -'}
+                                                    </p>
+                                                    <p className="text-[11px] text-gray-400 font-medium truncate max-w-[150px]">
+                                                        {item.area || item.address || '-'}
+                                                    </p>
+                                                </div>
+                                            </td>
+
+                                            {/* 6. Moderasi / Aksi */}
+                                            <td className="px-6 py-4 text-right">
+                                                <div className="flex items-center justify-end gap-1.5 flex-wrap">
+                                                    {/* Tinjau Detail */}
+                                                    <button
+                                                        onClick={() => setSelectedPropertyForReview(item)}
+                                                        className="p-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl transition-all shadow-sm active:scale-95 cursor-pointer"
+                                                        title="Tinjau Detail Properti"
+                                                    >
+                                                        <Eye size={15} />
+                                                    </button>
+
+                                                    {/* Buka Halaman Publik */}
+                                                    <button
+                                                        onClick={() => window.open('/kost/' + createKostSlug(item), '_blank')}
+                                                        className="p-2 bg-blue-50 hover:bg-blue-100 text-blue-600 rounded-xl transition-all active:scale-95 cursor-pointer"
+                                                        title="Kunjungi Halaman Publik"
+                                                    >
+                                                        <ExternalLink size={15} />
+                                                    </button>
+
+                                                    {/* Approval / Toggle Publish */}
+                                                    {isPublished ? (
+                                                        <button
+                                                            onClick={() => handleUnpublishToDraft(item)}
+                                                            className="px-2.5 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-700 rounded-xl text-xs font-bold transition-all active:scale-95 cursor-pointer"
+                                                            title="Tarik ke Draft"
+                                                        >
+                                                            Draftkan
+                                                        </button>
+                                                    ) : (
+                                                        <button
+                                                            onClick={() => handlePublish(item)}
+                                                            className="px-2.5 py-1.5 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-sm active:scale-95 cursor-pointer"
+                                                            title="Publikasikan Listing"
+                                                        >
+                                                            Publish
+                                                        </button>
+                                                    )}
+
+                                                    {/* Freeze / Unfreeze */}
+                                                    {isSuspended ? (
+                                                        <button
+                                                            onClick={() => handleUnfreeze(item)}
+                                                            className="px-2.5 py-1.5 bg-green-100 hover:bg-green-200 text-green-800 rounded-xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer"
+                                                            title="Buka Pembekuan"
+                                                        >
+                                                            Buka Blokir
+                                                        </button>
+                                                    ) : (
+                                                        <button
+                                                            onClick={() => handleOpenFreeze(item)}
+                                                            className="p-2 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-xl transition-all active:scale-95 cursor-pointer"
+                                                            title="Bekukan Listing (Penalti / Revisi)"
+                                                        >
+                                                            <Snowflake size={15} />
+                                                        </button>
+                                                    )}
+
+                                                    {/* Transfer Kepemilikan */}
+                                                    <button
+                                                        onClick={() => onTransferProperty(item)}
+                                                        className="p-2 bg-purple-50 hover:bg-purple-100 text-purple-600 rounded-xl transition-all active:scale-95 cursor-pointer"
+                                                        title="Transfer Kepemilikan ke Mitra Lain"
+                                                    >
+                                                        <ArrowLeftRight size={15} />
+                                                    </button>
+
+                                                    {/* Hapus Properti */}
+                                                    <button
+                                                        onClick={() => onDeleteProperty(item.id, item.namaKost || item.title || 'Kost')}
+                                                        className="p-2 bg-gray-50 hover:bg-rose-50 text-gray-400 hover:text-rose-600 rounded-xl transition-all active:scale-95 cursor-pointer"
+                                                        title="Hapus Properti"
+                                                    >
+                                                        <Trash2 size={15} />
+                                                    </button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    );
+                                })}
+
+                                {filteredListings.length === 0 && (
+                                    <tr>
+                                        <td colSpan={6} className="px-6 py-16 text-center">
+                                            <div className="w-16 h-16 bg-gray-50 text-gray-300 rounded-3xl flex items-center justify-center mx-auto mb-3">
+                                                <Building2 size={32} />
+                                            </div>
+                                            <p className="font-black text-gray-700 text-base">Tidak ada listing yang sesuai kriteria.</p>
+                                            <p className="text-xs text-gray-400 mt-1">Coba sesuaikan tab atau kata kunci pencarian Anda.</p>
+                                        </td>
+                                    </tr>
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            )}
+
+            {/* ── TABEL 2: DAFTAR ADUAN / LAPORAN PENGGUNA (Jika tab === 'reports') ── */}
+            {currentTab === 'reports' && (
+                <div className="bg-white border border-gray-100 rounded-[2.5rem] overflow-hidden shadow-sm space-y-4">
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-left text-sm text-gray-500">
+                            <thead className="bg-gray-50/80 text-[10px] font-black text-gray-400 uppercase tracking-widest border-b border-gray-100">
+                                <tr>
+                                    <th className="px-6 py-4">Properti Dilaporkan</th>
+                                    <th className="px-6 py-4">Kategori & Masalah</th>
+                                    <th className="px-6 py-4">Data Pelapor</th>
+                                    <th className="px-6 py-4">Bukti Foto</th>
+                                    <th className="px-6 py-4">Status Aduan</th>
+                                    <th className="px-6 py-4 text-right">Aksi Penanganan</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-100">
+                                {filteredReports.map(report => {
+                                    const isPending = report.status === 'pending';
+                                    const isResolved = report.status === 'resolved';
+                                    const isDismissed = report.status === 'dismissed';
+                                    const evidence = report.evidence_urls?.[0];
+
+                                    return (
+                                        <tr key={report.id} className="hover:bg-red-50/20 transition-colors">
+                                            {/* 1. Properti Dilaporkan */}
+                                            <td className="px-6 py-4">
+                                                <div className="space-y-1">
+                                                    <p className="font-black text-gray-900 text-sm hover:text-orange-600 transition-colors cursor-pointer" onClick={() => window.open(`/kost/${report.property_id}`, '_blank')}>
+                                                        {report.propertyName || 'Kost'}
+                                                    </p>
+                                                    <p className="text-[11px] text-gray-400 font-medium">
+                                                        {report.propertyCity || report.propertyAddress || 'Lokasi -'}
+                                                    </p>
+                                                    {report.ownerPhone && (
+                                                        <button
+                                                            onClick={() => handleOpenWhatsApp(report.ownerPhone, report.propertyName, false, `Ada aduan user terkait: ${report.description}`)}
+                                                            className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-lg border border-emerald-100 hover:bg-emerald-100 transition-colors cursor-pointer"
+                                                        >
+                                                            <Phone size={10} /> Chat Mitra: {report.ownerPhone}
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            </td>
+
+                                            {/* 2. Kategori & Masalah */}
+                                            <td className="px-6 py-4 max-w-xs">
+                                                <div className="space-y-1">
+                                                    <span className="inline-flex px-2 py-0.5 bg-rose-50 text-rose-700 border border-rose-200 rounded-md text-[10px] font-black uppercase tracking-wider">
+                                                        {report.category}
+                                                    </span>
+                                                    <p className="text-xs text-gray-800 font-medium leading-relaxed bg-gray-50 p-2.5 rounded-xl border border-gray-100">
+                                                        "{report.description}"
+                                                    </p>
+                                                    <span className="text-[10px] text-gray-400 block">
+                                                        {new Date(report.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                                                    </span>
+                                                </div>
+                                            </td>
+
+                                            {/* 3. Data Pelapor */}
+                                            <td className="px-6 py-4">
+                                                <div className="space-y-1">
+                                                    <p className="font-bold text-gray-900 text-xs">{report.reporter_name || 'Pengguna'}</p>
+                                                    {report.reporter_phone && (
+                                                        <button
+                                                            onClick={() => handleWhatsAppReporter(report.reporter_phone, report.propertyName || 'Kost', report.category)}
+                                                            className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-600 hover:underline bg-emerald-50 px-2 py-0.5 rounded-lg border border-emerald-100 transition-colors cursor-pointer"
+                                                        >
+                                                            <Phone size={10} /> {report.reporter_phone}
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            </td>
+
+                                            {/* 4. Bukti Foto */}
+                                            <td className="px-6 py-4">
+                                                {evidence ? (
+                                                    <div
+                                                        onClick={() => setSelectedEvidenceForZoom(evidence)}
+                                                        className="w-12 h-12 rounded-xl overflow-hidden bg-gray-100 border border-gray-200 cursor-pointer hover:scale-105 transition-transform shadow-sm relative group"
+                                                    >
+                                                        <img src={evidence} alt="Bukti" className="w-full h-full object-cover" />
+                                                        <div className="absolute inset-0 bg-black/30 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity text-white">
+                                                            <Eye size={14} />
+                                                        </div>
+                                                    </div>
+                                                ) : (
+                                                    <span className="text-[11px] text-gray-400 italic">Tanpa foto</span>
+                                                )}
+                                            </td>
+
+                                            {/* 5. Status Aduan */}
+                                            <td className="px-6 py-4">
+                                                {isPending && (
+                                                    <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-amber-50 text-amber-700 border border-amber-200 rounded-xl text-[10px] font-black uppercase tracking-wider">
+                                                        <Clock size={11} /> Belum Ditinjau
+                                                    </span>
+                                                )}
+                                                {isResolved && (
+                                                    <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-xl text-[10px] font-black uppercase tracking-wider">
+                                                        <CheckCircle2 size={11} /> Ditindaklanjuti
+                                                    </span>
+                                                )}
+                                                {isDismissed && (
+                                                    <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-gray-100 text-gray-600 border border-gray-200 rounded-xl text-[10px] font-black uppercase tracking-wider">
+                                                        <X size={11} /> Diabaikan
+                                                    </span>
+                                                )}
+                                                {report.action_taken && (
+                                                    <p className="text-[9px] text-gray-400 font-bold mt-1 uppercase">Aksi: {report.action_taken}</p>
+                                                )}
+                                            </td>
+
+                                            {/* 6. Aksi Penanganan */}
+                                            <td className="px-6 py-4 text-right">
+                                                <div className="flex items-center justify-end gap-1.5 flex-wrap">
+                                                    {/* Bekukan Properti Langsung */}
+                                                    <button
+                                                        onClick={() => handleFreezeFromReport(report)}
+                                                        className="px-2.5 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-sm active:scale-95 flex items-center gap-1 cursor-pointer"
+                                                        title="Bekukan Listing Properti Ini"
+                                                    >
+                                                        <Snowflake size={13} /> Bekukan Kost
+                                                    </button>
+
+                                                    {/* Tandai Selesai */}
+                                                    {!isResolved && (
+                                                        <button
+                                                            onClick={() => handleUpdateReportStatus(report.id, 'resolved')}
+                                                            className="p-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-xl transition-all active:scale-95 cursor-pointer"
+                                                            title="Tandai Selesai / Ditindaklanjuti"
+                                                        >
+                                                            <Check size={15} />
+                                                        </button>
+                                                    )}
+
+                                                    {/* Abaikan Laporan */}
+                                                    {!isDismissed && (
+                                                        <button
+                                                            onClick={() => handleUpdateReportStatus(report.id, 'dismissed')}
+                                                            className="p-2 bg-gray-100 hover:bg-gray-200 text-gray-500 rounded-xl transition-all active:scale-95 cursor-pointer"
+                                                            title="Abaikan Laporan Ini"
+                                                        >
+                                                            <X size={15} />
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    );
+                                })}
+
+                                {filteredReports.length === 0 && (
+                                    <tr>
+                                        <td colSpan={6} className="px-6 py-16 text-center">
+                                            <div className="w-16 h-16 bg-gray-50 text-gray-300 rounded-3xl flex items-center justify-center mx-auto mb-3">
+                                                <Flag size={32} />
+                                            </div>
+                                            <p className="font-black text-gray-700 text-base">Tidak ada aduan pengguna.</p>
+                                            <p className="text-xs text-gray-400 mt-1">Seluruh laporan yang masuk telah selesai ditindaklanjuti.</p>
+                                        </td>
+                                    </tr>
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            )}
+
+            {/* ── MODAL 1: TINJAUAN & SUPERVISI DETAIL LISTING (KOMPREHENSIF 3-TAB) ── */}
+            {selectedPropertyForReview && (
+                <PropertyReviewModal
+                    property={selectedPropertyForReview}
+                    onClose={() => setSelectedPropertyForReview(null)}
+                    onPublish={handlePublish}
+                    onUnpublishToDraft={handleUnpublishToDraft}
+                    onRequestRevision={handleRequestRevision}
+                    onToggleVerification={handleToggleVerification}
+                    onOpenFreeze={handleOpenFreeze}
+                    onUnfreeze={handleUnfreeze}
+                    FORMAT_CURRENCY={FORMAT_CURRENCY}
+                />
+            )}
+
+            {/* ── MODAL 2: PEMBEKUAN LISTING (SUSPEND / PENALTI) ── */}
+            {propertyToFreeze && (
+                <div className="fixed inset-0 z-[140] flex items-center justify-center p-4">
+                    <div className="absolute inset-0 bg-gray-900/70 backdrop-blur-sm animate-in fade-in" onClick={() => setPropertyToFreeze(null)} />
+                    <div className="relative bg-white w-full max-w-md rounded-[2.5rem] shadow-2xl p-6 sm:p-8 z-10 animate-in zoom-in-95 duration-200 space-y-5">
+                        <div className="text-center space-y-2">
+                            <div className="w-16 h-16 bg-rose-100 text-rose-600 rounded-3xl flex items-center justify-center mx-auto shadow-inner">
+                                <Snowflake size={32} />
+                            </div>
+                            <h3 className="text-xl font-black text-gray-900 tracking-tight">
+                                Bekukan Listing Kost
+                            </h3>
+                            <p className="text-xs text-gray-500">
+                                Properti <span className="font-bold text-gray-900">"{propertyToFreeze.title || propertyToFreeze.namaKost}"</span> akan disembunyikan dari pencarian publik sampai mitra memperbaikinya.
+                            </p>
+                        </div>
+
+                        <div className="space-y-2">
+                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block">
+                                Alasan Pembekuan / Catatan Revisi untuk Mitra:
+                            </label>
+                            <textarea
+                                value={freezeReason}
+                                onChange={e => setFreezeReason(e.target.value)}
+                                placeholder="Contoh: Alamat tidak sesuai dengan titik peta, mohon perbaiki lokasi dan foto kamar mandi yang belum diunggah..."
+                                className="w-full p-4 bg-gray-50 border border-gray-200 rounded-2xl text-xs font-medium focus:bg-white focus:ring-2 focus:ring-rose-500 focus:border-rose-500 outline-none transition-all min-h-[110px]"
+                            />
+                        </div>
+
+                        <div className="flex gap-3">
+                            <button
+                                onClick={() => { setPropertyToFreeze(null); setRelatedReportIdForFreeze(null); }}
+                                className="flex-1 py-3.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-2xl font-black text-xs uppercase tracking-widest transition-all cursor-pointer"
+                            >
+                                Batal
+                            </button>
+                            <button
+                                onClick={handleConfirmFreeze}
+                                disabled={isProcessingAction || !freezeReason.trim()}
+                                className="flex-1 py-3.5 bg-rose-600 hover:bg-rose-700 text-white rounded-2xl font-black text-xs uppercase tracking-widest transition-all shadow-lg shadow-rose-200 active:scale-95 disabled:opacity-50 cursor-pointer"
+                            >
+                                {isProcessingAction ? 'Memproses...' : 'Bekukan Sekarang'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* ── MODAL 3: ZOOM FOTO BUKTI ADUAN ── */}
+            {selectedEvidenceForZoom && (
+                <div className="fixed inset-0 z-[160] flex items-center justify-center p-4">
+                    <div className="absolute inset-0 bg-black/85 backdrop-blur-md animate-in fade-in" onClick={() => setSelectedEvidenceForZoom(null)} />
+                    <div className="relative max-w-2xl max-h-[85vh] rounded-3xl overflow-hidden z-10 shadow-2xl animate-in zoom-in-95">
+                        <img src={selectedEvidenceForZoom} alt="Bukti Aduan" className="w-full h-full object-contain" />
+                        <button
+                            onClick={() => setSelectedEvidenceForZoom(null)}
+                            className="absolute top-4 right-4 bg-black/60 hover:bg-black/90 text-white p-2 rounded-full transition-colors cursor-pointer"
+                        >
+                            <X size={18} />
+                        </button>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+};
+
+export default PropertyManagement;

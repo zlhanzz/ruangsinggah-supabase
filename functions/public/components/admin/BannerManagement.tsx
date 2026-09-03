@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
-import { Banner } from '../../types';
+import React, { useState, useEffect } from 'react';
+import { Banner, MitraPromoPopupSetting } from '../../types';
 import { supabase } from '../../supabase';
-import { deleteBanner } from '../../adminService';
+import { deleteBanner, getMitraPromoPopupSetting, saveMitraPromoPopupSetting, DEFAULT_MITRA_PROMO_POPUP } from '../../adminService';
+import { Sparkles, Upload, ExternalLink, Check, Image as ImageIcon } from 'lucide-react';
 
 interface BannerManagementProps {
     banners: Banner[];
@@ -37,6 +38,47 @@ const BannerManagement: React.FC<BannerManagementProps> = ({
     });
     const [bannerImageFile, setBannerImageFile] = useState<File | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
+
+    // --- MITRA PROMO POPUP STATE ---
+    const [mitraPopupSetting, setMitraPopupSetting] = useState<MitraPromoPopupSetting>(DEFAULT_MITRA_PROMO_POPUP);
+    const [popupImageFile, setPopupImageFile] = useState<File | null>(null);
+    const [popupImagePreview, setPopupImagePreview] = useState<string>('');
+    const [isSavingPopup, setIsSavingPopup] = useState(false);
+    const [popupSaveSuccess, setPopupSaveSuccess] = useState(false);
+
+    useEffect(() => {
+        getMitraPromoPopupSetting().then(data => {
+            setMitraPopupSetting(data);
+            if (data.image_url) setPopupImagePreview(data.image_url);
+        });
+    }, []);
+
+    const handleSavePopupSetting = async (e: React.FormEvent) => {
+        e.preventDefault();
+        try {
+            setIsSavingPopup(true);
+            setPopupSaveSuccess(false);
+            const updated = await saveMitraPromoPopupSetting(mitraPopupSetting, popupImageFile || undefined);
+            setMitraPopupSetting(updated);
+            if (updated.image_url) setPopupImagePreview(updated.image_url);
+            setPopupImageFile(null);
+            setPopupSaveSuccess(true);
+            setTimeout(() => setPopupSaveSuccess(false), 4000);
+        } catch (err: any) {
+            console.error('Gagal menyimpan promo popup:', err);
+            alert('Gagal menyimpan pengaturan iklan popup: ' + (err.message || 'Terjadi kesalahan'));
+        } finally {
+            setIsSavingPopup(false);
+        }
+    };
+
+    const handlePopupImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (e.target.files && e.target.files[0]) {
+            const file = e.target.files[0];
+            setPopupImageFile(file);
+            setPopupImagePreview(URL.createObjectURL(file));
+        }
+    };
 
     const openAddBannerModal = () => {
         setEditingBannerId(null);
@@ -105,7 +147,153 @@ const BannerManagement: React.FC<BannerManagementProps> = ({
         }
     };
     return (
-        <div className="space-y-6">
+        <div className="space-y-8">
+            {/* ── KONTROL IKLAN POP-UP PROMO MITRA (KOSTMANAGER) ── */}
+            <div className="bg-gradient-to-br from-gray-900 via-gray-900 to-gray-800 rounded-3xl p-6 lg:p-8 text-white shadow-xl border border-gray-700/50">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-gray-800">
+                    <div>
+                        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-orange-500/20 border border-orange-500/30 text-orange-400 text-xs font-black uppercase tracking-wider mb-2">
+                            <Sparkles size={12} className="animate-pulse" />
+                            Pop-Up Iklan Mitra (KostManager)
+                        </div>
+                        <h3 className="text-xl font-black tracking-tight text-white">
+                            Kontrol Desain Pop-Up Iklan Promo Mitra
+                        </h3>
+                        <p className="text-xs text-gray-400 mt-1 max-w-2xl">
+                            Atur dan unggah desain grafis banner promosi yang akan muncul sebagai iklan pop-up saat mitra membuka menu Kelola Kost.
+                        </p>
+                    </div>
+
+                    <div className="flex items-center gap-3 bg-gray-800/80 px-4 py-2.5 rounded-2xl border border-gray-700">
+                        <span className="text-xs font-bold text-gray-300">Status Pop-Up:</span>
+                        <button
+                            type="button"
+                            onClick={() => setMitraPopupSetting(prev => ({ ...prev, is_active: !prev.is_active }))}
+                            className={`px-3 py-1 rounded-xl text-xs font-black uppercase tracking-wider flex items-center gap-1.5 transition-all cursor-pointer ${
+                                mitraPopupSetting.is_active 
+                                    ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40'
+                                    : 'bg-gray-700 text-gray-400 border border-gray-600'
+                            }`}
+                        >
+                            {mitraPopupSetting.is_active ? '● Aktif' : '○ Nonaktif'}
+                        </button>
+                    </div>
+                </div>
+
+                <form onSubmit={handleSavePopupSetting} className="mt-6 grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+                    {/* Kolom Kiri: Preview Desain Grafis */}
+                    <div className="lg:col-span-5 space-y-3">
+                        <label className="text-xs font-black text-gray-300 uppercase tracking-wider block">
+                            Pratinjau Desain Grafis Banner
+                        </label>
+                        <div className="relative aspect-video rounded-2xl overflow-hidden bg-gray-800/50 border-2 border-dashed border-gray-700 flex items-center justify-center group shadow-inner">
+                            {popupImagePreview ? (
+                                <>
+                                    <img 
+                                        src={popupImagePreview} 
+                                        alt="Desain Banner Pop-up" 
+                                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                                    />
+                                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                        <label className="px-4 py-2 bg-white text-gray-900 rounded-xl font-bold text-xs cursor-pointer hover:bg-orange-50 transition-colors shadow-lg">
+                                            Ganti Desain
+                                            <input type="file" accept="image/*" onChange={handlePopupImageChange} className="hidden" />
+                                        </label>
+                                    </div>
+                                </>
+                            ) : (
+                                <div className="text-center p-6 space-y-2">
+                                    <div className="w-12 h-12 rounded-2xl bg-gray-700/50 flex items-center justify-center mx-auto text-gray-400">
+                                        <ImageIcon size={24} />
+                                    </div>
+                                    <p className="text-xs font-bold text-gray-300">Belum Ada Desain Custom</p>
+                                    <p className="text-[11px] text-gray-500 leading-relaxed">
+                                        Saat ini menggunakan fallback visual default KostManager.
+                                    </p>
+                                    <label className="inline-flex items-center gap-1.5 px-3.5 py-2 mt-2 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-xs font-bold cursor-pointer transition-colors shadow-md">
+                                        <Upload size={13} /> Upload Desain Banner
+                                        <input type="file" accept="image/*" onChange={handlePopupImageChange} className="hidden" />
+                                    </label>
+                                </div>
+                            )}
+                        </div>
+                        <p className="text-[11px] text-gray-400">
+                            Disarankan rasio 16:9 atau 4:3 (Landscape), otomatis dikompresi ke WebP sebelum disimpan.
+                        </p>
+                    </div>
+
+                    {/* Kolom Kanan: Form Data URL & Judul */}
+                    <div className="lg:col-span-7 space-y-4">
+                        <div>
+                            <label className="text-xs font-black text-gray-300 uppercase tracking-wider block mb-1.5">
+                                Judul / Pesan Banner (Alt Text)
+                            </label>
+                            <input 
+                                type="text"
+                                value={mitraPopupSetting.title || ''}
+                                onChange={e => setMitraPopupSetting(prev => ({ ...prev, title: e.target.value }))}
+                                placeholder="Misal: Gak Punya Waktu Kelola Kost? Upgrade ke KostManager!"
+                                className="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-xl text-xs font-bold text-white placeholder-gray-500 focus:outline-none focus:border-orange-500 transition-colors"
+                            />
+                        </div>
+
+                        <div>
+                            <label className="text-xs font-black text-gray-300 uppercase tracking-wider block mb-1.5">
+                                Tautan / Rute Tujuan Saat Diklik
+                            </label>
+                            <div className="relative">
+                                <input 
+                                    type="text"
+                                    value={mitraPopupSetting.link_url || ''}
+                                    onChange={e => setMitraPopupSetting(prev => ({ ...prev, link_url: e.target.value }))}
+                                    placeholder="/kost-manager atau https://..."
+                                    className="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-xl text-xs font-bold text-white placeholder-gray-500 focus:outline-none focus:border-orange-500 transition-colors pr-10"
+                                />
+                                <ExternalLink size={14} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                            </div>
+                            <p className="text-[11px] text-gray-400 mt-1">
+                                Default: <code>/kost-manager</code> (mengarah ke halaman promosi KostManager)
+                            </p>
+                        </div>
+
+                        <div className="flex items-center gap-3 pt-2">
+                            <label className="px-4 py-2.5 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-xl text-xs font-bold text-gray-200 flex items-center gap-2 cursor-pointer transition-colors">
+                                <Upload size={14} />
+                                <span>{popupImageFile ? popupImageFile.name : 'Pilih File Gambar'}</span>
+                                <input type="file" accept="image/*" onChange={handlePopupImageChange} className="hidden" />
+                            </label>
+                            {popupImagePreview && (
+                                <button
+                                    type="button"
+                                    onClick={() => { setPopupImageFile(null); setPopupImagePreview(''); setMitraPopupSetting(prev => ({ ...prev, image_url: '' })); }}
+                                    className="px-3 py-2.5 bg-gray-800 hover:bg-rose-950/40 text-rose-400 border border-gray-700 rounded-xl text-xs font-bold transition-colors cursor-pointer"
+                                    title="Reset ke Default Visual"
+                                >
+                                    Reset ke Default
+                                </button>
+                            )}
+                        </div>
+
+                        <div className="pt-2 flex items-center gap-3">
+                            <button
+                                type="submit"
+                                disabled={isSavingPopup}
+                                className="px-6 py-3 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-lg active:scale-95 disabled:opacity-50 flex items-center gap-2 cursor-pointer"
+                            >
+                                {isSavingPopup ? 'Menyimpan...' : 'Simpan Pengaturan Iklan Pop-Up'}
+                            </button>
+
+                            {popupSaveSuccess && (
+                                <span className="inline-flex items-center gap-1.5 text-xs font-bold text-emerald-400 animate-in fade-in duration-300">
+                                    <Check size={14} /> Pengaturan berhasil disimpan!
+                                </span>
+                            )}
+                        </div>
+                    </div>
+                </form>
+            </div>
+
+            {/* ── BANNER CAROUSEL BERANDA ── */}
             <div className="flex justify-between items-center mb-2">
                 <div>
                     <h2 className="text-2xl font-black text-gray-900 uppercase tracking-tight">Manajemen Banner Promo</h2>

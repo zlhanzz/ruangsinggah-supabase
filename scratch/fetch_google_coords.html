@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Google Places Coordinates Resolver</title>
+</head>
+<body>
+    <div id="status">Loading Google Maps...</div>
+    <pre id="output"></pre>
+
+    <script>
+        const API_KEY = "AIzaSyBAsdbPynnAWSRZ_1iQ3hmoCUAnq5VrV7c";
+        const script = document.createElement('script');
+        script.src = `https://maps.googleapis.com/maps/api/js?key=${API_KEY}&libraries=places&loading=async&callback=initMap`;
+        document.head.appendChild(script);
+
+        const queries = [
+            "Politeknik Pariwisata Negeri Makassar",
+            "Masjid 99 Kubah Asmaul Husna Makassar",
+            "Center Point of Indonesia Makassar",
+            "Menara Phinisi UNM Makassar",
+            "Politeknik Negeri Ujung Pandang Tamalanrea",
+            "Universitas Islam Makassar Perintis",
+            "Universitas Muhammadiyah Makassar Alauddin",
+            "Universitas Hasanuddin Pintu 1 Tamalanrea",
+            "Universitas Muslim Indonesia Urip Sumoharjo",
+            "Trans Studio Mall Makassar",
+            "Makassar Town Square Perintis"
+        ];
+
+        const results = [];
+
+        window.initMap = async function() {
+            document.getElementById('status').innerText = "Google Maps Loaded. Resolving places...";
+            const mapDiv = document.createElement('div');
+            const placesService = new google.maps.places.PlacesService(mapDiv);
+            const geocoder = new google.maps.Geocoder();
+
+            for (let i = 0; i < queries.length; i++) {
+                const q = queries[i];
+                await new Promise((resolve) => {
+                    placesService.findPlaceFromQuery({
+                        query: q,
+                        fields: ['name', 'geometry', 'formatted_address', 'place_id']
+                    }, (res, status) => {
+                        if (status === google.maps.places.PlacesServiceStatus.OK && res && res.length > 0) {
+                            const p = res[0];
+                            results.push({
+                                query: q,
+                                name: p.name,
+                                address: p.formatted_address,
+                                lat: p.geometry.location.lat(),
+                                lng: p.geometry.location.lng(),
+                                method: 'PlacesService'
+                            });
+                            resolve();
+                        } else {
+                            // Fallback to Geocoder
+                            geocoder.geocode({ address: q + ", Makassar, Indonesia" }, (geoRes, geoStatus) => {
+                                if (geoStatus === 'OK' && geoRes && geoRes.length > 0) {
+                                    const g = geoRes[0];
+                                    results.push({
+                                        query: q,
+                                        name: g.formatted_address,
+                                        lat: g.geometry.location.lat(),
+                                        lng: g.geometry.location.lng(),
+                                        method: 'Geocoder'
+                                    });
+                                } else {
+                                    results.push({
+                                        query: q,
+                                        error: status + " / " + geoStatus
+                                    });
+                                }
+                                resolve();
+                            });
+                        }
+                    });
+                });
+                await new Promise(r => setTimeout(r, 600));
+            }
+
+            document.getElementById('status').innerText = "DONE";
+            document.getElementById('output').innerText = JSON.stringify(results, null, 2);
+            console.log("FINAL_RESULTS_JSON:" + JSON.stringify(results));
+        };
+    </script>
+</body>
+</html>

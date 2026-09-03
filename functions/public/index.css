@@ -1,6 +1,11 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800;900&display=swap');
 @import "tailwindcss";
 
 @theme {
+  --font-sans: 'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+  --font-serif: 'Plus Jakarta Sans', sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+
   /* Stitch spacing tokens */
   --spacing-margin-page: 1.5rem;
   --spacing-stack-sm: 0.75rem;
@@ -215,5 +220,101 @@ input::-ms-clear {
 .text-body-lg { font-size: 16px; line-height: 24px; font-weight: 500; }
 .text-label-bold { font-size: 12px; line-height: 16px; font-weight: 700; }
 .text-label-sm { font-size: 10px; line-height: 14px; font-weight: 600; }
+
+:root {
+  font-family: 'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+* {
+  font-family: 'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+html, body {
+  font-family: 'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  color: #0b1c30;
+  background-color: #f8f9ff;
+  overflow-x: hidden;
+  max-width: 100vw;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Stacked 3D Perspective Carousel */
+#hero-carousel-container {
+  perspective: 1200px;
+  position: relative;
+  width: 100%;
+}
+
+.carousel-slide {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  margin-left: auto;
+  margin-right: auto;
+  width: 90%;
+  max-width: 860px;
+  height: 100%;
+  transition: transform 0.6s cubic-bezier(0.25, 1, 0.5, 1), opacity 0.6s ease, z-index 0.6s;
+  will-change: transform, opacity;
+  cursor: pointer;
+}
+
+.carousel-slide.active {
+  transform: translateX(0) scale(1);
+  opacity: 1;
+  z-index: 10;
+  pointer-events: auto;
+  box-shadow: 0 14px 34px -5px rgba(0, 0, 0, 0.18);
+}
+
+.carousel-slide.prev {
+  transform: translateX(-68%) scale(0.88);
+  opacity: 0.65;
+  z-index: 5;
+  pointer-events: auto;
+}
+
+.carousel-slide.next {
+  transform: translateX(68%) scale(0.88);
+  opacity: 0.65;
+  z-index: 5;
+  pointer-events: auto;
+}
+
+.carousel-slide:not(.active):not(.prev):not(.next) {
+  transform: scale(0.75);
+  opacity: 0;
+  z-index: 1;
+  pointer-events: none;
+}
+
+@media (max-width: 768px) {
+  .carousel-slide {
+    width: 100%;
+    max-width: 100%;
+    border-radius: 1rem;
+  }
+  .carousel-slide.active {
+    transform: translateX(0) scale(1);
+    opacity: 1;
+    z-index: 10;
+    box-shadow: 0 4px 16px -2px rgba(0, 0, 0, 0.12);
+  }
+  .carousel-slide.prev {
+    transform: translateX(-100%) scale(0.95);
+    opacity: 0;
+    z-index: 1;
+    pointer-events: none;
+  }
+  .carousel-slide.next {
+    transform: translateX(100%) scale(0.95);
+    opacity: 0;
+    z-index: 1;
+    pointer-events: none;
+  }
+}
 
 

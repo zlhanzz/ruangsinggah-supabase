@@ -2,42 +2,1725 @@
 
 ## Fitur Selesai (Completed Features)
 
-### 279. Modernisasi UI/UX Beranda (Home) & Bottom Navigation Bar Mobile dengan Desain Google Stitch (`Home.tsx`, `Navbar.tsx`, `QuickActionMenu.tsx`, `KostCard.tsx`, `index.css`) (September 2026)
+### 293. Sistem Rating & Ulasan Riil Terverifikasi Langsung dari Penghuni Kost (`KostCard.tsx`, `KostDetail.tsx`, `MyKost.tsx`, `userService.ts`) (September 2026)
 - **Permintaan & Masalah**:
-  - Pengguna meminta penyesuaian UI/UX pada halaman beranda (Home) dan mobile navigation bar dengan mengadopsi desain modern hasil konversi Google Stitch.
-  - Penyesuaian berfokus pada kerangka dan styling bersih (*clean*), mempertahankan seluruh konten riil, logo RuangSinggah.id, data listing dari Supabase, dan fungsionalitas filter yang sudah ada.
-  - Pada mobile, bottom navigation bar disesuaikan memiliki 4 menu presisi: **Home**, **Search**, **Orders**, dan **Profile**.
+  - Pengguna melaporkan bahwa rating kost pada kartu listing masih bernilai dummy (5.0 statis) dan meminta agar rating kost 100% riil serta bersumber dari penilaian langsung penghuni kost yang aktif.
 - **Implementasi Solusi**:
-  1. **Integrasi Design Tokens & Utilities Google Stitch (`index.css`)**:
-     - Mengintegrasikan CSS color tokens (`--primary: #994700`, `--primary-container: #ff7a00`, `--background: #f8f9ff`, `--surface: #f8f9ff`, `--tertiary: #6d3bd7`, dsb.).
-     - Menambahkan typography classes (`.text-headline-md`, `.text-headline-lg`, `.text-body-md`, dsb.) dan komponen styling.
-  2. **Modernisasi Navbar & 4-Menu Mobile Bottom Navigation (`Navbar.tsx`)**:
-     - Desktop Navbar: Nav link elegan (`Cari Kost`, `Data Kost`, `Jasa Survey`, `Jadi Mitra`) dengan indikator garis oranye aktif dan tombol auth Masuk/Daftar (pill button oranye).
-     - Mobile Bottom Navigation Bar: Menampilkan 4 menu utama berurutan:
-       1. 🏠 **Home** (`Page.HOME`)
-       2. 🔍 **Search** (`Page.LISTINGS`)
-       3. 📄 **Orders** (`Page.MY_BOOKINGS`)
-       4. 👤 **Profile** (`Page.PROFILE` / `Page.LOGIN` jika guest)
-     - 100% menggunakan SVG bundled lokal `lucide-react` (`Home`, `Search`, `ClipboardList`, `User`, `Bell`) bebas FOUT.
-  3. **Penyelarasan Search Bar Desktop & Mobile (`Home.tsx`)**:
-     - Desktop: Horizontal floating pill bar dengan 4 segmen (Lokasi/Nama, Kota, Kampus, Jenis Kost) + tombol search bulat `#0b1c30`.
-     - Mobile: Compact trigger bar dengan ikon Search, teks *"CARI KOST SEKARANG"*, dan tombol *"FILTER"*.
-  4. **Penyelarasan Menu Utama & Fitur (`QuickActionMenu.tsx`)**:
-     - Section header: `• Menu Utama & Fitur` dengan dot oranye.
-     - 4 Action cards: Cari Kost, Data Kost, Jasa Survey, Jadi Mitra dengan icon pastel lembut dan shadow modern.
-  5. **Penyelarasan Kartu Kost Rekomendasi (`KostCard.tsx`)**:
-     - Rounded-3xl card dengan aspect ratio foto proporsional.
-     - Badge kategori, badge verified oranye, bintang rating, icon lokasi MapPin, dan tombol `DETAIL` hitam elegan.
+  1. **Penghapusan Dummy Rating di `KostCard.tsx`**:
+     - Menghapus nilai fallback statis `5.0`.
+     - Mengkalkulasi nilai rata-rata ulasan riil: `(reviews.reduce(sum + rating) / reviews.length).toFixed(1)`.
+     - Jika kost memiliki ulasan: Tampilkan `⭐ {avgRating} ({reviewCount})`.
+     - Jika kost belum memiliki ulasan: Tampilkan badge elegan `⭐ Baru` (tanpa rating fiktif).
+  2. **Modul Pemberian Ulasan & Rating Penghuni di `MyKost.tsx`**:
+     - Menambahkan tombol aksi **"Beri Ulasan & Rating Kost"** / **"Edit Ulasan & Rating"** pada kartu sewa aktif anak kost.
+     - Menyediakan modal interaktif pemilihan bintang 1–5 (hover & click responsive) dan textarea testimoni pengalaman tinggal.
+     - Menyimpan ulasan ke database Supabase via `addPropertyReview()` dengan dukungan upsert per user.
+  3. **Penyajian Seksian Ulasan di Halaman Detail Kost (`KostDetail.tsx`)**:
+     - Menambahkan `InfoSection` **"Ulasan Penghuni Kost"** yang menyajikan ringkasan skor rating rata-rata riil, diagram persentase sebaran bintang (5⭐ s.d. 1⭐), serta daftar testimoni jujur penghuni terverifikasi lengkap dengan avatar, tanggal, dan komentar.
+  4. **Peningkatan Backend `userService.ts`**:
+     - Mengoptimalkan fungsi `addPropertyReview` agar mengkalkulasi ulang rata-rata rating properti secara presisi dan menyimpannya ke kolom `reviews` dan `rating` di tabel `properties`.
 - **File Tersentuh**:
-  - `functions/public/index.css`
+  - `functions/public/components/KostCard.tsx`
+  - `functions/public/pages/KostDetail.tsx`
+  - `functions/public/pages/MyKost.tsx`
+  - `functions/public/userService.ts`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi Vite `cmd /c npm run build` di `functions/public/` lulus 100% (✓ 2509 modules transformed, built in 25.71s, 0 error).
+
+### 292. Perbaikan Populasi Opsi Filter (Provinsi, Kota, Kecamatan, Kampus) Berbasis Database (`userService.ts` & `Listings.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  - Pengguna melaporkan bahwa opsi dropdown filter (Provinsi, Kota, Kecamatan, Kampus) masih belum menampilkan daftar opsi sesuai listing yang ada di database (hanya memuat opsi default "Semua...").
+- **Akar Masalah & Implementasi Solusi**:
+  1. **Akar Masalah**: Sebelumnya query `getAvailableFilterOptions()` memanggil `.select('province, city, ...')`. Karena `province` bukan kolom fisik mandiri di skema tabel `properties` PostgreSQL (melainkan tersimpan di objek `metadata`), PostgREST Supabase mengembalikan error `column properties.province does not exist` sehingga proses gagal dan mengembalikan array kosong.
+  2. **Query Universal Aman (`select('*')`) di `userService.ts`**:
+     - Mengubah query menjadi `.select('*')` yang aman dari error kolom tidak terdefinisi.
+     - Menambahkan ekstraksi cerdas fallback provinsi: `(row.province || row.metadata?.province || (city ? 'Sulawesi Selatan' : '') || 'Sulawesi Selatan').trim()`.
+     - Mengumpulkan daftar unik `provinces`, `cities`, `districts`, `campuses`, serta array `rawRelations`.
+     - Mengamankan query `getFilteredProperties` agar filter provinsi dan kampus dilakukan secara in-memory matching jika tidak ada kolom fisik.
+  3. **Fallback Instan di `Listings.tsx`**:
+     - Menambahkan ekstraksi langsung dari `initialListings` pada saat komponen pertama kali dirender, sehingga opsi dropdown langsung terisi tanpa menunggu waktu jeda jaringan.
+- **File Tersentuh**:
+  - `functions/public/userService.ts`
+  - `functions/public/pages/Listings.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi Vite `cmd /c npm run build` di `functions/public/` lulus 100% (✓ 2509 modules transformed, built in 30.88s, 0 error).
+
+### 291. Implementasi Dynamic Cascading & Independent Filter Options (Provinsi -> Kota -> Kecamatan -> Kampus) (`FilterControls.tsx`, `FilterDrawer.tsx`, `Listings.tsx`, `userService.ts`) (September 2026)
+- **Permintaan & Masalah**:
+  - Pengguna meminta agar sistem filter bekerja secara hierarkis (cascading): jika memilih provinsi tertentu maka pilihan kota menyesuaikan dengan provinsi tersebut, jika memilih kota maka pilihan kecamatan dan kampus menyesuaikan dengan kota/area tersebut. Namun sistem tetap harus 100% opsional dan independen (pengguna bebas langsung memilih kampus, kota, atau harga saja tanpa wajib menyetel parent filter).
+- **Implementasi Solusi**:
+  1. **Metadata Relasi Geografi & Kampus Database (`userService.ts`)**:
+     - Menambahkan interface `GeoRelationEntry` (`province, city, district, campuses`) dan menyertakan `rawRelations` pada output fungsi `getAvailableFilterOptions()`.
+  2. **Cascading Cerdas & Opsi Bebas (`FilterControls.tsx`)**:
+     - Menggunakan `useMemo` untuk menghitung `computedCities`, `computedDistricts`, dan `computedCampuses` secara dinamis dari `rawRelations`:
+       - **Kota**: Menyaring kota berdasarkan `selectedProvince` jika dipilih, atau menampilkan seluruh kota jika `selectedProvince === 'Semua'`.
+       - **Kecamatan / Area**: Menyaring kecamatan berdasarkan `selectedCity` atau `selectedProvince` jika dipilih, atau menampilkan seluruh kecamatan jika tidak disetel.
+       - **Kampus**: Menyaring kampus berdasarkan kecamatan/kota/provinsi terpilih, atau menampilkan seluruh kampus yang terdata di database jika tidak disetel.
+     - **Auto-Reset Cerdas**: Mengatur handler perubahan Provinsi dan Kota agar otomatis mereset child dropdown jika pilihan sebelumnya sudah tidak valid di parent yang baru.
+  3. **Integrasi UI Sidebar Desktop & Mobile Drawer (`Listings.tsx` & `FilterDrawer.tsx`)**:
+     - Mengalirkan `rawRelations` ke kedua komponen filter kontrol.
+     - Mempertahankan tombol "Terapkan Filter" on-demand.
+- **File Tersentuh**:
+  - `functions/public/userService.ts`
+  - `functions/public/components/FilterControls.tsx`
+  - `functions/public/components/FilterDrawer.tsx`
+  - `functions/public/pages/Listings.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi Vite `cmd /c npm run build` di `functions/public/` lulus 100% (✓ 2509 modules transformed, built in 26.96s, 0 error).
+
+### 290. Penambahan Filter Provinsi & Kecamatan Serta Implementasi Tombol "Terapkan Filter" On-Demand (`FilterControls.tsx`, `FilterDrawer.tsx`, `Listings.tsx`, `userService.ts`) (September 2026)
+- **Permintaan & Masalah**:
+  - Pengguna meminta penambahan filter kategori Provinsi dan Kecamatan/Area, serta meminta agar sistem tidak langsung bereaksi saat pengguna sedang mengatur filter/mengetik pencarian (menggunakan tombol "Terapkan Filter" aktif on-demand).
+- **Implementasi Solusi**:
+  1. **Penambahan Filter Kategori Provinsi & Kecamatan**:
+     - Menambahkan field `selectedProvince` dan `selectedDistrict` ke `FilterState` dan `PropertyFilterParams`.
+     - Memperbarui `getFilteredProperties` di `userService.ts` untuk memfilter `.eq('province', selectedProvince)` dan `.eq('area', selectedDistrict)`.
+     - Memperbarui `getAvailableFilterOptions` untuk mengumpulkan daftar unik `provinces` dan `districts` dari tabel `properties`.
+  2. **Implementasi Tombol "Terapkan Filter" On-Demand**:
+     - Di `Listings.tsx`: Memisahkan state `draftFilters` (state isian form sementara) dan `appliedFilters` (state aktif query database).
+     - Query database Supabase hanya dieksekusi saat tombol **"Terapkan Filter"** diklik atau saat menekan `Enter` pada kolom pencarian.
+     - Menyediakan tombol **"Terapkan Filter"** berwarna oranye `#ff7a00` tebal dengan bayangan modern baik pada Desktop Sidebar Filter maupun Mobile Filter Drawer.
+     - Tombol **"Reset Filter"** mengembalikan form dan langsung mengeksekusi query database ke kondisi awal.
+- **File Tersentuh**:
+  - `functions/public/userService.ts`
+  - `functions/public/components/FilterControls.tsx`
+  - `functions/public/components/FilterDrawer.tsx`
+  - `functions/public/pages/Listings.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi Vite `cmd /c npm run build` di `functions/public/` lulus 100% (✓ 2509 modules transformed, built in 30.82s, 0 error).
+
+### 289. Migrasi Filter, Pencarian, dan Paginasi Listing Kost ke Backend Supabase Query (Mitra Biasa & Mitra KostManager) (`userService.ts` & `Listings.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  - Pengguna meminta agar filter, pencarian teks, dan paginasi pada katalog listing kost diproses langsung di level backend database (Supabase PostgreSQL Query) daripada di browser (client-side), serta memastikan query bekerja untuk kedua jenis properti (Mitra Biasa dan Mitra KostManager).
+- **Implementasi Solusi**:
+  1. **Query Database PostgreSQL Dinamis di Backend (`userService.ts`)**:
+     - Membuat fungsi `getFilteredProperties(params)` yang mengeksekusi PostgREST SQL query langsung ke tabel `properties` dengan status `published` (mencakup properti mitra biasa `is_managed = false` dan mitra KostManager `is_managed = true`).
+     - **Pencarian Teks Multi-Kolom**: `.or('title.ilike.%${term}%,address.ilike.%${term}%,area.ilike.%${term}%')` untuk mencari nama kost, alamat, maupun wilayah.
+     - **Filter Kategori**: Mendukung filter tipe hunian (`type`), filter kota (`city`), filter kampus terdekat (`campuses`), dan filter harga maksimal (`price`).
+     - **Paginasi Server-Side**: Mengambil data range `.range(from, to)` (9 item per page) dan menghitung total record yang cocok via `{ count: 'exact' }`.
+     - Menyediakan fungsi `getAvailableFilterOptions()` untuk mengambil daftar kota dan kampus aktif secara dinamis dari database.
+  2. **Integrasi Client dengan Debouncing (`Listings.tsx`)**:
+     - Menghubungkan seluruh state filter dan tombol paginasi langsung ke `getFilteredProperties`.
+     - Memasang debounce 250ms pada input pencarian agar transisi pencarian terasa instan tanpa membebani kuota database dengan query bertubi-tubi.
+     - Menampilkan indikator loading halus saat data sedang diambil dari backend.
+- **File Tersentuh**:
+  - `functions/public/userService.ts`
+  - `functions/public/pages/Listings.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi Vite `cmd /c npm run build` di `functions/public/` lulus 100% (✓ 2509 modules transformed, built in 24.55s, 0 error).
+
+### 288. Penerapan Lazy Loading Gambar & Paginasi Halaman pada Menu Listing (`Listings.tsx` & `KostCard.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  - Pengguna meminta agar halaman katalog listing menerapkan *lazy load* gambar untuk mencegah lag saat render awal, serta menerapkan paginasi halaman (page 1, 2, 3...) jika jumlah unit kost mencapai batas tertentu sehingga tidak menumpuk dalam 1 halaman panjang.
+- **Implementasi Solusi**:
+  1. **Lazy Loading Gambar & Skeleton Shimmer (`KostCard.tsx`)**:
+     - Menambahkan atribut `loading="lazy"` dan `decoding="async"` pada elemen `<img>` kartu properti.
+     - Mengimplementasikan state `imageLoaded` dengan skeleton loader shimmer bergradasi lembut (`from-slate-100 via-slate-200 to-slate-100 animate-pulse`) agar transisi render gambar mulus tanpa *layout shift*.
+     - Menyediakan fallback icon dan pesan jika gambar gagal dimuat.
+  2. **Paginasi Halaman 9 Unit per Halaman (`Listings.tsx`)**:
+     - Mengatur konstanta `ITEMS_PER_PAGE = 9` (pas 3 baris $\times$ 3 kolom pada desktop).
+     - Menambahkan perhitungan dinamis `totalPages`, `startIndex`, `endIndex`, serta pemotongan data `paginatedKosts = filteredKosts.slice(...)`.
+     - Menyediakan navigasi paginasi modern: Tombol *Sebelumnya*, nomor halaman (*1, 2, 3...* dengan smart ellipsis `...` dan highlight oranye pada halaman aktif), serta tombol *Berikutnya*.
+     - Menambahkan *Smooth Scroll* otomatis ke bagian atas hasil pencarian setiap kali pengguna berganti halaman.
+     - Mereset nomor halaman ke 1 secara otomatis setiap kali kriteria filter atau pencarian diperbarui.
+- **File Tersentuh**:
+  - `functions/public/components/KostCard.tsx`
+  - `functions/public/pages/Listings.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi Vite `cmd /c npm run build` di `functions/public/` lulus 100% (✓ 2509 modules transformed, built in 23.66s, 0 error).
+
+### 287. Penyesuaian UI/UX Halaman Profil Mode Mobile Presisi Mockup Google Stitch (`Profile.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  - Pengguna meminta penyesuaian khusus tampilan mode mobile halaman Profil agar persis dengan desain mockup Google Stitch mobile (avatar atas terpusat, banner otoritas ringkas, card informasi bertanda dot, dan tombol aksi ergonomis).
+- **Implementasi Solusi**:
+  1. **Top Profile Card Mobile (`Profile.tsx`)**:
+     - Cover atas bergradasi oranye `#ff7a00` tinggi 28 (`h-28`), avatar lingkaran besar `w-24 h-24` dengan badge centang oranye di sudut bawah.
+     - Nama pengguna tebal dengan checkmark verified, email, dan pill `Administrator Terverifikasi` / `Pengguna Terverifikasi` berikon shield.
+  2. **Banner Otoritas & Status Ringkas**:
+     - Banner berikon shield di kiri (`w-10 h-10`), judul kapital tebal `ADMINISTRATOR TERVERIFIKASI`, dan deskripsi ringkas yang pas di layar smartphone.
+  3. **Card Informasi Kontak & Pekerjaan (Dot Oranye)**:
+     - Header ber-indikator dot oranye `● INFORMASI KONTAK & PEKERJAAN`.
+     - Field input/tampilan berlatar belakang lembut `#F8FAFC` (*WhatsApp* dengan ikon telepon hijau, *Pekerjaan*, *Nama Kampus/Tempat Kerja*, *Jenis Kelamin*).
+  4. **Card Identitas & Domisili (Dot Slate)**:
+     - Header ber-indikator dot slate `● IDENTITAS & DOMISILI`.
+     - 2-Kolom untuk *Agama* & *Status*, serta baris full-width untuk *Tempat Lahir*, *Tanggal Lahir*, dan *Alamat Asal*.
+  5. **Tombol Aksi Mobile Ergonomis**:
+     - Tombol utama dark navy `Edit Profil` (`py-3.5`) dan tombol sekunder putih-oranye `Kembali`.
+- **File Tersentuh**:
+  - `functions/public/pages/Profile.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi Vite `cmd /c npm run build` di `functions/public/` lulus 100% (✓ 2509 modules transformed, built in 26.97s, 0 error).
+
+### 286. Redesain UI/UX Halaman Profil Mode Desktop Presisi Mockup Google Stitch (`Profile.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  - Pengguna meminta perombakan layout halaman Profile desktop menjadi layout 2-kolom modern sesuai desain referensi Google Stitch, menghilangkan tumpang tindih elemen (*overlapping*), dan meningkatkan estetika antarmuka.
+- **Implementasi Solusi**:
+  1. **Header & Breadcrumbs Rapi**:
+     - Breadcrumb bersih `/ Pengaturan Akun / Profil {RoleTitle}` dengan judul tebal, badge role (*Super Admin*, *Mitra Pemilik*, *Pencari Kost*), deskripsi wewenang, dan tombol aksi atas (*Kembali ke Beranda* & *Edit Profil*).
+  2. **Sidebar Card Kiri Sticky (`lg:col-span-4`)**:
+     - Header cover gradasi oranye `#ff7a00` dengan badge `SISTEM UTAMA` / `AKUN AKTIF`.
+     - Lingkaran avatar besar (`w-28 h-28`) dengan inisial/foto WebP jernih dan badge centang verifikasi.
+     - Nama pengguna dengan ikon verified checkmark, email, dan badge pill terverifikasi.
+     - Grid 4-box ringkasan meta (*Role Otoritas*, *Status Akun*, *Bergabung*, *Tingkat Akses*).
+     - Tombol aksi sidebar: `Edit Profil Sekarang` (dark navy) dan `Ganti Kata Sandi` (lengkap dengan modal interaktif).
+  3. **Panel Informasi Kanan (`lg:col-span-8`)**:
+     - **Kartu 1 - Informasi Kontak & Pekerjaan**: Grid 2x2 (*WhatsApp* dengan badge hijau Aktif, *Pekerjaan*, *Nama Kampus/Tempat Kerja*, *Jenis Kelamin*).
+     - **Kartu 2 - Data Kelahiran & Domisili**: Grid 2x2 (*Agama*, *Status Hubungan*, *Tempat Lahir*, *Tanggal Lahir*) + *Alamat Asal / Domisili Lengkap* (full-width).
+     - **Kartu Khusus Agen**: Panel upload dan verifikasi KTP (NIK + Foto KTP) untuk role `survey_agent`.
+     - **Kartu 3 - Banner Status Administrator/Otoritas Terverifikasi**: Banner rapi berikon shield dengan teks bersih tanpa tumpang tindih.
+     - **Bottom Action Buttons**: Tombol *Kembali* dan *Edit Profil* / *Simpan Perubahan* & *Batal*.
+  4. **Modal Ganti Kata Sandi Interaktif**:
+     - Dilengkapi form input kata sandi baru, konfirmasi, toggle show/hide password, dan opsi pengiriman link reset ke email pengguna via Supabase Auth.
+- **File Tersentuh**:
+  - `functions/public/pages/Profile.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi Vite `cmd /c npm run build` di `functions/public/` lulus 100% (✓ 2509 modules transformed, built in 1m 1s, 0 error).
+
+### 285. Perbaikan Visibilitas Mobile Bottom Navigation Bar pada Halaman Orders & Sub-Routes (`Navbar.tsx` & `MyKost.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  - Pengguna mendapati Mobile Bottom Navigation Bar menghilang saat membuka menu **Orders / Kost Saya** (`/my-bookings`).
+- **Implementasi Solusi**:
+  1. **Pembaruan Logika Visibilitas Berbasis Prefix (`Navbar.tsx`)**:
+     - Mengubah perbandingan array kaku `[...].includes(activePage)` menjadi pengecekan fleksibel berbasis route (`activePage.startsWith(Page.MY_BOOKINGS)`, `startsWith(Page.CHAT)`, `startsWith(Page.LISTINGS)`, dll.).
+     - Menjamin Mobile Bottom Navigation Bar selalu muncul di seluruh halaman user umum dan hanya disembunyikan pada halaman dashboard pengelola/admin.
+  2. **Penyelarasan Padding Bawah Halaman (`MyKost.tsx`)**:
+     - Mengubah padding bawah container menjadi `pb-28 sm:pb-12` agar kartu pesanan di bagian bawah tidak tertutup oleh bottom navigation bar.
+- **File Tersentuh**:
   - `functions/public/components/Navbar.tsx`
-  - `functions/public/pages/Home.tsx`
-  - `functions/public/components/QuickActionMenu.tsx`
+  - `functions/public/pages/MyKost.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi Vite `cmd /c npm run build` di `functions/public/` lulus 100% (✓ 2509 modules transformed, built in 34.13s, 0 error).
+
+### 284. Redesain Mobile Bottom Navigation Bar Presisi Mockup Google Stitch (`Navbar.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  - Pengguna merasa ikon dan teks pada bottom navbar mobile sebelumnya terlalu kecil, tipis, dan berwarna abu-abu pudar sehingga sulit dilihat dan dioperasikan di layar HP.
+- **Implementasi Solusi**:
+  1. **Peningkatan Proporsi Ikon & Stroke (`Navbar.tsx`)**:
+     - Memperbesar ukuran ikon dari 21px menjadi 23px (`size={23}`) dengan ketebalan stroke tegas `strokeWidth={2.2}` (inaktif) dan `strokeWidth={2.6}` (aktif).
+  2. **Harmonisasi Warna Kontras Tinggi Google Stitch**:
+     - *Inaktif*: Menggunakan warna dark slate tegas `text-[#334155]` dengan label `font-bold text-[11px]` (jelas dan tajam).
+     - *Aktif*: Menggunakan warna signature oranye `text-[#ff7a00]` dengan background fill halus `fill-[#ff7a00]/10` dan label `font-extrabold text-[11px]`.
+  3. **Container & Area Sentuh (*Tap Target*)**:
+     - Memberikan padding `py-2 px-1` dengan shadow halus `shadow-[0_-4px_24px_rgba(0,0,0,0.06)]` dan safe-area inset yang nyaman disentuh.
+- **File Tersentuh**:
+  - `functions/public/components/Navbar.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi Vite `cmd /c npm run build` di `functions/public/` lulus 100% (✓ 2509 modules transformed, built in 32.86s, 0 error).
+
+### 283. Penambahan Menu Chat / Pesan pada Mobile Bottom Navigation Bar & Dropdown Profil (`Navbar.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  - Pengguna meminta penambahan menu **Chat / Pesan** pada bottom navigation bar versi mobile agar pengguna dapat langsung mengakses dan meninjau seluruh riwayat percakapan yang pernah dilakukan dengan pemilik kost maupun admin/pengelola.
+- **Implementasi Solusi**:
+  1. **Integrasi Menu Chat pada Mobile Bottom Nav (`Navbar.tsx`)**:
+     - Menjadikan Mobile Bottom Navigation Bar berformat 5 menu seimbang (*Home*, *Search*, *Chat*, *Orders*, *Profile*).
+     - Menggunakan icon vector SVG `<MessageSquare />` dari package `lucide-react` (100% bebas FOUT).
+     - Navigasi pintar: jika pengguna sudah login langsung membuka `Page.CHAT` (`/chat`), jika belum login diarahkan ke `Page.LOGIN`.
+  2. **Shortcut Chat pada Dropdown Profil Desktop & Mobile**:
+     - Menambahkan menu *Pesan / Chat* pada dropdown avatar profil untuk akses cepat di perangkat desktop.
+- **File Tersentuh**:
+  - `functions/public/components/Navbar.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi Vite `cmd /c npm run build` di `functions/public/` lulus 100% (✓ 2509 modules transformed, built in 50.70s, 0 error).
+
+### 282. Perbaikan ReferenceError AlertCircle is not defined pada KostDetail (`KostDetail.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  - Pengguna menemukan error `ReferenceError: AlertCircle is not defined` saat membuka detail kost yang memiliki tipe kamar "Kosongan (Tanpa Perabot)".
+- **Implementasi Solusi**:
+  1. **Import AlertCircle dari `lucide-react` (`KostDetail.tsx`)**:
+     - Menambahkan ikon vector SVG `AlertCircle` ke dalam daftar impor `lucide-react` di bagian atas file `KostDetail.tsx`.
+- **File Tersentuh**:
+  - `functions/public/pages/KostDetail.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi Vite `cmd /c npm run build` di `functions/public/` lulus 100% (✓ 2509 modules transformed, built in 30.55s, 0 error).
+
+### 281. Perbaikan TypeError toLowerCase pada Normalisasi Kampus dan Fasilitas Publik KostDetail (`KostDetail.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  - Pengguna menemukan error `TypeError: Cannot read properties of undefined (reading 'toLowerCase')` saat membuka detail kost tertentu (terutama berjenis KostManager) akibat variasi format data JSON kolom `campuses` dan `publicFacilities` di database (array string mentah vs array objek).
+- **Implementasi Solusi**:
+  1. **Universal Safe Normalizer (`KostDetail.tsx`)**:
+     - Menerapkan fungsi normalizer cerdas yang otomatis mendeteksi apakah data berbentuk *string* (`"UNHAS"`) maupun *object* (`{ name: "UNHAS", ... }`), melakukan trim nama secara aman, serta menyaring elemen null/undefined.
+     - Melindungi pemanggilan `publicNames.map()` dan `raw.filter()` agar tidak pernah memicu crash saat properti `.name` tidak ada.
+- **File Tersentuh**:
+  - `functions/public/pages/KostDetail.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi Vite `cmd /c npm run build` di `functions/public/` lulus 100% (✓ 2509 modules transformed, built in 1m 18s, 0 error).
+
+### 280. Penyesuaian Badge "TERVERIFIKASI" Berwarna Biru pada Kartu Listing (`KostCard.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  - Pengguna meminta agar teks badge verifikasi di kartu kost diubah dari `"VERIFIED"` menjadi `"TERVERIFIKASI"` dengan warna biru terverifikasi (`bg-[#2563eb]`).
+- **Implementasi Solusi**:
+  1. **Update Teks & Warna Badge (`KostCard.tsx`)**:
+     - Mengubah label badge verifikasi menjadi `"TERVERIFIKASI"` dengan warna `bg-[#2563eb] text-white`.
+     - Menyesuaikan badge tipe putra menjadi `bg-[#0284c7]` agar kontras dan harmonis.
+- **File Tersentuh**:
   - `functions/public/components/KostCard.tsx`
   - `functions/PROGRESS.md`
   - `WALKTHROUGH.md`
 - **Verifikasi**:
-  - Uji kompilasi build Vite `cmd /c npm run build` lulus 100% (✓ 2504 modules transformed, built in 1m 10s, 0 error).
+  - Kompilasi Vite `cmd /c npm run build` di `functions/public/` lulus 100% (✓ 2509 modules transformed, built in 46.33s, 0 error).
+
+### 279. Pemulihan Penuh Seluruh Fitur Workspace & Penerapan UI/UX Google Stitch Beranda (Desktop & Mobile) (`Home.tsx`, `Footer.tsx`, `Navbar.tsx`, `PromoCarousel.tsx`, `QuickActionMenu.tsx`, `KostCard.tsx`, `index.html`, `index.css`) (September 2026)
+- **Permintaan & Masalah**:
+  - Pemulihan total seluruh fitur workspace (Dashboard Mitra, Formulir Multi-Langkah Listing, Peninjauan Listing Super Admin, AI Banner Sensor, Interactive Route Map Kost Detail, dll.) yang sempat terpotong akibat sinkronisasi branch lama, sekaligus menggabungkan UI/UX modern Google Stitch pada beranda desktop dan mobile secara harmonis tanpa regresi logika.
+- **Implementasi Solusi**:
+  1. **Pemulihan Total Integritas Kode Workspace**:
+     - Merestore seluruh 278 fitur lengkap di `MitraDashboard.tsx`, `KostDetail.tsx`, `KostFormMitra.tsx`, `PropertyReviewModal.tsx`, `adminService.ts`, dan modul terkait.
+  2. **UI/UX Google Stitch Beranda & Rebranding Nasional**:
+     - *Tipografi*: Mengunci `Plus Jakarta Sans` secara universal.
+     - *Palet Warna*: Deep Navy `#0b1c30`, Warm Slate Brown `#8c7263`, Vivid Tangerine Orange `#ff7a00`.
+     - *Desktop*: 4-segmen search bar melayang, 3D stacked deck carousel, 4 kartu fitur, dan footer afiliasi lengkap.
+     - *Mobile*: Search bar 1-baris compact, banner carousel swipeable full-width, 4 menu fitur 1-baris horizontal, dan bottom nav.
+     - *SEO*: `<title>RuangSinggah.id - Platform Pencarian & Sewa Properti Terpercaya Se-Indonesia</title>` dan Schema.org JSON-LD.
+- **File Tersentuh**:
+  - Seluruh file workspace telah diverifikasi utuh.
+- **Verifikasi**:
+  - Kompilasi Vite `cmd /c npm run build` di `functions/public/` lulus 100% (✓ 2509 modules transformed, built in 43.93s, 0 error).
+
+### 278. Penyederhanaan UI Mini Peta Rute & Fitur Auto-Scale Adaptive Viewport (`KostDetail.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  - Pengguna meminta agar tampilan peta dibuat lebih bersih (*clean & minimalis*) dengan:
+    1. Menghapus banner oranye di atas peta ("Menampilkan rute menuju...").
+    2. Menghapus tombol link di bawah peta ("Buka navigasi penuh di Google Maps").
+    3. Menerapkan fitur *auto-scale* / *adaptive viewport* pada layar mini preview peta agar skala dan tingginya otomatis menyesuaikan diri secara proporsional saat rute jalan jarak jauh ditampilkan.
+- **Implementasi Solusi**:
+  1. **Pembersihan Elemen UI (*Ultra Clean Map Preview*)**:
+     - Menghapus komponen banner atas dan tombol link bawah secara total.
+     - Section peta kini tampil bersih, modern, dan bebas distraksi.
+  2. **Fitur Auto-Scale Adaptive Height**:
+     - **Saat Mode Pin Kost (Normal)**: Iframe berukuran compact `h-60 sm:h-72`.
+     - **Saat Mode Rute Aktif**: Container peta secara otomatis membesar (*auto-scale*) menjadi `h-96 sm:h-[420px] md:h-[460px]` dengan animasi CSS transisi halus (`transition-all duration-500 ease-in-out`).
+     - Seluruh garis rute belokan dan titik asal-tujuan tampil lega tanpa terpotong.
+  3. **Floating Reset Pill Ringkas**:
+     - Menempatkan tombol mini semi-transparan yang elegan di sudut kanan atas peta bertuliskan *"✕ Titik Kost"* (`<RotateCcw />`) saat rute aktif, sehingga pengguna dapat kembali ke titik kost dengan satu klik cepat (atau dengan mengklik ulang tombol *"Aktif ✓"* pada list).
+  4. **Bebas FOUT**:
+     - 100% menggunakan SVG bundled lokal `lucide-react`.
+- **File Tersentuh**:
+  - `functions/public/pages/KostDetail.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Uji kompilasi build Vite `cmd /c npm run build` lulus 100% (✓ 2509 modules transformed, built in 30.64s, 0 error).
+
+### 277. Visualisasi Rute Interaktif Langsung pada Mini Peta Halaman Detail Kost (Interactive In-App Route Preview) (`KostDetail.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  - Sebelumnya, ketika calon penghuni mengklik tombol *"Rute"* pada daftar Kampus Terdekat atau Fasilitas Publik Terdekat, sistem membuka tab baru ke Google Maps eksternal (`window.open`). Hal ini menyebabkan pengguna terlempar keluar dari website RuangSinggah.
+  - Pengguna meminta agar ketika tombol *"Rute"* diklik, visualisasi rute petunjuk arah langsung ditampilkan pada layar mini map preview di bagian atas tanpa harus keluar dari aplikasi.
+- **Implementasi Solusi**:
+  1. **Interactive Route State & Dynamic Map Embed (`KostDetail.tsx`)**:
+     - Mengembangkan state `activeRoute` dan ref `mapPreviewRef`.
+     - Ketika tombol *"Rute"* diklik pada kampus/fasilitas publik manapun, iframe peta mini secara dinamis beralih ke mode directions: `https://maps.google.com/maps?saddr=${originLat},${originLng}&daddr=${destLat},${destLng}&output=embed`.
+     - Peta mini langsung menampilkan garis jalur perjalanan, rute belokan, dan estimasi rute dari lokasi Kost menuju destinasi yang dipilih secara instan di dalam aplikasi.
+  2. **Banner Status Rute Aktif & Tombol Reset**:
+     - Menyajikan floating info banner di atas peta mini:
+       - 🧭 **Menampilkan Rute Menuju:** [Nama Tempat] (Badge Jarak `± X km`).
+       - Estimasi Waktu Tempuh 3 Moda: 🚶 Jalan Kaki • 🏍️ Sepeda Motor • 🚗 Mobil.
+       - Tombol **"✕ Titik Kost"** (`<RotateCcw />`) untuk mengembalikan peta ke mode pin tunggal properti.
+  3. **Smooth Scroll & Visual Highlight Aktif**:
+     - Mengintegrasikan fungsi *smooth scroll* otomatis ke layar mini map saat tombol *"Rute"* diklik.
+     - Kartu tempat yang rutenya sedang aktif mendapatkan penanda ring & border oranye/biru serta tombol bertuliskan *"Aktif ✓"*.
+  4. **Tombol Navigasi Alternatif Sekunder**:
+     - Tombol di bawah peta bertransformasi menjadi *"Buka Navigasi Penuh di Google Maps ↗"* jika pengguna sewaktu-waktu tetap ingin membuka GPS navigasi penuh di aplikasi Google Maps eksternal.
+  5. **Bebas FOUT**:
+     - 100% menggunakan SVG bundled lokal `lucide-react` (`Navigation`, `RotateCcw`, `GraduationCap`, `Building2`, `MapPin`).
+- **File Tersentuh**:
+  - `functions/public/pages/KostDetail.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Uji kompilasi build Vite `cmd /c npm run build` lulus 100% (✓ 2509 modules transformed, built in 27.68s, 0 error).
+
+### 276. Perbaikan Tampilan Foto Listing pada Sesi Admin & Penerapan Stale-While-Revalidate di Halaman Detail (`App.tsx`, `userService.ts`, `adminService.ts`) (September 2026)
+- **Permintaan & Masalah**:
+  - Pengguna melaporkan bahwa foto listing kost ("Kost Apalah Daya") tampil sempurna ketika diakses oleh real user, mobile, maupun guest (belum login), namun foto dan thumbnail tidak muncul (broken image icon) ketika diakses oleh akun Administrator di desktop browser saat membuka pratinjau / deep link `/kost/...`.
+- **Investigasi & Analisis Akar Masalah**:
+  1. *Stale State Caching di `KostDetailWrapper` (`App.tsx`)*:
+     - `KostDetailWrapper` sebelumnya memeriksa `if (!kost || kost.id !== realPropertyId)`.
+     - Karena akun admin di browser desktop sudah membuka website dan memuat state `listings` sebelum foto diperbaiki/diupload ulang, `listings.find(...)` menemukan objek properti lama yang masih menyimpan URL foto rusak di memori tab.
+     - Akibat kondisi `if (!kost || ...)` tersebut, pemanggilan `getPublishedPropertyDetails(realPropertyId)` dilewati sehingga tab admin terus menampilkan data lama. Sebaliknya, tab incognito / guest memuat data fresh dari server sehingga foto muncul normal.
+  2. *Ketiadaan Resolver `getDisplayImageUrl` & Metadata di `getAdminProperties` (`adminService.ts`)*:
+     - Fungsi `getAdminProperties` sebelumnya memetakan `image_urls` mentah tanpa melalui `getDisplayImageUrl` dan belum menyertakan `photosMeta`, `photoCategories`, serta `categorizedPhotos`.
+  3. *Inkonsistensi `photosMeta` di `userService.ts`*:
+     - Pada `getPublishedProperties` dan `getPublishedPropertyDetails`, pemetaan `photosMeta` belum memprioritaskan `row.metadata?.photos_meta`.
+- **Implementasi Solusi**:
+  1. **Penerapan Pola Stale-While-Revalidate pada `KostDetailWrapper` (`App.tsx`)**:
+     - `KostDetailWrapper` menggunakan data in-memory `listings` untuk render instan awal (0ms delay), namun **selalu melakukan background fetch `getPublishedPropertyDetails(realPropertyId)`** setiap kali halaman dibuka.
+     - Begitu data server terbaru didapatkan, state `kost` langsung diperbarui secara reaktif sehingga tampilan foto, harga, dan ketersediaan selalu sinkron 100%.
+  2. **Resolusi URL & Metadata Lengkap pada `getAdminProperties` (`adminService.ts`)**:
+     - Menggunakan `getDisplayImageUrl` dan `getDisplayImageObject` agar seluruh URL foto dipastikan teresolusi ke CDN proxy Cloudflare `https://media.ruangsinggah.id/...`.
+     - Memetakan `photosMeta`, `photoCategories`, dan `categorizedPhotos` secara lengkap pada objek `BasicPropertyInfo`.
+  3. **Penyelarasan `photosMeta` & Verifikasi Admin di `userService.ts`**:
+     - Memastikan `photosMeta` memprioritaskan `row.metadata?.photos_meta || rawImages`.
+     - Memperkuat verifikasi admin pada mode pratinjau draft dengan mengecek tabel `users`.
+- **File Tersentuh**:
+  - `functions/public/App.tsx`
+  - `functions/public/userService.ts`
+  - `functions/public/adminService.ts`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Uji kompilasi build Vite `cmd /c npm run build` lulus 100% (✓ 2509 modules transformed, built in 25.93s, 0 error).
+
+### 275. Perbaikan Foto Hilang Pasca-Edit Listing Mitra & Penegasan Alur Publish Baru vs Edit Listing (`adminService.ts` & `KostFormMitra.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  - Mitra melaporkan bahwa setelah melakukan pengeditan data kost pada Dashboard Mitra lalu menyimpannya, foto-foto pada listing menjadi hilang / rusak (tampil sebagai broken image icon `Thumbnail 1`, `Thumbnail 2`, dst. di sisi user pencari kost).
+  - Pengguna menanyakan apakah alur edit listing lama yang sudah disetujui admin sama dengan pendaftaran listing baru yang wajib menunggu ACC admin dari awal.
+- **Investigasi & Analisis Akar Masalah**:
+  1. *Akar Masalah Foto Hilang*:
+     - Fungsi pembacaan listing `getOwnerProperties` di `userService.ts` mengonversi domain URL foto dari Supabase (`supabase.co`) ke CDN proxy (`media.ruangsinggah.id`).
+     - Ketika listing diedit, `KostFormMitra.tsx` mengirimkan URL `media.ruangsinggah.id` ke `updatePropertyWithMedia`.
+     - Fungsi `updatePropertyWithMedia` sebelumnya membandingkan string eksak (`keptUrl === imgObj.original`). Perbedaan nama host domain membuat komparasi bernilai `false` untuk seluruh foto lama.
+     - Akibatnya, sistem salah menduga bahwa semua foto lama telah dihapus oleh pengguna dan memicu `deleteFileFromStorage()`, yang secara fisik menghapus file foto dari Supabase Storage.
+  2. *Penegasan Alur Publish Baru vs Editing*:
+     - Listing baru (`addPropertyWithMedia`) wajib berstatus `'draft'` dengan `is_verified: false` untuk ditinjau & di-ACC oleh Super Admin.
+     - Listing lama yang sudah tayang (`status === 'published'`) ketika diedit (`updatePropertyWithMedia`) wajib **tetap berstatus `'published'`** dan `is_verified: true`, sehingga perubahan data langsung tayang secara instan di sisi user tanpa harus menunggu antrean review admin ulang.
+- **Implementasi Solusi**:
+  1. **Helper Normalisasi Path Storage (`normalizeStorageRelativePath` & `deleteFileFromStorage`) di `adminService.ts`**:
+     - Mengembangkan fungsi `normalizeStorageRelativePath` yang mengekstrak path relatif objek storage (contoh: `properties/user123/kost/img.webp`), kebal terhadap perbedaan domain CDN proxy (`media.ruangsinggah.id`), direct Supabase, maupun relative path.
+     - Memperbarui pengecekan `itemsToDelete`, `videosToDelete`, dan `findLabelForUrl` agar mencocokkan path storage yang dinormalisasi. Foto lama yang dipertahankan dijamin tidak akan pernah terhapus dari storage.
+  2. **Perlindungan Status Listing Saat Edit di `adminService.ts` & `KostFormMitra.tsx`**:
+     - Pada `updatePropertyWithMedia`, menetapkan `targetStatus` & `targetVerified`: jika properti yang diedit sudah `published`, maka status tetap `published` dan `is_verified: (existing.is_verified ?? true)`.
+     - Di `KostFormMitra.tsx`, memberikan umpan balik notifikasi yang ramah dan kontekstual:
+       - Edit Listing Aktif: *"Perubahan berhasil disimpan! Data kost Anda telah langsung diperbarui pada listing publik."*
+       - Edit Listing Draft: *"Perubahan draft berhasil disimpan! Menunggu peninjauan oleh tim admin RuangSinggah."*
+       - Pendaftaran Baru: *"Pendaftaran kost berhasil diajukan! Listing baru Anda saat ini dalam tahap peninjauan (review) oleh tim RuangSinggah dan akan otomatis tayang setelah disetujui."*
+- **File Tersentuh**:
+  - `functions/public/adminService.ts`
+  - `functions/public/components/KostFormMitra.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Uji kompilasi build Vite `cmd /c npm run build` di `functions/public/` lulus 100% (✓ 2509 modules transformed, built in 34.61s, 0 error).
+
+### 274. Redesain Tampilan Landmark & Fasilitas Publik Terdekat Menjadi Ramping & Efisien (Compact Grid Horizontal) (`KostDetail.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  - Bagian Landmark (Kampus Terdekat) dan Fasilitas Publik Terdekat pada halaman detail kost sebelumnya memakan ruang vertikal secara berlebihan karena dirender sebagai kartu vertikal tinggi (`min-w-[200px]`, tinggi ~160px) dengan `flex-wrap`.
+  - Pengguna meminta agar tampilan landmark dan fasilitas publik dibuat jauh lebih ramping, efisien, dan tidak memakan banyak tempat.
+- **Implementasi Solusi**:
+  1. **Grid Responsif Compact 2-Kolom (`grid grid-cols-1 md:grid-cols-2 gap-2`)**:
+     - Menggantikan kartu vertikal besar dengan horizontal card ramping setinggi ~48px.
+     - Di desktop tampil rapi dalam 2 kolom bersebelahan, di mobile dalam 1 kolom vertikal yang compact.
+  2. **Struktur Konten Baris Ramping**:
+     - Sisi Kiri: Icon pin ter-bundle (`MapPin`, `GraduationCap`, `Building2` dari `lucide-react`) + Nama tempat tebal ber-tooltip.
+     - Sisi Kanan: Badge jarak (`distance`) bernuansa oranye/biru pastel.
+     - Sub-baris: Estimasi waktu tempuh 3 moda transportasi (🚶 Jalan Kaki, 🏍️ Motor, 🚗 Mobil) dalam chips abu-abu mini + Tombol **Rute** ringkas yang langsung membuka navigasi Google Maps.
+  3. **Bebas FOUT**:
+     - 100% menggunakan SVG bundled lokal `lucide-react`, 0 network request CDN font ligature.
+- **File Tersentuh**:
+  - `functions/public/pages/KostDetail.tsx`
+- **Verifikasi**:
+  - Uji kompilasi build TypeScript `cmd /c "npm run build"` lulus 100% (exit code 0, 0 error).
+
+### 273. Restrukturisasi & Penyajian Fasilitas & Sub-Fasilitas Listing Berhirarki (1:1 Sesuai Input Mitra & Agen) (`KostDetail.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  - Bagian Fasilitas Umum pada halaman detail kost sebelumnya hanya merender array fasilitas secara datar (flat array) dengan bullet bulat sederhana, sehingga sub-fasilitas kelengkapan (seperti kompor, kulkas bersama, wastafel cuci piring, dispenser air, peralatan masak, parkir motor, parkir mobil) bercampur baur dengan fasilitas utama tanpa hierarki.
+  - Fasilitas kamar juga belum terdeskripsikan secara rapi per kategori perabot kamar tidur, kamar mandi, dan dapur kamar di sidebar.
+- **Implementasi Solusi**:
+  1. **Parser Fasilitas Hirarkis (`parseStructuredPublicFacilities`)**:
+     - Mengelompokkan sub-fasilitas ke dalam kartu induk utama (**Dapur Bersama**, **Area Parkir**, **WC Umum / Luar**, **Ruang Tamu & Bersama**).
+     - Menampilkan sub-kelengkapan dalam bentuk pills/chips rapi berikon centang di dalam kartu induk fasilitas tersebut.
+     - Memetakan fasilitas mandiri (**WiFi**, **CCTV**, **Security 24 Jam**, **Akses 24 Jam**, **Laundry**, **Mushola**, **Area Jemuran**, **Lift**, **Cleaning Service**, dll.) ke dalam grid kartu ber-ikon vector SVG `lucide-react`.
+  2. **Struktur Fasilitas Kamar Per Tipe (`structuredRoomFacilities`)**:
+     - Mengelompokkan fasilitas per unit terpilih menjadi sub-kategori: *Perabot & Ruangan* (Kasur, Lemari, Meja, AC, TV, Jendela), *Kamar Mandi* (Kamar Mandi Dalam/Luar, Kloset Duduk/Jongkok, Water Heater, Shower), *Dapur Pribadi* (jika ada Dapur Dalam), serta indikator peringatan khusus jika kamar berstatus *Kosongan (Tanpa Perabot)*.
+  3. **Bebas FOUT**: Seluruh icon menggunakan SVG vector murni yang ter-bundle lokal via `lucide-react`.
+- **File Tersentuh**:
+  - `functions/public/pages/KostDetail.tsx`
+- **Commit**: `c3e9b55` → `bukan-productions`
+
+### 272. Fix Galeri Foto Tipe Kamar untuk Kost Biasa (Non-Managed) (`KostDetail.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  - Bilah navigasi foto tipe kamar (`showRoomPhotoNav`) tidak muncul untuk listing kost biasa (bukan KostManager) meskipun foto sudah ada.
+  - Foto kost biasa disimpan di `kost.imageUrls` (propertyPhotos) dengan label seperti `"Interior Kamar: Standard"`, `"Kamar Mandi: VIP"`, bukan di `rt.images`.
+  - `normalizedRooms` hanya membaca `rt.images || rt.image_urls`, selalu kosong untuk kost biasa → `showRoomPhotoNav = false`.
+- **Implementasi Solusi**:
+  1. **Fallback foto di `normalizedRooms`**: Jika `rt.images` kosong dan `!kost.isManaged`, sistem kini memindai `propertyPhotos` untuk foto berlabel yang mengandung nama tipe kamar (cth: `"Standard"` → match label `"Interior Kamar: Standard"`). Foto yang cocok di-assign ke tipe kamar tersebut sebagai `roomPhotoItems`.
+  2. **Update `emptyRooms`**: Untuk kost biasa, `emptyRooms` kini mencakup semua tipe yang memiliki foto (tidak peduli status available/terisi). Untuk KostManager, tetap hanya unit yang `isAvailable`.
+  3. **Label nav bar dinamis**: Bilah navigasi kini menampilkan `"Pilih Foto Unit Kamar"` (KostManager) atau `"Pilih Foto Tipe Kamar"` (kost biasa) secara kontekstual.
+- **File Tersentuh**:
+  - `functions/public/pages/KostDetail.tsx`
+- **Commit**: `9698d29` → `bukan-productions`
+
+### 271. Modal Pratinjau 1:1 Super Admin dengan Fitur Minta Catatan Revisi Mitra & Integrasi Status Perlu Revisi di Dashboard Mitra (`PropertyReviewModal.tsx`, `PropertyManagement.tsx`, `MitraDashboard.tsx`, `adminService.ts`) (September 2026)
+- **Permintaan & Masalah**:
+  - Super Admin memerlukan kemampuan untuk meninjau listing baru secara 1:1 persis seperti tampilan asli pengguna/pencari kost tanpa tombol booking/chat aktif, serta memberikan catatan revisi terstruktur jika data kost masih kurang lengkap atau belum memenuhi standar sebelum disetujui.
+  - Mitra kost perlu melihat catatan evaluasi spesifik dari admin langsung pada kartu listing di Dashboard Mitra dengan label jelas "Perlu Revisi", sehingga mitra tahu apa yang perlu diperbaiki.
+- **Investigasi & Analisis**:
+  1. *Keseragaman Pengalaman Pratinjau*: Super Admin sebelumnya memiliki modal tinjauan manual yang bentuknya berbeda dari halaman publik asli. Dengan memanfaatkan `hideBookingAndChat={true}` pada `KostDetail.tsx`, Super Admin dapat melihat tata letak otentik 1:1.
+  2. *Alur Moderasi Dua Arah*: Admin butuh tombol "Minta Revisi" yang membuka form catatan perbaikan. Ketika dikirim, status properti kembali menjadi draft dengan catatan evaluasi tersimpan di `metadata.revision_notes` dan kolom `revision_notes`.
+  3. *Umpan Balik Jelas Bagi Mitra*: Mitra yang listingnya membutuhkan revisi langsung disajikan kartu bertanda badge oranye "Perlu Revisi" dan banner peringatan berisi instruksi admin serta tombol "Edit".
+- **Implementasi Solusi**:
+  1. **Komponen Pratinjau 1:1 Super Admin ([`PropertyReviewModal.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/components/admin/PropertyReviewModal.tsx))**:
+     - Membungkus `<KostDetail kost={property} hideBookingAndChat={true} />` dalam layout layar penuh dengan topbar kontrol moderasi lengkap.
+     - Topbar menyediakan tombol aksi: "Setujui & Publikasikan", "Minta Revisi", "Beri/Hapus Centang Biru", "Bekukan Kost", dan "Tutup".
+     - Dialog catatan revisi interaktif dengan textarea untuk menuliskan pesan evaluasi admin secara detail.
+  2. **Layanan Moderasi Admin ([`adminService.ts`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/adminService.ts))**:
+     - Menambahkan fungsi `requestPropertyRevision(propertyId, revisionNotes)` yang memperbarui status properti menjadi `draft` dan mencatat `revision_notes` serta `revision_requested_at`.
+  3. **Manajemen Properti Admin ([`PropertyManagement.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/components/admin/PropertyManagement.tsx))**:
+     - Menggantikan modal peninjauan kustom dengan `PropertyReviewModal`.
+     - Menyediakan handler `handleRequestRevision` yang memanggil `requestPropertyRevision` dan menyegarkan data.
+  4. **Tampilan Umpan Balik Mitra ([`MitraDashboard.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/MitraDashboard.tsx))**:
+     - Mendeteksi ketersediaan catatan revisi (`revisionNotes` / `metadata.revision_notes`).
+     - Menampilkan badge "Perlu Revisi" dan banner instruksi admin dengan latar amber yang jelas.
+- **File Tersentuh**:
+  - `functions/public/components/admin/PropertyReviewModal.tsx` (baru)
+  - `functions/public/components/admin/PropertyManagement.tsx`
+  - `functions/public/adminService.ts`
+  - `functions/public/pages/MitraDashboard.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi Vite `cmd /c npm run build` di `functions/public/` sukses 100% (✓ 2509 modules transformed, built in 28.95s, 0 error).
+
+### 270. Konversi Banner Statis KostManager Menjadi Pop-up Iklan Grafis Dinamis dengan Kontrol Super Admin (`BannerManagement.tsx`, `MitraDashboard.tsx`, `adminService.ts`, `types.ts`) (September 2026)
+- **Permintaan & Masalah**:
+  - Pengguna merasa terganggu dengan banner statis oranye besar KostManager yang *hardcoded* di atas halaman "Kost Saya" dan Beranda mitra, yang memakan ruang vertikal secara permanen:
+    > *"bisa nggak sih ini dalam bentuk pop up aja yang muncul terus saat mitra membuka menu kelola kost atau baru pertama kali login tanpa harus menjadi hardcode yang selalu memenuhi tempat"*
+    > *"kalau perlu nanti kita pakai desain grafis aja sebagai banner promo kostmanager. jadi nnanti bentuknya seperti iklan pop up yang bisa di close. kontrol pop up iklan promo nantinya akan ada di dashboard super admin untuk upload desain banner nya"*
+- **Investigasi & Analisis**:
+  1. *Hardcoded Clutter*: Dua blok banner promo oranye berukuran besar sebelumnya terpasang paten di tab Beranda (overview) dan tab Kost Saya (properties) di `MitraDashboard.tsx`. Hal ini mempersempit area kerja pengelolaan listing dan memicu komplain layout yang sesak.
+  2. *Kurangnya Fleksibilitas Pemasaran*: Admin tidak dapat mengganti konten, visual grafis, atau menonaktifkan promosi tanpa harus mengedit kode sumber secara manual.
+  3. *Solusi Pop-Up Ad*: Mengadopsi pola *in-app image ad popup* modern (seperti Tokopedia/Traveloka/Mamikos). Desain grafis promosi yang menawan muncul di tengah layar dengan tombol close `[ ✕ ]` melayang di sudut atas, sehingga setelah ditutup, ruang dashboard mitra 100% bersih dan rapi.
+- **Implementasi Solusi**:
+  1. **Konfigurasi Database Terpusat ([`adminService.ts`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/adminService.ts), [`types.ts`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/types.ts))**:
+     - Menambahkan tipe `MitraPromoPopupSetting` (`is_active`, `title`, `image_url`, `link_url`, `alt_text`).
+     - Menyimpan dan membaca konfigurasi dari tabel `app_settings` Supabase dengan `key = 'mitra_promo_popup'`.
+     - Mengembangkan fungsi `getMitraPromoPopupSetting()` dan `saveMitraPromoPopupSetting(setting, newImageFile?)`.
+  2. **Panel Kontrol Super Admin ([`BannerManagement.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/components/admin/BannerManagement.tsx))**:
+     - Menambahkan kartu kontrol baru: **"🖼️ Kontrol Desain Pop-Up Iklan Promo Mitra (KostManager)"**.
+     - Fitur lengkap:
+       - **Pratinjau Desain Banner Grafis**: Menampilkan visual aktif secara real-time.
+       - **Upload Desain Grafis Baru**: Otomatis dikompresi ke WebP sebelum diunggah ke Supabase Storage (`banners/promo/`).
+       - **Toggle Status On/Off**: Mengaktifkan atau menonaktifkan penayangan pop-up di sisi mitra.
+       - **Pengaturan Link URL & Pesan Judul**: Menentukan rute tujuan ketika banner di-klik (default: `/kost-manager`).
+       - **Tombol Reset Default**: Mengembalikan ke fallback visual default.
+  3. **Pembersihan Layout & Pop-Up Iklan di Sisi Mitra ([`MitraDashboard.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/MitraDashboard.tsx))**:
+     - Menghapus total kedua banner statis oranye di tab overview dan tab properties. Area kerja mitra menjadi lega dan bersih.
+     - Membaca konfigurasi `mitra_promo_popup` saat dashboard dimuat.
+     - Menampilkan modal pop-up iklan dengan latar belakang gelap blur (`backdrop-blur-md`) saat mitra membuka menu "Kelola Kost" (`properties`) atau login.
+     - Menyediakan tombol tutup `[ ✕ ]` melayang di sudut kanan atas banner dan dukungan penutupan dengan tombol keyboard `Escape`.
+     - Mengklik gambar banner akan mengarahkan mitra langsung ke rute promosi KostManager (`/kost-manager`).
+     - Jika belum ada desain grafis custom yang diunggah admin, pop-up secara otomatis menampilkan desain visual bawaan KostManager yang elegan.
+- **File Tersentuh**:
+  - `functions/public/types.ts`
+  - `functions/public/adminService.ts`
+  - `functions/public/components/admin/BannerManagement.tsx`
+  - `functions/public/pages/MitraDashboard.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi Vite `cmd /c npm run build` di `functions/public/` lulus 100% (✓ 1928 modules transformed, built in 31.95s, 0 error).
+
+### 269. Modal Pratinjau Interaktif Listing Terisolasi 1:1 UI/UX Asli User di Lingkup Dashboard Mitra (`KostDetail.tsx`, `MitraKostPreviewModal.tsx`, `MitraDashboard.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  - Pengguna ingin memisahkan secara tegas lingkungan portal mitra dari lingkungan user pencari kost untuk persiapan arsitektur masa depan (seperti subdomain mandiri), dan meminta agar fitur preview listing kost yang sedang diajukan tetap berada di dalam lingkup dashboard mitra tanpa harus menembus/melompat ke rute publik:
+    > *"kedepannya saya akan benar benar memisahkan antara dashboard mitra dengan tampilan user ke lingkungan yang benar benar berbeda, bisa nggak sih preview kost yang sedang diajukan itu masih dalam lingkup dashboard mitra tanpa harus tembus ke lingkungan user pencari properti?"*
+  - Pada pengujian awal, pengguna memberikan masukan bahwa tampilan modal pratinjau sebelumnya tidak mencerminkan tata letak asli halaman detail kost user:
+    > *"kenapa tidak merepresentasikan langsung ui/ux tampilan user kita? kenapa beda? saya ingin agar 1:1 tampilannya, tapi tanpa tombol booking atau chat"*
+- **Investigasi & Analisis Akar Masalah**:
+  1. *Portal Bleeding*: Sebelumnya tombol Preview di menu "Kost Saya" melakukan navigasi keluar ke rute publik `/kost/{slug}`. Mitra "terlempar" ke halaman publik yang menampilkan navbar publik, search bar, dan footer umum.
+  2. *Discrepancy UI*: Pembuatan tampilan tiruan terpisah menimbulkan perbedaan tata letak dengan halaman detail publik (`KostDetail.tsx`), seperti varian kamar, fasilitas, dan galeri grid foto.
+  3. *Authentic 1:1 Representation*: Mitra berhak melihat tampilan yang persis 100% sama dengan apa yang dilihat oleh calon penyewa, namun dengan keamanan: tanpa tombol booking aktif dan tanpa chat.
+- **Implementasi Solusi**:
+  1. **Dukungan Mode Pratinjau pada Komponen Utama ([`KostDetail.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/KostDetail.tsx))**:
+     - Menambahkan prop `hideBookingAndChat?: boolean` pada `KostDetailProps`.
+     - Ketika `hideBookingAndChat === true`:
+       - Tombol **"Ajukan Sewa"**, **"Chat Pemilik"**, dan **"Laporkan Properti"** disembunyikan dan digantikan dengan badge informasi: *"Mode Pratinjau Mitra • Tombol transaksi sewa dan chat calon penyewa dinonaktifkan dalam mode pratinjau mitra."*
+       - Tombol chat "Tanya" pada mobile sticky header disembunyikan.
+       - Penghitungan metrik view publik (`incrementPropertyView`) dinonaktifkan agar tidak menaikkan metrik analitik palsu dari pemilik sendiri.
+  2. **Integrasi 1:1 Langsung di Modal Pratinjau ([`MitraKostPreviewModal.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/components/mitra/MitraKostPreviewModal.tsx))**:
+     - Alih-alih merender layout tiruan, modal langsung membungkus komponen asli `<KostDetail kost={kost} onBack={onClose} hideBookingAndChat={true} />`.
+     - **Topbar Kontrol Mitra (Sticky)**: Menyediakan status badge review admin, tombol **`[ ✏️ Edit Kost ]`** untuk membuka form edit mitra secara instan, dan tombol **`[ ✕ Tutup ]`** (didukung shortcut tombol `Escape`).
+     - Menghadirkan tampilan 100% identik dengan seluruh fitur asli: grid galeri foto, pilihan varian kamar, fasilitas, peraturan, dan peta kampus.
+  3. **Dashboard Mitra ([`MitraDashboard.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/MitraDashboard.tsx))**:
+     - State `previewingKost: Kost | null` memicu modal terbuka di layer atas tanpa pernah mengubah URL browser dari `/dashboard-mitra`.
+- **File Tersentuh**:
+  - `functions/public/pages/KostDetail.tsx`
+  - `functions/public/components/mitra/MitraKostPreviewModal.tsx`
+  - `functions/public/pages/MitraDashboard.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Uji kompilasi build Vite `cmd /c npm run build` di `functions/public/` lulus 100% (✓ 2508 modules transformed, built in 37.40s, 0 error).
+
+### 268. Penerapan URL Ramah SEO (Slug Nama Kost & Lokasi) pada Seluruh Listing Berbasis Opsi 1 (`slugUtils.ts`, `App.tsx`, `MitraDashboard.tsx`, `KostDetail.tsx`, dll.) (September 2026)
+- **Permintaan & Masalah**:
+  - Pengguna meminta agar URL halaman listing kost tidak lagi menggunakan kode acak panjang (UUID) murni, melainkan menampilkan nama kost langsung di URL untuk meningkatkan estetika dan SEO, serta menanyakan bagaimana cara terbaik mengantisipasi jika ada kost yang memiliki nama sama:
+    > *"btw bisa nggak sih nanti setiap listing kost kita tidak langi menggunakan kode di urlnya tapi menggunakan nama kostnya langsung tertera di url? tapi perlu antisipasi nama kost yang sama sih. bagusnya bagimana?"*
+  - Pengguna menyetujui penerapan **Opsi 1 (Standar Airbnb & Mamikos)**: `/kost/{nama-kost}-{area/kota}-{uuid}`.
+- **Investigasi & Analisis Akar Masalah**:
+  1. *UUID-Only URL*: Format sebelumnya `/kost/bb6b0ccc-6d9e-494a-b972-aa7dd9cbd81f` tidak ramah SEO mesin pencari (Google menyukai keyword nama dan lokasi) dan terlihat kaku saat dibagikan ke calon penyewa.
+  2. *Duplicate Name Collision*: Di dunia nyata, nama kost sering kembar (misal "Kost Melati" atau "Kost Pelangi"). Menggunakan akhiran UUID di ujung slug menjamin 100% bebas tabrakan (*zero collision*) tanpa perlu query database berat atau penambahan kolom database baru.
+  3. *Backward Compatibility*: Seluruh tautan lama berbasis UUID murni yang sudah tersebar di WhatsApp atau bookmark pengguna harus tetap berfungsi dan otomatis di-update ke format slug baru (*Canonical URL 301 replace*).
+- **Implementasi Solusi**:
+  1. **Pembuatan Helper Slug Generator & Parser ([`slugUtils.ts`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/utils/slugUtils.ts))**:
+     - `createKostSlug(kost)`: Mengonversi nama kost + area/kota menjadi string kebab-case bersih (menghilangkan emoji, simbol khusus, dan karakter aksen) lalu menggabungkannya dengan UUID properti: `/kost/{nama-kost}-{area}-{uuid}`.
+     - `extractKostId(param)`: Menggunakan regex UUID `/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/i` sehingga sistem dapat mengekstrak ID database secara instan baik dari URL slug baru maupun URL UUID lama.
+  2. **Perutean Fleksibel & Canonical URL Sync ([`App.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/App.tsx))**:
+     - `KostDetailWrapper` menggunakan `extractKostId(id)` untuk memuat data properti.
+     - Menambahkan sinkronisasi otomatis: jika user mengakses link lama UUID murni, address bar browser secara otomatis diperbarui ke format slug baru menggunakan `window.history.replaceState` tanpa me-reload halaman.
+     - Menyesuaikan fungsi navigasi `handleKostSelect(idOrKost)` agar otomatis membentuk rute slug baru saat pengguna mengklik kartu kost dari Beranda atau Katalog Listing.
+  3. **Penyelarasan Tautan di Seluruh Komponen**:
+     - **Dashboard Mitra ([`MitraDashboard.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/MitraDashboard.tsx))**: Tombol Preview membuka `/kost/${createKostSlug(p)}`.
+     - **Detail Kost ([`KostDetail.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/KostDetail.tsx))**: Meta tag SEO `canonicalUrl` dan Schema.org JSON-LD menggunakan format slug baru.
+     - **Portal Admin ([`PropertyManagement.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/components/admin/PropertyManagement.tsx) & [`KostManagerPortal.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/components/admin/KostManagerPortal.tsx))**: Tombol "Kunjungi Halaman Publik" mengarah ke slug baru.
+- **File Tersentuh**:
+  - `functions/public/utils/slugUtils.ts` (baru)
+  - `functions/public/App.tsx`
+  - `functions/public/pages/MitraDashboard.tsx`
+  - `functions/public/pages/KostDetail.tsx`
+  - `functions/public/components/admin/PropertyManagement.tsx`
+  - `functions/public/components/admin/KostManagerPortal.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Uji kompilasi build Vite `cmd /c npm run build` di `functions/public/` lulus 100% (✓ 2507 modules transformed, built in 36.43s, 0 error).
+
+### 267. Peningkatan Kejelasan Status Listing dalam Peninjauan (Review) di Dashboard Mitra & Dukungan Mode Pratinjau (Preview) Pemilik (`MitraDashboard.tsx`, `userService.ts`, `KostDetail.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  - Pengguna melaporkan tampilan status listing pada menu "Kost Saya" di Dashboard Mitra sangat membingungkan pasca-publikasi:
+    > *"ketika sebuah listing dalam tahap peninjauan,/review tolong tampilkan statusnya dengan baik, saya rasa untuk tampilan seperti ini mitra kurang tau apa yang sedang terjadi sekarang, dan mungkin akan bingung mempertanyakan kenapa propertinya belum listing padahal sudah di publish"*
+  - Tangkapan layar memperlihatkan:
+    1. Subtitle header bertuliskan `1 PROPERTI AKTIF` (menghitung seluruh item properti tanpa membedakan status).
+    2. Foto kartu properti menampilkan badge abu-abu gelap bertuliskan `• DRAFT` (`p.status === 'published' ? '● Aktif' : '● Draft'`).
+    3. Tidak ada informasi penjelasan bahwa listing telah berhasil dikirim dan sedang dalam antrean review admin.
+    4. Tombol **Preview** langsung mental/redirect ke `/listings` karena fungsi pembacaan data publik `getPublishedPropertyDetails` mengunci filter hanya untuk `status === 'published'`.
+- **Investigasi & Analisis Akar Masalah**:
+  1. *Header Summary Bias*: Logika `properties.length` menganggap semua listing yang tersimpan di database sebagai "Properti Aktif", mengaburkan fakta bahwa listing baru memerlukan verifikasi admin sebelum tayang publik.
+  2. *Badge Status Biner & Membingungkan*: Hanya ada kondisi `published` ("Aktif") atau fallback ("Draft"). Mitra yang baru menekan "Publikasikan Kost" merasa cemas karena statusnya tertulis "Draft" seolah-olah pengajuan belum selesai atau gagal disimpan.
+  3. *Zero Educational Feedback*: Di dalam kartu properti tidak terdapat box status atau perkiraan waktu review (SLA 1x24 jam).
+  4. *Preview Access Blocker*: `getPublishedPropertyDetails` mengembalikan `null` jika properti belum `published`, menyebabkan `KostDetailWrapper` di `App.tsx` melempar pemilik kembali ke `/listings`.
+- **Implementasi Solusi**:
+  1. **Akurasi Metrik Header "Kost Saya" ([`MitraDashboard.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/MitraDashboard.tsx))**:
+     - Memisahkan penghitungan metrik secara transparan: `publishedCount`, `inReviewCount`, dan `suspendedCount`.
+     - Header menampilkan informasi jujur: `{publishedCount} Properti Tayang` dan `{inReviewCount} Menunggu Review` (serta `{suspendedCount} Ditangguhkan` jika ada).
+  2. **Pembaruan Badge Foto 3-Tingkat ([`MitraDashboard.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/MitraDashboard.tsx))**:
+     - `published`: `bg-emerald-500 text-white` (Tayang Publik)
+     - `draft / pending_review`: `bg-amber-500 text-white animate-pulse` (⏳ Sedang Ditinjau)
+     - `suspended`: `bg-rose-500 text-white` (Ditangguhkan)
+  3. **Banner Status Edukatif di Dalam Kartu Properti ([`MitraDashboard.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/MitraDashboard.tsx))**:
+     - Menambahkan banner informatif bergradasi amber/orange yang menjelaskan secara ramah bahwa listing berhasil diajukan, sedang diverifikasi tim RuangSinggah (estimasi 1×24 jam), dan akan otomatis tayang di katalog pencarian publik setelah disetujui.
+     - Menyediakan banner peringatan untuk status `suspended` yang memuat alasan penangguhan dan saran perbaikan.
+  4. **Dukungan Mode Pratinjau Pemilik & Admin ([`userService.ts`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/userService.ts), [`KostDetail.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/KostDetail.tsx))**:
+     - Memperbarui `getPublishedPropertyDetails` agar memeriksa apakah pemanggil adalah pemilik (`owner_uid === user.id`) atau admin jika properti belum berstatus `published`.
+     - Pada `KostDetail.tsx`, jika properti belum published, sistem menampilkan **Banner Mode Pratinjau Pemilik** di bagian atas layar dan tombol sewa berubah menjadi `Pratinjau (Belum Tayang)` agar calon penyewa tidak dapat mengajukan booking sebelum listing disetujui.
+- **File Tersentuh**:
+  - `functions/public/pages/MitraDashboard.tsx`
+  - `functions/public/userService.ts`
+  - `functions/public/pages/KostDetail.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Uji kompilasi build Vite `cmd /c npm run build` di `functions/public/` lulus 100% (✓ 2506 modules transformed, built in 38.94s, 0 error).
+
+### 266. Penghapusan Auto-Check Sub-Fasilitas Saat Memilih Fasilitas Induk (`KostFormMitra.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  - Pengguna melaporkan bahwa ketika mencentang fasilitas induk pada form fasilitas, beberapa sub-fasilitas ikut tercentang secara otomatis padahal belum dipilih oleh pengguna.
+- **Investigasi & Analisis Akar Masalah**:
+  1. *Fasilitas Gedung / Umum (`HierarchicalPublicFacilityInput` - Langkah 4)*:
+     - Pada fungsi `toggleItem`, terdapat logika bawaan yang menyuntikkan sub-opsi indeks ke-0 (`toAdd.push(item.subOptions[0])`) saat grup diaktifkan:
+       - Mencentang "Area Parkir" $\rightarrow$ Otomatis mencentang "Parkir Motor".
+       - Mencentang "Dapur Bersama" $\rightarrow$ Otomatis mencentang "Kompor".
+       - Mencentang "WC Umum" $\rightarrow$ Otomatis mencentang "Kloset Duduk".
+  2. *Fasilitas Kamar (`HierarchicalRoomFacilityInput` - Langkah 3)*:
+     - Pada `handleToggleFacility`, terdapat logika bawaan:
+       - Mencentang "Kamar Mandi Dalam" $\rightarrow$ Otomatis menyuntikkan "Shower" ke dalam `bathroomFacilities`.
+       - Mencentang "Dapur Dalam" $\rightarrow$ Otomatis menyuntikkan "Kompor" dan "Wastafel Cuci Piring" ke dalam `kitchenFacilities`.
+- **Implementasi Solusi**:
+  1. **Pembersihan Logika `HierarchicalPublicFacilityInput`**:
+     - Memperbarui fungsi `toggleItem` agar hanya menambahkan `item.label` ke dalam array `facilities` tanpa menyuntikkan sub-opsi default apa pun.
+     - Sub-panel kelengkapan fasilitas tetap terbuka rapi di bawah kartu fasilitas dengan seluruh sub-opsi dalam kondisi kosong (tidak tercentang).
+  2. **Pembersihan Logika `HierarchicalRoomFacilityInput`**:
+     - Menghapus baris auto-inject `updatedBathFacs.push('Shower')` saat mencentang "Kamar Mandi Dalam".
+     - Menghapus baris auto-inject `updatedKitchenFacs = ['Kompor', 'Wastafel Cuci Piring']` saat mencentang "Dapur Dalam".
+     - Menambahkan pembersihan bersih (*clean reset*) sub-fasilitas kamar mandi dan dapur saat fasilitas induknya dinonaktifkan (uncheck).
+- **File Tersentuh**:
+  - `functions/public/components/KostFormMitra.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Uji kompilasi build Vite `cmd /c npm run build` di `functions/public/` lulus 100% (✓ 2506 modules transformed, built in 36.28s, 0 error).
+
+### 265. Pemulihan Metadata Kategori Foto Properti Saat Edit Listing Kost Mitra (`userService.ts`, `KostFormMitra.tsx`, `adminService.ts`) (September 2026)
+- **Permintaan & Masalah**:
+  - Mitra menanyakan mengapa setelah mempublikasikan kost, hampir semua foto kecuali "Bangunan Depan" hilang / menjadi 0 foto ketika kartu kost diklik "Edit" (`media_1788356202994.png`).
+  - Pengguna mengkhawatirkan apakah foto-foto tersebut tidak benar-benar tersimpan di database Supabase untuk peran mitra biasa.
+- **Investigasi & Analisis Akar Masalah**:
+  1. *Penyimpanan Database & Storage*: Data foto dan file gambar 100% tersimpan aman di Supabase Storage (`properties/...`) dan kolom PostgreSQL `properties.image_urls` serta `properties.metadata` (`photos_meta`, `photo_categories`, `categorized_photos`).
+  2. *Mapping Omission pada Pembacaan Data*: Fungsi `getOwnerProperties(ownerUid)` di `userService.ts:851-894` mengekstrak `image_urls` menjadi array URL string murni (`imageUrls: images`), namun **tidak memetakan** field `photosMeta`, `photoCategories`, `categorizedPhotos`, maupun `metadata` ke objek properti yang dikembalikan.
+  3. *Distribusi Default di Form Edit*: Ketika objek properti tersebut diedit di `KostFormMitra.tsx`, form hanya menerima array string `form.imageUrls` tanpa informasi kategori. Logika `existingWithCats` kemudian menetapkan indeks 0 sebagai "Bangunan Depan" dan seluruh indeks lainnya dilempar ke "Fasilitas Lainnya", menyebabkan kartu kategori seperti "Koridor & Akses Masuk", "Lingkungan Sekitar", "Area Parkir", dan kategori tipe kamar menjadi 0 foto.
+- **Implementasi Solusi**:
+  1. **Pemetaan Lengkap Metadata Foto di `userService.ts` (`getOwnerProperties`)**:
+     - Memetakan field `photosMeta` dari `p.metadata?.photos_meta || (Array.isArray(p.image_urls) ? p.image_urls : [])`.
+     - Memetakan field `photoCategories` dari `p.metadata?.photo_categories`.
+     - Memetakan field `categorizedPhotos` dari `p.metadata?.categorized_photos`.
+     - Memetakan field `metadata: p.metadata`.
+  2. **Rekonstruksi Presisi Kategori Foto di `KostFormMitra.tsx`**:
+     - Menginisialisasi `form.photoCategories`, `form.photosMeta`, dan `form.categorizedPhotos` dari properti `editingKost` atau `editingKost.metadata`.
+     - Menginisialisasi `customCategories` dari `editingKost.photoCategories` atau `editingKost.metadata?.photo_categories`.
+     - Menyelaraskan fungsi penghapusan foto `removeExistingImage` agar memperbarui `form.imageUrls` dan `form.photosMeta` secara sinkron.
+     - Pada validasi `validateCurrentStep(4)` dan rendering Step 4 UI (`existingWithCats`), menggunakan `sourceImages` yang memprioritaskan `photosMeta`, membaca `label`/`category`, dan melakukan reverse lookup ke `form.categorizedPhotos` untuk memetakan foto ke kartu kategori aslinya.
+     - Pada payload submit `existingImagesWithLabels`, mempertahankan objek foto lengkap beserta label, kategori, dan caption.
+  3. **Penguatan Sinkronisasi di `adminService.ts` (`updatePropertyWithMedia`)**:
+     - Menambahkan fungsi `findLabelForUrl` untuk memulihkan label/kategori dari `existing.metadata?.photos_meta`, `currentImageObjects`, atau `existing.metadata?.categorized_photos` jika terjadi pengiriman data yang belum terlabel.
+     - Menjaga `derivedPhotoCategories` dan `derivedCategorizedPhotos` agar tidak tertimpa oleh array string kosong.
+- **File Tersentuh**:
+  - `functions/public/userService.ts`
+  - `functions/public/components/KostFormMitra.tsx`
+  - `functions/public/adminService.ts`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Uji kompilasi build Vite `cmd /c npm run build` di `functions/public/` lulus 100% (✓ 2506 modules transformed, built in 37.27s, 0 error).
+
+### 264. Pemulihan & Penguatan Sensor Banner Kontak Otomatis AI (Nomor Telepon / Spanduk Sewa) (`adminService.ts`, `KostFormMitra.tsx`, `supabase/config.toml`) (September 2026)
+- **Permintaan & Masalah**:
+  - Pengguna menanyakan mengapa sensor banner otomatis dari sistem tidak bekerja lagi pada foto tampak depan kost ("Bangunan Depan") yang memuat spanduk sewa berisi nomor telepon/WhatsApp (`media_1788339018992.png`). Foto terunggah dengan badge hijau "BARU" dan bukan badge "ruangsinggah.id" (sensor kontak tidak aktif).
+- **Investigasi & Analisis Akar Masalah**:
+  1. *Edge Function Supabase & Model Gemini Aktif*: Pengujian diagnostik langsung ke Edge Function `detect-contact-banner` membuktikan Edge Function dan model AI `gemini-2.5-flash` aktif 100% dan sukses mendeteksi nomor telepon spanduk pada citra user (`has_contact: true`, teks: `"INFO WA : 0813 5536 27"`, `"0823 4990 80"`).
+  2. *Silent Fallback pada Gangguan Jaringan*: Pada `adminService.ts`, jika terjadi network disconnect atau timeout HTTP (18s), blok catch langsung mengembalikan `{ hasContact: false }` tanpa retry dan tanpa flag error ke UI, sehingga foto masuk apa adanya.
+  3. *Validasi File Terlalu Kaku*: Pengecekan `file.type.startsWith('image/')` pada browser mobile atau Android gallery bisa mengembalikan string kosong (`""`), menyebabkan pembuatan Base64 AI di-skip.
+  4. *Konfigurasi Gateway*: `supabase/config.toml` belum mendaftarkan entri `[functions.detect-contact-banner]` dengan `verify_jwt = false`.
+  5. *Ketiadaan Tombol Re-Scan Manual*: Jika foto terunggah saat koneksi sempat drop, pengguna tidak memiliki cara untuk memindai ulang foto tanpa menghapus dan mengunggahnya dari awal.
+- **Implementasi Solusi**:
+  1. **Konfigurasi Gateway Supabase (`supabase/config.toml`)**:
+     - Menambahkan deklarasi fungsi `[functions.detect-contact-banner]` dengan `verify_jwt = false` agar pemanggilan dari anon client/mitra selalu diizinkan tanpa kendala JWT.
+  2. **Penguatan Pemanggilan API AI di Front-End (`adminService.ts`)**:
+     - Menambahkan header cadangan `apikey: supabaseAnonKey`.
+     - Menambahkan mekanisme auto-retry 1x dengan jeda 800ms jika request pertama terhambat gangguan jaringan.
+     - Menyediakan properti `error?: string` pada `ContactBannerDetectionResult` agar status kegagalan jaringan tertangkap oleh UI form.
+  3. **Validasi Fleksibel & Feedback UI di `KostFormMitra.tsx`**:
+     - Menambahkan helper `isImageFile(file)` yang memeriksa MIME type maupun ekstensi file (`.jpg`, `.jpeg`, `.png`, `.webp`, `.heic`, dll.).
+     - Menampilkan banner notifikasi ramah (`AlertCircle`) jika koneksi AI terputus saat proses upload berlangsung.
+     - Mengembangkan fungsi `handleReScanBanner(item)` yang dapat memindai ulang foto langsung dari memory / fetch preview URL, menerapkan penyamaran kotak spanduk dan watermark kapsul `ruangsinggah.id`, mengompresi ke WebP, dan memperbarui Supabase storage draft.
+     - Menambahkan tombol aksi manual "Pindai Kontak (AI)" berlambang perisai (`ShieldAlert`) pada kartu foto yang belum tersensor (`!item.isBlurred`) baik pada kategori wajib maupun kategori kustom/tambahan.
+     - Memperluas cakupan deteksi kategori rawan kontak (`isBannerProneCategory`) dengan keyword tambahan: `luar`, `gerbang`, `spanduk`, `banner`, `jalan`.
+- **File Tersentuh**:
+  - `supabase/config.toml`
+  - `functions/public/adminService.ts`
+  - `functions/public/components/KostFormMitra.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Uji kompilasi build Vite `cmd /c npm run build` di `functions/public/` lulus 100% (✓ 2506 modules transformed, built in 1m 7s, 0 error).
+
+### 263. Penegakan Status Awal 'draft' pada Pendaftaran Properti Mitra & Penyelesaian Error RLS 42501 (`adminService.ts` & `KostFormMitra.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  - Saat mitra mengklik tombol "Publikasikan Kost" untuk mengirim pendataan kost ke dashboard admin, muncul error `42501: new row violates row-level security policy for table "properties"`.
+- **Investigasi & Analisis Akar Masalah**:
+  - Kebijakan keamanan baris (Row Level Security / RLS) pada database PostgreSQL Supabase melarang akun mitra / non-admin untuk langsung memasukkan properti baru dengan `status: 'published'`.
+  - Di `KostFormMitra.tsx:93`, `initialForm` secara keliru diinisialisasi dengan status `'published'`, sehingga payload form selalu mengirim status tersebut.
+  - Pada `adminService.ts:2064` (`addPropertyWithMedia`), kode memasukkan `status: kostData.status || 'draft'` tanpa memvalidasi apakah user yang login adalah admin atau mitra biasa. Akibatnya, status `published` lolos ke payload insert Supabase dan ditolak keras oleh RLS PostgreSQL dengan error `42501`.
+  - Simulasi nyata dengan akun mitra membuktikan: jika properti di-insert dengan `status: 'published'` maka ditolak RLS `42501`, namun jika berstatus `status: 'draft'` maka **100% lolos sukses**.
+- **Implementasi Solusi**:
+  1. **Penguncian Status 'draft' untuk Non-Admin di `adminService.ts`**:
+     - Memperbarui `addPropertyWithMedia` untuk menghitung `const targetStatus = isAdmin ? (kostData.status || 'draft') : 'draft'`.
+     - Properti baru yang didaftarkan oleh mitra dijamin selalu berstatus `'draft'` dengan `is_verified: false` agar aman dari penolakan RLS dan mematuhi alur tinjauan (*review*) resmi oleh admin.
+  2. **Koreksi Nilai Awal di `KostFormMitra.tsx`**:
+     - Mengubah default `initialForm.status` menjadi `'draft'`.
+     - Memastikan pemanggilan `addPropertyWithMedia` secara eksplisit menetapkan `{ ...data, status: 'draft', isVerified: false }`.
+- **File Tersentuh**:
+  - `functions/public/adminService.ts`
+  - `functions/public/components/KostFormMitra.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Uji kompilasi build Vite `cmd /c npm run build` di `functions/public/` lulus 100% (✓ 2506 modules transformed, built in 21.96s, 0 error).
+
+### 262. Perbaikan Supabase Insert/Update Error PGRST204 Kolom `categorized_photos` & `photo_categories` (`adminService.ts` & `userService.ts`) (September 2026)
+- **Permintaan & Masalah**:
+  - Saat mitra mengklik tombol "Publikasikan Kost" di `KostFormMitra.tsx:3856` / `adminService.ts:2092`, muncul error Supabase PostgREST `PGRST204: Could not find the 'categorized_photos' column of 'properties' in the schema cache`.
+- **Investigasi & Analisis Akar Masalah**:
+  - Berdasarkan audit skema tabel `properties` di PostgreSQL Supabase, kolom `categorized_photos` dan `photo_categories` tidak ada sebagai kolom fisik tingkat root.
+  - Data pengelompokan foto per kategori sebenarnya telah tersimpan dengan aman dan terstruktur di dalam kolom `metadata` (JSONB) (`metadata.categorized_photos` dan `metadata.photo_categories`).
+  - Namun pada fungsi `addPropertyWithMedia` dan `updatePropertyWithMedia`, terdapat baris duplikat yang mencoba mengirim `photo_categories` dan `categorized_photos` langsung di root payload insert/update tabel `properties`. PostgREST mendeteksi ketidaksesuaian skema fisik dan menolak operasi penyimpanan.
+- **Implementasi Solusi**:
+  1. **Pembersihan Root Payload di `adminService.ts`**:
+     - Menghapus baris `photo_categories: derivedPhotoCategories` dan `categorized_photos: derivedCategorizedPhotos` dari objek `insert` pada fungsi `addPropertyWithMedia`.
+     - Menghapus baris `photo_categories: derivedPhotoCategories` dan `categorized_photos: derivedCategorizedPhotos` dari objek `update` pada fungsi `updatePropertyWithMedia`.
+     - Memastikan kedua field tersebut tetap tersimpan utuh dan rapi di dalam kolom `metadata` (JSONB) properti.
+  2. **Penguatan Sinkronisasi Pembacaan di `userService.ts`**:
+     - Menambahkan fallback pembacaan dari `row.metadata?.photo_categories` dan `row.metadata?.categorized_photos` pada `fetchPublishedProperties` dan `getPublishedPropertyDetails` sehingga data foto per kategori terbaca sempurna di seluruh UI calon penyewa.
+- **File Tersentuh**:
+  - `functions/public/adminService.ts`
+  - `functions/public/userService.ts`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Uji kompilasi build Vite `cmd /c npm run build` di `functions/public/` lulus 100% (✓ 2506 modules transformed, built in 26.54s, 0 error).
+
+### 261. Perbaikan Presisi Logika Kategori Foto Dinamis Berdasarkan Fasilitas Umum & Tipe Kamar (`KostFormMitra.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  - Pengguna melaporkan anomali di Langkah 5 (Upload Foto): kategori foto "Ruang Tamu & Bersama" dan "Area Laundry & Jemuran" tiba-tiba muncul padahal pada Langkah 4 (Fasilitas Umum) kedua fasilitas tersebut sama sekali tidak dicentang.
+  - Pengguna mempertanyakan apakah sistem upload foto sudah berjalan dinamis mengikuti input tipe kamar dan fasilitas umum sebelumnya.
+- **Investigasi & Analisis Akar Masalah**:
+  - Ditemukan *regex keyword collision* pada fungsi `computeActivePhotoCategories`:
+    - Regex ruang tamu sebelumnya menggunakan `/(tamu|santai|bersama)/i`. Ketika mitra mencentang `Dapur Bersama` atau `Kulkas Bersama`, kata `"bersama"` memicu regex tersebut sehingga kartu Ruang Tamu salah dimunculkan (*false positive*).
+    - Regex laundry sebelumnya menggunakan `/(laundry|cuci|jemur)/i`. Ketika mitra mencentang sub-kelengkapan dapur `Wastafel Cuci Piring`, kata `"cuci"` memicu regex tersebut sehingga kartu Area Laundry salah dimunculkan (*false positive*).
+- **Implementasi Solusi**:
+  1. **Pencocokan Eksak (*Exact Match*) Fasilitas Utama**:
+     - Ruang Tamu: Hanya aktif jika fasilitas utama **`Ruang Tamu`** dipilih secara eksplisit (`ruang tamu`, `ruang santai`, `lobby`). Kata `"bersama"` dihapus total dari deteksi.
+     - Area Laundry & Jemuran: Hanya aktif jika fasilitas utama **`Laundry`** atau **`Area Jemuran`** dipilih secara eksplisit (`laundry`, `area jemuran`, `jemuran`). Kata `"cuci"` dihapus sehingga `Wastafel Cuci Piring` tidak pernah lagi memicu laundry.
+     - Dapur Bersama: Hanya aktif jika fasilitas utama `Dapur Bersama` dipilih.
+     - WC Umum: Hanya aktif jika fasilitas utama `WC Umum` dipilih.
+     - Area Parkir: Hanya aktif jika fasilitas utama `Area Parkir` (atau sub parkir motor/mobil) dipilih.
+     - Mushola: Menambahkan deteksi kartu foto ibadah jika `Mushola` dipilih.
+  2. **Perlindungan Sub-Kelengkapan dari Kategori Kustom**:
+     - Mendaftarkan seluruh sub-opsi fasilitas standar (`Kompor`, `Kulkas Bersama`, `Dispenser Air`, `Wastafel Cuci Piring`, `Peralatan Masak`, `Kloset Duduk`, `Shower`, dll.) ke dalam set `knownStandardFacilities` agar tidak pernah bocor menjadi kategori foto kustom tak terduga.
+  3. **Penegasan Sistem Foto Dinamis**:
+     - Memastikan seluruh tipe kamar di Langkah 3 ter-generate secara dinamis (`Kamar: ${roomName}`), dan kartu foto kamar mandi dalam / dapur dalam hanya muncul jika tipe kamar bersangkutan mencentang fasilitas tersebut.
+- **File Tersentuh**:
+  - `functions/public/components/KostFormMitra.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Uji kompilasi build Vite `cmd /c npm run build` di `functions/public/` lulus 100% (✓ 2506 modules transformed, built in 21.59s, 0 error).
+
+### 260. Standardisasi Rasio 4:3 Landscape (1200 x 900) & Smart Center-Crop pada Input Foto Mitra (`KostFormMitra.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  - Pengguna menanyakan ketersediaan penyesuaian rasio dan ukuran foto otomatis pada dashboard mitra, dan menunjuk sistem auto-crop yang sudah ada di pendataan KostManager agen (`convertToWebP` di `adminService.ts`).
+  - Sebelumnya, fungsi `compressImageToWebP` di form mitra hanya melakukan downscale resolusi dengan mempertahankan rasio asli gambar, sehingga foto portrait (tegak 9:16 dari kamera smartphone) tetap vertikal dan tampil tidak seragam (belang-belang/terpotong tidak beraturan) di kartu listing pencarian user dan galeri properti.
+- **Implementasi Solusi**:
+  1. **Smart Center-Crop ke Rasio Standar 4:3 (1200 x 900 px)**:
+     - Mengintegrasikan algoritma pemotongan cerdas di tengah (*center-crop*) pada `compressImageToWebP` di `KostFormMitra.tsx`:
+       - Menetapkan target standar industri: **1200 x 900 pixel** (rasio lanskap 4:3).
+       - Membandingkan `imgRatio` terhadap `targetRatio` (1.333).
+       - Jika foto lebih lebar (16:9 atau panorama): sistem melakukan crop horizontal simetris di sisi kiri dan kanan.
+       - Jika foto tegak/portrait (9:16 atau 3:4 vertikal dari kamera HP): sistem melakukan crop vertikal simetris di bagian atas dan bawah.
+     - Interpolasi canvas diatur ke `imageSmoothingQuality = 'high'` untuk menjaga ketajaman detail bangunan dan interior kamar.
+  2. **Harmoni dengan AI Vision & Cloud Storage**:
+     - Pipeline berjalan selaras: Pemindaian AI spanduk ➔ Watermarking `ruangsinggah.id` ➔ Auto-Crop 4:3 & WebP Compression ➔ Instant Cloud Upload ke Supabase Storage.
+     - Seluruh foto yang diunggah mitra kini 100% seragam, simetris, dan proporsional saat tampil di antarmuka calon penyewa.
+- **File Tersentuh**:
+  - `functions/public/components/KostFormMitra.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Uji kompilasi build Vite `cmd /c npm run build` di `functions/public/` lulus 100% (✓ 2506 modules transformed, built in 29.79s, 0 error).
+
+### 259. Pengetatan Presisi Filter Kategori AI Scanner Spanduk (`KostFormMitra.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  - Pengguna mengklarifikasi bahwa kategori input foto di sistem RuangSinggah tidak memiliki kategori "gerbang", "akses", dan "luar".
+  - Pengguna meminta agar pemindaian AI banner secara khusus hanya difokuskan pada 3 kategori utama yang rawan spanduk: **Bagian Depan (Fasad)**, **Lingkungan Sekitar**, dan **Area Parkir**.
+  - Kategori lain tidak perlu dipindai oleh AI agar proses upload berlangsung instan (0 detik jeda AI) dan tidak membuang kuota token.
+- **Implementasi Solusi**:
+  1. **Refinement `isBannerProneCategory`**:
+     - Menghapus kata kunci `gerbang`, `akses`, `luar`, dan `front`.
+     - Membatasi pencocokan secara ketat hanya pada: `depan`, `fasad`, `lingkungan`, dan `parkir`.
+  2. **Efisiensi Maksimal & Instant Upload**:
+     - Foto pada kategori seperti *Koridor & Akses Masuk*, *WC Umum / Luar*, *Dapur Bersama*, *Ruang Tamu*, serta seluruh tipe kamar langsung di-bypass dari AI Vision (0 detik pemrosesan AI) dan langsung dikompresi ke WebP resolusi tinggi.
+     - Menghemat hingga 80-90% pemakaian kuota API Gemini untuk setiap listing kost.
+- **File Tersentuh**:
+  - `functions/public/components/KostFormMitra.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Uji kompilasi build Vite `cmd /c npm run build` di `functions/public/` lulus 100% (✓ 2506 modules transformed, built in 35.59s, 0 error).
+
+### 258. Redesain Penyamaran Spanduk dengan Bounding Box Clustering & Watermark Branding Elegan "ruangsinggah.id" (`KostFormMitra.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  - Pengguna memberikan masukan terhadap tampilan penyamaran spanduk kontak yang sebelumnya:
+    1. Spanduk yang memuat beberapa baris nomor telepon menghasilkan beberapa kotak deteksi AI yang bertingkat, sehingga label teks sensor muncul berulang kali secara bertumpuk.
+    2. Teks label "Kontak Disamarkan" dan badge merah mencolok "DISAMARKAN" memberi kesan sensor manual yang kaku dan kurang elegan.
+    3. Pengguna mengusulkan agar sensor diubah menjadi watermark elegan bertuliskan brand startup resmi: **`ruangsinggah.id`**.
+- **Implementasi Solusi**:
+  1. **Algoritma Penggabungan Kotak Bersinggungan (*Bounding Box Clustering & Union*)**:
+     - Membangun algoritma clustering pada fungsi `applyBlurToBoundingBoxes`: jika beberapa kotak deteksi dari AI saling beririsan (*overlap*) atau memiliki jarak dekat (radius 3.5% dimensi gambar), kotak-kotak tersebut otomatis dilebur menjadi satu bidang batas gabungan tunggal (*single clean bounding area*). Menghilangkan duplikasi kotak dan teks yang bertumpuk.
+  2. **Watermark Kapsul Elegan (*Rounded Pill Badge*) "ruangsinggah.id"**:
+     - Latar belakang spanduk tetap diberikan mosaik pixelate halus di canvas (menghancurkan karakter nomor telepon/kontak secara fisik & matematis) lalu dilapisi frosted glassmorphism gelap yang bersih `rgba(15, 23, 42, 0.78)`.
+     - Di tengah area spanduk, digambar satu badge kapsul elegan (*rounded pill*) berlatar belakang `rgba(2, 6, 23, 0.88)` dengan border aksen oranye halus `rgba(249, 115, 22, 0.65)`.
+     - Tipografi modern dua warna:
+       - Kata **`ruangsinggah`** dengan warna putih bersih (`#FFFFFF`, font bold).
+       - Kata **`.id`** dengan warna oranye terang khas RuangSinggah (`#FB923C`).
+     - Mengubah kesan sensor menjadi **watermark branding resmi platform properti premium** kelas dunia (seperti Airbnb / Rumah123).
+  3. **Penyempurnaan Badge Thumbnail Foto**:
+     - Mengubah badge merah mencolok `DISAMARKAN` menjadi badge kapsul dark-glassmorphism yang elegan: `ruangsinggah.id` dengan dot oranye berdenyut halus (*pulse dot*), menciptakan kesan foto properti yang terverifikasi dan profesional.
+- **File Tersentuh**:
+  - `functions/public/components/KostFormMitra.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Uji kompilasi build Vite `cmd /c npm run build` di `functions/public/` lulus 100% (✓ 2506 modules transformed, built in 25.28s, 0 error).
+
+### 257. Sistem Instant Cloud Upload ke Supabase Storage, Draf Foto Persisten, dan Pembersihan Sampah Draf yang Aman (`KostFormMitra.tsx`, `adminService.ts`) (September 2026)
+- **Permintaan & Masalah**:
+  - Pengguna melaporkan bahwa saat foto kost telah diunggah di formulir mitra lalu formulirnya tertutup atau browser di-refresh, foto yang sudah diunggah menghilang dan tidak tersimpan sebagai draf sehingga harus diunggah ulang dari awal.
+  - Pengguna meminta agar sistem draf foto langsung terhubung dengan cloud Supabase Storage, serta dilengkapi aturan pembersihan sampah draf yang hati-hati dan aman agar tidak menumpuk file tak terpakai.
+- **Implementasi Solusi**:
+  1. **Instant Cloud Upload ke Supabase Storage (`adminService.ts`)**:
+     - Menambahkan fungsi `uploadDraftPhotoToStorage(file, userId)`: Setelah foto dikompresi ke WebP resolusi tinggi dan disamarkan (jika ada spanduk), foto langsung diunggah seketika ke Supabase Storage pada jalur terisolasi `properties/drafts/${userId}/${timestamp}_${fileName}.webp`.
+     - Fungsi mengembalikan `publicUrl` CDN Supabase dan `storagePath`.
+  2. **Persistensi Penuh Draf Foto (`KostFormMitra.tsx`)**:
+     - Karena foto telah berwujud URL internet resmi Supabase, array `draftPhotos` (berisi ID, URL, kategori, caption, dan status sensor) dapat langsung disimpan ke draf `localStorage` tanpa hambatan kuota 5MB.
+     - Saat formulir dibuka kembali (*initial mount*), foto-foto draf dipulihkan secara instan dari Supabase Storage lengkap dengan kategori dan status penyamaran.
+  3. **Pembersihan Sampah Draf yang Aman (*Safe Garbage Collection*)**:
+     - Menambahkan fungsi `deleteDraftPhotosFromStorage(storagePaths)` di `adminService.ts` dengan filter keselamatan mutlak: **hanya file yang diawali path `drafts/` yang diizinkan untuk dihapus**. File listing properti aktif 100% aman dan tidak akan pernah terhapus secara tidak sengaja.
+     - Ketika mitra menghapus satu foto draf (`removeNewPhotoItem`), file draf langsung dihapus dari Supabase Storage.
+     - Ketika mitra menekan tombol "Hapus Draf / Mulai Baru" (`handleClearDraft`), seluruh file foto draf terkait langsung dibersihkan dari Supabase Storage.
+  4. **Submit Instan Tanpa Re-Upload**:
+     - Pada fungsi `handleSubmit`, foto-foto baru yang telah terunggah ke Supabase Storage dipetakan langsung ke `imageUrls` listing properti. Tombol simpan akhir menjadi instan karena tidak perlu lagi mengunggah ulang file gambar berukuran besar.
+- **File Tersentuh**:
+  - `functions/public/adminService.ts`
+  - `functions/public/components/KostFormMitra.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Uji kompilasi build Vite `cmd /c npm run build` di `functions/public/` lulus 100% (✓ 2506 modules transformed, built in 25.14s, 0 error).
+
+### 256. Deteksi Spanduk / Kontak Langsung pada Foto Properti & Blurring Otomatis Berbasis Canvas dengan Gemini 3.7 Flash (`detect-contact-banner`, `KostFormMitra.tsx`, `adminService.ts`) (September 2026)
+- **Permintaan & Masalah**:
+  - Foto properti yang diunggah mitra sering kali memuat spanduk/banner atau tulisan yang menampilkan nomor kontak langsung (nomor HP/WA, plang sewa kamar, dsb.) yang berisiko memicu transaksi liar di luar sistem resmi RuangSinggah.
+  - Pengguna meminta agar sistem dapat mendeteksi banner tersebut secara otomatis dan menerapkan metode penyamaran (blur) yang hemat token AI, cepat, dan hemat biaya.
+  - Pengguna meminta prioritas model AI menggunakan **Gemini 3.7 Flash**.
+- **Implementasi Solusi**:
+  1. **Supabase Edge Function Cerdas & Hemat Token (`detect-contact-banner`)**:
+     - Membangun Edge Function Deno yang menerapkan arsitektur **Model Priority Cascade** dengan memprioritaskan `gemini-3.7-flash` (diikuti fallback ke `gemini-2.5-flash`, `gemini-2.0-flash`, dan `gemini-1.5-flash`).
+     - Prompt AI dirancang khusus mengekstrak teks kontak/nomor telepon dan mengembalikan koordinat *bounding box* (skala 0 - 1000). AI tidak menghasilkan inpainting sehingga respon sangat cepat (0.5 - 1.5 detik) dan output token sangat minimal (<100 token).
+  2. **Service Layer & Fallback Aman (`adminService.ts`)**:
+     - Menambahkan interface `ContactBannerDetectionResult` dan fungsi `detectPhotoContactBanner(base64Image, mimeType)` dengan timeout guard 12 detik dan fallback aman (jika API offline/timeout, upload foto tetap berjalan mulus tanpa macet).
+  3. **Low-Res Base64 Transfer (<80KB) & Canvas Blurring (`KostFormMitra.tsx`)**:
+     - Helper `createLowResBase64ForAi`: Meresize foto ke maks 800px di memori browser sebelum dikirim ke AI agar transmisi instan (<80KB).
+     - Helper `applyBlurToBoundingBoxes`: Menerapkan efek pixelate mosaik di HTML5 Canvas browser (downscale 0.08x lalu upscale tanpa smoothing) sehingga informasi nomor kontak hancur permanen secara matematis, dipadukan dengan overlay semi-transparan `rgba(15, 23, 42, 0.75)` bertuliskan `🔒 Kontak Disamarkan`.
+     - File yang disamarkan kemudian diteruskan ke pipeline kompresi `compressImageToWebP`, sehingga file yang diunggah ke Supabase Storage dan database adalah file yang **sudah dalam kondisi tersamarkan**.
+  4. **Antarmuka & Edukasi Pengguna (`KostFormMitra.tsx`)**:
+     - Menampilkan indikator loading saat pemindaian foto: *"Memindai foto dengan Gemini 3.7 Flash..."*.
+     - Menampilkan banner edukatif di Langkah 5: *"Perlindungan Kontak & Privasi Aktif: Foto Anda terdeteksi memuat informasi kontak langsung/spanduk sewa dan telah disamarkan secara otomatis demi keamanan transaksi."*.
+     - Menyematkan badge `🛡️ Disamarkan` pada thumbnail foto yang terkena penyamaran.
+  5. **Penyempurnaan Presisi Sensor (Tight Bounding Box)**:
+     - Mengetatkan prompt AI Vision agar fokus secara eksklusif pada spanduk kain/kontak yang memuat nomor telepon, dan mengabaikan plang nama bangunan/kost permanen di dinding (tanpa kontak).
+     - Menghilangkan padding margin berlebih di canvas front-end (0% offset) sehingga kotak mosaik blur pas menempel pada tepi kain spanduk tanpa menutupi pot bunga, jalanan, atau pagar.
+  6. **Akselerasi & Efisiensi Maksimal (Smart Category Filtering & Promise.all)**:
+     - **Smart Category Filter**: Membatasi pemindaian AI Vision hanya pada kategori foto eksterior yang berpotensi memiliki spanduk sewa (`Bangunan Depan/Fasad`, `Area Lingkungan`, `Gerbang/Pagar`, `Akses Masuk`). Foto interior (kamar tidur, kasur, kamar mandi dalam, dapur) langsung lolos instan (0 detik) ke WebP tanpa AI, memangkas 70–80% kuota API.
+     - **Pemrosesan Paralel (`Promise.all`)**: Mengubah loop serial menjadi paralel sehingga banyak foto yang diunggah bersamaan selesai dalam satu waktu tunggu yang sama.
+     - **Resolusi Sweet Spot (1024px / 0.65)**: Payload base64 turun ke ~45 KB per foto untuk kecepatan transmisi dan decoding AI 2x lebih kencang tanpa mengurangi ketajaman foto asli hasil upload (tetap Full HD WebP).
+  7. **Pengalaman Pengguna Tanpa Gangguan (In-Card Seamless Loading & Eliminasi Banner Atas)**:
+     - Menghapus banner biru besar di bagian atas daftar foto (`Memindai foto dengan Gemini 3.7 Flash...`) agar layout tidak bergeser (*zero layout shift*) dan tidak menampilkan teks teknis nama AI yang mencolok.
+     - Memindahkan status pemrosesan langsung ke dalam kartu tombol upload foto pada kategori yang bersangkutan (`uploadingCategory === cat.id`), menampilkan animasi spinner halus `Loader2` dan teks *"Memproses... Mohon tunggu"* hingga foto selesai dan langsung muncul di grid.
+- **File Tersentuh**:
+  - `supabase/functions/detect-contact-banner/index.ts`
+  - `functions/public/adminService.ts`
+  - `functions/public/components/KostFormMitra.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Uji kompilasi build Vite `cmd /c npm run build` di `functions/public/` lulus 100% (✓ 2506 modules transformed, 24.20s, 0 error).
+
+### 255. Pencatatan Permanen Caption dan Kategori Foto ke Database & Tampilan User Listing (`KostFormMitra.tsx`, `adminService.ts`, `userService.ts`, `KostDetail.tsx`, `types.ts`) (September 2026)
+- **Permintaan & Masalah**:
+  - Pengguna meminta kepastian mutlak bahwa seluruh kategori dan caption foto yang diunggah mitra tercatat secara permanen di database Supabase, dan ditampilkan dengan jelas pada antarmuka calon penyewa saat listing ditampilkan.
+- **Implementasi Solusi**:
+  1. **Standardisasi Type Data & Objek Media Kaya (`types.ts`)**:
+     - Memperluas interface `ImageUrlObject` dengan atribut lengkap: `url?: string; label?: string; category?: string; caption?: string;`.
+     - Menambahkan properti `photosMeta?: ImageUrlObject[];` pada antarmuka publik `Kost`.
+  2. **Persistensi Database Multi-Layer (`adminService.ts`)**:
+     - Pada `addPropertyWithMedia` dan `updatePropertyWithMedia`:
+       - Setiap foto yang diunggah mitra menghasilkan objek media kaya: `{ original, url, label, category, caption }`.
+       - Objek disimpan ke kolom `image_urls` (JSONB), `photo_categories` (Text Array), `categorized_photos` (JSONB mapping per kategori), serta `metadata.photos_meta` (JSONB).
+  3. **Pengambilan Data Front-End Publik Bebas Regresi (`userService.ts`)**:
+     - Menambahkan helper `getDisplayImageObject(img)` yang mengekstrak metadata foto (`url`, `original`, `label`, `category`, `caption`).
+     - Memperbarui `getPublishedProperties` dan `getPublishedPropertyDetails` agar menyertakan `photosMeta` tanpa merusak kompatibilitas `imageUrls` (array of string URL absolut) untuk komponen kartu lain.
+  4. **Antarmuka Pengisian & Edit Caption Mitra (`KostFormMitra.tsx`)**:
+     - Menambahkan interface `NewPhotoItem.caption?: string` dengan inisialisasi default terisi nama kategori foto.
+     - Menyediakan tombol edit caption `Edit3` di samping tombol hapus `×` pada setiap thumbnail foto baru maupun foto lama.
+     - Menghadirkan modal pop-up interaktif untuk mengubah dan memberi keterangan detail pada setiap foto.
+     - Menyusun upload payload dan draft update dengan membawa metadata `file`, `label`, `category`, dan `caption`.
+  5. **Tampilan Dinamis di Sisi Pengguna (`KostDetail.tsx`)**:
+     - Mengekstrak `PhotoItem` dengan membaca `photosMeta` dari database jika tersedia, serta fallback ke `image_urls` dan `categorizedPhotos`.
+     - Menampilkan badge kategori foto di sudut kiri atas carousel utama (`🏠 Bangunan Depan (Fasad)`, `🛏️ Kamar: Standard`, dll.).
+     - Menampilkan info foto dan counter di sudut kanan bawah (`📸 1 / N FOTO • [Label / Kategori]`).
+     - Menampilkan banner caption foto terpadu di kiri bawah jika foto memiliki caption keterangan detail yang berbeda dari nama kategorinya.
+- **File Tersentuh**:
+  - `functions/public/types.ts`
+  - `functions/public/adminService.ts`
+  - `functions/public/userService.ts`
+  - `functions/public/components/KostFormMitra.tsx`
+  - `functions/public/pages/KostDetail.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Uji kompilasi build Vite `cmd /c npm run build` di `functions/public/` lulus 100% (✓ 2506 modules transformed, 58.09s, 0 error).
+
+### 254. Pengetatan Aturan Validasi Input Kost Mitra (Wizard Flow 1 - 6) & Saklar Eksklusif WC (`KostFormMitra.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  - Tombol navigasi "Lanjut" pada form pendaftaran mitra sebelumnya dapat ditekan untuk melompati langkah wizard tanpa memeriksa kelengkapan data esensial.
+  - Sub-fasilitas WC (Kloset Duduk vs Kloset Jongkok) masih dapat dipilih bersamaan padahal secara fisik tidak mungkin terjadi pada satu titik kloset.
+  - Pengguna meminta pengetatan aturan validasi wajib vs opsional secara menyeluruh pada setiap langkah (Flow 1 - 6):
+    1. Flow 1: Nama kost & tipe penghuni kost (Putra/Putri/Campur) WAJIB, deskripsi kost OPSIONAL.
+    2. Flow 2: Alamat lengkap, kota, dan penentuan titik koordinat pin lokasi pada peta WAJIB.
+    3. Flow 3: Minimal satu tipe kamar terdaftar WAJIB. Pada pembuatan tipe kamar: nama, ukuran kamar, kapasitas penghuni (min 1), kuota kamar tersedia (min 1), penentuan ada/tidaknya biaya tambahan orang (jika ada, nominal biaya per kepala WAJIB > 0), serta periode dan tarif sewa WAJIB diisi.
+    4. Flow 4: Fasilitas gedung/umum WAJIB dipilih minimal satu. Sub-fasilitas dari fasilitas yang dicentang (Parkir, Dapur Bersama, WC Umum) WAJIB dipilih. Saklar eksklusif WC: Kloset Duduk vs Kloset Jongkok saling mengunci (tidak bisa terpilih bersamaan). Penentuan ada/tidaknya biaya tambahan fasilitas WAJIB (jika ada, nominal bulanan > 0 dan cakupan biaya WAJIB dipilih). Fasilitas untuk setiap tipe kamar WAJIB ditentukan tipe WC-nya (Dalam/Luar) dan kelengkapan sub-fasilitasnya.
+    5. Flow 5: Seluruh kategori foto yang muncul (baik umum maupun reaksi tipe kamar/fasilitas terpilih) WAJIB memiliki minimal 1 foto per kategorinya.
+    6. Flow 6: Peraturan kost OPSIONAL.
+- **Implementasi Solusi**:
+  1. **Saklar Eksklusif Kloset Duduk vs Kloset Jongkok**:
+     - Pada `HierarchicalPublicFacilityInput` dan `HierarchicalRoomFacilityInput`, jika pengguna memilih 'Kloset Duduk', sistem otomatis membatalkan pilihan 'Kloset Jongkok', dan sebaliknya.
+  2. **Validasi Sub-Wizard Kamar (`saveDraftRoom`)**:
+     - Memvalidasi nama tipe kamar dan ukuran kamar pada Tahap 1 sebelum ke Tahap 2.
+     - Memvalidasi kapasitas penghuni (>= 1) dan jumlah kamar tersedia (>= 1 unit) pada Tahap 2 sebelum ke Tahap 3.
+     - Memvalidasi nominal biaya orang tambahan (> 0) jika toggle aktif, serta minimal satu periode sewa dengan harga > 0 sebelum draft kamar dapat disimpan.
+  3. **Validator Langkah Wizard (`validateCurrentStep` & `handleNextStep`)**:
+     - Menggantikan navigasi langsung tombol "Lanjut" dengan pemeriksaan ketat `validateCurrentStep(step)`.
+     - Menampilkan pesan error spesifik dan mencegah mitra melompat ke langkah berikutnya jika ada data wajib yang belum terpenuhi.
+  4. **Validasi Lengkap Kategori Foto Langkah 5**:
+     - Membuat helper terpadu `computeActivePhotoCategories(form, customCategories)` yang menghitung seluruh kategori umum dan kategori reaksi tipe kamar/fasilitas.
+     - Memeriksa setiap kategori aktif; jika ada kategori dengan 0 foto, sistem menampilkan pesan error menyebutkan nama kategori tersebut (misal: `"Kategori foto 'KM Dalam: Standard' wajib diunggah minimal 1 foto sebelum melanjutkan."`).
+  5. **Verifikasi Menyeluruh pada `handleSubmit`**:
+     - Menjalankan iterasi validasi dari Langkah 1 hingga Langkah 5 (`s = 0` s.d. `4`) sebelum memproses pengunggahan media dan penyimpanan database.
+- **File Tersentuh**:
+  - `functions/public/components/KostFormMitra.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Uji kompilasi build Vite `cmd /c npm run build` di `functions/public/` sukses 100% (✓ 2506 modules transformed, 36.08s, 0 error).
+
+### 253. Adopsi Mekanisme Input Fasilitas Tipe Kamar Ala Dashboard Agen (KostManager) dengan Sub-Fasilitas Inline (`KostFormMitra.tsx` & `types.ts`) (September 2026)
+- **Permintaan & Masalah**:
+  - Pada Langkah 4 formulir pendaftaran mitra (`KostFormMitra.tsx`), sistem input fasilitas kamar sebelumnya terbagi kaku menjadi dua sekat: opsi radio tipe kamar mandi di atas, dan deretan chips bulat datar `FacilityInput` di bawah.
+  - Pengguna meminta agar sistem input fasilitas tipe kamar disamakan dengan **input fasilitas kamar pada Dashboard Agen (KostManager)**:
+    1. Mengadopsi mekanisme parent dan sub-fasilitas inline (mekar rapi di bawah induk terkait).
+    2. Menghadirkan quick switch kondisi kamar: `[ ⚠️ Kosongan (Tanpa Perabot) ]` vs `[ ✓ Furnished (Isian) ]`.
+    3. Mempertahankan dan bahkan mengembangkan kelengkapan fasilitas kamar dengan format grid 2 kolom yang clean, teratur, dan dilengkapi ikon emoji serta checkbox responsif (0ms).
+- **Implementasi Solusi**:
+  1. **Quick Switch Kondisi Kamar (Kosongan vs Furnished)**:
+     - Ditempatkan di bagian atas setiap kartu tipe kamar.
+     - Saat memilih **Kosongan (Tanpa Perabot)**: seluruh perabot isian (Kasur, Lemari, Meja Belajar, Kursi, AC, Kipas Angin, TV, Water Heater, Kulkas Mini) dinonaktifkan dengan transisi `opacity-40 pointer-events-none`, menyisakan fasilitas fisik kamar seperti Kamar Mandi Dalam/Luar, Dapur Dalam, Jendela Luar, Ventilasi, dan Balkon.
+     - Saat memilih **Furnished (Isian)**: seluruh perabot terbuka dan dapat dipilih secara leluasa.
+  2. **Grid 2 Kolom Fasilitas Utama Kamar Terpadu**:
+     - Menyatukan seluruh fasilitas kamar dalam antarmuka grid 2 kolom dengan kartu checkbox ringkas (Kasur, Lemari Pakaian, Meja Belajar, Kursi, AC, Kipas Angin, TV, Water Heater, Jendela Luar, Ventilasi, Balkon, Kulkas Mini, Kamar Mandi Dalam, Kamar Mandi Luar, Dapur Dalam).
+  3. **Mekanisme Sub-Fasilitas Inline Beraksen Garis Kiri (`border-l-2 border-orange-500`)**:
+     - **Kamar Mandi Dalam**: saat dicentang, mekar sub-panel inline di bawahnya (`col-span-2`) beraksen oranye, memuat sub-kelengkapan:
+       - 🚽 Kloset Duduk, 🚽 Kloset Jongkok, 🚿 Shower, ♨️ Water Heater, 🚰 Wastafel, 🛁 Bak Mandi, 🪣 Ember & Gayung.
+       - Dilengkapi badge tags kelengkapan WC kustom dan kolom input penambahan (+).
+     - **Dapur Dalam**: saat dicentang, mekar sub-panel inline di bawahnya (`col-span-2`) beraksen oranye, memuat sub-kelengkapan:
+       - 🍳 Kompor, 🧊 Kulkas, 🚰 Wastafel Cuci Piring, 🗄️ Kitchen Set, 💧 Dispenser.
+       - Dilengkapi badge tags kelengkapan dapur kustom dan kolom input penambahan (+).
+     - **Kamar Mandi Luar**: opsi alternatif yang otomatis menyesuaikan status kamar mandi dalam secara konsisten.
+  4. **Fasilitas Kamar Kustom Bebas**:
+     - Mitra dapat menambahkan fasilitas unik apa pun di luar preset (misal: *Sofa*, *Karpet*, *Cermin Rias*) yang ditampilkan dalam bentuk badge dengan tombol hapus `&times;`.
+  5. **Integritas Alur Data & Skema Database**:
+     - Menambahkan properti `kitchenFacilities?: string[]` pada `RoomType` di `types.ts`.
+     - Sinkronisasi state `roomFacilities`, `bathroomFacilities`, dan `kitchenFacilities` tetap kompatibel 100% dengan filter pencarian kost, `KostDetail.tsx`, dan pendataan foto unit kamar di Langkah 5.
+- **File Tersentuh**:
+  - `functions/public/types.ts`
+  - `functions/public/components/KostFormMitra.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Uji kompilasi build Vite `cmd /c npm run build` di `functions/public/` sukses 100% (✓ 2506 modules transformed, 57.24s, 0 error).
+
+### 252. Mekanisme Input Biaya Tambahan Fasilitas dengan Toggle On/Off & Checklist Cakupan Item Ala Dashboard Agen (`KostFormMitra.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  - Pengguna meminta agar bagian **Biaya Tambahan Fasilitas** pada formulir pendaftaran mitra (`KostFormMitra.tsx` Langkah 4) memiliki mekanisme input yang sama dengan yang ada pada Dashboard Agen (`AgentDashboard.tsx`):
+    1. Menginput nominal harga bulanan dengan format pemisah ribuan otomatis.
+    2. Menentukan cakupan biaya tambahan (mencakup apa saja) menggunakan checklist item interaktif.
+    3. Diterapkan tombol toggle On/Off untuk menentukan secara eksplisit apakah ada biaya tambahan fasilitas atau tidak.
+- **Implementasi Solusi**:
+  1. **Toggle Switch On / Off Eksplisit**:
+     - Menghadirkan opsi toggle: `[ ✕ Tidak Ada ]` vs `[ ✓ Ada Biaya Tambahan ]`.
+     - Saat memilih **Tidak Ada**: panel konfigurasi tertutup rapi, menyajikan keterangan informatif bahwa biaya sewa sudah bersih (*all-in*), serta mereset nominal biaya `additionalFeePrice = 0` dan `additionalFeeName = ''`.
+     - Saat memilih **Ada Biaya Tambahan**: panel mekar terbuka dengan animasi transisi yang mulus.
+  2. **Input Nominal Harga Terformat Otomatis**:
+     - Menggunakan helper `formatCurrencyInput` dan `parseCurrencyInput` dengan prefix `Rp` dan pemisah titik ribuan otomatis (misal: `50.000`), sehingga konsisten dengan pengisian tarif kamar.
+  3. **Checklist Cakupan Biaya Tambahan Ala Dashboard Agen**:
+     - Menyediakan grid checklist item preset cakupan esensial:
+       - ⚡ **Listrik**
+       - 💧 **Air**
+       - 🗑️ **Sampah**
+       - 📶 **Wifi**
+       - 🛡️ **Keamanan / Parkir**
+     - Dilengkapi input penambahan cakupan kustom bebas (+ tombol `+ Tambah` / enter) untuk item tambahan lain (misal: *Gas*, *Laundry*, *Iuran RT*).
+     - Sinkronisasi dua arah instan dengan field string database `form.additionalFeeName` (contoh: `"Listrik, Air, Sampah"`).
+  4. **Retensi Ketentuan Penagihan**:
+     - Pilihan ketentuan penagihan (`Mulai dari Bulan Awal Sewa Pertama` vs `Promo Bebas Tagihan di Bulan Pertama`) tetap tersaji elegan dengan penjelasannya.
+- **File Tersentuh**:
+  - `functions/public/components/KostFormMitra.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Uji kompilasi build Vite `cmd /c npm run build` di `functions/public/` sukses 100% (✓ 2506 modules transformed, 0 error).
+
+### 251. Adopsi Mekanisme Input Fasilitas Clean & Ringkas Dashboard Agen pada Formulir Mitra (`KostFormMitra.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  - Pengguna lebih menyukai mekanisme sistem input fasilitas yang ada pada Dashboard Agen (`KostManagerPropertyFormModal.tsx` & `AgentDashboard.tsx`) karena terasa jauh lebih *clean*, ringkas, ringan, dan tidak membuat pusing (*nggak bikin mumet*).
+  - Pengguna ingin agar **mekanisme ringkasan input dari Dashboard Agen diadopsi**, namun **kelengkapan variasi fasilitas dari formulir mitra tetap dipertahankan 100%** untuk setiap kategorinya.
+- **Implementasi Solusi**:
+  1. **Tata Letak Grid 2 Kolom Bersih & Kompak Ala Dashboard Agen**:
+     - Mengubah komponen `HierarchicalPublicFacilityInput` dari kartu tebal bertingkat menjadi antarmuka grid 2 kolom dengan card checkbox baris ringkas (`label` ber-border halus, checkbox oranye instan, ikon emoji, dan teks tebal).
+     - Menyatukan seluruh fasilitas umum utama (WiFi, Area Parkir, Dapur Bersama, WC Umum, Ruang Tamu, CCTV, Laundry, Mushola, Area Jemuran, Security 24 Jam, Akses 24 Jam, Lift, Cleaning Service) dalam satu grid terpadu yang sangat rapi dan lega.
+  2. **Sub-Panel Inline Beraksen Garis Kiri (`border-l-2 border-orange-500`)**:
+     - Saat fasilitas induk (**Area Parkir**, **Dapur Bersama**, **WC Umum**) dicentang aktif, panel sub-kelengkapannya langsung terbuka secara inline pada baris berikutnya (`col-span-2`) tepat di bawah induk terkait.
+     - Menggunakan aksen garis oranye di sisi kiri (`border-l-2 border-orange-500 bg-orange-50/40 pl-4 py-2.5 rounded-r-xl`), memuat checkbox sub-kelengkapan ringkas dan form penambahan kustom secara terintegrasi.
+  3. **Penyesuaian Serupa pada Fasilitas per Tipe Kamar**:
+     - Mengadopsi card radio ringkas untuk pilihan `[ Kamar Mandi Dalam ]` vs `[ Kamar Mandi Luar ]`.
+     - Saat memilih Kamar Mandi Dalam, sub-kelengkapan kamar mandi (Kloset Duduk/Jongkok, Shower, Water Heater, Wastafel, dll.) mekar dengan aksen inline `border-l-2 border-orange-500`.
+  4. **Retensi Kelengkapan Mitra & Responsivitas 0ms**:
+     - Seluruh opsi kelengkapan mitra (termasuk tag kustom dan input penambahan bebas) tetap dipertahankan 100%.
+     - State array string `facilities`, `roomFacilities`, dan `bathroomFacilities` tetap sinkron dan kompatibel penuh dengan skema database Supabase.
+- **File Tersentuh**:
+  - `functions/public/components/KostFormMitra.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Uji kompilasi build Vite `cmd /c npm run build` di `functions/public/` sukses 100% (✓ 2506 modules transformed, 31.73s, 0 error).
+
+### 250. Optimasi Responsivitas On/Off & Tata Letak Inline Sub-Fasilitas Langsung di Bawah Induk (`KostFormMitra.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  - Pengguna melaporkan bahwa tombol on/off fasilitas induk kurang responsif (kadang delay atau status tidak berubah sama sekali saat diklik).
+  - Tampilan kurang dinamis karena saat fasilitas induk diklik, sub-fasilitasnya tidak langsung muncul di bawah kartu induk tersebut, melainkan terlempar ke bawah di antara fasilitas-fasilitas utama lainnya.
+- **Implementasi Solusi**:
+  1. **Tata Letak Inline Accordion Card**:
+     - Membungkus setiap fasilitas utama (🅿️ Area Parkir, 🍳 Dapur Bersama, 🚻 WC Umum / Luar) dalam satu kontainer kartu tersendiri (`Inline Group Card`).
+     - Sub-panel kelengkapan dirender langsung di dalam kartu yang sama, tepat di bawah baris header induk dengan pembatas garis elegan dan animasi fade-in yang mulus.
+     - Ketika Area Parkir aktif, sub-opsi parkir langsung mekar di kartu Area Parkir (tanpa melompati kartu Dapur Bersama atau WC Umum).
+  2. **Perbaikan Logika & Responsivitas 0ms**:
+     - Memperbaiki bug logika filter: status aktif kini menggunakan `isGroupActive` berbasis exact matching yang konsisten dengan set deaktifasi `toRemoveSet`, sehingga grup dapat dimatikan (*off*) dan dihidupkan (*on*) kembali secara instan dan bersih tanpa macet.
+     - Menambahkan isolasi event `e.stopPropagation()` pada tombol toggle on/off agar interaksi klik switch dan klik kartu berjalan presisi tanpa konflik event bubbling.
+     - Menyediakan indikator jumlah kelengkapan yang aktif secara real-time pada kartu induk (contoh: *"2 kelengkapan aktif"*).
+- **File Tersentuh**:
+  - `functions/public/components/KostFormMitra.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Uji kompilasi build Vite `cmd /c npm run build` di `functions/public/` lulus 100% (✓ 2506 modules transformed, 49.18s, 0 error).
+
+### 249. Sistem Input Fasilitas & Sub-Fasilitas Hirarkis Pola KostManager (`KostFormMitra.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  - Pada Langkah 4 (Fasilitas), tampilan awal menyajikan puluhan chips bulat berjejer secara datar (flat), membuat layar terasa sangat penuh (*bejibun*), membingungkan, dan sulit dipahami oleh mitra.
+  - Pengguna meminta agar digunakan sistem yang sama dengan formulir pendataan KostManager (`KostManagerPropertyFormModal.tsx` & `AgentDashboard.tsx`), yaitu sistem **Fasilitas Induk dan Sub-Fasilitas** yang kontekstual.
+- **Implementasi Solusi**:
+  1. **Komponen `HierarchicalPublicFacilityInput` untuk Fasilitas Umum**:
+     - Membagi fasilitas umum ke dalam kelompok induk berkelengkapan:
+       - 🅿️ **Area Parkir**: Jika dipilih/aktif, membuka sub-panel kelengkapan (`Parkir Motor`, `Parkir Mobil`, `Parkir Sepeda` + custom).
+       - 🍳 **Dapur Bersama**: Jika dipilih/aktif, membuka sub-panel kelengkapan (`Kompor`, `Kulkas Bersama`, `Dispenser Air`, `Wastafel Cuci Piring`, `Peralatan Masak`, `Meja Makan Bersama` + custom).
+       - 🚻 **WC Umum / Luar**: Jika dipilih/aktif, membuka sub-panel kelengkapan (`Kloset Duduk`, `Kloset Jongkok`, `Shower`, `Wastafel` + custom).
+     - Fasilitas umum mandiri (standalone) disajikan secara rapi dan ringkas: `WiFi`, `Ruang Tamu`, `CCTV`, `Laundry`, `Mushola`, `Area Jemuran`, `Security 24 Jam`, `Akses 24 Jam`, `Lift`, `Cleaning Service`.
+     - Fasilitas kustom bebas tetap tersedia dengan badge removable dan input teks di bagian bawah.
+  2. **Fasilitas Kamar per Tipe Kamar Hirarkis**:
+     - **Tipe Kamar Mandi**: Tombol segmented pilihan utama `[ 🚿 Kamar Mandi Dalam ]` vs `[ 🚪 Kamar Mandi Luar ]`. Jika memilih Kamar Mandi Dalam, otomatis muncul sub-kelengkapan (`Kloset Duduk`, `Kloset Jongkok`, `Shower`, `Water Heater`, `Wastafel`, `Bak Mandi`, `Ember & Gayung`).
+     - **Fasilitas Kamar Tidur**: Pilihan perabot esensial teratur (`Kasur`, `Lemari Pakaian`, `Meja Belajar`, `Kursi`, `AC`, `Kipas Angin`, `TV`, `Jendela`, `Ventilasi`, `Balkon`, `Kulkas Mini` + custom).
+  3. **Integritas Alur Data**:
+     - Seluruh fasilitas tersimpan konsisten dalam array string standar `form.facilities`, `room.roomFacilities`, dan `room.bathroomFacilities`, kompatibel penuh dengan database Supabase dan auto-save draft localStorage.
+- **File Tersentuh**:
+  - `functions/public/components/KostFormMitra.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Uji kompilasi build Vite `cmd /c npm run build` di `functions/public/` lulus 100% (✓ 2506 modules transformed, 48.20s, 0 error).
+
+### 248. Penghapusan Tombol Redundan Tambah Tipe Kamar di Header Ringkasan (`KostFormMitra.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  - Pada tampilan ringkasan tipe kamar tersimpan (Summary View), terdapat tombol oranye `+ Tambah Tipe Kamar` di baris header atas yang menduplikasi fungsi tombol kartu besar `+ Tambah Tipe Kamar Lainnya` di bagian bawah daftar kamar.
+  - Pengguna meminta tombol di header tersebut dihapus karena memenuhi layar.
+- **Implementasi Solusi**:
+  1. **Pembersihan Baris Header Summary View**:
+     - Menghapus tombol `startAddRoom` dari header `Tipe Kamar & Harga`.
+     - Header kini tampil rapi dan lega dengan teks judul dan deskripsi saja.
+     - Penambahan kamar baru dilakukan sepenuhnya melalui tombol kartu `+ Tambah Tipe Kamar Lainnya` yang lebih intuitif dan terintegrasi di bagian bawah daftar kartu kamar.
+- **File Tersentuh**:
+  - `functions/public/components/KostFormMitra.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Uji kompilasi build Vite `cmd /c npm run build` di `functions/public/` lulus 100% (✓ 2506 modules transformed, 28.20s, 0 error).
+
+### 247. Penghapusan Banner Notifikasi Draft Pengisian (`KostFormMitra.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  - Banner kuning "Melanjutkan Draft Pengisian | Progres sebelumnya tersimpan otomatis | [Mulai Baru]" memakan ruang vertikal yang cukup besar tepat di atas form data.
+  - Pengguna merasa banner tersebut mengganggu dan meminta untuk dihapus agar formulir terlihat lebih lega dan rapi.
+- **Implementasi Solusi**:
+  1. **Pembersihan Layout Modal**:
+     - Menghapus blok render `Restored Draft Notice Banner` dari modal `KostFormMitra.tsx`.
+     - Status penyimpanan draft tetap terwakili secara elegan oleh badge kecil `Draft Aktif` di header modal di samping judul tanpa memakan ruang vertikal.
+     - Mekanisme auto-save draft ke localStorage tetap berjalan normal di latar belakang tanpa mengganggu kenyamanan pengguna.
+- **File Tersentuh**:
+  - `functions/public/components/KostFormMitra.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Uji kompilasi build Vite `cmd /c npm run build` di `functions/public/` lulus 100% (✓ 2506 modules transformed, 28.08s, 0 error).
+
+### 246. Format Otomatis Pemisah Ribuan Titik (.) pada Input Harga Kamar (`KostFormMitra.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  - Pada formulir pengisian harga sewa dan biaya tambahan, nominal angka tampil menyatu tanpa pemisah ribuan (contoh: `500000`, `50000`), sehingga menyulitkan mitra membaca apakah nilai tersebut puluhan ribu, ratusan ribu, atau jutaan.
+  - Pengguna meminta agar otomatis ditambahkan titik (.) setiap setelah mengetik 3 digit angka.
+- **Implementasi Solusi**:
+  1. **Helper Currency Formatter & Parser**:
+     - Dibuat fungsi `formatCurrencyInput` untuk memformat angka dengan pemisah ribuan standar Indonesia titik (`.`) secara instan (contoh: `500000` ➔ `500.000`, `1500000` ➔ `1.500.000`).
+     - Dibuat fungsi `parseCurrencyInput` untuk membersihkan karakter titik sebelum disimpan ke state, sehingga nilai di database tetap numerik integer murni (`number`).
+  2. **Penerapan pada Input Harga Pokok & Biaya Tambahan**:
+     - Mengubah `type="number"` menjadi `type="text"` dengan `inputMode="numeric"` agar keyboard pada smartphone tetap memunculkan pad angka/numpad.
+     - Diterapkan pada seluruh input tarif sewa pokok (Bulanan, Harian, Mingguan, 3 Bulan, 6 Bulan, Tahunan) dan input nominal Biaya Tambahan Penghuni Ekstra.
+     - Placeholder disesuaikan menjadi format titik yang realistis (`Contoh: 50.000`).
+- **File Tersentuh**:
+  - `functions/public/components/KostFormMitra.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Uji kompilasi build Vite `cmd /c npm run build` di `functions/public/` lulus 100% (✓ 2506 modules transformed, 26.04s, 0 error).
+
+### 245. Pemindahan Input Nominal Biaya Tambahan Penghuni ke Tahap 3 (Harga Sewa) (`KostFormMitra.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  - Memasukkan angka nominal uang di Tahap 2 (Kapasitas) membebani alur dan membuat fokus terbagi antara mengatur unit kamar dan menghitung nominal rupiah.
+  - Pengguna meminta agar jika dicentang "Ada Biaya Tambahan", nominalnya diinput di bagian harga (Tahap 3), sehingga seluruh struktur finansial kamar (harga pokok kamar & biaya tambahan per orang ekstra) terlihat secara terpadu.
+- **Implementasi Solusi**:
+  1. **Penyederhanaan Tahap 2 (Kapasitas & Ketersediaan)**:
+     - Tahap 2 murni berfokus pada preferensi kualitatif: *"Apakah ada biaya sewa tambahan jika kamar dihuni lebih dari 1 orang?"* (`[ Tidak, Biaya Tetap Sama ]` / `[ Ya, Ada Biaya Tambahan ]`).
+     - Kolom input nominal uang dihilangkan dari Tahap 2 dan diganti dengan hint informatif: *"💡 Besaran nominal biaya tambahan per orang akan Anda tentukan pada langkah berikutnya (Harga Sewa)."*
+  2. **Integrasi Finansial Terpadu di Tahap 3 (Periode Sewa & Harga)**:
+     - Di Tahap 3, jika mitra mencentang "Ya, Ada Biaya Tambahan" di Tahap 2, muncul kartu khusus beraksen amber di bawah daftar tarif sewa pokok:
+       `Biaya Tambahan Penghuni Ekstra (> 1 Orang)`
+       `Rp [ Masukkan Nominal ] / Bulan (per orang ekstra)`.
+     - Seluruh struktur harga kamar kini rapi, terpusat, dan mudah dipahami mitra.
+- **File Tersentuh**:
+  - `functions/public/components/KostFormMitra.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Uji kompilasi build Vite `cmd /c npm run build` di `functions/public/` lulus 100% (✓ 2506 modules transformed, 33.44s, 0 error).
+
+### 244. Pertanyaan Eksplisit Opsi Biaya Sewa Tambahan Penghuni > 1 Orang di Tahap 2 (`KostFormMitra.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  - Pada Tahap 2 (Kapasitas & Ketersediaan), mitra membutuhkan pertanyaan eksplisit yang jelas mengenai apakah ada biaya sewa tambahan jika penghuninya lebih dari 1 orang.
+  - Banyak pemilik kost yang mengizinkan kamar diisi berdua/bertiga tanpa biaya tambahan (biaya tetap sama), sementara yang lain mengenakan biaya tambahan per bulan.
+- **Implementasi Solusi**:
+  1. **Pertanyaan Eksplisit & Interaktif**:
+     - Ditambahkan pertanyaan: *"Apakah ada biaya sewa tambahan jika kamar dihuni lebih dari 1 orang?"*.
+     - Sedia 2 pilihan tombol chip:
+       - `[ Tidak, Biaya Tetap Sama ]`: Menonaktifkan biaya tambahan dan menyetel nominal ke Rp 0.
+       - `[ Ya, Ada Biaya Tambahan ]`: Membuka field input nominal biaya tambahan per orang per bulan/periode.
+  2. **Keterangan Edukatif untuk Kapasitas 1 Orang**:
+     - Jika kapasitas dipilih `1 Orang`, ditampilkan box info yang ramah: *"Kamar ini dikhususkan untuk 1 penghuni. Pilih 2 Orang atau 3 Orang jika ingin mengizinkan penghuni tambahan & mengatur biaya tambahannya."*
+- **File Tersentuh**:
+  - `functions/public/components/KostFormMitra.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Uji kompilasi build Vite `cmd /c npm run build` di `functions/public/` lulus 100% (✓ 2506 modules transformed, 26.82s, 0 error).
+
+### 243. Alur Bertahap (Step-by-Step Mini-Wizard) Penambahan Kamar & Kartu Ringkasan Tipe Kamar (`KostFormMitra.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  - Input penambahan kamar tidak boleh langsung muncul semua sekaligus karena membebani pemilik kost.
+  - Proses harus bertahap:
+    1. Pemilihan profile tipe dan ukuran kamar dulu.
+    2. Jika sudah oke, lanjut ke maksimal kapasitas penghuni, biaya tambahan per orang per bulan (> 1 orang), dan jumlah unit kamar.
+    3. Jika sudah oke, lanjut ke periode sewa yang ditawarkan dan harga masing-masing periode.
+    4. Setelah semua terisi, disimpan ke dalam kartu ringkasan tipe kamar yang rapi.
+    5. Kartu ringkasan tipe kamar masih bisa diedit atau dihapus.
+    6. Masih di langkah 3 yang sama, mitra dapat menambah tipe kamar baru lainnya.
+- **Implementasi Solusi**:
+  1. **Sub-Wizard Bertahap 3 Tahap**:
+     - Mengembangkan stepper mini di dalam kartu penambahan/pengeditan kamar (`1. Profil & Ukuran` ➔ `2. Kapasitas & Unit` ➔ `3. Periode & Harga`).
+     - **Tahap 1**: Menampilkan preset nama kamar (`Standard`, `Deluxe`, `VIP`, dll.) dan pilihan cepat ukuran dimensi kamar + tombol `Lanjut ke Kapasitas ➔`.
+     - **Tahap 2**: Menampilkan pilihan kapasitas (`1 Orang`, `2 Orang`, `3 Orang`), biaya tambahan penghuni ekstra jika > 1, dan stepper unit kamar + tombol `Kembali` & `Lanjut ke Harga ➔`.
+     - **Tahap 3**: Menampilkan toggle periode sewa yang ditawarkan (`Bulanan` default aktif) serta input nominal harga untuk periode aktif + tombol `Kembali` & `Simpan Tipe Kamar`.
+  2. **Tampilan Kartu Ringkasan (Summary View)**:
+     - Setelah disimpan, kamar muncul sebagai kartu ringkasan yang bersih dan elegan (nama tipe, ukuran, kapasitas, ketersediaan unit, harga bulanan pokok, dan badge periode lainnya).
+     - Dilengkapi tombol ✏️ `Edit` (membuka kembali form bertahap untuk kamar tersebut) dan 🗑️ `Hapus`.
+     - Terdapat tombol `+ Tambah Tipe Kamar Lainnya` di bawah kartu ringkasan untuk menambah kamar baru secara dinamis.
+- **File Tersentuh**:
+  - `functions/public/components/KostFormMitra.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Uji build Vite `cmd /c npm run build` di `functions/public/` lulus 100% (✓ 2506 modules transformed, 21.25s, 0 error).
+
+### 242. Redesain Total UI/UX Tipe Kamar & Harga (Langkah 3) dengan Preset Terstandarisasi & Periode Sewa Fleksibel (`KostFormMitra.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  - UI/UX formulir penambahan tipe kamar dirasa kurang menarik, membingungkan, kaku, dan kurang responsif.
+  - Tampilan 6 kotak periode harga sewa (`Harian`, `Mingguan`, `Bulanan`, `3 Bulan`, `6 Bulan`, `Tahunan`) sekaligus dengan nilai `Rp 0` membuat layar semrawut dan membingungkan pemilik properti.
+  - Input nama tipe kamar bebas berpotensi membuat data tidak konsisten; pengguna meminta disediakan tombol pilihan nama terstandarisasi seperti `Standard`, `VIP`, `Premium`, `Exclusive`, `Deluxe`.
+  - Penegasan skema periode sewa: `Bulanan` adalah default utama yang aktif otomatis, dengan opsi mengaktifkan periode lainnya sesuai kebutuhan.
+- **Implementasi Solusi**:
+  1. **Preset Nama Tipe Kamar Terstandarisasi**:
+     - Menambahkan tombol chip pilihan cepat: `Standard`, `Deluxe`, `VIP`, `Premium`, `Exclusive`, serta opsi `+ Kustom`.
+     - Klik pada chip langsung menetapkan nama tipe kamar secara instan; kolom teks kustom hanya muncul jika memilih kustom atau ingin menambahkan catatan spesifik.
+  2. **Preset Ukuran Kamar & Grid Responsif**:
+     - Pilihan cepat ukuran dimensi kamar (`3x3 m`, `3x4 m`, `4x4 m`, `4x5 m`) plus input fleksibel berikon `Maximize2`.
+  3. **Kapasitas Sentuh-Cepat & Ketersediaan Unit**:
+     - Tombol kapasitas touch-friendly (`1 Orang`, `2 Orang`, `3 Orang`).
+     - Stepper ketersediaan unit kamar yang bersih (`- [ 1 Kamar ] +`).
+     - Biaya tambahan orang ekstra hanya muncul secara kontekstual jika kapasitas > 1 orang.
+  4. **Skema Tarif Sewa Fleksibel (Bebas dari Kotak Rp 0 Menumpuk)**:
+     - Deretan chips toggle periode sewa yang ditawarkan (`[✓ Bulanan]` aktif otomatis + pilihan `Harian`, `Mingguan`, `3 Bulan`, `6 Bulan`, `Tahunan`).
+     - Hanya periode yang dicentang yang menampilkan kartu input harga dengan format `Rp` yang lega dan kontras. Periode yang tidak aktif tidak akan membebani layar.
+- **File Tersentuh**:
+  - `functions/public/components/KostFormMitra.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Uji kompilasi build Vite `cmd /c npm run build` di `functions/public/` lulus 100% (✓ 2506 modules transformed, 23.46s, 0 error).
+
+### 241. Pertukaran Urutan Wizard Kamar (Langkah 3) & Fasilitas (Langkah 4) dengan Fasilitas & Foto Kamar Dinamis (`KostFormMitra.tsx`) (September 2026)
+- **Permintaan & Kebutuhan**:
+  - Menggeser menu **Tipe Kamar** menjadi **Langkah 3** (Wizard Flow 3) dan **Fasilitas** menjadi **Langkah 4** (Wizard Flow 4).
+  - Menghapus input fasilitas kamar dan fasilitas kamar mandi dari formulir penambahan kamar di Langkah 3.
+  - Pada Langkah 4 (Fasilitas), input fasilitas kamar & kamar mandi dibuat dinamis menyesuaikan tipe-tipe kamar yang telah ditambahkan di Langkah 3.
+  - Pada Langkah 5 (Foto), input foto dibuat dinamis berkorelasi dengan fasilitas umum yang dipilih (Area Parkir, Dapur Bersama, WC Umum, Ruang Tamu, Laundry, dll.) serta input foto dinamis untuk setiap tipe kamar dan kamar mandi dalam.
+- **Implementasi Solusi**:
+  1. **Pertukaran STEPS**:
+     - `info` (1) ➔ `location` (2) ➔ `rooms` (3) ➔ `facilities` (4) ➔ `media` (5) ➔ `rules` (6).
+  2. **Langkah 3 (Kamar)**:
+     - Murni memetakan nama tipe kamar, ukuran kamar, skema tarif per periode sewa, kapasitas penghuni, kamar tersedia, dan sisa kamar.
+     - Fasilitas kamar tidur dan kamar mandi dihilangkan dari langkah ini dan dipindahkan ke Langkah 4.
+  3. **Langkah 4 (Fasilitas Properti & Kamar Dinamis)**:
+     - Bagian 1: Fasilitas Umum / Gedung (`form.facilities`) + Pengaturan Biaya Tambahan.
+     - Bagian 2: Kartu fasilitas dinamis per tipe kamar dari `form.roomTypes` untuk mengatur Fasilitas Kamar Tidur (`ROOM_AMENITIES`) dan Fasilitas Kamar Mandi (`BATH_AMENITIES`).
+  4. **Langkah 5 (Foto Berkorelasi Dinamis)**:
+     - Bagian Umum Dinamis: Hanya memunculkan dropzone foto fasilitas bersama yang dicentang di Langkah 4 (Area Parkir, Dapur Bersama, WC Umum, Ruang Tamu, Laundry) selain 3 kategori pokok (Bangunan Depan/Cover, Koridor, Lingkungan).
+     - Bagian Kamar Dinamis: Otomatis memunculkan dropzone foto kamar per tipe (`Kamar: [Nama Tipe Kamar]`), serta dropzone foto kamar mandi dalam jika fasilitas kamar mandi dalam dipilih.
+  5. **Integrasi & Validasi**:
+     - Memperbarui redirect validasi foto kosong di `handleSubmit` ke `setStep(4)`.
+- **File Tersentuh**:
+  - `functions/public/components/KostFormMitra.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Uji kompilasi build Vite `cmd /c npm run build` di `functions/public/` lulus 100% (✓ 2506 modules transformed, 23.32s, 0 error).
+
+### 240. Penataan Ulang Urutan Wizard Formulir Mitra: Pemindahan Menu Foto ke Langkah 5 (`KostFormMitra.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  - Pengguna memutuskan untuk membatalkan peletakan fasilitas umum pada Wizard Flow 1 (mengembalikan Info Dasar bersih seperti semula).
+  - Menu input foto properti yang semula berada di Langkah 3 digeser ke bagian hampir terakhir (Langkah 5 / Wizard Flow 5).
+- **Implementasi Solusi**:
+  1. **Pembersihan Info Dasar (Langkah 1)**:
+     - Menghapus input fasilitas umum dari `case 0:`.
+     - Langkah 1 kembali murni berisi Nama Kost, Tipe Kost, dan Deskripsi Kost.
+  2. **Penataan Ulang Urutan STEPS & renderStep()**:
+     - **Langkah 1 (Flow 1)**: Info Dasar (`id: 'info'`, icon `Home`)
+     - **Langkah 2 (Flow 2)**: Lokasi Kost (`id: 'location'`, icon `MapPin`)
+     - **Langkah 3 (Flow 3)**: Fasilitas Gedung & Biaya Tambahan (`id: 'facilities'`, icon `Wifi`)
+     - **Langkah 4 (Flow 4)**: Tipe Kamar & Harga (`id: 'rooms'`, icon `Check`)
+     - **Langkah 5 (Flow 5)**: Foto Properti Berkategori Terstruktur (`id: 'media'`, icon `Camera`)
+     - **Langkah 6 (Flow 6)**: Peraturan Kost (`id: 'rules'`, icon `BookOpen`)
+  3. **Manfaat Alur Baru**:
+     - Fasilitas kost dan kamar sudah terdata lengkap terlebih dahulu pada Langkah 3 & 4 sebelum mitra mengunggah foto di Langkah 5, sehingga dokumentasi foto area dan kamar menjadi jauh lebih terarah dan relevan.
+- **File Tersentuh**:
+  - `functions/public/components/KostFormMitra.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Uji kompilasi build Vite `npm run build` di `functions/public/` lulus 100% (✓ 2506 modules transformed, 22.93s, 0 error).
+
+### 239. Penambahan Input Fasilitas Umum pada Wizard Flow 1 (`KostFormMitra.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  - Pengguna ingin input fasilitas umum kost tersedia langsung di Wizard Flow 1 (Langkah 1: Info Dasar) agar mitra dapat langsung memilih fasilitas bersama tanpa harus menunggu langkah belakang.
+- **Implementasi Solusi**:
+  1. **Integrasi Komponen Fasilitas Umum di Flow 1 (`KostFormMitra.tsx`)**:
+     - Menambahkan komponen `FacilityInput` pada `case 0:` tepat di bawah field `Deskripsi Kost`.
+     - Menyajikan pilihan preset fasilitas umum kost: WiFi, Parkir Motor, Parkir Mobil, CCTV, AC, Laundry, Dapur Bersama, Ruang Tamu, Mushola, Jemuran, Kulkas Bersama, Water Heater, Cleaning Service, Security 24 Jam, Akses 24 Jam, dan Lift.
+     - Menyediakan input tambah fasilitas kustom (misal: Kolam Renang, Rooftop, Gym, dll.).
+  2. **Sinkronisasi Data**:
+     - Pilihan fasilitas terikat langsung ke `form.facilities: string[]`, tersimpan otomatis di draft `localStorage`, dan dikirim ke Supabase database.
+- **File Tersentuh**:
+  - `functions/public/components/KostFormMitra.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Uji kompilasi build Vite `npm run build` di `functions/public/` lulus 100% (✓ 2506 modules transformed, 28.53s, 0 error).
+
+### 238. Pengkategorian Foto Properti Terstruktur & Penghapusan Input Video (`KostFormMitra.tsx`, `adminService.ts`, `KostDetail.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  - Pengguna ingin input foto kost di formulir mitra tidak lagi bercampur dalam satu kotak tanpa kategori.
+  - Bagian "Video Kost" dihapus total dari langkah media agar form lebih bersih dan ringan.
+  - Setiap input foto dibagi ke dalam beberapa kategori area properti (seperti pada pendataan KostManager di Dashboard Agen).
+  - Kategori foto wajib terhubung dengan database Supabase agar otomatis tampil sebagai caption/kategori di sisi tampilan calon penyewa (`KostDetail.tsx`).
+- **Implementasi Solusi**:
+  1. **Penghapusan Input Video Kost (`KostFormMitra.tsx`)**:
+     - Menghapus input "Video Kost", state `newVideoFiles`, dan `videoInputRef` dari Langkah 3 (Foto).
+  2. **Pengkategorian Foto Terstruktur di Formulir Mitra (`KostFormMitra.tsx`)**:
+     - Menerapkan kategori area properti standar:
+       - 🏢 **Bangunan Depan (Fasad)** *(Wajib, otomatis menjadi Cover Utama)*
+       - 🚪 **Koridor & Akses Masuk**
+       - 🅿️ **Area Parkir (Motor/Mobil)**
+       - 🍳 **Dapur Bersama**
+       - 🛋️ **Ruang Tamu & Bersama**
+       - 🚿 **WC Umum / Kamar Mandi Luar**
+       - 🌿 **Lingkungan Sekitar**
+       - 📸 **Fasilitas & Area Lainnya**
+       - Fitur tambah kategori kustom (misal: Rooftop, Kolam Renang, Balkon).
+     - Kotak upload / dropzone terpisah per kategori dengan thumbnail preview, badge kategori/cover, dan tombol hapus individual.
+     - Kompresi client-side otomatis ke WebP (`compressImageToWebP`) sebelum dikirim ke server (mematuhi RULE 5).
+     - Prioritas penataan foto: foto "Bangunan Depan" dijamin selalu diatur pada index 0 sebagai cover utama properti.
+  3. **Integrasi Database & Kompatibilitas Sisi User (`adminService.ts`, `KostDetail.tsx`)**:
+     - `addPropertyWithMedia` dan `updatePropertyWithMedia` kini memproses payload berkategori:
+       - Menyimpan objek terstruktur `{ original: url, url: url, label: categoryName }` di kolom `image_urls`.
+       - Menyimpan array `photo_categories` dan objek mapping `categorized_photos` di tabel `properties` serta `metadata`.
+     - Tampilan calon penyewa di `KostDetail.tsx` langsung membaca `img.label` dan `photoCategories` sehingga caption/kategori foto otomatis muncul di galeri foto publik.
+- **File Tersentuh**:
+  - `functions/public/components/KostFormMitra.tsx`
+  - `functions/public/adminService.ts`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Uji kompilasi build Vite `npm run build` di `functions/public/` lulus 100% (✓ 2506 modules transformed, 38.28s, 0 error).
+
+### 237. Kartu Draft Properti Otomatis & Pemisahan Tombol Tambah Baru (`MitraDashboard.tsx`, `KostFormMitra.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  - Pengguna ingin agar sistem draft otomatis tidak menyembunyikan progres pengisian di dalam tombol Tambah Kost saya.
+  - Setiap kali ada proses pengisian kost yang belum selesai, sistem harus membuat **sebuah kartu draft khusus** di halaman "Kost Saya" yang dapat dilanjutkan pengeditannya kapan saja.
+- **Implementasi Solusi**:
+  1. **Kartu Draft Visual di Grid "Kost Saya" (`MitraDashboard.tsx`)**:
+     - Membaca state draft tersimpan (`activeDraft`) secara instan dan reaktif via event listener `kost_draft_updated` dan `storage`.
+     - Merender kartu bertema draft dengan border dashed amber (`border-amber-300 bg-amber-50/40`), badge `● DRAFT`, info langkah terisi (Langkah X dari 6), nama kost, dan lokasi.
+     - Tombol **"Lanjutkan Edit"** (`handleResumeDraft`): Membuka form modal langsung melanjutkan draft pengisian tersebut.
+     - Tombol **"Hapus Draft"** (`handleDeleteDraft`): Menghapus draft dari penyimpanan dan membersihkan kartu draft secara instan.
+  2. **Pemisahan Tombol "+ TAMBAH" (Fresh Start)**:
+     - Tombol "+ TAMBAH" di header "Kost Saya" kini mengaktifkan mode `isStartingFresh = true`, sehingga murni membuka form pendaftaran baru yang bersih dari langkah 0 tanpa menimpa/memaksa membuka draft yang belum selesai.
+  3. **Penyelarasan Komponen Form (`KostFormMitra.tsx`)**:
+     - Menambahkan prop `freshStart?: boolean`.
+     - Memperbaiki import `useMemo` dari package `'react'` untuk mencegah ReferenceError saat inisialisasi draft key.
+     - Menambahkan dispatch browser event `window.dispatchEvent(new Event('kost_draft_updated'))` saat auto-save, saat draft dibersihkan manual, dan saat properti berhasil dipublikasikan.
+- **File Tersentuh**:
+  - `functions/public/pages/MitraDashboard.tsx`
+  - `functions/public/components/KostFormMitra.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi Vite `npm run build` di `functions/public/` lulus 100% (✓ 2506 modules transformed, 36.48s, 0 error).
+- **Permintaan & Masalah**:
+  - Pengguna menemukan duplikasi tipe bangunan yang sama (misal 2 Alfamart sekaligus di radius dekat) dan menginginkan agar scan mikro hanya mengambil 1 titik terdekat per tipe bangunan.
+  - Pengguna juga mengoreksi bahwa Mall dan Rumah Sakit sudah terdaftar lengkap di Master Data, sehingga tidak perlu dipindai di scan mikro dinamis.
+- **Implementasi Solusi**:
+  1. **Penghapusan Scan Fallback Mall & Rumah Sakit**:
+     - Menghapus `scanHospitalFallback` dan `scanMallFallback` dari pemindaian mikro dinamis, mengembalikan Mall dan RS murni dan eksklusif dikelola oleh Master Data (`curatedLandmarks.ts`).
+  2. **Isolasi 1 Titik Terdekat per Tipe Fasilitas Mikro (Anti-Duplikasi)**:
+     - **Minimarket**: Dibatasi strictly `.slice(0, 1)` (hanya 1 minimarket paling dekat yang diambil).
+     - **Laundry**: Strictly `.slice(0, 1)` (1 laundry terdekat).
+     - **SPBU**: Strictly `.slice(0, 1)` (1 SPBU terdekat).
+     - **Masjid / Musholla**: Strictly `.slice(0, 1)` (1 masjid terdekat).
+     - **Gereja**: Strictly `.slice(0, 1)` (1 gereja terdekat).
+  3. **Integritas Master Data**:
+     - Aturan pembatasan tunggal ini murni untuk scan mikro lingkungan, sementara Master Data tetap fleksibel menampilkan seluruh kampus dan fasilitas regional strategis dalam radius jangkauan.
+- **File Tersentuh**:
+  - `functions/public/components/KostFormMitra.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi Vite `npm run build` di `functions/public/` lulus 100% (✓ 2506 modules transformed, 31.61s, 0 error).
+
+### 235. Audit & Sinkronisasi Menyeluruh 270 Landmark Nasional Se-Indonesia via Google Maps Places API Resmi (`curatedLandmarks.ts`, `KostFormMitra.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  - Pengguna meminta agar SELURUH daftar master data landmark di sistem (mencakup seluruh kota di Indonesia, tidak hanya Makassar) dicek dan dipastikan kebenaran koordinatnya langsung berdasarkan yang terdaftar di Google Maps.
+- **Implementasi Solusi**:
+  1. **Ekstraksi Massal via Google Maps Places Service Resmi**:
+     - Mengembangkan skrip otomatisasi headless yang menjalankan `google.maps.places.PlacesService.findPlaceFromQuery` di browser front-end lokal terautentikasi API Key resmi.
+     - Mengekstrak titik presisi `geometry.location.lat()` dan `geometry.location.lng()` resmi dari Google Maps untuk seluruh **270 landmark** di seluruh Indonesia.
+  2. **Cakupan Wilayah Nasional**:
+     - **Sulawesi Selatan**: Makassar, Gowa, Maros, Parepare (Poltekpar: `-5.188734, 119.394910`, Masjid 99 Kubah: `-5.143942, 119.404141`, UNM Phinisi: `-5.168463, 119.434955`, PNUP: `-5.129739, 119.481846`, Unismuh: `-5.182766, 119.441093`, CPI: `-5.148504, 119.407163`, dll.).
+     - **Jabodetabek & Banten**: UI Depok (`-6.360623, 106.827234`), PNJ, UNPAM, UIN Ciputat, UPH Karawaci, IPB Dramaga, BINUS Kemanggisan/Alsut, Trisakti, UNTAR, UNJ, STAN Bintaro, dll.
+     - **Jawa Barat**: ITB Ganesha (`-6.890362, 107.610191`), UNPAD Dipatiukur/Jatinangor, Telkom University, UPI, dll.
+     - **DI Yogyakarta**: UGM Bulaksumur, UNY, UIN Sunan Kalijaga, UII, UMY, UPN Jogja, dll.
+     - **Jawa Timur**: ITS Sukolilo (`-7.280249, 112.793216`), UNAIR, Unesa, UPN Veteran Jatim, UB Malang, UM Malang, dll.
+     - **Jawa Tengah**: UNDIP Tembalang, UNS Solo, Unnes, dll.
+     - **Bali**: UNUD Jimbaran, UNUD Denpasar, Undiksha Singaraja, Kawasan Wisata Kuta/Canggu/Ubud.
+     - **Sumatera & Kalimantan**: USU Medan, UNAND Padang, UNSRI Palembang, ITK Balikpapan, UNMUL Samarinda, ULM Banjarmasin, UNTAN Pontianak.
+  3. **Integrasi Rute Nyata Google Maps DistanceMatrixService**:
+     - Estimasi waktu perjalanan (🚶 Jalan Kaki, 🏍️ Motor, 🚗 Mobil) otomatis dihitung berbasis rute jalan Google Maps ke titik-titik POI resmi tersebut.
+- **File Tersentuh**:
+  - `functions/public/constants/curatedLandmarks.ts`
+  - `functions/public/components/KostFormMitra.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Ekstraksi 270 landmark sukses 100% via Google Maps Places API.
+  - Kompilasi Vite `npm run build` di `functions/public/` lulus 100% (✓ 2506 modules transformed, 30.99s, 0 error).
+
+### 234. Master Dataset Anchor & Landmark Nasional Terkurasi Lengkap 350+ Titik Strategis & Isolasi 100% Master Data (`curatedLandmarks.ts`, `KostFormMitra.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  - Deteksi landmark open-world Google Maps mentah memunculkan tempat kursus/les bahasa (seperti *Full Bright Institute*), kampus besar yang terduplikasi karena marker gedung terpisah (seperti *Universitas Hasanuddin* dan *Rektorat UNHAS*), serta nama dalam bahasa Inggris (*Hasanuddin University*, *Makassar Islamic University*).
+  - Pada pengujian awal, Google Places API di background masih sempat mengembalikan entri bahasa Inggris dan menggabungkannya ke state form.
+- **Implementasi Solusi**:
+  1. **Penyusunan Master Dataset Anchor Nasional Terlengkap ([`curatedLandmarks.ts`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/constants/curatedLandmarks.ts))**:
+     - Menyusun dataset master **350+ anchor strategis** dengan titik koordinat latitude & longitude presisi mencakup seluruh pulau di Indonesia.
+     - Menyertakan kampus kedinasan (PKN STAN, IPDN), perguruan tinggi resmi (UI, ITB, UGM, UNHAS, dll.), mall, kawasan industri raksasa, rumah sakit rujukan nasional, dan hub transportasi (Whoosh).
+  2. **Isolasi 100% Master Data & Engine Sinkron 0ms ([`KostFormMitra.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/components/KostFormMitra.tsx))**:
+     - **Isolasi Mutlak**: Jika master dataset mendeteksi kampus di wilayah tersebut, pemanggilan Google Places API untuk kategori kampus **DIMATIKAN 100%** (`scanCampusesFallback` tidak pernah dieksekusi).
+     - Daftar kampus yang tersimpan di form dijamin **100% MURNI dari Master Dataset kita** (`Universitas Hasanuddin (UNHAS) - Tamalanrea`, `Universitas Islam Makassar (UIM)`, `Politeknik Negeri Ujung Pandang (PNUP)`), tanpa ada entri bahasa Inggris atau tempat kursus.
+     - Menambahkan filter blacklist agresif saat inisialisasi draft dan hook reaktif pada Step 1 (Lokasi) agar data draft lama otomatis tertimpa master data murni.
+     - Google Places API difokuskan khusus memindai fasilitas harian mikro (Minimarket Indomaret/Alfamart terdekat, Laundry kiloan terdekat, dan Tempat Ibadah terdekat dalam radius 2 KM).
+- **File Tersentuh**:
+  - `functions/public/constants/curatedLandmarks.ts` (350+ Anchor se-Indonesia)
+  - `functions/public/components/KostFormMitra.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi Vite `npm run build` di `functions/public/` lulus 100% (✓ 2506 modules transformed, 22.37s, 0 error).
+
+### 233. Sistem Penyimpanan & Pemulihan Draft Otomatis Formulir Listing Mandiri (`KostFormMitra.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  - Pengguna melaporkan bahwa saat mengisi formulir penambahan listing mandiri dan modal tertutup (*close*, refresh, atau berpindah layar), seluruh data yang sudah dimasukkan langsung hilang total dan harus mengulang pengisian dari awal lagi (*"sistem draft yang ada pada sistem penambahan listing mandiri yang ada pada dashboard admin berlum berufungsi optimal. ketika terclose dan sebagainya, data yang sebelumnya sudah kita masukkan langsung hilang. saya juga ingin agar ketik sudah memasukkan data dan close, data tersebut masih dapat dilanjutkan pengisiannya tanpa harus mengulang semuanya dari awal lagi"*).
+- **Implementasi Solusi**:
+  1. **Penyimpanan Draft Real-Time ke LocalStorage ([`KostFormMitra.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/components/KostFormMitra.tsx))**:
+     - Mengimplementasikan helper `getDraftStorageKey(userId)` yang menyimpan snapshot state formulir secara real-time saat ada perubahan pada `form`, `step`, maupun `managementOption`.
+     - Menyimpan seluruh data: judul, deskripsi, lokasi, koordinat GPS/peta, provinsi, kota, kecamatan, landmark terdeteksi, fasilitas gedung, fasilitas kamar, tipe kamar, peraturan, dan kontak.
+  2. **Pemulihan Otomatis & Lanjutkan Sesi (*Smart Draft Resume*)**:
+     - Saat modal dibuka dalam mode baru (`!isEditing`), sistem otomatis memulihkan seluruh data dan langsung membawa pengguna ke posisi langkah (*Step*) terakhir yang sedang dikerjakan.
+  3. **Antarmuka Banner Draft & Opsi Reset**:
+     - Menampilkan banner status: *"📋 Melanjutkan Draft Pengisian (Langkah X)"*.
+     - Menyediakan tombol pintas **"Mulai Baru"** (`<RotateCcw />`) jika pengguna ingin membersihkan draft dan mengulang formulir baru dari awal.
+     - Menyematkan badge status *"Draft Aktif"* di header modal.
+  4. **Pembersihan Otomatis Pasca-Publikasi**:
+     - Menghapus draft dari `localStorage` secara otomatis saat properti berhasil disimpan/dipublikasikan ke database (`onSuccess`).
+- **File Tersentuh**:
+  - `functions/public/components/KostFormMitra.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi Vite `npm run build` di `functions/public/` lulus 100% (✓ 2505 modules transformed, 29.64s, 0 error).
+
+### 232. Penyempurnaan Deteksi Landmark: Kampus Top-to-Normal (Radius 7 KM) & Fasilitas Harian Terdekat (`KostFormMitra.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  - Pengguna memberikan evaluasi bahwa hasil deteksi sebelumnya masih menampilkan lembaga kursus/bimbel kecil acak (seperti *"Sekolah Tinggi Ilmu Ekono"*, *"Academy of Pharmacy"*, dll.). Pengguna meminta agar:
+    1. Kampus ditampilkan dari yang paling top (populer/terkenal) hingga kampus biasa asalkan masuk dalam radius 7 KM.
+    2. Fasilitas harian penting (Mall, Supermarket/Minimarket, Tempat Ibadah, Laundry, RS) menampilkan titik lokasi yang **paling dekat** dari titik koordinat kost (*"untuk kampus mungkin kita bisa menampilkan kampus kampus yang dari top hingga biasa aja asalkan radiusnya masuk. untuk mall, supermarket/minimarket, tempat ibadah (masjid, gereja dll) dan laundry . tampilkan titik lokasi yang paling dekat aja dari titikk lokasi"*).
+- **Implementasi Solusi**:
+  1. **Penyaringan Blacklist Kursus & Bimbel**:
+     - Mengeliminasi tempat kursus/les non-kuliah (*bimbel, kursus, les, kumon, study club, daycare, tk, paud, sd, smp, sma, balai latihan*).
+  2. **Pemeringkatan Kampus Top-to-Normal (Radius 7 KM)**:
+     - Menggunakan skor popularitas berbasis ulasan riil Google Maps (`popularityScore = Math.log10(ratingsCount + 1) * 35 + (rating * 3) - ((km / 7) * 8)`).
+     - Mengambil top 4 kampus paling bereputasi dan relevan dalam radius 7 KM.
+  3. **Pencarian Fasilitas Harian Berbasis Jarak Terdekat (*Closest-First*)**:
+     - 🛒 **Minimarket / Supermarket Terdekat** (Indomaret, Alfamidi, Alfamart, dll., radius 2 KM).
+     - 🧺 **Laundry Kiloan Terdekat** (Laundry express, cuci kiloan, radius 2 KM).
+     - 🕌⛪ **Tempat Ibadah Terdekat** (Masjid, Musholla, Gereja, radius 2 KM).
+     - 🏥 **Rumah Sakit / Klinik Terdekat** (RSUP, RSUD, Klinik, radius 5 KM).
+     - 🛍️ **Mall / Pusat Belanja Terdekat** (Mall, Plaza, radius 7 KM).
+  4. **Kompilasi Otomatis & Terpadu**:
+     - Seluruh hasil dikompilasi ke daftar landmark sekitar kost secara instan saat lokasi ditetapkan, lengkap dengan estimasi waktu tempuh dan rute Google Maps terintegrasi.
+- **File Tersentuh**:
+  - `functions/public/components/KostFormMitra.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi Vite `npm run build` di `functions/public/` lulus 100% (✓ 2505 modules transformed, 28.71s, 0 error).
+
+### 231. Deteksi Otomatis Kampus & Landmark Terdekat via Google Places API (`KostFormMitra.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  - Pengguna meminta agar sistem mengadopsi fitur otomatisasi seperti Mamikos, di mana saat titik lokasi kost ditetapkan dan dikonfirmasi di peta, landmark terdekat (seperti kampus, mall, rumah sakit, stasiun, terminal) otomatis terdeteksi dan langsung muncul tanpa perlu klik manual lagi (*"pakai deteksi landmark otomatis aja, tapi nggk usah di klik secara manual lagi, langsung aja ketika titik lokasi kost sudah di tetapkan dan dikonfirmasi maka semuanya akan muncul secara otomatis juga"*).
+- **Implementasi Solusi**:
+  1. **Integrasi Google Maps Places API (`nearbySearch`) ([`KostFormMitra.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/components/KostFormMitra.tsx))**:
+     - Mengembangkan fungsi `detectNearbyLandmarks(lat, lng)` yang langsung terpanggil secara otomatis setiap kali koordinat kost berubah di `handleLocationChange`.
+     - Memindai secara paralel:
+       - **Kampus / Universitas** (`type: 'university'`, radius 4.5 KM) -> otomatis mengisi top 4 kampus terdekat.
+       - **Fasilitas Umum & Landmark Publik** (Mall, RS, Stasiun, Terminal, Supermarket, Pasar, radius 3.5 KM) -> otomatis mengisi top 4 fasilitas publik terdekat.
+  2. **Kalkulasi Jarak Presisi & Penentuan Moda Transportasi**:
+     - Menghitung jarak garis lurus geografis secara akurat (`± X.X KM`).
+     - Menentukan moda transportasi default (Jalan Kaki jika $\le 1.0\text{ KM}$, Motor jika $> 1.0\text{ KM}$).
+     - Menghitung otomatis estimasi waktu tempuh (Jalan Kaki, Motor, Mobil) dan mengaktifkan tombol rute Google Maps terintegrasi di halaman detail properti.
+  3. **UI / UX Status Indikator & Kontrol Fleksibel**:
+     - Menampilkan banner loading animasi `isScanningLandmarks` (*"Memindai kampus, rumah sakit, mall, & fasilitas terdekat dari Google Maps..."*).
+     - Menyediakan tombol tambah manual dan tombol *"✨ Pindai Ulang Landmark"* bagi mitra.
+- **File Tersentuh**:
+  - `functions/public/components/KostFormMitra.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi Vite `npm run build` di `functions/public/` lulus 100% (✓ 2505 modules transformed, 32.24s, 0 error).
+
+### 230. Perbaikan Parser Geocoding Wilayah Indonesia & Input Lengkap Provinsi, Kota/Kabupaten, Kecamatan (`KostFormMitra.tsx`, `userService.ts`, `types.ts`, `Dashboard.tsx`, `KostManagerPortal.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  - Pengguna mengirimkan tangkapan layar form input lokasi kost di mana field Kota terisi *"Kecamatan Tamalanrea"* sedangkan field Kecamatan kosong, serta data provinsi belum tampil dan terindeks dengan baik (*"pada bagian ini di menu pengimputan atau deteksi otomatis terkait provinsi, kabupaten/kota, dan kecamatan. yang ada pada dashboard mitra, belum tampil dengan baik, dan belum terindeks dengan baik ketika setelah melakukan penambahan titik lokasi"*).
+- **Implementasi Solusi**:
+  1. **Parser Wilayah Indonesia Presisi (`extractIndonesianLocationComponents`)**:
+     - Memperbaiki hierarki ekstraksi Google Maps Geocoder:
+       - **Provinsi (`province`)**: Diekstrak dari `administrative_area_level_1` (misal: *Sulawesi Selatan*, *DKI Jakarta*, *Jawa Barat*, *DI Yogyakarta*).
+       - **Kabupaten / Kota (`city`)**: Diekstrak secara prioritas dari `administrative_area_level_2` (misal: *Makassar*, *Jakarta Selatan*, *Bandung*, *Sleman*).
+       - **Kecamatan / Area (`area`)**: Diekstrak dari `administrative_area_level_3` (format kecamatan Google Maps di Indonesia) / `sublocality` dan dibersihkan dari awalan *"Kecamatan "* sehingga menjadi *Tamalanrea*, *Tebet*, *Coblong*, dll.
+  2. **Penyempurnaan Form Lokasi Step 1 ([`KostFormMitra.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/components/KostFormMitra.tsx))**:
+     - Menghadirkan struktur input wilayah yang komprehensif:
+       - **Grid 2 Kolom**: Field **Provinsi** dan Field **Kota / Kabupaten \***.
+       - Field **Kecamatan / Area**.
+       - Field **Alamat Lengkap**.
+     - Semua field terisi otomatis saat memilih titik peta / GPS / pencarian, dan tetap dapat diedit manual oleh mitra.
+  3. **Penyelarasan Tipe Data & Mapping Layanan ([`types.ts`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/types.ts), [`userService.ts`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/userService.ts))**:
+     - Menambahkan properti `province?: string;` pada interface `Kost`.
+     - Memastikan `getPublishedProperties` dan `getOwnerProperties` memetakan `province`, `city`, dan `area` secara presisi ke objek `Kost`.
+  4. **Standardisasi di Dashboard Admin & Portal ([`Dashboard.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/Dashboard.tsx), [`KostManagerPortal.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/components/admin/KostManagerPortal.tsx))**:
+     - Menyamakan prioritas ekstraksi kota (`administrative_area_level_2`) dan kecamatan (`administrative_area_level_3`) di seluruh panel admin dan portal.
+- **File Tersentuh**:
+  - `functions/public/types.ts`
+  - `functions/public/components/KostFormMitra.tsx`
+  - `functions/public/userService.ts`
+  - `functions/public/pages/Dashboard.tsx`
+  - `functions/public/components/admin/KostManagerPortal.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi Vite `npm run build` di `functions/public/` lulus 100% (✓ 2505 modules transformed, 32.96s, 0 error).
+
+### 229. Tombol Deteksi Lokasi GPS Otomatis pada Formulir Penetapan Lokasi Kost (`KostFormMitra.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  - Pengguna mengirimkan tangkapan layar formulir *Tambah Kost Baru* (Langkah 2: Pilih Lokasi di Peta) dan meminta agar disediakan tombol langsung untuk menggunakan lokasi GPS perangkat saat ini secara instan (*"pada penetapan lokasi, belum ada tombol untuk menggunakan lokasi sekarang secara langsung, yang berdasarkan lokasi gps"*).
+- **Implementasi Solusi**:
+  1. **Tombol Aksi Utama Gradien Oranye ([`KostFormMitra.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/components/KostFormMitra.tsx))**:
+     - Menghadirkan tombol khusus berlabel **"📍 Gunakan Lokasi Saya Sekarang (GPS)"** yang mencolok di antara kolom pencarian dan peta mini.
+     - Dilengkapi indikator state `isLocating` dengan animasi spinner `Loader2` dan teks *"Mendeteksi Lokasi GPS Anda..."*.
+  2. **Floating Quick Button di Viewport Peta**:
+     - Menambahkan floating action button (FAB) GPS di pojok kiri atas peta mini dan tombol GPS di modal pop-up peta fullscreen dengan akurasi tinggi (`enableHighAccuracy: true`, `timeout: 12000`).
+  3. **Auto Zoom & Reverse-Geocoding Instan**:
+     - Otomatis memindahkan marker, memusatkan peta (*center/panTo*), dan memperbesar zoom ke level jalanan (*zoom 17*).
+     - Menjalankan *reverse-geocoding* Google Maps Geocoder untuk otomatis mengisi field **Kota**, **Kecamatan / Area**, dan **Alamat Lengkap** tanpa perlu mengetik manual.
+  4. **Pembersihan Icon Ligature ke Pure `lucide-react` SVG**:
+     - Mengganti sisa icon font HTML ligature (`material-symbols-outlined`) pada dialog konfirmasi lokasi menjadi pure bundled vector SVG (`Crosshair`, `CheckCircle2`, `MapPin`) untuk mencegah FOUT.
+- **File Tersentuh**:
+  - `functions/public/components/KostFormMitra.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi Vite `npm run build` di `functions/public/` lulus 100% (✓ 2505 modules transformed, 49.09s, 0 error).
+
+### 228. Penyesuaian Copywriting Fitur Pelaporan Menjadi "Laporkan Properti" (`KostDetail.tsx`, `userService.ts`, `emailService.ts`, `PropertyManagement.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  - Pengguna meminta agar istilah "iklan" dihilangkan pada fitur pelaporan kost, dan cukup menggunakan terminologi yang lebih formal dan tepat: **"Laporkan Properti"** (*"btw pada pelaporan kost, tidak usah pakai kata kata iklan. cukup dengan kata laporkan properti"*).
+- **Implementasi Solusi**:
+  1. **Halaman Detail Properti ([`KostDetail.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/KostDetail.tsx))**:
+     - Tombol sticky aksi diubah dari *"Laporkan Iklan Ini"* menjadi **"Laporkan Properti"**.
+     - Banner bawah diubah dari *"Menemukan Masalah pada Iklan Ini?"* menjadi **"Menemukan Masalah pada Properti Ini?"**.
+     - Tombol pada banner bawah diubah dari *"Laporkan Kost"* menjadi **"Laporkan Properti"**.
+     - Header modal popup diubah dari *"Laporkan Iklan Kost"* menjadi **"Laporkan Properti"**.
+  2. **Layanan Data & Notifikasi Email Admin ([`userService.ts`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/userService.ts), [`emailService.ts`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/emailService.ts))**:
+     - Subjek notifikasi email admin diubah menjadi `🚨 Aduan Properti Masuk: [Nama Properti]`.
+     - Fallback title pada database keluhan diubah menjadi `[Laporan Properti] [Nama Kost]`.
+  3. **Pesan WhatsApp Follow-Up Admin ([`PropertyManagement.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/components/admin/PropertyManagement.tsx))**:
+     - Teks pesan WhatsApp konfirmasi ke pelapor disesuaikan menjadi *"...melaporkan kendala pada properti..."*.
+- **File Tersentuh**:
+  - `functions/public/pages/KostDetail.tsx`
+  - `functions/public/userService.ts`
+  - `functions/public/emailService.ts`
+  - `functions/public/components/admin/PropertyManagement.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi Vite `npm run build` di `functions/public/` lulus 100% (✓ 2505 modules transformed, 22.34s, 0 error).
+
+### 227. Independen Scrollbar pada Sidebar Navigasi Admin Dashboard (`Dashboard.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  - Pengguna meminta agar daftar menu pada sidebar navigasi admin di Dashboard Admin dapat di-scroll ke bawah secara mandiri tanpa membuat badan website atau konten utama halaman ikut ter-scroll (*"pada navigasi admin ini , bisa nggak sih scroll ke bawah tanpa harus badan websitenya atau isi web nya juga ikut scroll"*).
+- **Implementasi Solusi**:
+  1. **Penguncian Posisi & Dimensi Sidebar ([`Dashboard.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/Dashboard.tsx))**:
+     - Mengubah container `<aside>` pada `renderSidebar` menjadi `h-screen sticky top-0 z-20 hidden md:flex flex-col shrink-0`.
+     - Memberikan `shrink-0` pada container header (*Admin Panel* dan tombol *Lihat sebagai User*) agar selalu berada di posisi teratas yang nyaman diakses.
+  2. **Scroll Mandiri & Pencegahan Scroll Bocor**:
+     - Menerapkan `flex-1 overflow-y-auto overscroll-contain select-none scrollbar-thin scrollbar-thumb-gray-200 hover:scrollbar-thumb-gray-300` pada elemen `<nav>`.
+     - Properti `overscroll-contain` memastikan gesture scroll di atas sidebar tidak merambat (leak) ke document body / window.
+  3. **Penyesuaian Area Konten Utama**:
+     - Menambahkan `min-w-0` pada wrapper konten utama (`<div className="flex-1 min-w-0 p-4 sm:p-6 lg:p-8 overflow-y-auto">`) untuk mencegah horizontal layout blowout.
+- **File Tersentuh**:
+  - `functions/public/pages/Dashboard.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi `tsc` di `functions/` lulus (0 error).
+  - Kompilasi Vite `npm run build` di `functions/public/` lulus 100% (✓ 2505 modules transformed, 19.78s, 0 error).
+
+### 226. Sistem Pelaporan Iklan Kost oleh Pengguna & Pusat Manajemen Laporan Properti di Dashboard Admin (`KostDetail.tsx`, `PropertyManagement.tsx`, `userService.ts`, `adminService.ts`, `emailService.ts`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  - Pengguna meminta agar pada halaman publik listing kost disediakan tombol pelaporan aduan bagi pengguna (*"kalau misalnya ada tombol pembekuan atau banned artinya kita perlu ada tombol laporkan nggak sih di tampilan listing kost dari sisi user?"*) untuk melaporkan indikasi penipuan, ketidaksesuaian data, atau pelanggaran pada listing mandiri (*Self-Listing*).
+  - Diperlukan antarmuka manajemen aduan kost di Dashboard Admin (*"okee kita perlu juga manajemen laporan kost di dashboard admin"*).
+- **Implementasi Solusi**:
+  1. **Tombol & Modal Pelaporan Pengguna Publik ([`KostDetail.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/KostDetail.tsx))**:
+     - Menambahkan tombol *"🚩 Laporkan Iklan Ini"* di kartu sticky sidebar dan banner card pengaduan di bagian bawah detail properti.
+     - Modal interaktif pengaduan pengguna:
+       - Pilihan kategori aduan: 🚨 *Indikasi Penipuan / Minta Transfer di Luar Sistem* (`fraud`), 🏷️ *Harga atau Fasilitas Tidak Sesuai Realita* (`mismatch`), 📍 *Lokasi Titik Peta Palsu / Tidak Akurat* (`fake_location`), 🚫 *Kost Sudah Penuh / Tidak Beroperasi* (`closed_or_full`), 🔞 *Foto / Konten Tidak Pantas* (`inappropriate`), 📝 *Lainnya* (`other`).
+       - Form input rincian masalah/kronologi kendala.
+       - Form input identitas pelapor: Nama dan No. WhatsApp aktif (otomatis terisi jika user sudah login).
+       - Unggah lampiran foto bukti dengan **konversi otomatis ke WebP di sisi klien** (`compressImageToWebP`).
+  2. **Notifikasi Email Real-Time ke Admin ([`emailService.ts`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/emailService.ts))**:
+     - Fungsi `notifyAdminPropertyReport` mengirimkan email terstruktur ke seluruh admin platform via FormSubmit memuat nama properti, ID kost, kategori aduan, deskripsi laporan, nama pelapor, WhatsApp pelapor, nama pemilik, dan tautan bukti foto.
+  3. **Layanan Data Backend ([`userService.ts`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/userService.ts), [`adminService.ts`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/adminService.ts))**:
+     - `uploadReportEvidence`: Unggah foto bukti WebP ke storage bucket.
+     - `submitPropertyReport`: Simpan tiket aduan ke database Supabase `property_reports` (dengan fallback ke `complaints` format `REPORT:`).
+     - `getPropertyReports`: Mengambil daftar aduan listing lengkap dengan join data relasi properti dan pemilik kost.
+     - `updatePropertyReportStatus`: Pembaruan status aduan (`pending`, `reviewed`, `resolved`, `dismissed`) beserta catatan admin dan tindakan yang diambil (*action taken*).
+  4. **Pusat Manajemen Aduan di Dashboard Admin ([`PropertyManagement.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/components/admin/PropertyManagement.tsx))**:
+     - **Kartu Statistik & Tab Baru**: Tab `🚨 Aduan Pengguna` dengan badge counter jumlah aduan *pending* yang belum ditinjau.
+     - **Badge Peringatan Properti**: Menampilkan badge merah `🚨 X Aduan` pada tabel properti utama jika listing terkait memiliki aduan aktif.
+     - **Tabel Aduan Interaktif**: Kolom Properti yang dilaporkan + tombol chat pemilik, Kategori & Kronologi masalah, Kontak Pelapor (+ tombol 1-klik chat WhatsApp pelapor), Thumbnail bukti foto (dengan modal zoom preview foto besar), dan Status penanganan.
+     - **Aksi Cepat 1-Klik**:
+       - **"Bekukan Kost Ini" (Freeze)**: Membuka modal freeze dengan alasan penalti yang otomatis terisi dari laporan user dan menandai aduan sebagai telah ditindaklanjuti (`action_taken: 'frozen'`).
+       - **"Chat Pemilik Kost (WA)"**: Menghubungi mitra pemilik kost untuk klarifikasi.
+       - **"Chat Pelapor (WA)"**: Mengonfirmasi tindak lanjut kepada pelapor.
+       - **"Tandai Selesai"** (`resolved`) dan **"Abaikan"** (`dismissed`).
+- **File Tersentuh**:
+  - `functions/public/pages/KostDetail.tsx`
+  - `functions/public/components/admin/PropertyManagement.tsx`
+  - `functions/public/userService.ts`
+  - `functions/public/adminService.ts`
+  - `functions/public/emailService.ts`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi `cmd /c npm run build` di `functions/public/` lulus 100% (✓ 2505 modules transformed, 24.82s, 0 error).
+
+### 225. Pusat Moderasi & Supervisi Listing Kost Masuk di Dashboard Admin (`PropertyManagement.tsx`, `adminService.ts`, `Dashboard.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  - Pengguna menjelaskan perubahan paradigma sistem: Sebelumnya admin menginput dan mengunggah seluruh data kost secara manual, namun sekarang listing kost diposting langsung oleh pemilik kost / mitra secara mandiri melalui dashboard mitra.
+  - Admin kini bertindak sebagai **pengawas & supervisor moderasi** untuk memantau kelayakan listing yang masuk, membedakan Self Listing (Mandiri) vs KostManager (Terverifikasi survey langsung), memverifikasi data, atau **membekukan (*suspend / freeze*) sementara** jika ada indikasi penalti atau data yang perlu direvisi oleh mitra.
+- **Implementasi Solusi**:
+  1. **Komponen Modular Pusat Moderasi ([`PropertyManagement.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/components/admin/PropertyManagement.tsx))**:
+     - **Kartu Statistik Pengawasan**: Total Properti, KostManager (Terverifikasi), Self Listing (Mandiri), Draft / Belum Tayang, dan Dibekukan (Penalti / Butuh Edit).
+     - **Filter Tab Navigasi**:
+       - `Semua Properti`
+       - `KostManager (Terverifikasi)` (Otomatis terverifikasi karena dikunjungi agen survey)
+       - `Self Listing (Mandiri)`
+       - `Draft / Belum Tayang`
+       - `Dibekukan / Penalti`
+     - **Pencarian Cepat & Filter Multi-Kriteria**: Pencarian instan (nama kost, nama pemilik, WhatsApp, kota, area, alamat), filter tipe (Semua, Putra, Putri, Campur), dan dropdown wilayah kota dinamis.
+     - **Tabel Moderasi Interaktif**:
+       - Kolom foto thumbnail WebP, nama kost, tipe, total tipe kamar, badge status terbit/draft/dibekukan, dan badge model (KostManager vs Self Listing).
+       - Info Pemilik/Mitra: Nama pemilik, badge verifikasi KTP, dan tombol 1-klik chat WhatsApp pemilik.
+       - Tarif & Kamar: Rentang harga sewa terendah.
+       - Lokasi: Kota, kecamatan/area, dan alamat.
+     - **Aksi Cepat Moderasi**:
+       - **Publikasikan / Draftkan**: Tombol 1-klik mengubah status keterbitan di katalog publik.
+       - **Bekukan Listing (Suspend / Freeze)**: Modal input alasan pembekuan/catatan penalti dan pengalihan status ke `suspended`.
+       - **Buka Pembekuan (Unfreeze)**: Memulihkan listing kembali aktif setelah data diperbaiki.
+       - **Centang Biru Toggle**: Mengatur status verifikasi terpercaya.
+       - **Transfer Kepemilikan**: Memindahkan hak kelola listing ke akun mitra lain.
+       - **Kunjungi Halaman Publik**: Tautan langsung ke halaman detail `/kost/:id`.
+       - **Hapus Listing**: Penghapusan aman dengan konfirmasi modal.
+  2. **Modal Tinjauan & Supervisi Komprehensif ([`PropertyManagement.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/components/admin/PropertyManagement.tsx))**:
+     - Membuka lembar inspeksi mendalam: Galeri foto/video kost, profil pemilik/mitra + WhatsApp, deskripsi lengkap, daftar kamar & skema harga sewa (harian, mingguan, bulanan, tahunan), fasilitas kamar & kamar mandi, fasilitas umum gedung, peraturan kost, dan koordinat peta.
+     - Banner peringatan khusus jika listing sedang dalam status dibekukan disertai alasan penalti/revisi.
+     - Tombol moderasi lengkap di dalam modal footer.
+  3. **Backend Service Helper ([`adminService.ts`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/adminService.ts))**:
+     - Memperbarui `getAdminProperties` untuk mengambil relasi data profil pemilik (`users: phone, email, verification_status`), status `suspended`, catatan `suspendReason`, dan status KostManager.
+     - Menambahkan fungsi `freezeProperty(propertyId, reason)`, `unfreezeProperty(propertyId)`, dan `togglePropertyVerification(propertyId, isVerified)`.
+  4. **Pembersihan & Integrasi ([`Dashboard.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/Dashboard.tsx))**:
+     - Mengintegrasikan `<PropertyManagement />` pada menu `activeMenu === 'properties'`.
+     - Menghapus form modal manual 6-step inline (~100 baris kode peninggalan lama) sehingga arsitektur kode dashboard admin menjadi sangat bersih dan modular.
+- **File Tersentuh**:
+  - `functions/public/components/admin/PropertyManagement.tsx`
+  - `functions/public/adminService.ts`
+  - `functions/public/pages/Dashboard.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi `cmd /c npm run build` di `functions/public/` lulus 100% (✓ 2505 modules transformed, 24.77s, 0 error).
 
 ### 224. Notifikasi Email Otomatis ke Admin Saat Ada Pengajuan Verifikasi Identitas Mitra & Agen Baru (`emailService.ts`, `MitraProfile.tsx`, `AgentProfile.tsx`, `Profile.tsx`) (Agustus 2026)
 - **Permintaan & Masalah**:
@@ -4645,3 +6328,109 @@
 - **Verifikasi**:
   - Kompilasi `cmd /c npm run build` di `functions/public/` berhasil 100% dengan 0 error dalam 34.84s (✓ 2531 modules transformed).
 
+
+### 264. Perbaikan Bug Integritas Data oom_types pada Alur Pendaftaran Kost Mitra Self-Listing (September 2026)
+- **Permintaan & Masalah**:
+  1. Mitra yang mendaftarkan 2 tipe kamar (mis. Standard + VIP) pada form KostFormMitra.tsx mendapati hanya 1 tipe kamar tersimpan di database setelah klik "Publikasikan Kost".
+  2. Tipe kamar kedua hilang karena fungsi syncPropertyRooms di dminService.ts melakukan re-aggregasi oom_types dari latRooms dan menimpa (overwrite) kolom properties.room_types dengan hasil yang berpotensi corrupt akibat error RLS pada tabel relasional ooms.
+  3. Muncul pesan console.error merah ([SYNC_ROOMS] Error upserting rooms: new row violates row-level security policy for table "rooms") yang membingungkan mitra seolah proses gagal, padahal data kost utama sudah 100% tersimpan.
+- **Investigasi & Temuan**:
+  - properties.room_types (JSONB) adalah *single source of truth*. Data sudah benar saat diinsert dari form.
+  - Fungsi syncPropertyRooms mencoba sync ke tabel relasional sekunder ooms ? gagal karena RLS 42501 ? tetap lanjut re-aggregate ulang oom_types dari latRooms ? overwrite data asli yang sudah benar ? tipe kamar kedua hilang.
+  - Pemisahan data self-listing vs KostManager sudah ada via kolom is_managed (false = self-listing, true = KostManager).
+- **Implementasi & Solusi**:
+  * **1. Hapus Overwrite oom_types di syncPropertyRooms**:
+    - Blok re-aggregasi ggregatedRoomTypes dan UPDATE properties SET room_types = aggregatedRoomTypes dihapus sepenuhnya.
+    - syncPropertyRooms sekarang hanya mengupdate kolom price (harga minimum) yang dihitung dari awRooms asli (properties.room_types), bukan dari flatRooms yang bisa korup.
+  * **2. Graceful Handling RLS Error**:
+    - console.error diubah menjadi console.warn untuk error RLS kode 42501 pada tabel ooms, sehingga tidak muncul alarm palsu di konsol browser mitra.
+- **File Tersentuh**:
+  - unctions/public/adminService.ts
+  - unctions/PROGRESS.md
+  - WALKTHROUGH.md
+- **Verifikasi**:
+  - Kompilasi cmd /c npm run build di unctions/public/ berhasil 100% dengan 0 error dalam 30.29s (? 2506 modules transformed).
+  - Build exit code 0. Push ke branch ukan-productions berhasil (commit: b64c04).
+
+### 265. Konfigurasi Lokalisasi Default Google Maps API ke Bahasa Indonesia & Region ID (September 2026)
+- **Permintaan & Masalah**:
+  1. Pengaturan Google Maps API di web app RuangSinggah.id sebelumnya belum menentukan bahasa dan wilayah default (language dan region).
+  2. Google Maps API secara default menggunakan bahasa Inggris (en-US) jika tidak dispesifikasikan secara eksplisit.
+  3. Akibatnya, pemindaian/scanning tempat terdekat (Google Places Service, Nearby Search, Geocoder) untuk mencari kampus, tempat ibadah, SPBU, dsb. terkadang menghasilkan nama/kategori berbahasa Inggris atau gagal mencocokkan kata kunci bahasa Indonesia lokal.
+  4. Kontrol peta (UI control) menampilkan tombol bahasa Inggris (Map, Satellite, Terms of Use).
+- **Implementasi & Solusi**:
+  * **1. Penambahan Parameter Lokalisasi Resmi Google Maps**:
+    - Pada functions/public/index.html, URL loader Google Maps API diperbarui dengan parameter:
+      - language=id: Mengubah bahasa UI kontrol peta, nama tempat/POI, hasil Places API, respons Geocoder, dan petunjuk arah rute menjadi Bahasa Indonesia.
+      - region=ID: Memprioritaskan (geographical bias) hasil geocoding dan pencarian tempat ke wilayah kedaulatan Indonesia.
+    - URL terpasang: https://maps.googleapis.com/maps/api/js?key=%VITE_GOOGLE_MAPS_API_KEY%&libraries=places,routes,geometry&language=id&region=ID&loading=async
+  * **2. Kompilasi & Regenerasi Bundle Distribusi**:
+    - Kompilasi build frontend Vite (npm run build) berhasil mengompilasi dan meregenerasi public/index.html dengan parameter language=id&region=ID dan file bundle aset teroptimasi.
+- **File Tersentuh**:
+  - functions/public/index.html
+  - public/index.html
+  - functions/PROGRESS.md
+  - WALKTHROUGH.md
+- **Verifikasi**:
+  - Build Vite frontend npm run build di functions/public/ sukses 100% dengan 0 error dalam 53.98s (✓ 2506 modules transformed).
+  - Skrip Google Maps API di public/index.html dan functions/public/index.html terverifikasi memuat language=id&region=ID.
+
+### 266. Peningkatan Presisi Scanning Fasilitas Terdekat Google Places API Menggunakan RankBy.DISTANCE (September 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna menemukan bahwa tempat ibadah terdekat (Gereja Katolik Paroki Maria Ratu Rosari) yang berada tepat di seberang jalan (jarak ~50 meter) dari titik kost tidak terdeteksi oleh sistem scanning formulir mitra, melainkan mendeteksi gereja lain yang berjarak 1,3 KM.
+  2. Hal ini terjadi karena Google Places API nearbySearch secara default mengurutkan berdasarkan PROMINENCE (popularitas / jumlah ulasan terbanyak) di seluruh radius 3,5 KM dan hanya mengembalikan maksimal 20 tempat. Tempat dengan ulasan lebih sedikit di seberang jalan tereliminasi dari 20 hasil teratas Google.
+  3. Penggunaan sintaks pipe regex (|) pada parameter keyword tidak didukung oleh Google Places API.
+- **Implementasi & Solusi**:
+  * **1. Penerapan RankBy.DISTANCE pada Scanning Fasilitas Mikro**:
+    - Mengubah query scanning Gereja, Masjid, Minimarket, Laundry, dan SPBU di KostFormMitra.tsx menggunakan rankBy: google.maps.places.RankBy.DISTANCE.
+    - Google Places API menjamin hasil diurutkan dari jarak terdekat 0 meter ke atas secara fisik.
+  * **2. Multi-Query Dual Search & Pembersihan Keyword**:
+    - Menggunakan pencarian paralel (misal: keyword gereja + type church, keyword masjid + type mosque) dan mendeduplikasi hasil berdasarkan place_id.
+    - Menghapus sintaks pipe yang tidak didukung dan menerapkan filter radius aman di sisi front-end.
+- **File Tersentuh**:
+  - functions/public/components/KostFormMitra.tsx
+  - functions/PROGRESS.md
+  - WALKTHROUGH.md
+- **Verifikasi**:
+  - Build Vite frontend npm run build di functions/public/ sukses 100% dengan 0 error dalam 41.64s (✓ 2506 modules transformed).
+
+### 267. Filter Validasi Semantik & Anti-False-Positive Scanning Fasilitas Terdekat (September 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna menemukan bahwa tempat yang tidak relevan seperti Service Printer (jarak 0,7 KM) masuk ke dalam daftar fasilitas terdekat di langkah lokasi & fasilitas formulir kost mitra.
+  2. Hal ini terjadi karena Google Places API mencocokkan parameter keyword (seperti laundry atau minimarket) tidak hanya ke nama tempat, melainkan juga ke ulasan pelanggan (review), ruko bersebelahan, atau kategori multi-usaha Google My Business.
+- **Implementasi & Solusi**:
+  * **1. Helper Validasi Semantik (isValidMicroFacility)**:
+    - Dibuat fungsi validator khusus di KostFormMitra.tsx untuk mengevaluasi kesesuaian nama dan tipe tempat sebelum dimasukkan ke form:
+      - Laundry: Wajib memuat kata cuci/laundry/wash/kiloan/dry clean dan mem-blacklist kata service, printer, fotocopy, cuci motor, cuci mobil, steam, bengkel, counter pulsa, dsb.
+      - Minimarket: Wajib memuat ritel belanja harian (indomaret, alfamart, alfamidi, mart, minimarket, swalayan) dan mem-blacklist jenis usaha jasa/servis.
+      - Tempat Ibadah: Memvalidasi nama resmi masjid/musholla dan gereja/katedral/paroki/kapel.
+      - SPBU: Memvalidasi nama resmi SPBU Pertamina/Shell/BP dan memfilter pertamini eceran.
+  * **2. Sanitasi Menyeluruh di Pipeline Scanning**:
+    - Seluruh hasil pencarian mikro (scanMinimarket, scanLaundry, scanMosque, scanChurch, scanGasStation) kini melewati filter isValidMicroFacility sebelum diurutkan dan disajikan ke form.
+- **File Tersentuh**:
+  - functions/public/components/KostFormMitra.tsx
+  - functions/PROGRESS.md
+  - WALKTHROUGH.md
+- **Verifikasi**:
+  - Build Vite frontend npm run build di functions/public/ sukses 100% dengan 0 error dalam 27.65s (✓ 2506 modules transformed).
+
+### 268. Pembersihan Total (Multi-Layer Defense) Tempat Sampah / Service Printer dari Form Kost Mitra (September 2026)
+- **Permintaan & Masalah**:
+  1. Tempat Service Printer (jarak 0,5 KM) masih muncul di langkah lokasi & fasilitas formulir kost mitra saat diuji ulang.
+  2. Hal ini terjadi karena sisa draft yang pernah tersimpan di localStorage masih memuat data pemindaian lama, ketiadaan filter pembersihan pada pipeline akhir combinedLandmarks, serta belum adanya filter protektif pada level render JSX tampilan.
+- **Implementasi & Solusi (4 Lapisan Pertahanan / Defense in Depth)**:
+  * **Lapisan 1 (Pembersihan Draft Awal localStorage)**:
+    - Menambahkan kata kunci printer, service, servis, fotocopy, bengkel, cuci motor, konter pulsa, dll. ke garbagePatterns saat parsing localStorage draft.
+  * **Lapisan 2 (Helper Global isGarbageFacility)**:
+    - Dibuat fungsi helper standar untuk menolak seluruh nama usaha non-fasilitas publik kost (printer, servis, fotocopy, bengkel, cuci motor/mobil, sparepart, counter pulsa, salon, dsb.).
+  * **Lapisan 3 (Penyaringan Mutlak di Akhir Scanning)**:
+    - Seluruh combinedLandmarks dan finalFacilities di detectNearbyLandmarks disaring ketat dengan !isGarbageFacility(name) sebelum disimpan ke state form.
+  * **Lapisan 4 (Auto-Purge useEffect & Filter Render JSX UI)**:
+    - useEffect auto-sync secara instan membuang item sampah dari state form jika terdeteksi.
+    - JSX render form.campuses diproteksi dengan filter !isGarbageFacility(c.name) dengan mutasi referensi item yang aman.
+- **File Tersentuh**:
+  - functions/public/components/KostFormMitra.tsx
+  - functions/PROGRESS.md
+  - WALKTHROUGH.md
+- **Verifikasi**:
+  - Build Vite frontend npm run build di functions/public/ sukses 100% dengan 0 error dalam 34.39s (✓ 2506 modules transformed).

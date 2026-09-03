@@ -1,14 +1,14 @@
 import { supabase } from './supabase';
-import { Kost, DatabaseProduct, ImageUrlObject, VideoUrlObject, SurveyRequest, Banner, KostManagerPackage } from './types';
+import { Kost, DatabaseProduct, ImageUrlObject, VideoUrlObject, SurveyRequest, Banner, KostManagerPackage, MitraPromoPopupSetting } from './types';
 import { notifyAdminStatusUpdate } from './emailService';
-import { ensureAbsoluteUrl } from './userService';
+import { ensureAbsoluteUrl, getDisplayImageUrl, getDisplayImageObject } from './userService';
 import { getCurrentDate } from './utils/timeUtils';
 
 // ---- TYPE DEF ----
 export interface BasicPropertyInfo extends Partial<Kost> {
   id: string;
   namaKost: string;
-  status: 'draft' | 'published';
+  status: 'draft' | 'published' | 'suspended' | string;
   address: string;
   area: string;
   imageUrls: string[];
@@ -17,6 +17,15 @@ export interface BasicPropertyInfo extends Partial<Kost> {
   tiktokUrl?: string;
   ownerName?: string;
   ownerRole?: string;
+  ownerPhone?: string;
+  ownerEmail?: string;
+  ownerVerificationStatus?: string;
+  suspendReason?: string;
+  revisionNotes?: string;
+  revisionRequestedAt?: string;
+  metadata?: any;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface AdminTransaction {
@@ -97,20 +106,59 @@ export async function checkIfUserIsAdmin(uid: string): Promise<boolean> {
   return role === 'admin';
 }
 
+// Normalisasi path relatif storage agar perbandingan dan penghapusan konsisten di semua domain (CDN proxy & direct Supabase)
+export function normalizeStorageRelativePath(urlStr: string): string {
+  if (!urlStr || typeof urlStr !== 'string') return '';
+  const trimmed = urlStr.trim();
+  // Ekstrak bagian path setelah /storage/v1/object/public/<bucket>/ atau /storage/v1/object/<bucket>/
+  const match = trimmed.match(/\/storage\/v1\/object\/(?:public\/)?[^/]+\/(.+)$/i);
+  if (match && match[1]) {
+    return decodeURIComponent(match[1].split('?')[0]);
+  }
+  // Coba parse sebagai URL standar
+  try {
+    const u = new URL(trimmed);
+    const p = decodeURIComponent(u.pathname.replace(/^\/+/, ''));
+    const parts = p.split(/storage\/v1\/object\/(?:public\/)?[^/]+\//i);
+    if (parts.length > 1) {
+      return parts[1].split('?')[0];
+    }
+    return p.split('?')[0];
+  } catch {
+    return decodeURIComponent(trimmed.replace(/^\/+/, '').split('?')[0]);
+  }
+}
+
 // Delete file from Supabase Storage using URL parsing
 async function deleteFileFromStorage(fileUrl: string): Promise<void> {
   if (!fileUrl) return;
   try {
-    // Supabase Storage URL format:
-    // https://<project>.supabase.co/storage/v1/object/public/<bucket>/<path>
-    const url = new URL(fileUrl);
-    const pathParts = url.pathname.split('/storage/v1/object/public/');
-    if (pathParts.length < 2) return;
-    const rest = pathParts[1];
-    const slashIdx = rest.indexOf('/');
-    if (slashIdx === -1) return;
-    const bucket = rest.substring(0, slashIdx);
-    const filePath = rest.substring(slashIdx + 1);
+    const rawTrimmed = fileUrl.trim();
+    let bucket = 'properties';
+    let filePath = '';
+
+    const urlMatch = rawTrimmed.match(/\/storage\/v1\/object\/(?:public\/)?([^/]+)\/(.+)$/i);
+    if (urlMatch && urlMatch[1] && urlMatch[2]) {
+      bucket = urlMatch[1];
+      filePath = decodeURIComponent(urlMatch[2].split('?')[0]);
+    } else {
+      try {
+        const u = new URL(rawTrimmed);
+        const parts = u.pathname.split(/storage\/v1\/object\/(?:public\/)?/i);
+        if (parts.length >= 2) {
+          const rest = parts[1];
+          const slashIdx = rest.indexOf('/');
+          if (slashIdx !== -1) {
+            bucket = rest.substring(0, slashIdx);
+            filePath = decodeURIComponent(rest.substring(slashIdx + 1).split('?')[0]);
+          }
+        }
+      } catch {
+        filePath = normalizeStorageRelativePath(rawTrimmed);
+      }
+    }
+
+    if (!filePath) return;
     const { error } = await supabase.storage.from(bucket).remove([filePath]);
     if (error) console.warn('Storage delete warning:', error.message);
   } catch (e) {
@@ -258,6 +306,71 @@ export async function uploadFileAndGetURL(file: File, folderName: string): Promi
   return uploadFileToStorage(file, 'properties', folderName);
 }
 
+export interface DraftPhotoUploadResult {
+  publicUrl: string;
+  storagePath: string;
+}
+
+/**
+ * uploadDraftPhotoToStorage: Mengunggah foto sementara draft ke folder khusus 'drafts/{userId}/'
+ * agar tersimpan di cloud Supabase dan tidak hilang saat form tertutup.
+ */
+export async function uploadDraftPhotoToStorage(
+  file: File,
+  userId?: string
+): Promise<DraftPhotoUploadResult> {
+  const { data: { user } } = await supabase.auth.getUser();
+  const targetUid = user?.id || userId || 'guest';
+
+  // Pastikan format WebP
+  const processedFile = await convertToWebP(file);
+  let sanitizedFileName = processedFile.name.replace(/[^a-zA-Z0-9.-]/g, '_');
+  if (!sanitizedFileName.toLowerCase().endsWith('.webp')) {
+    sanitizedFileName += '.webp';
+  }
+
+  const fileName = `${Date.now()}_${Math.random().toString(36).substring(2, 8)}_${sanitizedFileName}`;
+  const storagePath = `drafts/${targetUid}/${fileName}`;
+
+  const { error: uploadError } = await supabase.storage
+    .from('properties')
+    .upload(storagePath, processedFile, {
+      contentType: 'image/webp',
+      upsert: false,
+    });
+
+  if (uploadError) {
+    console.error('Gagal mengunggah foto draft ke Supabase storage:', uploadError);
+    throw new Error(`Gagal menyimpan foto draft ke cloud: ${uploadError.message}`);
+  }
+
+  const { data: urlData } = supabase.storage.from('properties').getPublicUrl(storagePath);
+  return {
+    publicUrl: urlData.publicUrl,
+    storagePath
+  };
+}
+
+/**
+ * deleteDraftPhotosFromStorage: Membersihkan file foto draft dari folder 'drafts/' secara aman.
+ * Mencegah kebocoran storage tanpa risiko menyentuh foto listing aktif.
+ */
+export async function deleteDraftPhotosFromStorage(storagePaths: string[]): Promise<void> {
+  if (!storagePaths || storagePaths.length === 0) return;
+  // Safety filter mutlak: hanya file di folder 'drafts/' yang boleh dihapus
+  const safePaths = storagePaths.filter(p => typeof p === 'string' && p.startsWith('drafts/'));
+  if (safePaths.length === 0) return;
+
+  try {
+    const { error } = await supabase.storage.from('properties').remove(safePaths);
+    if (error) {
+      console.warn('Gagal menghapus file draft dari Supabase storage:', error);
+    }
+  } catch (err) {
+    console.warn('Exception saat membersihkan file draft:', err);
+  }
+}
+
 // ---- PROPERTY FUNCTIONS ----
 
 export async function getAdminProperties(ownerUid?: string): Promise<BasicPropertyInfo[]> {
@@ -266,37 +379,54 @@ export async function getAdminProperties(ownerUid?: string): Promise<BasicProper
 
   const isAdmin = await checkIfUserIsAdmin(user.id);
 
-  let query = supabase.from('properties').select('*, users(name, full_name, role)');
+  let query = supabase.from('properties').select('*, users(id, name, full_name, role, phone, email, verification_status)');
   if (ownerUid) {
     query = query.eq('owner_uid', ownerUid);
   } else if (!isAdmin) {
     query = query.eq('owner_uid', user.id);
   }
 
-  const { data, error } = await query;
+  const { data, error } = await query.order('created_at', { ascending: false });
   if (error) throw error;
   if (!data) return [];
 
   return data.map((row) => {
     const rawImages = row.image_urls || [];
-    const images: string[] = rawImages.map((img: any) =>
-      typeof img === 'string' ? img : (img.webp || img.original || img.thumbnail || '')
-    ).filter((u: string) => u !== '');
+    const images: string[] = rawImages.map(getDisplayImageUrl).filter((u: string) => u !== '');
+    const photosMeta = (row.metadata?.photos_meta || rawImages).map(getDisplayImageObject).filter(Boolean) as ImageUrlObject[];
 
     const rawVideos = row.video_urls || [];
     const videos: string[] = rawVideos.map((vid: any) =>
       typeof vid === 'string' ? vid : (vid.original || '')
     ).filter((u: string) => u !== '');
 
+    const photoCategories = row.photo_categories || row.photoCategories || (row.metadata && (row.metadata.photo_categories || row.metadata.photoCategories)) || [];
+    const categorizedPhotos = row.categorized_photos || row.categorizedPhotos || (row.metadata && (row.metadata.categorized_photos || row.metadata.categorizedPhotos)) || {};
+
     const ownerData = Array.isArray(row.users) ? row.users[0] : row.users;
     const isSystemId = ['super_admin_id', 'admin-system-id'].includes(row.owner_uid?.toLowerCase());
+    const isManaged = Boolean(row.is_managed);
+
+    let suspendReason = '';
+    let revisionNotes = '';
+    let revisionRequestedAt = '';
+    let parsedMeta: any = null;
+    if (row.metadata) {
+      parsedMeta = typeof row.metadata === 'string' ? JSON.parse(row.metadata) : row.metadata;
+      suspendReason = parsedMeta?.suspend_reason || parsedMeta?.suspendReason || '';
+      revisionNotes = parsedMeta?.revision_notes || parsedMeta?.revisionNotes || '';
+      revisionRequestedAt = parsedMeta?.revision_requested_at || parsedMeta?.revisionRequestedAt || '';
+    }
 
     return {
       id: row.id,
-      namaKost: row.title || row.namaKost,
-      status: row.status,
-      address: row.address,
+      namaKost: row.title || row.namaKost || 'Kost Tanpa Nama',
+      status: row.status || 'draft',
+      address: row.address || '',
       imageUrls: images,
+      photosMeta,
+      photoCategories,
+      categorizedPhotos,
       videoUrls: videos,
       instagramUrl: row.instagram_url || '',
       tiktokUrl: row.tiktok_url || '',
@@ -308,13 +438,13 @@ export async function getAdminProperties(ownerUid?: string): Promise<BasicProper
       title: row.title,
       description: row.description,
       location: row.location,
-      facilities: row.facilities,
-      roomTypes: row.room_types,
-      rules: row.rules,
-      campuses: row.campuses,
-      publicFacilities: row.public_facilities,
-      isVerified: row.is_verified,
-      isManaged: row.is_managed,
+      facilities: row.facilities || [],
+      roomTypes: row.room_types || [],
+      rules: row.rules || [],
+      campuses: row.campuses || [],
+      publicFacilities: row.public_facilities || [],
+      isVerified: isManaged ? true : Boolean(row.is_verified),
+      isManaged: isManaged,
       omnichannelContactName: row.omnichannel_contact_name,
       omnichannelContactPhone: row.omnichannel_contact_phone,
       additionalFeePrice: row.additional_fee_price,
@@ -322,7 +452,16 @@ export async function getAdminProperties(ownerUid?: string): Promise<BasicProper
       additionalFeeStartsFrom: row.additional_fee_starts_from,
       ownerName: ownerData?.name || ownerData?.full_name || (isSystemId ? 'Super Admin' : `Tanpa Pemilik (${row.owner_uid?.substring(0,8)}...)`),
       ownerRole: ownerData?.role || (isSystemId ? 'admin' : 'owner'),
-      } as BasicPropertyInfo;
+      ownerPhone: ownerData?.phone || row.omnichannel_contact_phone || '',
+      ownerEmail: ownerData?.email || '',
+      ownerVerificationStatus: ownerData?.verification_status || 'unverified',
+      suspendReason: suspendReason,
+      revisionNotes: revisionNotes,
+      revisionRequestedAt: revisionRequestedAt,
+      metadata: parsedMeta,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at
+    } as BasicPropertyInfo;
   });
 }
 
@@ -1174,60 +1313,45 @@ export async function syncPropertyRooms(propertyId: string, inputRooms?: any[]):
             .upsert(roomsPayload, { onConflict: 'property_id,room_number' });
 
         if (upsertErr) {
-            console.error(`[SYNC_ROOMS] Error upserting rooms:`, upsertErr.message);
+            if (upsertErr.code === '42501') {
+                // RLS policy restricts write to relational rooms table — this is expected for draft properties.
+                // Data kamar 100% aman tersimpan di properties.room_types (JSONB) sebagai single source of truth.
+                console.warn(`[SYNC_ROOMS] RLS policy membatasi penulisan ke tabel rooms (kode 42501). Data kamar tetap lengkap di properties.room_types.`);
+            } else {
+                console.warn(`[SYNC_ROOMS] Gagal sinkronisasi tabel rooms:`, upsertErr.message);
+            }
         } else {
             console.log(`[SYNC_ROOMS] Successfully synced rooms.`);
         }
 
-        // 3. Group flatRooms by roomTypeName and update parent properties table
-        const groups: Record<string, any[]> = {};
-        flatRooms.forEach((r: any) => {
-            const key = r.roomTypeName || 'Standard';
-            if (!groups[key]) groups[key] = [];
-            groups[key].push(r);
-        });
-
-        const aggregatedRoomTypes = Object.keys(groups).map(typeName => {
-            const roomsInGroup = groups[typeName];
-            const prices = roomsInGroup.map(r => Number(r.price)).filter(p => p > 0);
-            const minPrice = prices.length > 0 ? Math.min(...prices) : 0;
-            const availableRooms = roomsInGroup.filter(r => r.status === 'available' || r.status === 'kosong' || r.status === 'kosong_siap');
-            const availableCount = availableRooms.length;
-            const isAvailable = availableCount > 0;
-            
-            const firstRoom = roomsInGroup[0] || {};
-            
-            return {
-                name: typeName,
-                price: minPrice,
-                size: firstRoom.size || '3x4m',
-                isAvailable: isAvailable,
-                availableRoomCount: availableCount,
-                maxOccupants: firstRoom.maxOccupants || 1,
-                roomFacilities: firstRoom.roomFacilities || [],
-                bathroomFacilities: firstRoom.bathroomFacilities || [],
-                rooms: roomsInGroup.map(r => ({
-                    roomNumber: r.roomNumber,
-                    status: r.status,
-                    images: r.images || []
-                }))
-            };
-        });
-
-        const allPrices = flatRooms.map(r => Number(r.price)).filter(p => p > 0);
-        const finalMinPrice = allPrices.length > 0 ? Math.min(...allPrices) : 0;
-
-        console.log(`[SYNC_ROOMS] Updating properties table for property ${propertyId} with aggregated room_types...`);
-        const { error: propUpdateErr } = await supabase
-            .from('properties')
-            .update({
-                room_types: aggregatedRoomTypes,
-                price: finalMinPrice
+        // 3. Update harga minimum (price) di properties berdasarkan rawRooms — JANGAN timpa room_types.
+        //    room_types sudah benar saat diinsert dari form. Re-aggregasi dari flatRooms bisa menyebabkan
+        //    kehilangan tipe kamar jika upsert ke tabel rooms gagal (RLS). Cukup update price saja.
+        const allPricesFromRaw = rawRooms
+            .map((rt: any) => {
+                // Ambil harga bulanan dari pricing array jika ada, fallback ke price langsung
+                const monthlyPrice = Array.isArray(rt.pricing)
+                    ? (rt.pricing.find((p: any) => p.period === 'bulanan')?.price || rt.price || 0)
+                    : (rt.price || 0);
+                return Number(monthlyPrice);
             })
-            .eq('id', propertyId);
+            .filter((p: number) => p > 0);
+        const finalMinPrice = allPricesFromRaw.length > 0 ? Math.min(...allPricesFromRaw) : 0;
 
-        if (propUpdateErr) {
-            console.error(`[SYNC_ROOMS] Error updating property:`, propUpdateErr.message);
+        if (finalMinPrice > 0) {
+            console.log(`[SYNC_ROOMS] Updating property price to Rp ${finalMinPrice.toLocaleString('id-ID')} (harga minimum dari ${rawRooms.length} tipe kamar).`);
+            const { error: propUpdateErr } = await supabase
+                .from('properties')
+                .update({ price: finalMinPrice })
+                .eq('id', propertyId);
+
+            if (propUpdateErr) {
+                console.warn(`[SYNC_ROOMS] Gagal update harga properti:`, propUpdateErr.message);
+            } else {
+                console.log(`[SYNC_ROOMS] Harga properti berhasil diperbarui.`);
+            }
+        } else {
+            console.log(`[SYNC_ROOMS] Tidak ada harga valid — skip update price.`);
         }
     } catch (err) {
         console.error(`[SYNC_ROOMS] Fatal error during sync:`, err);
@@ -1885,30 +2009,48 @@ export async function deleteResidentStatus(residentId: string): Promise<void> {
 
 export async function addPropertyWithMedia(
   kostData: Partial<Kost>,
-  imageFiles: File[],
-  videoFiles: File[]
+  imageFiles: (File | { file: File; label?: string; category?: string })[],
+  videoFiles: File[] = []
 ): Promise<string> {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error('Anda harus login.');
 
   const isAdmin = await checkIfUserIsAdmin(user.id);
   const targetOwnerUid = (isAdmin && kostData.ownerUid) ? kostData.ownerUid : user.id;
+  const targetStatus = isAdmin ? (kostData.status || 'draft') : 'draft';
 
   // Generate a temporary ID for Storage path (will be overwritten with DB-generated UUID)
   const tempId = crypto.randomUUID();
 
-  const existingImages = (kostData.imageUrls || []).map((url: any) =>
-    typeof url === 'string' ? { original: url } : url
-  );
+  const existingImages = (kostData.imageUrls || []).map((url: any) => {
+    if (typeof url === 'string') return { original: url, url };
+    return {
+      original: url.original || url.url || '',
+      url: url.url || url.original || '',
+      ...(url.label ? { label: url.label } : {}),
+      ...(url.category ? { category: url.category } : {})
+    };
+  });
   const existingVideos = (kostData.videoUrls || []).map((url: any) =>
     typeof url === 'string' ? { original: url } : url
   );
 
-  // Upload new images
-  const newImageObjects: ImageUrlObject[] = [];
-  for (const file of imageFiles) {
-    const url = await uploadFileToStorage(file, 'properties', `${user.id}/${tempId}/images/original`);
-    newImageObjects.push({ original: url });
+  // Upload new images with category label support
+  const newImageObjects: any[] = [];
+  for (const item of imageFiles) {
+    const rawFile = (item && 'file' in item) ? item.file : (item as File);
+    const label = (item && 'label' in item) ? (item.label || (item as any).category) : undefined;
+    const category = (item && 'category' in item) ? (item as any).category : label;
+    const caption = (item && 'caption' in item) ? (item as any).caption : (label || category);
+    const webpFile = await convertToWebP(rawFile);
+    const url = await uploadFileToStorage(webpFile, 'properties', `${user.id}/${tempId}/images/original`);
+    newImageObjects.push({ 
+      original: url, 
+      url, 
+      ...(label ? { label } : {}),
+      ...(category ? { category } : {}),
+      ...(caption ? { caption } : {})
+    });
   }
 
   // Upload new videos
@@ -1917,6 +2059,26 @@ export async function addPropertyWithMedia(
     const url = await uploadFileToStorage(file, 'properties', `${user.id}/${tempId}/videos/original`);
     newVideoObjects.push({ original: url });
   }
+
+  const allImages = [...existingImages, ...newImageObjects];
+  const derivedPhotoCategories = kostData.photoCategories && kostData.photoCategories.length > 0
+    ? kostData.photoCategories
+    : allImages.map((img: any) => img.label || img.category || '');
+
+  const derivedCategorizedPhotos = (kostData.categorizedPhotos && Object.keys(kostData.categorizedPhotos).length > 0)
+    ? kostData.categorizedPhotos
+    : (() => {
+        const catMap: Record<string, string[]> = {};
+        allImages.forEach((img: any) => {
+          const cat = img.label || img.category || 'Foto Properti';
+          const u = img.original || img.url;
+          if (u) {
+            if (!catMap[cat]) catMap[cat] = [];
+            catMap[cat].push(u);
+          }
+        });
+        return catMap;
+      })();
 
   // Insert into Supabase (PostgreSQL)
   const { data: inserted, error } = await supabase
@@ -1933,16 +2095,19 @@ export async function addPropertyWithMedia(
       area: kostData.area || '',
       metadata: {
         ...(kostData.metadata || {}),
-        province: kostData.province || ''
+        province: kostData.province || '',
+        photo_categories: derivedPhotoCategories,
+        categorized_photos: derivedCategorizedPhotos,
+        photos_meta: allImages
       },
       type: kostData.type,
       property_type: kostData.type, // Map the type specifically for Supabase DB
-      status: kostData.status || 'draft',
+      status: targetStatus,
       is_verified: kostData.isVerified ?? false,
       is_managed: kostData.isManaged ?? false,
       rating: Number(kostData.rating || 0),
       location: kostData.location,
-      image_urls: [...existingImages, ...newImageObjects],
+      image_urls: allImages,
       video_urls: [...existingVideos, ...newVideoObjects],
       instagram_url: kostData.instagramUrl || '',
       tiktok_url: kostData.tiktokUrl || '',
@@ -1967,7 +2132,6 @@ export async function addPropertyWithMedia(
     throw new Error(error.message);
   }
 
-  if (error) throw error;
   await syncPropertyRooms(inserted.id);
   return inserted.id;
 }
@@ -1975,8 +2139,8 @@ export async function addPropertyWithMedia(
 export async function updatePropertyWithMedia(
   propertyId: string,
   kostData: Partial<Kost>,
-  newImageFiles: File[],
-  newVideoFiles: File[]
+  newImageFiles: (File | { file: File; label?: string; category?: string })[],
+  newVideoFiles: File[] = []
 ): Promise<void> {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error('Anda harus login.');
@@ -1996,23 +2160,45 @@ export async function updatePropertyWithMedia(
   const currentImageObjects = existing.image_urls || [];
   const currentVideoObjects = existing.video_urls || [];
 
-  const keptImageStrings = kostData.imageUrls || [];
+  const keptImageStrings = (kostData.imageUrls || []).map((img: any) => 
+    typeof img === 'string' ? img : (img?.original || img?.url || '')
+  );
   const keptVideoStrings = kostData.videoUrls || [];
+
+  const normalizedKeptImagePaths = keptImageStrings.map(normalizeStorageRelativePath).filter(Boolean);
+  const normalizedKeptVideoPaths = keptVideoStrings.map(normalizeStorageRelativePath).filter(Boolean);
+
+  const isImagePathKept = (candidate: string) => {
+    if (!candidate) return false;
+    if (keptImageStrings.includes(candidate)) return true;
+    const norm = normalizeStorageRelativePath(candidate);
+    if (!norm) return false;
+    return normalizedKeptImagePaths.some(k => k === norm || norm.endsWith(k) || k.endsWith(norm));
+  };
+
+  const isVideoPathKept = (candidate: string) => {
+    if (!candidate) return false;
+    if (keptVideoStrings.includes(candidate)) return true;
+    const norm = normalizeStorageRelativePath(candidate);
+    if (!norm) return false;
+    return normalizedKeptVideoPaths.some(k => k === norm || norm.endsWith(k) || k.endsWith(norm));
+  };
 
   // Determine deletions
   const itemsToDelete = currentImageObjects.filter((imgObj: any) => {
-    const isKept = keptImageStrings.some(keptUrl =>
-      keptUrl === imgObj.original ||
-      keptUrl === imgObj.webp ||
-      keptUrl === imgObj.thumbnail ||
-      keptUrl === imgObj
-    );
+    const origUrl = typeof imgObj === 'string' ? imgObj : (imgObj.original || imgObj.url || '');
+    const webpUrl = typeof imgObj === 'object' ? (imgObj.webp || '') : '';
+    const thumbUrl = typeof imgObj === 'object' ? (imgObj.thumbnail || '') : '';
+
+    const isKept = isImagePathKept(origUrl) ||
+                   (webpUrl && isImagePathKept(webpUrl)) ||
+                   (thumbUrl && isImagePathKept(thumbUrl));
     return !isKept;
   });
 
   const videosToDelete = currentVideoObjects.filter((vidObj: any) => {
-    const url = typeof vidObj === 'string' ? vidObj : vidObj.original;
-    return !keptVideoStrings.includes(url);
+    const url = typeof vidObj === 'string' ? vidObj : (vidObj.original || vidObj.url || '');
+    return !isVideoPathKept(url);
   });
 
   // Delete removed files from Storage
@@ -2031,26 +2217,89 @@ export async function updatePropertyWithMedia(
     })
   ]);
 
-  // Filter kept objects
-  const finalImageObjects = currentImageObjects.filter((imgObj: any) => {
-    return keptImageStrings.some(keptUrl =>
-      keptUrl === imgObj.original ||
-      keptUrl === imgObj.webp ||
-      keptUrl === imgObj.thumbnail ||
-      keptUrl === imgObj
+  // Filter kept objects and sync labels/category/caption from kostData.imageUrls if updated
+  const existingPhotosMeta: any[] = Array.isArray(existing.metadata?.photos_meta) ? existing.metadata.photos_meta : [];
+  const existingCategorized: Record<string, string[]> = existing.metadata?.categorized_photos || {};
+
+  const findLabelForUrl = (u: string): string => {
+    if (!u) return '';
+    const normU = normalizeStorageRelativePath(u);
+    const matchesUrl = (target: string) => {
+      if (!target) return false;
+      if (target === u) return true;
+      const normT = normalizeStorageRelativePath(target);
+      return normT && (normT === normU || normT.endsWith(normU) || normU.endsWith(normT));
+    };
+
+    const fromMeta = existingPhotosMeta.find((m: any) => 
+      matchesUrl(m.original) || matchesUrl(m.url) || matchesUrl(m.webp)
     );
-  });
+    if (fromMeta?.label || fromMeta?.category) return fromMeta.label || fromMeta.category;
+
+    const fromObj = currentImageObjects.find((o: any) => 
+      matchesUrl(o.original) || matchesUrl(o.url) || matchesUrl(o.webp)
+    );
+    if (fromObj?.label || fromObj?.category) return fromObj.label || fromObj.category;
+
+    for (const [catName, urls] of Object.entries(existingCategorized)) {
+      if (Array.isArray(urls) && urls.some(item => matchesUrl(item))) {
+        return catName;
+      }
+    }
+    return '';
+  };
+
+  const finalImageObjects = (kostData.imageUrls && kostData.imageUrls.length > 0)
+    ? kostData.imageUrls.map((img: any, idx: number) => {
+        const urlStr = typeof img === 'string' ? img : (img.original || img.url || '');
+        let label = typeof img === 'object' ? (img.label || img.category || '') : '';
+        let category = typeof img === 'object' ? (img.category || img.label || '') : '';
+        if (!label) {
+          label = findLabelForUrl(urlStr);
+        }
+        if (!label && Array.isArray(kostData.photoCategories) && kostData.photoCategories[idx]) {
+          label = kostData.photoCategories[idx];
+        }
+        if (!category) {
+          category = label;
+        }
+        const caption = (typeof img === 'object' && img.caption) ? img.caption : (label || category || '');
+        return {
+          original: urlStr,
+          url: urlStr,
+          ...(label ? { label } : {}),
+          ...(category ? { category } : {}),
+          ...(caption ? { caption } : {})
+        };
+      })
+    : currentImageObjects.filter((imgObj: any) => {
+        const origUrl = typeof imgObj === 'string' ? imgObj : (imgObj.original || imgObj.url || '');
+        const webpUrl = typeof imgObj === 'object' ? (imgObj.webp || '') : '';
+        const thumbUrl = typeof imgObj === 'object' ? (imgObj.thumbnail || '') : '';
+        return isImagePathKept(origUrl) || (webpUrl && isImagePathKept(webpUrl)) || (thumbUrl && isImagePathKept(thumbUrl));
+      });
 
   const finalVideoObjects = currentVideoObjects.filter((vidObj: any) => {
     const url = typeof vidObj === 'string' ? vidObj : vidObj.original;
-    return keptVideoStrings.includes(url);
+    return isVideoPathKept(url);
   });
 
-  // Upload new files
-  const newImageObjects: ImageUrlObject[] = [];
-  for (const file of newImageFiles) {
-    const url = await uploadFileToStorage(file, 'properties', `${user.id}/${propertyId}/images/original`);
-    newImageObjects.push({ original: url });
+  // Upload new files with category label and caption support
+  const newImageObjects: any[] = [];
+  for (const item of newImageFiles) {
+    const rawFile = (item && 'file' in item) ? item.file : (item as File);
+    const label = (item && 'label' in item) ? (item.label || (item as any).category) : undefined;
+    const category = (item && 'category' in item) ? (item as any).category : label;
+    const caption = (item && 'caption' in item) ? (item as any).caption : (label || category);
+    const webpFile = await convertToWebP(rawFile);
+    const url = await uploadFileToStorage(webpFile, 'properties', `${user.id}/${propertyId}/images/original`);
+    newImageObjects.push({ 
+      original: url, 
+      url, 
+      ...(label ? { label } : {}),
+      ...(category ? { category } : {}),
+      ...(caption ? { caption } : {})
+    });
   }
 
   const newVideoObjects: VideoUrlObject[] = [];
@@ -2060,6 +2309,38 @@ export async function updatePropertyWithMedia(
   }
 
   const targetOwnerUid = (isAdmin && kostData.ownerUid) ? kostData.ownerUid : existing.owner_uid;
+  const allImages = [...finalImageObjects, ...newImageObjects];
+
+  const derivedPhotoCategories = (kostData.photoCategories && kostData.photoCategories.length > 0 && kostData.photoCategories.some((c: any) => !!c))
+    ? kostData.photoCategories
+    : allImages.map((img: any) => img.label || img.category || '');
+
+  const derivedCategorizedPhotos = (kostData.categorizedPhotos && Object.keys(kostData.categorizedPhotos).length > 0)
+    ? kostData.categorizedPhotos
+    : (() => {
+        const catMap: Record<string, string[]> = {};
+        allImages.forEach((img: any) => {
+          const cat = img.label || img.category || 'Foto Properti';
+          const u = img.original || img.url;
+          if (u) {
+            if (!catMap[cat]) catMap[cat] = [];
+            catMap[cat].push(u);
+          }
+        });
+        return catMap;
+      })();
+
+  // Status & Verification Preservation:
+  // - Admin dapat mengubah status secara bebas.
+  // - Mitra / Non-Admin:
+  //   * Jika properti SUDAH 'published', status TETAP 'published' dan is_verified: (existing.is_verified ?? true).
+  //   * Jika properti masih 'draft', status TETAP 'draft' dan is_verified: false.
+  const targetStatus = isAdmin 
+    ? (kostData.status || existing.status || 'draft')
+    : (existing.status === 'published' ? 'published' : 'draft');
+  const targetVerified = isAdmin
+    ? (kostData.isVerified !== undefined ? kostData.isVerified : (existing.is_verified ?? false))
+    : (existing.status === 'published' ? (existing.is_verified ?? true) : false);
 
   const { error: updateError } = await supabase
     .from('properties')
@@ -2076,16 +2357,19 @@ export async function updatePropertyWithMedia(
       metadata: {
         ...(existing.metadata || {}),
         ...(kostData.metadata || {}),
-        ...(kostData.province !== undefined ? { province: kostData.province } : {})
+        ...(kostData.province !== undefined ? { province: kostData.province } : {}),
+        photo_categories: derivedPhotoCategories,
+        categorized_photos: derivedCategorizedPhotos,
+        photos_meta: allImages
       },
       type: kostData.type,
       property_type: kostData.type, // Sync added column
-      status: kostData.status,
-      is_verified: kostData.isVerified,
-      is_managed: kostData.isManaged,
+      status: targetStatus,
+      is_verified: targetVerified,
+      is_managed: kostData.isManaged !== undefined ? kostData.isManaged : (existing.is_managed ?? false),
       rating: Number(kostData.rating || 0),
       location: kostData.location,
-      image_urls: [...finalImageObjects, ...newImageObjects],
+      image_urls: allImages,
       video_urls: [...finalVideoObjects, ...newVideoObjects],
       instagram_url: kostData.instagramUrl,
       tiktok_url: kostData.tiktokUrl,
@@ -2112,13 +2396,17 @@ export async function updatePropertyWithMedia(
   await syncPropertyRooms(propertyId);
 }
 
-export async function updatePropertyStatus(propertyId: string, newStatus: 'draft' | 'published'): Promise<void> {
+export async function updatePropertyStatus(
+  propertyId: string, 
+  newStatus: 'draft' | 'published' | 'suspended' | string,
+  reason?: string
+): Promise<void> {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error('Tidak ada admin yang login.');
 
   const { data: existing, error: fetchError } = await supabase
     .from('properties')
-    .select('owner_uid')
+    .select('owner_uid, metadata')
     .eq('id', propertyId)
     .single();
 
@@ -2128,9 +2416,79 @@ export async function updatePropertyStatus(propertyId: string, newStatus: 'draft
   const isAdmin = await checkIfUserIsAdmin(user.id);
   if (!isOwner && !isAdmin) throw new Error('Anda tidak memiliki izin.');
 
+  const currentMeta = typeof existing.metadata === 'string' ? JSON.parse(existing.metadata) : (existing.metadata || {});
+  const updatedMeta = {
+    ...currentMeta,
+    ...(reason !== undefined ? { suspend_reason: reason } : {})
+  };
+
   const { error } = await supabase
     .from('properties')
-    .update({ status: newStatus, updated_at: getCurrentDate().toISOString() })
+    .update({ 
+      status: newStatus, 
+      metadata: updatedMeta,
+      updated_at: getCurrentDate().toISOString() 
+    })
+    .eq('id', propertyId);
+
+  if (error) throw error;
+}
+
+export async function freezeProperty(propertyId: string, reason: string): Promise<void> {
+  return updatePropertyStatus(propertyId, 'suspended', reason);
+}
+
+export async function unfreezeProperty(propertyId: string): Promise<void> {
+  return updatePropertyStatus(propertyId, 'published', '');
+}
+
+export async function requestPropertyRevision(propertyId: string, revisionNotes: string): Promise<void> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('Tidak ada admin yang login.');
+
+  const isAdmin = await checkIfUserIsAdmin(user.id);
+  if (!isAdmin) throw new Error('Hanya admin yang dapat meminta revisi listing properti.');
+
+  const { data: existing, error: fetchError } = await supabase
+    .from('properties')
+    .select('owner_uid, metadata')
+    .eq('id', propertyId)
+    .single();
+
+  if (fetchError || !existing) throw new Error('Properti tidak ditemukan.');
+
+  const currentMeta = typeof existing.metadata === 'string' ? JSON.parse(existing.metadata) : (existing.metadata || {});
+  const updatedMeta = {
+    ...currentMeta,
+    revision_notes: revisionNotes.trim(),
+    revision_requested_at: getCurrentDate().toISOString()
+  };
+
+  const { error } = await supabase
+    .from('properties')
+    .update({ 
+      status: 'draft', 
+      metadata: updatedMeta,
+      updated_at: getCurrentDate().toISOString() 
+    })
+    .eq('id', propertyId);
+
+  if (error) throw error;
+}
+
+export async function togglePropertyVerification(propertyId: string, isVerified: boolean): Promise<void> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('Tidak ada admin yang login.');
+
+  const isAdmin = await checkIfUserIsAdmin(user.id);
+  if (!isAdmin) throw new Error('Hanya admin yang dapat mengubah status verifikasi.');
+
+  const { error } = await supabase
+    .from('properties')
+    .update({ 
+      is_verified: isVerified, 
+      updated_at: getCurrentDate().toISOString() 
+    })
     .eq('id', propertyId);
 
   if (error) throw error;
@@ -4042,6 +4400,77 @@ export async function deleteBanner(bannerId: string): Promise<void> {
   if (error) throw error;
 }
 
+// ---- MITRA PROMO POPUP SETTING FUNCTIONS ----
+
+export const DEFAULT_MITRA_PROMO_POPUP: MitraPromoPopupSetting = {
+  is_active: true,
+  title: 'Gak Punya Waktu Kelola Kost? Upgrade ke KostManager!',
+  image_url: '',
+  link_url: '/kost-manager',
+  alt_text: 'Promo KostManager RuangSinggah'
+};
+
+export async function getMitraPromoPopupSetting(): Promise<MitraPromoPopupSetting> {
+  try {
+    const { data, error } = await supabase
+      .from('app_settings')
+      .select('value')
+      .eq('key', 'mitra_promo_popup')
+      .maybeSingle();
+
+    if (error || !data || !data.value) {
+      return DEFAULT_MITRA_PROMO_POPUP;
+    }
+
+    return {
+      is_active: Boolean(data.value.is_active ?? DEFAULT_MITRA_PROMO_POPUP.is_active),
+      title: String(data.value.title ?? DEFAULT_MITRA_PROMO_POPUP.title),
+      image_url: String(data.value.image_url ?? ''),
+      link_url: String(data.value.link_url ?? DEFAULT_MITRA_PROMO_POPUP.link_url),
+      alt_text: String(data.value.alt_text ?? DEFAULT_MITRA_PROMO_POPUP.alt_text),
+    };
+  } catch (err) {
+    console.error('getMitraPromoPopupSetting error:', err);
+    return DEFAULT_MITRA_PROMO_POPUP;
+  }
+}
+
+export async function saveMitraPromoPopupSetting(
+  settings: Partial<MitraPromoPopupSetting>,
+  newImageFile?: File
+): Promise<MitraPromoPopupSetting> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('Unauthorized');
+
+  const isAdmin = await checkIfUserIsAdmin(user.id);
+  if (!isAdmin) throw new Error('Access Denied');
+
+  let imageUrl = settings.image_url ?? '';
+
+  if (newImageFile) {
+    imageUrl = await uploadFileToStorage(newImageFile, 'banners', 'promo');
+  }
+
+  const payload: MitraPromoPopupSetting = {
+    is_active: settings.is_active ?? true,
+    title: settings.title ?? DEFAULT_MITRA_PROMO_POPUP.title,
+    image_url: imageUrl,
+    link_url: settings.link_url ?? DEFAULT_MITRA_PROMO_POPUP.link_url,
+    alt_text: settings.alt_text ?? DEFAULT_MITRA_PROMO_POPUP.alt_text,
+  };
+
+  const { error } = await supabase
+    .from('app_settings')
+    .upsert({
+      key: 'mitra_promo_popup',
+      value: payload,
+      updated_at: new Date().toISOString()
+    }, { onConflict: 'key' });
+
+  if (error) throw error;
+  return payload;
+}
+
 // ---- USER MANAGEMENT FUNCTIONS ----
 
 /**
@@ -4988,4 +5417,238 @@ export async function deleteKostManagerPackage(id: string): Promise<void> {
   if (error) throw error;
 }
 
+// --- PROPERTY REPORTS MANAGEMENT ---
 
+export interface PropertyReportItem {
+  id: string;
+  property_id: string;
+  reporter_id?: string;
+  reporter_name: string;
+  reporter_phone: string;
+  category: string;
+  description: string;
+  evidence_urls?: string[];
+  status: 'pending' | 'reviewed' | 'resolved' | 'dismissed' | string;
+  admin_notes?: string;
+  action_taken?: string;
+  created_at: string;
+  updated_at: string;
+  propertyName?: string;
+  propertyCity?: string;
+  propertyAddress?: string;
+  ownerName?: string;
+  ownerPhone?: string;
+  ownerUid?: string;
+}
+
+export async function getPropertyReports(statusFilter?: string): Promise<PropertyReportItem[]> {
+  try {
+    let query = supabase
+      .from('property_reports')
+      .select(`
+        *,
+        properties (
+          id,
+          title,
+          city,
+          address,
+          owner_uid
+        )
+      `)
+      .order('created_at', { ascending: false });
+
+    if (statusFilter && statusFilter !== 'all') {
+      query = query.eq('status', statusFilter);
+    }
+
+    const { data, error } = await query;
+    if (error) {
+      console.warn('Querying property_reports table returned error, checking complaints fallback:', error.message);
+      const { data: compData, error: compErr } = await supabase
+        .from('complaints')
+        .select('*')
+        .ilike('category', '%REPORT:%')
+        .order('created_at', { ascending: false });
+
+      if (compErr || !compData) return [];
+
+      return compData.map(c => ({
+        id: c.id,
+        property_id: c.kost_id || '',
+        reporter_name: c.user_name || 'Pengguna',
+        reporter_phone: c.user_phone || '',
+        category: (c.category || '').replace('REPORT: ', ''),
+        description: (c.description || '').replace('[ADUAN LISTING] ', ''),
+        evidence_urls: c.photos || (c.photo_url ? [c.photo_url] : []),
+        status: c.status || 'pending',
+        admin_notes: '',
+        action_taken: '',
+        created_at: c.created_at,
+        updated_at: c.updated_at,
+        propertyName: c.kost_name || c.title || 'Kost',
+        propertyCity: '',
+        propertyAddress: '',
+        ownerName: '',
+        ownerPhone: ''
+      }));
+    }
+
+    if (!data || data.length === 0) return [];
+
+    // Collect unique owner_uids to batch fetch user details
+    const ownerUids = Array.from(new Set(data.map((r: any) => r.properties?.owner_uid).filter(Boolean)));
+    const ownerMap: Record<string, any> = {};
+
+    if (ownerUids.length > 0) {
+      const { data: usersData } = await supabase
+        .from('users')
+        .select('id, name, full_name, phone, email')
+        .in('id', ownerUids);
+
+      (usersData || []).forEach(u => {
+        ownerMap[u.id] = u;
+      });
+    }
+
+    return data.map((row: any) => {
+      const prop = row.properties;
+      const owner = prop?.owner_uid ? ownerMap[prop.owner_uid] : null;
+      return {
+        id: row.id,
+        property_id: row.property_id,
+        reporter_id: row.reporter_id,
+        reporter_name: row.reporter_name || 'Pengguna',
+        reporter_phone: row.reporter_phone || '',
+        category: row.category,
+        description: row.description,
+        evidence_urls: row.evidence_urls || [],
+        status: row.status || 'pending',
+        admin_notes: row.admin_notes || '',
+        action_taken: row.action_taken || '',
+        created_at: row.created_at,
+        updated_at: row.updated_at,
+        propertyName: prop?.title || 'Kost',
+        propertyCity: prop?.city || '',
+        propertyAddress: prop?.address || '',
+        ownerName: owner?.name || owner?.full_name || 'Mitra',
+        ownerPhone: owner?.phone || '',
+        ownerUid: prop?.owner_uid
+      };
+    });
+  } catch (err) {
+    console.error('Failed fetching property reports:', err);
+    return [];
+  }
+}
+
+export async function updatePropertyReportStatus(
+  reportId: string, 
+  status: 'pending' | 'reviewed' | 'resolved' | 'dismissed' | string,
+  adminNotes?: string,
+  actionTaken?: string
+): Promise<void> {
+  const now = getCurrentDate().toISOString();
+  const payload: any = {
+    status,
+    updated_at: now
+  };
+  if (adminNotes !== undefined) payload.admin_notes = adminNotes;
+  if (actionTaken !== undefined) payload.action_taken = actionTaken;
+
+  const { error } = await supabase
+    .from('property_reports')
+    .update(payload)
+    .eq('id', reportId);
+
+  if (error) {
+    await supabase
+      .from('complaints')
+      .update({ status: status === 'resolved' ? 'closed' : status })
+      .eq('id', reportId);
+  }
+}
+
+export interface ContactBannerDetectionResult {
+  hasContact: boolean;
+  detectedTexts?: string[];
+  boxes: Array<{
+    ymin: number;
+    xmin: number;
+    ymax: number;
+    xmax: number;
+    label?: string;
+  }>;
+  error?: string;
+}
+
+export const detectPhotoContactBanner = async (
+  base64Image: string,
+  mimeType = 'image/webp'
+): Promise<ContactBannerDetectionResult> => {
+  const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
+
+  const invokeAttempt = async (attemptNumber: number): Promise<any> => {
+    const timeoutPromise = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error(`Deteksi banner kontak timeout (18s) - Percobaan ${attemptNumber}`)), 18000)
+    );
+
+    const invokePromise = supabase.functions.invoke('detect-contact-banner', {
+      body: { base64Image, mimeType },
+      headers: supabaseAnonKey ? {
+        apikey: supabaseAnonKey
+      } : undefined
+    });
+
+    return await Promise.race([invokePromise, timeoutPromise]);
+  };
+
+  try {
+    console.log('[AI_BANNER] Memanggil Edge Function detect-contact-banner...');
+    let res: any;
+    let lastError: any = null;
+
+    // Percobaan 1
+    try {
+      res = await invokeAttempt(1);
+    } catch (err: any) {
+      lastError = err;
+      console.warn('[AI_BANNER] Percobaan 1 gagal, mencoba retry dalam 800ms...', err?.message || err);
+      // Tunggu 800ms sebelum retry
+      await new Promise(r => setTimeout(r, 800));
+      // Percobaan 2 (Retry)
+      res = await invokeAttempt(2);
+    }
+
+    const { data: aiRes, error: aiErr } = res || {};
+
+    if (aiErr) {
+      console.error('[AI_BANNER] Error invoke Edge Function:', aiErr);
+      return { 
+        hasContact: false, 
+        detectedTexts: [], 
+        boxes: [], 
+        error: aiErr.message || 'Gagal memanggil fungsi AI' 
+      };
+    }
+
+    if (aiRes && aiRes.success && aiRes.data) {
+      const data = aiRes.data;
+      console.log('[AI_BANNER] Sukses mendeteksi:', data);
+      return {
+        hasContact: !!data.has_contact,
+        detectedTexts: Array.isArray(data.detected_texts) ? data.detected_texts : [],
+        boxes: Array.isArray(data.boxes) ? data.boxes : []
+      };
+    }
+
+    return { hasContact: false, detectedTexts: [], boxes: [] };
+  } catch (err: any) {
+    console.warn('[AI_BANNER] Pemeriksaan banner kontak dilewati (fallback aman):', err);
+    return { 
+      hasContact: false, 
+      detectedTexts: [], 
+      boxes: [], 
+      error: err?.message || 'Gangguan jaringan saat memindai spanduk kontak' 
+    };
+  }
+};

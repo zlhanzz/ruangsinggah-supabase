@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../../supabase';
 import { FORMAT_CURRENCY } from '../../constants';
 import { sendNotification } from '../../notificationService';
+import { createKostSlug } from '../../utils/slugUtils';
 import { 
     Users, 
     Calendar, 
@@ -737,8 +738,10 @@ const LocationPicker: React.FC<{ lat: number; lng: number; onLocationChange: (la
                 const addressStr = result.formatted_address;
                 const components = result.address_components || [];
                 const getComp = (type: string) => components.find((c: any) => c.types.includes(type))?.long_name || '';
-                const city = getComp('locality') || getComp('administrative_area_level_2') || getComp('administrative_area_level_1');
-                const area = getComp('sublocality_level_1') || getComp('sublocality') || getComp('neighborhood');
+                const rawCity = getComp('administrative_area_level_2') || getComp('locality') || getComp('administrative_area_level_1');
+                const rawArea = getComp('administrative_area_level_3') || getComp('sublocality_level_1') || getComp('sublocality') || getComp('neighborhood');
+                const city = rawCity.replace(/^(Kota\s+Administrasi\s+|Kota\s+|Kabupaten\s+|Kab\.\s+)/i, '').trim();
+                const area = rawArea.replace(/^(Kecamatan\s+|Kec\.\s+)/i, '').trim();
                 setSearchQuery(addressStr);
                 onLocationChange(latVal, lngVal, addressStr, city, area);
             } else {
@@ -804,8 +807,10 @@ const LocationPicker: React.FC<{ lat: number; lng: number; onLocationChange: (la
                 marker.setPosition({ lat: newLat, lng: newLng });
                 const components = place.address_components || [];
                 const getComp = (type: string) => components.find((c: any) => c.types.includes(type))?.long_name || '';
-                const city = getComp('locality') || getComp('administrative_area_level_2') || getComp('administrative_area_level_1');
-                const area = getComp('sublocality_level_1') || getComp('sublocality') || getComp('neighborhood');
+                const rawCity = getComp('administrative_area_level_2') || getComp('locality') || getComp('administrative_area_level_1');
+                const rawArea = getComp('administrative_area_level_3') || getComp('sublocality_level_1') || getComp('sublocality') || getComp('neighborhood');
+                const city = rawCity.replace(/^(Kota\s+Administrasi\s+|Kota\s+|Kabupaten\s+|Kab\.\s+)/i, '').trim();
+                const area = rawArea.replace(/^(Kecamatan\s+|Kec\.\s+)/i, '').trim();
                 setSearchQuery(place.formatted_address || '');
                 onLocationChange(newLat, newLng, place.formatted_address || '', city, area);
             });
@@ -3894,7 +3899,7 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
                                                                     <div className="flex items-center justify-end gap-1.5">
                                                                         {/* Tombol 1: Buka Web Publik Listing */}
                                                                         <a
-                                                                            href={`/kost/${p.id}`}
+                                                                            href={`/kost/${createKostSlug(p)}`}
                                                                             target="_blank"
                                                                             rel="noopener noreferrer"
                                                                             className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition-all cursor-pointer shadow-2xs"
@@ -5930,7 +5935,7 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
                                                             </span>
                                                         </div>
                                                         <a
-                                                            href={`/kost/${activeProp.id}`}
+                                                            href={`/kost/${createKostSlug(activeProp)}`}
                                                             target="_blank"
                                                             rel="noopener noreferrer"
                                                             className="px-3 py-2 bg-white hover:bg-orange-50 text-orange-600 border border-orange-200 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all shadow-2xs flex items-center gap-1.5 cursor-pointer"

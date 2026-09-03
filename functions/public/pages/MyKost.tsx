@@ -215,9 +215,71 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
         }
     }, [surveyRequests]);
 
+    // Property Rating & Review states
+    const [showPropertyReviewModal, setShowPropertyReviewModal] = useState(false);
+    const [selectedPropertyReviewKost, setSelectedPropertyReviewKost] = useState<any | null>(null);
+    const [userReviewMap, setUserReviewMap] = useState<Record<string, any>>({});
+    const [isSubmittingPropertyReview, setIsSubmittingPropertyReview] = useState(false);
+
     // Rating form state
     const [ratingValue, setRatingValue] = useState(5);
     const [ratingComment, setRatingComment] = useState('');
+
+    const handleOpenPropertyReview = (kost: any) => {
+        const propId = kost.kostId || kost.property_id || kost.id;
+        setSelectedPropertyReviewKost(kost);
+        const existing = userReviewMap[propId];
+        if (existing) {
+            setRatingValue(Number(existing.rating) || 5);
+            setRatingComment(existing.comment || '');
+        } else {
+            setRatingValue(5);
+            setRatingComment('');
+        }
+        setShowPropertyReviewModal(true);
+    };
+
+    const handleSubmitPropertyReview = async () => {
+        if (!selectedPropertyReviewKost || !user) return;
+        const propId = selectedPropertyReviewKost.kostId || selectedPropertyReviewKost.property_id || selectedPropertyReviewKost.id;
+        if (!propId) {
+            alert('ID Properti tidak ditemukan.');
+            return;
+        }
+
+        if (ratingComment.trim().length < 5) {
+            alert('Harap tulis ulasan Anda minimal 5 karakter.');
+            return;
+        }
+
+        try {
+            setIsSubmittingPropertyReview(true);
+            const reviewPayload = {
+                userId: user.uid,
+                userName: user.displayName || user.name || user.email?.split('@')[0] || 'Penghuni Kost',
+                rating: ratingValue,
+                comment: ratingComment.trim()
+            };
+
+            await addPropertyReview(propId, reviewPayload);
+
+            setUserReviewMap(prev => ({
+                ...prev,
+                [propId]: {
+                    ...reviewPayload,
+                    date: new Date().toISOString()
+                }
+            }));
+
+            setShowPropertyReviewModal(false);
+            alert('Terima kasih! Ulasan dan rating Anda telah berhasil dikirim.');
+        } catch (err: any) {
+            console.error('Failed to submit property review:', err);
+            alert('Gagal mengirim ulasan: ' + (err.message || 'Terjadi kesalahan'));
+        } finally {
+            setIsSubmittingPropertyReview(false);
+        }
+    };
 
     // Extension form state
     const [extensionPeriod, setExtensionPeriod] = useState(1);
@@ -558,8 +620,17 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
                 const productIds = Array.from(new Set(data?.map(d => d.product_id || d.kost_id).filter(id => !!id)));
                 const { data: propertiesData } = await supabase
                     .from('properties')
-                    .select('id, title, address, image_urls, owner_uid, city, area, additional_fee_name, additional_fee_price, additional_fee_starts_from, room_types, location, facilities, rules, metadata, is_managed')
+                    .select('id, title, address, image_urls, owner_uid, city, area, additional_fee_name, additional_fee_price, additional_fee_starts_from, room_types, location, facilities, rules, metadata, is_managed, reviews, rating')
                     .in('id', productIds);
+
+                const uReviews: Record<string, any> = {};
+                (propertiesData || []).forEach((p: any) => {
+                    if (Array.isArray(p.reviews)) {
+                        const found = p.reviews.find((r: any) => r.userId === user.uid);
+                        if (found) uReviews[p.id] = found;
+                    }
+                });
+                setUserReviewMap(uReviews);
 
                 const propMap = (propertiesData || []).reduce((acc: any, p: any) => {
                     acc[p.id] = p;
@@ -2002,7 +2073,7 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
     console.log("DEBUG_MYKOST_RENDER: activeTab:", activeTab);
 
     return (
-        <div className="min-h-screen bg-[#F8FAFC] pt-8 pb-12 font-outfitSelection">
+        <div className="min-h-screen bg-[#F8FAFC] pt-8 pb-28 sm:pb-12 font-outfitSelection">
             {/* Background Decorations */}
             <div className="fixed inset-0 overflow-hidden pointer-events-none z-0">
                 <div className="absolute -top-[10%] -right-[10%] w-[40%] h-[40%] bg-orange-100/30 rounded-full blur-[120px]" />
@@ -2585,6 +2656,17 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
                                                     className="w-full bg-white hover:bg-rose-50 text-rose-600 border border-rose-200 px-4 sm:px-5 py-2.5 sm:py-3 rounded-xl sm:rounded-2xl font-black flex items-center justify-center gap-2 transition-all text-[9px] uppercase tracking-widest active:scale-[0.98] cursor-pointer"
                                                 >
                                                     <Wrench className="w-3.5 h-3.5 text-rose-500" /> Lapor Kendala Kamar
+                                                </button>
+                                            )}
+
+                                            {/* Beri / Edit Ulasan & Rating Kost */}
+                                            {isPaid && (
+                                                <button
+                                                    onClick={() => handleOpenPropertyReview(kost)}
+                                                    className="w-full bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 px-4 sm:px-5 py-2.5 sm:py-3 rounded-xl sm:rounded-2xl font-black flex items-center justify-center gap-2 transition-all text-[9px] uppercase tracking-widest active:scale-[0.98] cursor-pointer"
+                                                >
+                                                    <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-500" />
+                                                    {userReviewMap[kost.kostId || kost.property_id || kost.id] ? 'Edit Ulasan & Rating' : 'Beri Ulasan & Rating'}
                                                 </button>
                                             )}
 
@@ -5185,6 +5267,104 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
                                 className="px-6 py-2.5 bg-gray-900 hover:bg-black text-white text-xs font-black uppercase tracking-wider rounded-xl transition-all cursor-pointer"
                             >
                                 Tutup Galeri
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* 9. Modal Beri Ulasan & Rating Kost */}
+            {showPropertyReviewModal && selectedPropertyReviewKost && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-200">
+                    <div className="bg-white w-full max-w-lg rounded-[2.5rem] overflow-hidden shadow-2xl border border-gray-100 flex flex-col">
+                        {/* Header */}
+                        <div className="p-6 border-b border-gray-100 flex items-center justify-between bg-amber-50/50">
+                            <div className="flex items-center gap-3">
+                                <div className="p-2.5 bg-amber-100 rounded-2xl text-amber-600">
+                                    <Star className="w-6 h-6 fill-amber-500 text-amber-500" />
+                                </div>
+                                <div>
+                                    <h3 className="text-base font-black text-gray-900 uppercase tracking-tight">
+                                        {userReviewMap[selectedPropertyReviewKost.kostId || selectedPropertyReviewKost.property_id || selectedPropertyReviewKost.id] ? 'Edit Ulasan Kost' : 'Ulasan & Rating Penghuni'}
+                                    </h3>
+                                    <p className="text-xs text-gray-500 font-medium truncate max-w-[280px]">
+                                        {selectedPropertyReviewKost.kostName || selectedPropertyReviewKost.title || 'Kost Anda'}
+                                    </p>
+                                </div>
+                            </div>
+                            <button
+                                onClick={() => setShowPropertyReviewModal(false)}
+                                className="w-9 h-9 rounded-full bg-white border border-gray-200 hover:bg-gray-100 flex items-center justify-center text-gray-500 transition-colors cursor-pointer"
+                            >
+                                <X className="w-4 h-4" />
+                            </button>
+                        </div>
+
+                        {/* Body Form */}
+                        <div className="p-6 sm:p-8 space-y-6">
+                            {/* Star Selector */}
+                            <div className="text-center space-y-3 bg-gray-50/80 p-5 rounded-3xl border border-gray-100">
+                                <span className="text-[11px] font-black text-gray-400 uppercase tracking-widest block">
+                                    Beri Penilaian Bintang
+                                </span>
+                                <div className="flex items-center justify-center gap-2">
+                                    {[1, 2, 3, 4, 5].map((star) => (
+                                        <button
+                                            key={star}
+                                            type="button"
+                                            onClick={() => setRatingValue(star)}
+                                            className="p-1 hover:scale-125 transition-transform cursor-pointer focus:outline-hidden"
+                                        >
+                                            <Star
+                                                className={`w-8 h-8 sm:w-9 sm:h-9 ${
+                                                    star <= ratingValue
+                                                        ? 'text-amber-400 fill-amber-400 filter drop-shadow-sm'
+                                                        : 'text-gray-200'
+                                                }`}
+                                            />
+                                        </button>
+                                    ))}
+                                </div>
+                                <span className="text-xs font-black text-amber-600 block">
+                                    {ratingValue === 5 ? '⭐⭐⭐⭐⭐ Sangat Memuaskan' :
+                                     ratingValue === 4 ? '⭐⭐⭐⭐ Memuaskan' :
+                                     ratingValue === 3 ? '⭐⭐⭐ Cukup' :
+                                     ratingValue === 2 ? '⭐⭐ Kurang' : '⭐ Sangat Kurang'}
+                                </span>
+                            </div>
+
+                            {/* Comment Field */}
+                            <div className="space-y-2">
+                                <label className="block text-xs font-black text-gray-700 uppercase tracking-wider">
+                                    Tulis Pengalaman Tinggal Anda
+                                </label>
+                                <textarea
+                                    value={ratingComment}
+                                    onChange={(e) => setRatingComment(e.target.value)}
+                                    rows={4}
+                                    placeholder="Ceritakan pengalaman Anda selama tinggal di kost ini (kebersihan, kenyamanan, keamanan, fasilitas, atau keramahan pengelola)..."
+                                    className="w-full p-4 rounded-2xl border border-gray-200 focus:border-amber-500 focus:ring-2 focus:ring-amber-200 text-xs text-gray-800 transition-all resize-none outline-hidden"
+                                />
+                                <span className="text-[10px] text-gray-400 font-medium">Minimal 5 karakter ulasan jujur.</span>
+                            </div>
+                        </div>
+
+                        {/* Footer */}
+                        <div className="p-6 border-t border-gray-100 bg-gray-50 flex items-center justify-end gap-3">
+                            <button
+                                type="button"
+                                onClick={() => setShowPropertyReviewModal(false)}
+                                className="px-5 py-3 bg-white hover:bg-gray-100 text-gray-600 border border-gray-200 rounded-xl font-black text-xs uppercase tracking-wider transition-all cursor-pointer"
+                            >
+                                Batal
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handleSubmitPropertyReview}
+                                disabled={isSubmittingPropertyReview}
+                                className="px-7 py-3 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white rounded-xl font-black text-xs uppercase tracking-wider transition-all shadow-md active:scale-95 disabled:opacity-50 cursor-pointer flex items-center gap-2"
+                            >
+                                {isSubmittingPropertyReview ? 'Mengirim...' : 'Kirim Ulasan ✓'}
                             </button>
                         </div>
                     </div>

@@ -160,4 +160,28 @@ export async function notifyAdminIdentityVerification(details: {
   });
 }
 
+export async function notifyAdminPropertyReport(details: {
+  propertyName: string;
+  propertyId: string;
+  categoryLabel: string;
+  description: string;
+  reporterName: string;
+  reporterPhone: string;
+  ownerName?: string;
+  evidenceUrl?: string;
+}) {
+  return notifyAdminTransaction(`🚨 Aduan Properti Masuk: ${details.propertyName}`, {
+    "Nama Properti": details.propertyName,
+    "ID Properti": details.propertyId,
+    "Kategori Aduan": details.categoryLabel,
+    "Kronologi / Detail": details.description,
+    "Nama Pelapor": details.reporterName || 'Pengguna',
+    "WhatsApp Pelapor": details.reporterPhone || '-',
+    "Nama Pemilik Kost": details.ownerName || '-',
+    "Bukti Foto": details.evidenceUrl || '-',
+    "Petunjuk Admin": "Silakan buka Pusat Moderasi Listing di Dashboard Admin untuk meninjau dan mengambil tindakan (Bekukan Listing / Hubungi Pemilik).",
+    "Link Moderasi Listing": "https://ruangsinggah.id/dashboard"
+  });
+}
+
 

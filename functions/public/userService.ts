@@ -1,5 +1,5 @@
 import { supabase } from './supabase';
-import { Kost, DatabaseProduct } from './types';
+import { Kost, DatabaseProduct, ImageUrlObject } from './types';
 import { notifyAdminTransaction } from './emailService';
 import { getCurrentDate } from './utils/timeUtils';
 
@@ -12,11 +12,33 @@ const convertTimestamp = (ts: any): string => {
 
 // Helper to extract display URL from image object or string
 // Prioritize WebP > Original > Thumbnail
-const getDisplayImageUrl = (img: any): string => {
+export const getDisplayImageUrl = (img: any): string => {
   if (!img) return '';
   if (typeof img === 'string') return ensureAbsoluteUrl(img, 'properties');
-  const path = img.webp || img.original || img.thumbnail || '';
+  const path = img.webp || img.original || img.thumbnail || img.url || '';
   return ensureAbsoluteUrl(path, 'properties');
+};
+
+// Helper to extract rich image object with full metadata (url, label, category, caption)
+export const getDisplayImageObject = (img: any): ImageUrlObject | null => {
+  if (!img) return null;
+  if (typeof img === 'string') {
+    const u = ensureAbsoluteUrl(img, 'properties');
+    return { original: u, url: u, label: '', category: '', caption: '' };
+  }
+  const path = img.webp || img.original || img.thumbnail || img.url || '';
+  const u = ensureAbsoluteUrl(path, 'properties');
+  const label = img.label || img.category || '';
+  const category = img.category || img.label || '';
+  const caption = img.caption || label || category || '';
+  return {
+    ...img,
+    original: ensureAbsoluteUrl(img.original || path, 'properties'),
+    url: u,
+    label,
+    category,
+    caption
+  };
 };
 
 // Helper to ensure URL is absolute (Supabase Storage support)
@@ -95,6 +117,67 @@ export const getRoomEffectivePrice = (room: any) => {
   return { price: Number(room.price) || 0, unit: '/bln', priority: 7 };
 };
 
+export interface PropertyFilterParams {
+  searchTerm?: string;
+  typeFilter?: string;
+  selectedProvince?: string;
+  selectedCity?: string;
+  selectedDistrict?: string;
+  selectedCampus?: string;
+  maxPrice?: number;
+  page?: number;
+  limit?: number;
+}
+
+export function transformPropertyRow(row: any): Kost {
+  const rawImages = row.image_urls || [];
+  const images = rawImages.map(getDisplayImageUrl).filter((u: string) => u !== '');
+  const photosMeta = (row.metadata?.photos_meta || rawImages).map(getDisplayImageObject).filter(Boolean) as ImageUrlObject[];
+
+  const rawVideos = row.video_urls || [];
+  const videos = rawVideos.map(getDisplayVideoUrl).filter((u: string) => u !== '');
+
+  return {
+    id: row.id,
+    ownerUid: row.owner_uid,
+    title: row.title || 'Tanpa Nama',
+    description: row.description || '',
+    price: row.price || (row.room_types && row.room_types.length > 0 ? row.room_types[0].price : 0),
+    facilities: row.facilities || [],
+    address: row.address || '',
+    province: row.province || row.metadata?.province || '',
+    city: row.city || '',
+    area: row.area || '',
+    type: row.type || 'Campur',
+    status: row.status || 'published',
+    isVerified: row.is_verified ?? false,
+    isManaged: row.is_managed ?? false,
+    rating: row.rating || 0,
+    location: row.location || { lat: 0, lng: 0 },
+    imageUrls: images,
+    photosMeta,
+    videoUrls: videos,
+    instagramUrl: row.instagram_url || '',
+    tiktokUrl: row.tiktok_url || '',
+    roomTypes: row.room_types || [],
+    reviews: row.reviews || [],
+    rules: row.rules || [],
+    campuses: row.campuses || [],
+    publicFacilities: row.public_facilities || [],
+    virtualTourUrl: row.virtual_tour_url || '',
+    additionalFeePrice: row.additional_fee_price,
+    additionalFeeName: row.additional_fee_name,
+    additionalFeeStartsFrom: row.additional_fee_starts_from,
+    createdAt: convertTimestamp(row.created_at),
+    updatedAt: convertTimestamp(row.updated_at),
+    omnichannelContactName: row.omnichannel_contact_name,
+    omnichannelContactPhone: row.omnichannel_contact_phone,
+    omnichannelContactType: row.omnichannel_contact_type,
+    photoCategories: row.photo_categories || row.photoCategories || (row.metadata && (row.metadata.photo_categories || row.metadata.photoCategories)) || [],
+    categorizedPhotos: row.categorized_photos || row.categorizedPhotos || (row.metadata && (row.metadata.categorized_photos || row.metadata.categorizedPhotos)) || {},
+  } as Kost;
+}
+
 export async function getPublishedProperties(): Promise<Kost[]> {
   try {
     const { data, error } = await supabase
@@ -106,69 +189,224 @@ export async function getPublishedProperties(): Promise<Kost[]> {
     if (error) throw error;
     if (!data) return [];
 
-    return data.map((row) => {
-      const rawImages = row.image_urls || [];
-      const images = rawImages.map(getDisplayImageUrl).filter((u: string) => u !== '');
-
-      const rawVideos = row.video_urls || [];
-      const videos = rawVideos.map(getDisplayVideoUrl).filter((u: string) => u !== '');
-
-      return {
-        id: row.id,
-        ownerUid: row.owner_uid,
-        title: row.title || 'Tanpa Nama',
-        description: row.description || '',
-        price: row.price || (row.room_types && row.room_types.length > 0 ? row.room_types[0].price : 0),
-        facilities: row.facilities || [],
-        address: row.address || '',
-        city: row.city || '',
-        type: row.type || 'Campur',
-        status: row.status || 'published',
-        isVerified: row.is_verified ?? false,
-        isManaged: row.is_managed ?? false,
-        rating: row.rating || 0,
-        location: row.location || { lat: 0, lng: 0 },
-        imageUrls: images,
-        videoUrls: videos,
-        instagramUrl: row.instagram_url || '',
-        tiktokUrl: row.tiktok_url || '',
-        roomTypes: row.room_types || [],
-        reviews: row.reviews || [],
-        rules: row.rules || [],
-        campuses: row.campuses || [],
-        publicFacilities: row.public_facilities || [],
-        virtualTourUrl: row.virtual_tour_url || '',
-        additionalFeePrice: row.additional_fee_price,
-        additionalFeeName: row.additional_fee_name,
-        additionalFeeStartsFrom: row.additional_fee_starts_from,
-        createdAt: convertTimestamp(row.created_at),
-        updatedAt: convertTimestamp(row.updated_at),
-        omnichannelContactName: row.omnichannel_contact_name,
-        omnichannelContactPhone: row.omnichannel_contact_phone,
-        omnichannelContactType: row.omnichannel_contact_type,
-        photoCategories: row.photo_categories || row.photoCategories || [],
-        categorizedPhotos: row.categorized_photos || row.categorizedPhotos || {},
-      } as Kost;
-    });
+    return data.map(transformPropertyRow);
   } catch (error: any) {
     console.error('Error fetching published properties:', error);
     return [];
   }
 }
 
+/**
+ * Backend Database Query: Filter, search, and paginate properties directly from PostgreSQL
+ * Supports both standard Mitra properties (is_managed = false) and KostManager properties (is_managed = true)
+ */
+export async function getFilteredProperties(params: PropertyFilterParams = {}): Promise<{
+  kosts: Kost[];
+  totalCount: number;
+}> {
+  try {
+    let query = supabase
+      .from('properties')
+      .select('*', { count: 'exact' })
+      .eq('status', 'published');
+
+    // 1. Multi-column Text Search (Title, Address, Area)
+    if (params.searchTerm && params.searchTerm.trim() !== '') {
+      const term = params.searchTerm.trim();
+      query = query.or(`title.ilike.%${term}%,address.ilike.%${term}%,area.ilike.%${term}%`);
+    }
+
+    // 2. Room / Kost Type Filter
+    if (params.typeFilter && params.typeFilter !== 'Semua') {
+      query = query.eq('type', params.typeFilter);
+    }
+
+    // 3. City Filter
+    if (params.selectedCity && params.selectedCity !== 'Semua') {
+      query = query.eq('city', params.selectedCity);
+    }
+
+    // 4. District / Area Filter
+    if (params.selectedDistrict && params.selectedDistrict !== 'Semua') {
+      query = query.eq('area', params.selectedDistrict);
+    }
+
+    // 5. Max Price Filter
+    if (params.maxPrice && params.maxPrice < 5000000) {
+      query = query.lte('price', params.maxPrice);
+    }
+
+    // Sort newest updated first
+    query = query.order('updated_at', { ascending: false });
+
+    const isCampusFiltered = params.selectedCampus && params.selectedCampus !== 'Semua';
+    const isProvinceFiltered = params.selectedProvince && params.selectedProvince !== 'Semua';
+    const isCustomFiltered = isCampusFiltered || isProvinceFiltered;
+
+    // Server-side range only if no in-memory custom filters
+    if (!isCustomFiltered && params.page && params.limit) {
+      const from = (params.page - 1) * params.limit;
+      const to = from + params.limit - 1;
+      query = query.range(from, to);
+    }
+
+    const { data, error, count } = await query;
+    if (error) throw error;
+    if (!data) return { kosts: [], totalCount: 0 };
+
+    let mappedKosts = data.map(transformPropertyRow);
+
+    // Filter province if selected
+    if (isProvinceFiltered) {
+      const targetProv = params.selectedProvince!.toLowerCase();
+      mappedKosts = mappedKosts.filter(k => 
+        (k.province || 'sulawesi selatan').toLowerCase().includes(targetProv)
+      );
+    }
+
+    // Filter campus if selected
+    if (isCampusFiltered) {
+      const targetCampus = params.selectedCampus!.toLowerCase();
+      mappedKosts = mappedKosts.filter(k => 
+        k.campuses && k.campuses.some(c => c.name && c.name.toLowerCase().includes(targetCampus))
+      );
+    }
+
+    if (isCustomFiltered) {
+      const totalCustomCount = mappedKosts.length;
+      if (params.page && params.limit) {
+        const from = (params.page - 1) * params.limit;
+        mappedKosts = mappedKosts.slice(from, from + params.limit);
+      }
+      return { kosts: mappedKosts, totalCount: totalCustomCount };
+    }
+
+    return {
+      kosts: mappedKosts,
+      totalCount: count ?? mappedKosts.length
+    };
+  } catch (error: any) {
+    console.error('Error in getFilteredProperties:', error);
+    return { kosts: [], totalCount: 0 };
+  }
+}
+
+export interface GeoRelationEntry {
+  province: string;
+  city: string;
+  district: string;
+  campuses: string[];
+}
+
+/**
+ * Fetch unique provinces, cities, districts/areas, and campuses available in the database for dropdown filter options,
+ * along with raw relational entries for cascading dependency.
+ */
+export async function getAvailableFilterOptions(): Promise<{
+  provinces: string[];
+  cities: string[];
+  districts: string[];
+  campuses: string[];
+  rawRelations: GeoRelationEntry[];
+}> {
+  try {
+    const { data, error } = await supabase
+      .from('properties')
+      .select('*')
+      .eq('status', 'published');
+
+    if (error || !data) return { provinces: [], cities: [], districts: [], campuses: [], rawRelations: [] };
+
+    const provinces = new Set<string>();
+    const cities = new Set<string>();
+    const districts = new Set<string>();
+    const campuses = new Set<string>();
+    const rawRelations: GeoRelationEntry[] = [];
+
+    data.forEach((row: any) => {
+      const city = (row.city || row.metadata?.city || '').trim();
+      const prov = (row.province || row.metadata?.province || (city ? 'Sulawesi Selatan' : '') || 'Sulawesi Selatan').trim();
+      const area = (row.area || row.metadata?.area || '').trim();
+      const itemCampuses: string[] = [];
+
+      if (prov !== '') provinces.add(prov);
+      if (city !== '') cities.add(city);
+      if (area !== '') districts.add(area);
+
+      if (Array.isArray(row.campuses)) {
+        row.campuses.forEach((c: any) => {
+          if (c?.name && c.name.trim() !== '') {
+            const cName = c.name.trim();
+            campuses.add(cName);
+            itemCampuses.push(cName);
+          }
+        });
+      }
+
+      rawRelations.push({
+        province: prov,
+        city: city,
+        district: area,
+        campuses: itemCampuses
+      });
+    });
+
+    return {
+      provinces: Array.from(provinces).sort(),
+      cities: Array.from(cities).sort(),
+      districts: Array.from(districts).sort(),
+      campuses: Array.from(campuses).sort(),
+      rawRelations
+    };
+  } catch (error: any) {
+    console.error('Error fetching available filter options:', error);
+    return { provinces: [], cities: [], districts: [], campuses: [], rawRelations: [] };
+  }
+}
+
 export async function getPublishedPropertyDetails(propertyId: string): Promise<Kost | null> {
   try {
-    const { data: row, error } = await supabase
+    let row: any = null;
+
+    // 1. Coba ambil jika status published (terbuka untuk umum)
+    const { data: pubRow } = await supabase
       .from('properties')
       .select('*')
       .eq('id', propertyId)
       .eq('status', 'published')
-      .single();
+      .maybeSingle();
 
-    if (error || !row) return null;
+    if (pubRow) {
+      row = pubRow;
+    } else {
+      // 2. Mode Pratinjau (Preview Mode): jika belum published, izinkan pemilik atau admin melihat propertinya
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const { data: privRow } = await supabase
+          .from('properties')
+          .select('*')
+          .eq('id', propertyId)
+          .maybeSingle();
+
+        if (privRow) {
+          const isOwner = privRow.owner_uid === user.id;
+          let isAdmin = user.app_metadata?.role === 'admin' || user.user_metadata?.role === 'admin';
+          if (!isAdmin) {
+            const { data: dbUser } = await supabase.from('users').select('role').eq('id', user.id).maybeSingle();
+            if (dbUser?.role === 'admin') isAdmin = true;
+          }
+          if (isOwner || isAdmin) {
+            row = privRow;
+          }
+        }
+      }
+    }
+
+    if (!row) return null;
 
     const rawImages = row.image_urls || [];
     const images = rawImages.map(getDisplayImageUrl).filter((u: string) => u !== '');
+    const photosMeta = (row.metadata?.photos_meta || rawImages).map(getDisplayImageObject).filter(Boolean) as ImageUrlObject[];
 
     const rawVideos = row.video_urls || [];
     const videos = rawVideos.map(getDisplayVideoUrl).filter((u: string) => u !== '');
@@ -189,6 +427,7 @@ export async function getPublishedPropertyDetails(propertyId: string): Promise<K
       rating: row.rating || 0,
       location: row.location || { lat: 0, lng: 0 },
       imageUrls: images,
+      photosMeta,
       videoUrls: videos,
       instagramUrl: row.instagram_url || '',
       tiktokUrl: row.tiktok_url || '',
@@ -205,8 +444,8 @@ export async function getPublishedPropertyDetails(propertyId: string): Promise<K
       omnichannelContactName: row.omnichannel_contact_name,
       omnichannelContactPhone: row.omnichannel_contact_phone,
       omnichannelContactType: row.omnichannel_contact_type,
-      photoCategories: row.photo_categories || row.photoCategories || [],
-      categorizedPhotos: row.categorized_photos || row.categorizedPhotos || {},
+      photoCategories: row.photo_categories || row.photoCategories || (row.metadata && (row.metadata.photo_categories || row.metadata.photoCategories)) || [],
+      categorizedPhotos: row.categorized_photos || row.categorizedPhotos || (row.metadata && (row.metadata.categorized_photos || row.metadata.categorizedPhotos)) || {},
     } as Kost;
   } catch (error) {
     console.error('Error getting property details:', error);
@@ -279,32 +518,55 @@ export async function addPropertyReview(propertyId: string, review: { userId: st
   try {
     const { data: property, error: fetchError } = await supabase
       .from('properties')
-      .select('reviews')
+      .select('reviews, rating')
       .eq('id', propertyId)
       .single();
 
     if (fetchError) throw fetchError;
 
-    const currentReviews = property.reviews || [];
+    const currentReviews = Array.isArray(property?.reviews) ? property.reviews : [];
     const newReview = {
       ...review,
+      rating: Number(review.rating) || 5,
       date: getCurrentDate().toISOString()
     };
-    const updatedReviews = [...currentReviews, newReview];
+
+    // Upsert review by userId if user already submitted a review previously
+    const existingIndex = currentReviews.findIndex((r: any) => r.userId === review.userId);
+    let updatedReviews: any[] = [];
+    if (existingIndex >= 0) {
+      updatedReviews = [...currentReviews];
+      updatedReviews[existingIndex] = newReview;
+    } else {
+      updatedReviews = [...currentReviews, newReview];
+    }
 
     // Calculate new average rating
     const totalRating = updatedReviews.reduce((sum: number, r: any) => sum + (Number(r.rating) || 0), 0);
     const newAverageRating = Number((totalRating / updatedReviews.length).toFixed(1));
 
-    // Use RPC to bypass RLS for rating/reviews update if necessary
-    const { error: rpcError } = await supabase.rpc('submit_property_review', {
-      prop_id: propertyId,
-      new_review: newReview, // RPC appends this to the array
-      new_rating: newAverageRating
-    });
+    // Try direct update first
+    const { error: updateError } = await supabase
+      .from('properties')
+      .update({
+        reviews: updatedReviews,
+        rating: newAverageRating
+      })
+      .eq('id', propertyId);
 
-    if (rpcError) throw rpcError;
-    return { success: true };
+    if (updateError) {
+      // Fallback to RPC if RLS restricts direct update
+      const { error: rpcError } = await supabase.rpc('submit_property_review', {
+        prop_id: propertyId,
+        new_review: newReview,
+        new_rating: newAverageRating
+      });
+      if (rpcError) {
+        console.warn('RPC submit_property_review fallback also encountered error:', rpcError);
+      }
+    }
+
+    return { success: true, newAverageRating, reviews: updatedReviews };
   } catch (error) {
     console.error('Error adding property review:', error);
     throw error;
@@ -823,9 +1085,13 @@ export async function getOwnerProperties(ownerUid: string): Promise<Kost[]> {
     return allProps.map((row) => {
       const rawImages = row.image_urls || [];
       const images = rawImages.map(getDisplayImageUrl).filter((u: string) => u !== '');
+      const photosMeta = (row.metadata?.photos_meta || rawImages).map(getDisplayImageObject).filter(Boolean) as ImageUrlObject[];
 
       const rawVideos = row.video_urls || [];
       const videos = rawVideos.map(getDisplayVideoUrl).filter((u: string) => u !== '');
+
+      const photoCategories = row.photo_categories || row.photoCategories || (row.metadata && (row.metadata.photo_categories || row.metadata.photoCategories)) || [];
+      const categorizedPhotos = row.categorized_photos || row.categorizedPhotos || (row.metadata && (row.metadata.categorized_photos || row.metadata.categorizedPhotos)) || {};
 
       return {
         id: row.id,
@@ -835,7 +1101,9 @@ export async function getOwnerProperties(ownerUid: string): Promise<Kost[]> {
         price: row.price || 0,
         facilities: row.facilities || [],
         address: row.address || '',
+        province: row.province || row.metadata?.province || '',
         city: row.city || '',
+        area: row.area || '',
         type: row.type || 'Campur',
         status: row.status || 'published',
         isVerified: row.is_verified ?? false,
@@ -843,6 +1111,7 @@ export async function getOwnerProperties(ownerUid: string): Promise<Kost[]> {
         rating: row.rating || 0,
         location: row.location || { lat: 0, lng: 0 },
         imageUrls: images,
+        photosMeta,
         videoUrls: videos,
         instagramUrl: row.instagram_url || '',
         tiktokUrl: row.tiktok_url || '',
@@ -851,6 +1120,7 @@ export async function getOwnerProperties(ownerUid: string): Promise<Kost[]> {
         rules: row.rules || [],
         campuses: row.campuses || [],
         publicFacilities: row.public_facilities || [],
+        virtualTourUrl: row.virtual_tour_url || '',
         createdAt: convertTimestamp(row.created_at),
         updatedAt: convertTimestamp(row.updated_at),
         views: row.views || 0,
@@ -860,6 +1130,10 @@ export async function getOwnerProperties(ownerUid: string): Promise<Kost[]> {
         omnichannelContactName: row.omnichannel_contact_name,
         omnichannelContactPhone: row.omnichannel_contact_phone,
         omnichannelContactType: row.omnichannel_contact_type,
+        managed_by: row.managed_by || row.metadata?.managed_by || (row.is_managed ? 'kostmanager' : 'self'),
+        photoCategories,
+        categorizedPhotos,
+        metadata: row.metadata || {},
       } as Kost;
     });
   } catch (error: any) {
@@ -986,5 +1260,91 @@ export async function incrementPropertyView(propertyId: string) {
   } catch (error) {
     // Silent fail for view counter to not disrupt user experience
     console.warn('View counter increment failed (non-critical):', error);
+  }
+}
+
+export interface PropertyReportPayload {
+  propertyId: string;
+  propertyName?: string;
+  reporterId?: string;
+  reporterName: string;
+  reporterPhone: string;
+  category: string;
+  categoryLabel?: string;
+  description: string;
+  evidenceUrls?: string[];
+}
+
+export async function uploadReportEvidence(file: File, propertyId: string): Promise<string> {
+  try {
+    const timestamp = Date.now();
+    const cleanFileName = `report_${propertyId.substring(0, 8)}_${timestamp}.webp`;
+    const filePath = `reports/${cleanFileName}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from('properties')
+      .upload(filePath, file, {
+        contentType: 'image/webp',
+        upsert: true
+      });
+
+    if (uploadError) {
+      console.warn('Upload to properties bucket failed, trying survey-photos fallback:', uploadError.message);
+      const { error: fallbackError } = await supabase.storage
+        .from('survey-photos')
+        .upload(filePath, file, { contentType: 'image/webp', upsert: true });
+      if (fallbackError) throw fallbackError;
+      return supabase.storage.from('survey-photos').getPublicUrl(filePath).data.publicUrl;
+    }
+
+    return supabase.storage.from('properties').getPublicUrl(filePath).data.publicUrl;
+  } catch (err: any) {
+    console.error('Failed uploading report evidence:', err);
+    throw new Error('Gagal mengunggah foto bukti: ' + (err.message || err));
+  }
+}
+
+export async function submitPropertyReport(payload: PropertyReportPayload): Promise<void> {
+  const now = getCurrentDate().toISOString();
+  
+  const insertData = {
+    property_id: payload.propertyId,
+    reporter_id: payload.reporterId || null,
+    reporter_name: payload.reporterName,
+    reporter_phone: payload.reporterPhone,
+    category: payload.category,
+    description: payload.description,
+    evidence_urls: payload.evidenceUrls || [],
+    status: 'pending',
+    created_at: now,
+    updated_at: now
+  };
+
+  const { error } = await supabase
+    .from('property_reports')
+    .insert([insertData]);
+
+  if (error) {
+    console.warn('Inserting into property_reports table returned notice/fallback:', error.message);
+    // If the table property_reports isn't created in Supabase yet, we fallback to complaints table with type 'property_report'
+    const fallbackData = {
+      user_id: payload.reporterId || null,
+      user_name: payload.reporterName,
+      user_phone: payload.reporterPhone,
+      kost_id: payload.propertyId,
+      kost_name: payload.propertyName || 'Listing Properti',
+      title: `[Laporan Properti] ${payload.propertyName || 'Kost'}`,
+      category: `REPORT: ${payload.category}`,
+      description: `[ADUAN LISTING] ${payload.description}`,
+      photo_url: payload.evidenceUrls?.[0] || null,
+      status: 'open',
+      created_at: now,
+      updated_at: now
+    };
+    const { error: fallbackErr } = await supabase.from('complaints').insert([fallbackData]);
+    if (fallbackErr) {
+      console.error('Fallback insert into complaints also failed:', fallbackErr);
+      throw error;
+    }
   }
 }

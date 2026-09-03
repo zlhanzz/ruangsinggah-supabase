@@ -42,6 +42,7 @@ export interface RoomType {
   features: string[]; // General specs/highlights (e.g. "Termasuk Listrik", "Lantai 1")
   roomFacilities: string[]; // Specific room items (e.g. "Kasur", "Lemari")
   bathroomFacilities: string[]; // Bathroom specifics
+  kitchenFacilities?: string[]; // Kitchen specifics (if Dapur Dalam)
   isAvailable?: boolean; // Availability status
   availableRoomCount?: number; // Number of available rooms for this type
   maxOccupants?: number; // Maximum number of occupants allowed
@@ -86,6 +87,7 @@ export interface Kost {
   updatedAt?: string;
 
   // App specific fields
+  province?: string;
   city: string;
   area: string;
   type: 'Putra' | 'Putri' | 'Campur';
@@ -123,15 +125,20 @@ export interface Kost {
   // KostManager / Management Type
   managed_by?: 'self' | 'kostmanager';
 
-  // Photo categories from survey
+  // Photo categories and metadata from survey / mitra input
   photoCategories?: string[];
   categorizedPhotos?: Record<string, string[]>;
+  photosMeta?: ImageUrlObject[];
 }
 
 export interface ImageUrlObject {
   original: string;
+  url?: string;
   webp?: string;
   thumbnail?: string;
+  label?: string;
+  category?: string;
+  caption?: string;
 }
 
 export interface DatabaseProduct {
@@ -315,3 +322,10 @@ export interface KostManagerPackage {
   is_active: boolean;
 }
 
+export interface MitraPromoPopupSetting {
+  is_active: boolean;
+  title?: string;
+  image_url?: string;
+  link_url?: string;
+  alt_text?: string;
+}

@@ -27,6 +27,7 @@ import { sendNotification, notifySurveyStatusUpdate } from '../notificationServi
 import { notifyAdminTransaction } from '../emailService';
 import Listings from './Listings';
 import AnalyticsView from '../components/admin/AnalyticsView';
+import PropertyManagement from '../components/admin/PropertyManagement';
 import AgentManagement from '../components/admin/AgentManagement';
 import MitraManagement from '../components/admin/MitraManagement';
 import UserManagement from '../components/admin/UserManagement';
@@ -115,8 +116,10 @@ const LocationPicker: React.FC<{ lat: number; lng: number; onLocationChange: (la
                 const addressStr = result.formatted_address;
                 const components = result.address_components || [];
                 const getComp = (type: string) => components.find((c: any) => c.types.includes(type))?.long_name || '';
-                const city = getComp('locality') || getComp('administrative_area_level_2') || getComp('administrative_area_level_1');
-                const area = getComp('sublocality_level_1') || getComp('sublocality') || getComp('neighborhood');
+                const rawCity = getComp('administrative_area_level_2') || getComp('locality') || getComp('administrative_area_level_1');
+                const rawArea = getComp('administrative_area_level_3') || getComp('sublocality_level_1') || getComp('sublocality') || getComp('neighborhood');
+                const city = rawCity.replace(/^(Kota\s+Administrasi\s+|Kota\s+|Kabupaten\s+|Kab\.\s+)/i, '').trim();
+                const area = rawArea.replace(/^(Kecamatan\s+|Kec\.\s+)/i, '').trim();
                 setSearchQuery(addressStr);
                 onLocationChange(latVal, lngVal, addressStr, city, area);
             } else {
@@ -184,8 +187,10 @@ const LocationPicker: React.FC<{ lat: number; lng: number; onLocationChange: (la
                 marker.setPosition({ lat: newLat, lng: newLng });
                 const components = place.address_components || [];
                 const getComp = (type: string) => components.find((c: any) => c.types.includes(type))?.long_name || '';
-                const city = getComp('locality') || getComp('administrative_area_level_2') || getComp('administrative_area_level_1');
-                const area = getComp('sublocality_level_1') || getComp('sublocality') || getComp('neighborhood');
+                const rawCity = getComp('administrative_area_level_2') || getComp('locality') || getComp('administrative_area_level_1');
+                const rawArea = getComp('administrative_area_level_3') || getComp('sublocality_level_1') || getComp('sublocality') || getComp('neighborhood');
+                const city = rawCity.replace(/^(Kota\s+Administrasi\s+|Kota\s+|Kabupaten\s+|Kab\.\s+)/i, '').trim();
+                const area = rawArea.replace(/^(Kecamatan\s+|Kec\.\s+)/i, '').trim();
                 setSearchQuery(place.formatted_address || '');
                 onLocationChange(newLat, newLng, place.formatted_address || '', city, area);
             });
@@ -2070,8 +2075,8 @@ const Dashboard: React.FC<DashboardProps> = ({ role, uid, user, onPageChange, on
 
 
     const renderSidebar = () => (
-        <aside className="w-64 bg-white border-r border-gray-200 min-h-[calc(100vh-80px)] hidden md:flex flex-col sticky top-20 z-10">
-            <div className="p-6 border-b border-gray-100">
+        <aside className="w-64 bg-white border-r border-gray-200 h-screen sticky top-0 z-20 hidden md:flex flex-col shrink-0">
+            <div className="p-6 border-b border-gray-100 shrink-0">
                 <h2 className="text-xl font-black text-gray-900 uppercase tracking-tight">
                     {isAdmin ? 'Admin Panel' : isOwner ? 'Owner Panel' : 'Agent Panel'}
                 </h2>
@@ -2087,7 +2092,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, uid, user, onPageChange, on
                     </button>
                 )}
             </div>
-            <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
+            <nav className="flex-1 p-4 space-y-1 overflow-y-auto overscroll-contain select-none scrollbar-thin scrollbar-thumb-gray-200 hover:scrollbar-thumb-gray-300">
                 {/* --- KATALOG UTAMA --- */}
                 <div className="pb-2">
                     <p className="px-3 text-[10px] font-black text-gray-400 uppercase tracking-widest">Katalog Utama</p>
@@ -2726,7 +2731,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, uid, user, onPageChange, on
             {/* SIDEBAR DESKTOP */}
             {(isAdmin || isOwner) && renderSidebar()}
 
-            <div className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto">
+            <div className="flex-1 min-w-0 p-4 sm:p-6 lg:p-8 overflow-y-auto">
                 <div className="max-w-7xl mx-auto">
                     {loading ? (
                         <div className="text-center py-20"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500 mx-auto"></div></div>
@@ -2750,87 +2755,14 @@ const Dashboard: React.FC<DashboardProps> = ({ role, uid, user, onPageChange, on
                                     )}
                                     
                                     {activeMenu === 'properties' && (
-                                        <>
-                                            <div className="flex justify-end mb-4">
-                                                <button
-                                                    onClick={openAddModal}
-                                                    className="bg-orange-500 text-white px-6 py-3 rounded-xl font-bold hover:bg-orange-600 transition-all shadow-lg active:scale-95 flex items-center gap-2"
-                                                >
-                                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
-                                                    Tambah Kost
-                                                </button>
-                                            </div>
-                                            <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm">
-                                                <div className="overflow-x-auto">
-                                                    <table className="w-full text-left text-sm text-gray-500">
-                                                        <thead className="bg-gray-50/50 text-xs font-black text-gray-500 uppercase tracking-widest">
-                                                            <tr>
-                                                                <th className="px-6 py-4">Info Kost</th>
-                                                                <th className="px-6 py-4">Lokasi</th>
-                                                                <th className="px-6 py-4">Pemilik</th>
-                                                                <th className="px-6 py-4">Harga /Bulan</th>
-                                                                <th className="px-6 py-4">Status</th>
-                                                                <th className="px-6 py-4 text-right">Aksi</th>
-                                                            </tr>
-                                                        </thead>
-                                                        <tbody className="divide-y divide-gray-50">
-                                                            {displayListings.map(item => (
-                                                                <tr key={item.id} className="hover:bg-gray-50/50 transition-colors">
-                                                                    <td className="px-6 py-4">
-                                                                        <div className="flex items-center gap-3">
-                                                                            <img
-                                                                                src={item.imageUrls?.[0] || 'https://via.placeholder.com/100'}
-                                                                                alt={item.title}
-                                                                                className="w-12 h-12 rounded-lg object-cover bg-gray-100"
-                                                                            />
-                                                                            <div>
-                                                                                <p className="font-bold text-gray-900">{item.title}</p>
-                                                                                <p className="text-xs text-gray-400 mt-0.5">{item.type}</p>
-                                                                            </div>
-                                                                        </div>
-                                                                    </td>
-                                                                    <td className="px-6 py-4">
-                                                                        <p className="font-medium text-gray-900">{item.city}</p>
-                                                                        <p className="text-xs text-gray-400 mt-0.5">{item.area}</p>
-                                                                    </td>
-                                                                    <td className="px-6 py-4">
-                                                                        <div className="flex flex-col">
-                                                                            <p className="font-bold text-gray-900">{item.ownerName || 'Admin'}</p>
-                                                                            {item.ownerRole && ['owner', 'mitra'].includes(item.ownerRole.toLowerCase()) && (
-                                                                                <span className="inline-flex mt-1 text-[8px] font-black uppercase tracking-widest text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded w-fit border border-emerald-100">Mitra Dashboard</span>
-                                                                            )}
-                                                                        </div>
-                                                                    </td>
-                                                                    <td className="px-6 py-4 font-bold text-gray-900">
-                                                                        {FORMAT_CURRENCY(item.price)}
-                                                                    </td>
-                                                                    <td className="px-6 py-4">
-                                                                        <span className={`inline-flex px-2 py-1 text-[10px] font-bold uppercase tracking-wider rounded-md ${item.status === 'published' ? 'bg-green-100 text-green-700' :
-                                                                            item.status === 'draft' ? 'bg-gray-100 text-gray-600' : 'bg-orange-100 text-orange-700'
-                                                                            }`}>
-                                                                            {item.status || 'Active'}
-                                                                        </span>
-                                                                    </td>
-                                                                    <td className="px-6 py-4">
-                                                                        <div className="flex justify-end gap-2">
-                                                                            <button onClick={() => window.open(`/kost/${item.id}`, '_blank')} className="px-3 py-1.5 rounded-lg text-xs font-bold text-blue-600 bg-blue-50 hover:bg-blue-100 transition-colors">Kunjungi</button>
-                                                                            {isAdmin && (
-                                                                                <button onClick={() => handleOpenTransferModal('property', item)} className="px-3 py-1.5 rounded-lg text-xs font-bold text-emerald-600 bg-emerald-50 hover:bg-emerald-100 transition-colors">Transfer</button>
-                                                                            )}
-                                                                            <button onClick={() => openEditModal(item)} className="px-3 py-1.5 rounded-lg text-xs font-bold text-orange-600 bg-orange-50 hover:bg-orange-100 transition-colors">Edit</button>
-                                                                            <button onClick={() => handleDelete(item.id, 'kost', item.title)} className="px-3 py-1.5 rounded-lg text-xs font-bold text-red-600 bg-red-50 hover:bg-red-100 transition-colors">Hapus</button>
-                                                                        </div>
-                                                                    </td>
-                                                                </tr>
-                                                            ))}
-                                                            {displayListings.length === 0 && (
-                                                                <tr><td colSpan={6} className="px-6 py-8 text-center text-gray-400 font-medium">Belum ada data kost.</td></tr>
-                                                            )}
-                                                        </tbody>
-                                                    </table>
-                                                </div>
-                                            </div>
-                                        </>
+                                        <PropertyManagement 
+                                            adminListings={adminListings}
+                                            loading={loading}
+                                            refreshData={loadProperties}
+                                            FORMAT_CURRENCY={FORMAT_CURRENCY}
+                                            onTransferProperty={(prop) => handleOpenTransferModal('property', prop)}
+                                            onDeleteProperty={(id, name) => handleDelete(id, 'kost', name)}
+                                        />
                                     )}
 
                                     {activeMenu === 'verification' && isAdmin && (
@@ -3002,95 +2934,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, uid, user, onPageChange, on
                         )}
                     </div>
 
-                {/* MODAL PROPERTY FORM */}
-                {isModalOpen && activeMenu === 'properties' && (
-                    <div className="fixed inset-0 z-50 flex items-center justify-center p-0 sm:p-4 overflow-hidden">
 
-                        <div className="absolute inset-0 bg-gray-900/80 backdrop-blur-sm" onClick={() => setIsModalOpen(false)}></div>
-                        <div className="bg-white w-full h-full sm:h-auto sm:max-w-6xl sm:max-h-[90vh] sm:rounded-[2.5rem] shadow-2xl relative flex flex-col overflow-hidden animate-in zoom-in-95">
-
-                            {/* Header */}
-                            <div className="p-6 sm:p-8 border-b border-gray-100 flex justify-between items-center bg-white z-20">
-                                <h2 className="text-xl sm:text-2xl font-black text-gray-900 uppercase tracking-tight">{editingId ? 'Edit Properti' : 'Tambah Properti Baru'}</h2>
-                                <button onClick={() => setIsModalOpen(false)} className="p-2 hover:bg-gray-100 rounded-full text-gray-400 transition-colors">
-                                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-                                </button>
-                            </div>
-
-                            {/* Content Body - Split View */}
-                            <div className="flex flex-col md:flex-row flex-grow overflow-hidden relative">
-
-                                {/* Desktop Sidebar Navigation */}
-                                <div className="hidden md:flex flex-col w-72 bg-gray-50 border-r border-gray-100 overflow-y-auto shrink-0">
-                                    <div className="p-4 space-y-1">
-                                        {sections.map(tab => (
-                                            <button
-                                                key={tab.id}
-                                                type="button"
-                                                onClick={() => setActiveTab(tab.id)}
-                                                className={`w-full text-left px-6 py-4 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${activeTab === tab.id
-                                                    ? 'bg-white text-orange-600 shadow-sm border border-gray-100'
-                                                    : 'text-gray-400 hover:bg-white/50 hover:text-gray-600'
-                                                    }`}
-                                            >
-                                                {tab.label}
-                                            </button>
-                                        ))}
-                                    </div>
-                                </div>
-
-                                {/* Form Area */}
-                                <div className="flex-1 overflow-y-auto bg-white relative">
-                                    <form onSubmit={handleSubmit} className="min-h-full flex flex-col">
-
-                                        {/* Mobile Accordion & Desktop Content Wrapper */}
-                                        <div className="flex-grow p-6 sm:p-10 space-y-4">
-                                            {sections.map(section => (
-                                                <div key={section.id} className="md:hidden border border-gray-100 rounded-2xl overflow-hidden">
-                                                    {/* Mobile Header Toggle */}
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => setActiveTab(activeTab === section.id ? '' : section.id)}
-                                                        className={`w-full flex items-center justify-between p-5 text-left transition-colors ${activeTab === section.id ? 'bg-orange-50 text-orange-600' : 'bg-white text-gray-700'
-                                                            }`}
-                                                    >
-                                                        <span className="text-xs font-black uppercase tracking-widest">{section.label}</span>
-                                                        <svg className={`w-4 h-4 transition-transform ${activeTab === section.id ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
-                                                    </button>
-
-                                                    {/* Mobile Content */}
-                                                    <div className={`${activeTab === section.id ? 'block' : 'hidden'} border-t border-gray-100 bg-white p-5`}>
-                                                        {renderSectionContent(section.id)}
-                                                    </div>
-                                                </div>
-                                            ))}
-
-                                            {/* Desktop Visible Content */}
-                                            <div className="hidden md:block">
-                                                {renderSectionContent(activeTab)}
-                                            </div>
-                                        </div>
-
-                                        {/* Sticky Footer */}
-                                        <div className="p-6 sm:p-8 border-t border-gray-100 bg-white/95 backdrop-blur-sm sticky bottom-0 z-10 flex justify-between gap-4 mt-auto">
-                                            {editingId && (
-                                                <button type="button" onClick={handleDeleteFromModal} className="px-6 py-3 rounded-xl font-bold text-red-500 hover:bg-red-50 transition-colors">
-                                                    Hapus Properti
-                                                </button>
-                                            )}
-                                            <div className="flex gap-4 ml-auto">
-                                                <button type="button" onClick={() => setIsModalOpen(false)} className="px-6 py-3 rounded-xl font-bold text-gray-500 hover:bg-gray-50 transition-colors">Batal</button>
-                                                <button type="submit" disabled={isSubmitting} className="px-8 py-3 bg-orange-500 text-white rounded-xl font-bold hover:bg-orange-600 transition-colors shadow-lg shadow-orange-100 active:scale-95">
-                                                    {isSubmitting ? 'Menyimpan...' : 'Simpan Properti'}
-                                                </button>
-                                            </div>
-                                        </div>
-                                    </form>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                )}
 
 
 
