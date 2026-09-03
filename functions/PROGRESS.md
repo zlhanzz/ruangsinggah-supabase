@@ -2,6 +2,29 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 308. Kendali Cepat Update Jumlah Kamar Tersedia di Menu "Kost Saya" (`MitraDashboard.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  - Pemilik kost sebelumnya harus masuk ke wizard form pengeditan total 6 langkah (`KostFormMitra`) hanya untuk mengubah jumlah kamar kosong/tersedia.
+  - Pengguna meminta kontrol cepat langsung pada kartu listing properti di menu *"Kost Saya"* agar ketersediaan kamar dapat diperbarui dalam hitungan detik.
+- **Implementasi Solusi**:
+  1. **Logika Update Cepat Instan (`handleQuickUpdateRooms`)**:
+     - Mengembangkan fungsi mutasi cepat yang memperbarui `room_types` di Supabase dan menyinkronkan state `properties` lokal secara optimistik (0ms delay).
+     - Otomatis memperbarui field `availableRoomCount` dan status `isAvailable` (`count > 0`).
+  2. **Widget Stepper Cepat pada Kartu Listing Kost**:
+     - Menyematkan section kendali ketersediaan unit di bawah info Harga/Bulan & Rating pada kartu properti.
+     - Dilengkapi badge status dinamis (*🟢 X Kamar Kosong* / *🔴 Kamar Penuh*).
+     - Tombol stepper interaktif `[-]` dan `[+]` yang dapat diklik langsung untuk menambah/mengurangi kamar kosong tanpa reload halaman.
+  3. **Modal Cepat Multi Tipe Kamar (*Quick Room Manager Modal*)**:
+     - Untuk kost dengan lebih dari 1 tipe kamar, disediakan tombol `[ Atur per Tipe Kamar ⚡ ]` yang membuka modal ringkas untuk menyesuaikan ketersediaan masing-masing tipe kamar secara independen.
+  4. **Bebas FOUT**:
+     - 100% menggunakan pure bundled vector SVG `lucide-react` (`<Bed />`, `<Zap />`, `<X />`).
+- **File Tersentuh**:
+  - `functions/public/pages/MitraDashboard.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi build Vite `cmd /c npm run build` di `functions/public/` lulus 100% (✓ 2509 modules transformed, built in 1m 23s, 0 error).
+
 ### 307. Pembersihan Kartu Promosi KostManager dari Sidebar Dashboard Mitra (`MitraDashboard.tsx`) (September 2026)
 - **Permintaan & Masalah**:
   - Pengguna merasa tampilan kartu promosi oranye *"KostManager Auto-Pilot"* di bagian bawah sidebar navigasi terasa sesak dan mengganggu alur navigasi menu utama pemilik kost.

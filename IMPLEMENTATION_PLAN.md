@@ -1,36 +1,51 @@
-# IMPLEMENTATION PLAN: Pembersihan Kartu Promosi KostManager dari Sidebar Dashboard Mitra
+# IMPLEMENTATION PLAN: Kendali Cepat Update Jumlah Kamar Tersedia di Menu "Kost Saya"
 
 ## 1. Analisis Masalah & Kebutuhan
-- **Masalah**:
-  - Terdapat kartu promosi berwarna oranye *"KostManager Auto-Pilot"* yang disematkan di bagian bawah sidebar (di atas tombol *Keluar Akun*).
-  - Tampilan ini membuat tata letak navigasi sidebar terasa sesak dan mengganggu fokus pemilik kost saat mengakses menu utama.
+- **Kebutuhan Pengguna**:
+  - Saat ini, jika pemilik kost ingin mengubah jumlah kamar yang kosong/tersedia (misal ada penyewa baru masuk atau keluar), pemilik kost harus mengklik tombol Edit $\rightarrow$ masuk ke wizard formulir raksasa 6-langkah (`KostFormMitra`) $\rightarrow$ mencari langkah tipe kamar $\rightarrow$ mengubah angka $\rightarrow$ lalu menyimpan seluruh formulir.
+  - Pengguna meminta adanya **kendali cepat** langsung pada kartu properti di tab **"Kost Saya"** agar perubahan jumlah kamar kosong dapat dilakukan dalam hitungan detik tanpa perlu membuka form edit total.
+
 - **Tujuan Pengembangan**:
-  - Menghapus sepenuhnya komponen kartu promosi KostManager dari sidebar desktop dan drawer mobile pada `MitraDashboard.tsx`.
-  - Mengembalikan tampilan sidebar navigasi yang bersih, luas, rapi, dan profesional.
+  - Menyematkan widget kendali cepat ketersediaan kamar pada setiap kartu properti di tab *"Kost Saya"*.
+  - Menyediakan stepper interaktif `[-]` dan `[+]` yang langsung meng-update data ketersediaan kamar di Supabase dan state lokal secara instan (0ms delay / optimistic update).
+  - Menyediakan modal ringkas (*Quick Room Manager Modal*) jika kost memiliki banyak tipe kamar (multi-type).
 
 ---
 
 ## 2. Dampak Perubahan
 - **Berkas yang Dimodifikasi**:
   - `functions/public/pages/MitraDashboard.tsx`:
-    - Menghapus blok kartu promosi KostManager pada Desktop Sidebar.
-    - Menghapus blok kartu promosi KostManager pada Mobile Drawer Sidebar.
+    - Menambahkan state dan fungsi mutasi cepat `handleQuickUpdateRooms(kostId: string, newCount: number, roomTypeIdx?: number)`.
+    - Menambahkan antarmuka kendali cepat (*Quick Room Stepper*) pada kartu properti non-KostManager di tab *"Kost Saya"*.
+    - Menambahkan modal dialog ringkas untuk properti dengan multi tipe kamar.
 
 ---
 
 ## 3. Langkah-Langkah Eksekusi
-1. **Modifikasi `MitraDashboard.tsx`**:
-   - Menghapus elemen JSX kartu promosi KostManager di Desktop Sidebar (sebelum tombol logout).
-   - Menghapus elemen JSX kartu promosi KostManager di Mobile Drawer Sidebar.
-2. **Kompilasi & Build**:
+1. **Penyusunan Logika Update Cepat di `MitraDashboard.tsx`**:
+   - Membuat fungsi `handleQuickUpdateRooms(kostId: string, newCount: number, roomTypeIdx?: number)`:
+     - Menghitung array `room_types` baru dengan `availableRoomCount = newCount` dan `isAvailable = newCount > 0`.
+     - Memperbarui state lokal `properties` secara optimistik agar UI seketika berubah.
+     - Mengirim update ke Supabase tabel `properties` pada kolom `room_types` dan `updated_at`.
+2. **Penyematan Antarmuka Kendali Cepat pada Kartu Kost**:
+   - Di dalam kartu properti (di bawah info Harga & Rating):
+     - Menampilkan section ketersediaan kamar dengan badge status (*🟢 X Kamar Kosong* atau *🔴 Kamar Penuh*).
+     - Untuk kost 1 tipe kamar: Stepper interaktif `[-]` `{X Kamar}` `[+]` yang dapat diklik langsung.
+     - Untuk kost multi tipe kamar: Menampilkan rincian per tipe kamar dan tombol `[ Atur per Tipe Kamar ⚡ ]`.
+3. **Penyediaan Modal Ringkas Multi-Tipe Kamar**:
+   - Modal ringkas untuk menyesuaikan ketersediaan masing-masing tipe kamar secara independen.
+4. **Kompilasi & Build**:
    - Menjalankan `cmd /c npm run build` di `functions/public/` untuk memastikan 0 error kompilasi.
-3. **Pencatatan Progres & Git Push**:
-   - Mencatat progres nomor 307 di `functions/PROGRESS.md`.
+5. **Pencatatan Progres & Git Push**:
+   - Mencatat progres nomor 308 di `functions/PROGRESS.md`.
    - Memperbarui `WALKTHROUGH.md`.
    - Melakukan commit dan push ke branch `bukan-productions`.
 
 ---
 
 ## 4. Rencana Verifikasi
-- Membuka Dashboard Mitra (`/dashboard-mitra`).
-- Memastikan sidebar kiri desktop dan drawer mobile kembali bersih, hanya berisi menu navigasi dan tombol keluar akun di bagian bawah.
+- Buka tab **"Kost Saya"** di Dashboard Mitra (`/dashboard-mitra/properties`):
+  - Periksa kartu kost: Terdapat widget kendali cepat kamar.
+  - Klik tombol `[+]` $\rightarrow$ Jumlah kamar kosong bertambah dan tersimpan instan.
+  - Klik tombol `[-]` $\rightarrow$ Jumlah kamar kosong berkurang (jika 0 berubah menjadi badge merah *Kamar Penuh*).
+  - Buka halaman preview detail kost $\rightarrow$ Verifikasi jumlah kamar kosong di sisi publik otomatis sesuai dengan angka baru.

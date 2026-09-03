@@ -159,6 +159,8 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
     const [promoPopupSetting, setPromoPopupSetting] = useState<MitraPromoPopupSetting | null>(null);
     const [showPromoPopup, setShowPromoPopup] = useState(false);
     const [isStartingFresh, setIsStartingFresh] = useState(false);
+    const [quickRoomModalKost, setQuickRoomModalKost] = useState<Kost | null>(null);
+    const [updatingRoomKostId, setUpdatingRoomKostId] = useState<string | null>(null);
     const draftStorageKey = useMemo(() => uid ? `kost_form_draft_${uid}` : 'kost_form_draft_guest', [uid]);
     const [activeDraft, setActiveDraft] = useState<{
         form: Partial<Kost>;
@@ -727,6 +729,65 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
             onPageChange(target as Page);
         } else {
             navigate(target);
+        }
+    };
+
+    const handleQuickUpdateRooms = async (kostId: string, newAvailableCount: number, roomTypeIndex: number = 0) => {
+        const targetKost = properties.find(p => p.id === kostId);
+        if (!targetKost) return;
+
+        const safeCount = Math.max(0, newAvailableCount);
+        let updatedRoomTypes = [...(targetKost.roomTypes || [])];
+
+        if (updatedRoomTypes.length === 0) {
+            updatedRoomTypes = [{
+                name: 'Kamar Standard',
+                size: '3x3',
+                price: targetKost.price || 0,
+                availableRoomCount: safeCount,
+                isAvailable: safeCount > 0,
+                features: [],
+                roomFacilities: [],
+                bathroomFacilities: []
+            }];
+        } else if (updatedRoomTypes[roomTypeIndex]) {
+            updatedRoomTypes[roomTypeIndex] = {
+                ...updatedRoomTypes[roomTypeIndex],
+                availableRoomCount: safeCount,
+                isAvailable: safeCount > 0
+            };
+        } else {
+            updatedRoomTypes[0] = {
+                ...updatedRoomTypes[0],
+                availableRoomCount: safeCount,
+                isAvailable: safeCount > 0
+            };
+        }
+
+        // Optimistic UI update
+        const newProperties = properties.map(p => p.id === kostId ? { ...p, roomTypes: updatedRoomTypes } : p);
+        setProperties(newProperties);
+        if (quickRoomModalKost && quickRoomModalKost.id === kostId) {
+            setQuickRoomModalKost({ ...quickRoomModalKost, roomTypes: updatedRoomTypes });
+        }
+        setUpdatingRoomKostId(kostId);
+
+        try {
+            const { error } = await supabase
+                .from('properties')
+                .update({
+                    room_types: updatedRoomTypes,
+                    updated_at: new Date().toISOString()
+                })
+                .eq('id', kostId);
+
+            if (error) throw error;
+        } catch (err: any) {
+            console.error('Error updating available rooms:', err);
+            alert('Gagal memperbarui jumlah kamar: ' + err.message);
+            loadData();
+        } finally {
+            setTimeout(() => setUpdatingRoomKostId(null), 500);
         }
     };
 
@@ -1507,16 +1568,86 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                                                         </p>
                                                     </div>
                                                 ) : (
-                                                    <div className="grid grid-cols-2 gap-3 mt-4">
-                                                        <div className="bg-gray-50 rounded-xl p-3 border border-gray-100">
-                                                            <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Harga/Bulan</p>
-                                                            <p className="text-xs font-black text-green-600 mt-0.5">{FORMAT_CURRENCY(p.price)}</p>
+                                                    <>
+                                                        <div className="grid grid-cols-2 gap-3 mt-4">
+                                                            <div className="bg-gray-50 rounded-xl p-3 border border-gray-100">
+                                                                <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Harga/Bulan</p>
+                                                                <p className="text-xs font-black text-green-600 mt-0.5">{FORMAT_CURRENCY(p.price)}</p>
+                                                            </div>
+                                                            <div className="bg-gray-50 rounded-xl p-3 border border-gray-100">
+                                                                <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Rating</p>
+                                                                <p className="text-xs font-black text-gray-900 mt-0.5">⭐ {p.rating}</p>
+                                                            </div>
                                                         </div>
-                                                        <div className="bg-gray-50 rounded-xl p-3 border border-gray-100">
-                                                            <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Rating</p>
-                                                            <p className="text-xs font-black text-gray-900 mt-0.5">⭐ {p.rating}</p>
+
+                                                        {/* ── KENDALI CEPAT KAMAR TERSEDIA ── */}
+                                                        <div className="mt-3.5 p-3 bg-slate-50 border border-slate-200/80 rounded-2xl shadow-2xs">
+                                                            <div className="flex items-center justify-between gap-2 mb-2">
+                                                                <div className="flex items-center gap-1.5">
+                                                                    <Bed size={13} className="text-orange-500" />
+                                                                    <span className="text-[10px] font-black text-gray-800 uppercase tracking-wider">Kamar Tersedia</span>
+                                                                </div>
+                                                                {availRooms > 0 ? (
+                                                                    <span className="px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-emerald-100 text-emerald-700 border border-emerald-200 flex items-center gap-1">
+                                                                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                                                                        {availRooms} Kosong
+                                                                    </span>
+                                                                ) : (
+                                                                    <span className="px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-rose-100 text-rose-700 border border-rose-200 flex items-center gap-1">
+                                                                        <span className="w-1.5 h-1.5 rounded-full bg-rose-500"></span>
+                                                                        Penuh
+                                                                    </span>
+                                                                )}
+                                                            </div>
+
+                                                            {p.roomTypes && p.roomTypes.length > 1 ? (
+                                                                <div className="space-y-1.5">
+                                                                    <div className="text-[10px] text-gray-500 font-semibold flex items-center justify-between px-0.5">
+                                                                        <span>{p.roomTypes.length} Tipe Kamar</span>
+                                                                        <span className="text-orange-600 font-bold">{availRooms} Siap Huni</span>
+                                                                    </div>
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => setQuickRoomModalKost(p)}
+                                                                        className="w-full py-2 px-3 bg-white hover:bg-orange-50 text-orange-600 border border-orange-200 rounded-xl text-[11px] font-black uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 shadow-2xs active:scale-98 cursor-pointer"
+                                                                    >
+                                                                        <Zap size={12} fill="currentColor" /> Atur Kamar per Tipe
+                                                                    </button>
+                                                                </div>
+                                                            ) : (
+                                                                <div className="flex items-center justify-between gap-2 bg-white p-1.5 rounded-xl border border-slate-200/60 shadow-2xs">
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => handleQuickUpdateRooms(p.id, (p.roomTypes?.[0]?.availableRoomCount ?? (p.roomTypes?.[0]?.isAvailable !== false ? 1 : 0)) - 1, 0)}
+                                                                        disabled={(p.roomTypes?.[0]?.availableRoomCount ?? (p.roomTypes?.[0]?.isAvailable !== false ? 1 : 0)) <= 0 || updatingRoomKostId === p.id}
+                                                                        className="w-8 h-8 rounded-lg bg-slate-100 hover:bg-orange-100 text-gray-700 hover:text-orange-600 disabled:opacity-30 disabled:hover:bg-slate-100 disabled:hover:text-gray-700 font-black text-sm flex items-center justify-center transition-all active:scale-95 cursor-pointer disabled:cursor-not-allowed select-none"
+                                                                        title="Kurangi 1 Kamar Kosong"
+                                                                    >
+                                                                        -
+                                                                    </button>
+                                                                    
+                                                                    <div className="flex-1 flex flex-col items-center justify-center">
+                                                                        <span className="text-sm font-black text-gray-900 leading-tight">
+                                                                            {p.roomTypes?.[0]?.availableRoomCount ?? (p.roomTypes?.[0]?.isAvailable !== false ? 1 : 0)} <span className="text-[10px] font-bold text-gray-500">Kamar</span>
+                                                                        </span>
+                                                                        <span className="text-[8px] font-bold text-gray-400 uppercase tracking-widest">
+                                                                            {updatingRoomKostId === p.id ? 'Menyimpan...' : 'Siap Disewa'}
+                                                                        </span>
+                                                                    </div>
+
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => handleQuickUpdateRooms(p.id, (p.roomTypes?.[0]?.availableRoomCount ?? (p.roomTypes?.[0]?.isAvailable !== false ? 1 : 0)) + 1, 0)}
+                                                                        disabled={updatingRoomKostId === p.id}
+                                                                        className="w-8 h-8 rounded-lg bg-orange-500 hover:bg-orange-600 text-white font-black text-sm flex items-center justify-center transition-all shadow-xs shadow-orange-500/20 active:scale-95 cursor-pointer disabled:opacity-50 select-none"
+                                                                        title="Tambah 1 Kamar Kosong"
+                                                                    >
+                                                                        +
+                                                                    </button>
+                                                                </div>
+                                                            )}
                                                         </div>
-                                                    </div>
+                                                    </>
                                                 )}
 
                                                 {/* Info Banner Khusus Properti Dalam Tahap Peninjauan / Revisi */}
@@ -2786,6 +2917,105 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                                 </div>
                             </div>
                         )}
+                    </div>
+                </div>
+            )}
+
+            {/* ── MODAL CEPAT ATUR KAMAR PER TIPE ── */}
+            {quickRoomModalKost && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200">
+                    <div className="relative w-full max-w-md bg-white rounded-3xl shadow-2xl overflow-hidden border border-gray-100 animate-in zoom-in-95 duration-200">
+                        {/* Header */}
+                        <div className="px-6 py-5 border-b border-gray-100 flex items-center justify-between bg-gradient-to-r from-orange-50/60 to-white">
+                            <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-2xl bg-orange-500 text-white flex items-center justify-center shadow-md shadow-orange-500/20">
+                                    <Bed size={18} />
+                                </div>
+                                <div>
+                                    <h4 className="font-black text-gray-900 text-sm leading-tight uppercase tracking-tight truncate max-w-[240px]">
+                                        {quickRoomModalKost.title}
+                                    </h4>
+                                    <p className="text-[10px] font-bold text-orange-600 uppercase tracking-widest mt-0.5">
+                                        Kendali Cepat Kamar per Tipe
+                                    </p>
+                                </div>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => setQuickRoomModalKost(null)}
+                                className="p-2 rounded-xl text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors cursor-pointer"
+                            >
+                                <X size={18} />
+                            </button>
+                        </div>
+
+                        {/* Content: List Room Types */}
+                        <div className="p-6 space-y-4 max-h-[60vh] overflow-y-auto">
+                            <p className="text-xs text-gray-500 font-medium">
+                                Atur jumlah kamar kosong untuk masing-masing tipe kamar. Perubahan langsung tersimpan ke database.
+                            </p>
+
+                            <div className="space-y-3">
+                                {(quickRoomModalKost.roomTypes || []).map((rt: any, idx: number) => {
+                                    const count = Number(rt.availableRoomCount ?? (rt.isAvailable !== false ? 1 : 0));
+                                    const isAvail = count > 0 && rt.isAvailable !== false;
+
+                                    return (
+                                        <div key={idx} className="p-4 bg-slate-50 rounded-2xl border border-slate-200/80 flex items-center justify-between gap-3">
+                                            <div className="min-w-0 flex-1">
+                                                <h5 className="font-black text-gray-900 text-xs uppercase tracking-tight truncate">
+                                                    {rt.name || `Tipe Kamar ${idx + 1}`}
+                                                </h5>
+                                                <div className="flex items-center gap-2 mt-1">
+                                                    <span className="text-[11px] font-black text-emerald-600">
+                                                        {FORMAT_CURRENCY(rt.price || quickRoomModalKost.price || 0)}
+                                                    </span>
+                                                    <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider ${isAvail ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
+                                                        {isAvail ? `${count} Tersedia` : 'Penuh'}
+                                                    </span>
+                                                </div>
+                                            </div>
+
+                                            {/* Stepper */}
+                                            <div className="flex items-center gap-2 bg-white p-1.5 rounded-xl border border-slate-200/60 shadow-2xs">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleQuickUpdateRooms(quickRoomModalKost.id, count - 1, idx)}
+                                                    disabled={count <= 0 || updatingRoomKostId === quickRoomModalKost.id}
+                                                    className="w-8 h-8 rounded-lg bg-slate-100 hover:bg-orange-100 text-gray-700 hover:text-orange-600 disabled:opacity-30 disabled:hover:bg-slate-100 font-black text-sm flex items-center justify-center transition-all active:scale-95 cursor-pointer disabled:cursor-not-allowed select-none"
+                                                >
+                                                    -
+                                                </button>
+
+                                                <span className="w-8 text-center text-sm font-black text-gray-900">
+                                                    {count}
+                                                </span>
+
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleQuickUpdateRooms(quickRoomModalKost.id, count + 1, idx)}
+                                                    disabled={updatingRoomKostId === quickRoomModalKost.id}
+                                                    className="w-8 h-8 rounded-lg bg-orange-500 hover:bg-orange-600 text-white font-black text-sm flex items-center justify-center transition-all shadow-xs active:scale-95 cursor-pointer disabled:opacity-50 select-none"
+                                                >
+                                                    +
+                                                </button>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+
+                        {/* Footer */}
+                        <div className="px-6 py-4 bg-gray-50 border-t border-gray-100 flex items-center justify-end">
+                            <button
+                                type="button"
+                                onClick={() => setQuickRoomModalKost(null)}
+                                className="px-6 py-2.5 bg-gray-900 hover:bg-black text-white text-xs font-black uppercase tracking-wider rounded-xl transition-all shadow-md active:scale-95 cursor-pointer"
+                            >
+                                Selesai
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}
