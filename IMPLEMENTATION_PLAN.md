@@ -1,26 +1,30 @@
-# IMPLEMENTATION PLAN: Redesain UI/UX Halaman Profil Mode Desktop Presisi Mockup
+# IMPLEMENTATION PLAN: Penyesuaian UI/UX Halaman Profil Mode Mobile Presisi Mockup Google Stitch
 
 ## 1. Analisis Masalah & Kebutuhan
 - **Kondisi Saat Ini**:
-  - Halaman profil (`Profile.tsx`) saat ini menggunakan layout kartu tunggal vertikal lama yang kurang optimal di layar desktop lebar.
-  - Terdapat beberapa elemen teks/ikon yang tumpang tindih (*overlapping*), seperti breadcrumb header, badge status administrator, dan tombol aksi bawah.
-- **Kebutuhan Desain Baru (Mockup Referensi)**:
-  - **Header & Breadcrumbs**:
-    - Breadcrumb yang bersih: `/ Pengaturan Akun / Profil {RoleTitle}`.
-    - Judul halaman tebal dengan badge role (*Super Admin*, *Pemilik Kost*, *Pencari Kost*, *Agen Survey*).
-    - Subjudul deskriptif dan tombol aksi kanan atas (*Kembali ke Beranda* & *Edit Profil*).
-  - **Kolom Kiri (Kartu Profil Sticky, `lg:col-span-4`)**:
-    - Header cover bergradasi oranye dengan badge `SISTEM UTAMA` / `AKUN AKTIF`.
-    - Lingkaran avatar besar (`w-28 h-28`) dengan inisial/foto WebP jernih + badge centang verifikasi.
-    - Nama pengguna, icon terverifikasi, email, dan badge pill *Terverifikasi*.
-    - Grid 4-box ringkasan meta (*Role Otoritas*, *Status Akun*, *Bergabung*, *Tingkat Akses*).
-    - Tombol aksi: `Edit Profil Sekarang` (dark navy) dan `Ganti Kata Sandi` (outlined dengan modal interaktif).
-  - **Kolom Kanan (Panel Rincian Data, `lg:col-span-8 space-y-6`)**:
-    - **Kartu 1 - Informasi Kontak & Pekerjaan**: Grid 2x2 field (*No. WhatsApp* + badge hijau Aktif, *Pekerjaan*, *Nama Kampus/Tempat Kerja*, *Jenis Kelamin*).
-    - **Kartu 2 - Data Kelahiran & Domisili**: Grid 2x2 (*Agama*, *Status Hubungan*, *Tempat Lahir*, *Tanggal Lahir*) + *Alamat Asal / Domisili Lengkap* (full-width).
-    - **Kartu 3 (Khusus Agen)**: Panel verifikasi KTP (NIK & Foto KTP) untuk role `survey_agent`.
-    - **Kartu 4 - Banner Wewenang & Status Terverifikasi**: Banner informasi elegan dengan badge `Resmi` tanpa teks bertumpuk.
-    - **Bottom Action Buttons**: Tombol *Kembali* dan *Edit Profil* / *Simpan Perubahan* & *Batal*.
+  - Tampilan desktop telah disempurnakan menjadi 2-kolom, namun pada viewport mobile (`< lg`) tampilan form dan kartu masih perlu dioptimalkan agar 100% presisi dengan mockup mobile Google Stitch yang diberikan pengguna.
+- **Kebutuhan Desain Mobile (Mockup Referensi)**:
+  - **1. Card Profil Utama (Mobile Top Card)**:
+    - Cover header gradasi oranye `#ff7a00` tinggi proporsional (`h-28`).
+    - Avatar lingkaran besar (`w-24 h-24`) dengan badge centang verifikasi oranye di sudut bawah.
+    - Nama pengguna (`text-lg font-black`), icon verified checkmark, email pengguna, dan badge pill terverifikasi (`Administrator Terverifikasi` / `Pengguna Terverifikasi`).
+  - **2. Banner Administrator / Otoritas Ringkas**:
+    - Box oranye berikon shield di kiri (`w-10 h-10`), judul huruf kapital tebal `ADMINISTRATOR TERVERIFIKASI`, dan deskripsi ringkas tanpa teks terpotong.
+  - **3. Card Informasi Kontak & Pekerjaan**:
+    - Header ber-indikator dot oranye `● INFORMASI KONTAK & PEKERJAAN`.
+    - Field vertikal berlatar belakang lembut `#F8FAFC` dengan border halus:
+      - `NO. WHATSAPP *` (Ikon telepon/chat hijau + nomor telepon).
+      - `PEKERJAAN *` (Nilai teks tebal).
+      - `NAMA KAMPUS / TEMPAT KERJA *`.
+      - `JENIS KELAMIN *`.
+  - **4. Card Identitas & Domisili**:
+    - Header ber-indikator dot slate `● IDENTITAS & DOMISILI`.
+    - Baris 2-kolom untuk `AGAMA *` dan `STATUS *` (Status Hubungan).
+    - Baris full-width untuk `TEMPAT LAHIR`, `TANGGAL LAHIR *`, dan `ALAMAT ASAL *`.
+  - **5. Tombol Aksi Mobile Bawah**:
+    - Tombol utama dark navy `Edit Profil` (dengan ikon pensil oranye).
+    - Tombol sekunder putih dengan border & teks oranye `Kembali`.
+    - Spacing bawah `pb-28` agar tidak tertutup oleh Mobile Bottom Navigation Bar.
 
 ---
 
@@ -28,26 +32,28 @@
 - **File Terdampak**: `functions/public/pages/Profile.tsx`.
 - **Proteksi Logika**:
   - Mempertahankan seluruh logika state (`formData`, `handleSave`, `handlePhotoUpload`, `handleKtpUpload`, `handleCancel`, `handleDeletePhoto`).
-  - Menjaga keutuhan binding database Supabase (`users`, `user_verifications`, Supabase Auth metadata).
-  - Seluruh ikon menggunakan komponen SVG murni dari package `lucide-react` (bebas FOUT 100%).
+  - Menjaga keselarasan tampilan mode Desktop (2-kolom) dan mode Mobile (stacked card) menggunakan breakpoint Tailwind (`hidden lg:block`, `lg:grid-cols-12`, dll.).
+  - Menggunakan ikon vector SVG murni dari `lucide-react` (bebas FOUT 100%).
 
 ---
 
 ## 3. Langkah-Langkah Eksekusi
-1. **Pembaruan Markup & Styling `Profile.tsx`**:
-   - Struktur grid responsif `grid grid-cols-1 lg:grid-cols-12 gap-8`.
-   - Implementasi Sidebar Card Kiri lengkap dengan avatar, role badge, meta grid, dan tombol aksi.
-   - Implementasi Panel Kanan dengan Card Informasi Kontak & Pekerjaan, Card Data Kelahiran & Domisili, dan Banner Otoritas Sistem.
-   - Implementasi Modal Ganti Kata Sandi interaktif (`supabase.auth.updateUser` / `resetPasswordForEmail`).
-   - Penyesuaian mode *View* dan *Edit* agar transisi antar mode berjalan mulus.
+1. **Modifikasi `Profile.tsx`**:
+   - Selaraskan styling komponen pada breakpoint mobile (`< lg`) agar menampilkan:
+     - Top Profile Card dengan avatar, nama, email, dan pill terverifikasi.
+     - Banner status terverifikasi.
+     - Card Informasi Kontak & Pekerjaan dengan dot badge oranye dan input rounded background `#F8FAFC`.
+     - Card Identitas & Domisili dengan dot badge slate.
+     - Tombol aksi mobile `Edit Profil` (dark navy) dan `Kembali` (white with orange border).
+   - Pastikan mode desktop (`lg:`) tetap mempertahankan layout 2-kolom yang sudah rapi.
 
 ---
 
 ## 4. Rencana Verifikasi
 1. **Uji Kompilasi Build**:
    - Menjalankan `cmd /c npm run build` di `functions/public/` untuk memastikan 0 error kompilasi.
-2. **Uji Tampilan & Fungsionalitas**:
-   - Membuka halaman `/profile` pada resolusi desktop (1280px - 1920px) dan memastikan tata letak 2 kolom rapi, proporsional, dan identik dengan mockup.
-   - Menguji mode edit dan penyimpanan data ke Supabase.
+2. **Uji Tampilan & Interaksi Mobile**:
+   - Membuka halaman `/profile` pada resolusi smartphone (375px - 430px) untuk memastikan desain 100% presisi dengan screenshot mockup mobile.
+   - Memastikan pengeditan data dan tombol aksi berfungsi normal.
 3. **Pencatatan & Git Push**:
-   - Mencatat progres pada `functions/PROGRESS.md` (Nomor 286), memperbarui `WALKTHROUGH.md`, dan push ke `bukan-productions`.
+   - Mencatat progres pada `functions/PROGRESS.md` (Nomor 287), memperbarui `WALKTHROUGH.md`, dan push ke `bukan-productions`.

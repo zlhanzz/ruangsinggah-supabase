@@ -377,11 +377,11 @@ const Profile: React.FC<ProfileProps> = ({ user, onLogout, onSaveSuccess, forceE
   };
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] py-8 sm:py-12 font-sans selection:bg-orange-100 selection:text-orange-900 pb-28 sm:pb-16">
+    <div className="min-h-screen bg-[#F8FAFC] py-4 sm:py-8 lg:py-12 font-sans selection:bg-orange-100 selection:text-orange-900 pb-28 sm:pb-16">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         
-        {/* BREADCRUMB & HEADER SECTION */}
-        <div className="mb-8">
+        {/* DESKTOP BREADCRUMB & HEADER SECTION */}
+        <div className="hidden lg:block mb-8">
           <div className="flex items-center gap-2 text-xs font-semibold text-gray-400 mb-3">
             <span className="text-gray-300">/</span>
             <span className="text-gray-500 hover:text-gray-700 cursor-pointer" onClick={() => onBack ? onBack() : navigate(Page.HOME)}>
@@ -449,7 +449,7 @@ const Profile: React.FC<ProfileProps> = ({ user, onLogout, onSaveSuccess, forceE
 
         {/* Force Edit Message Alert */}
         {forceEdit && isEditing && (
-          <div className="mb-8 bg-amber-50 border border-amber-200 p-4 rounded-2xl flex items-start gap-3 shadow-xs">
+          <div className="mb-6 bg-amber-50 border border-amber-200 p-4 rounded-2xl flex items-start gap-3 shadow-xs">
             <AlertCircle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
             <div>
               <p className="font-bold text-amber-900 text-sm">Wajib Dilengkapi</p>
@@ -458,26 +458,26 @@ const Profile: React.FC<ProfileProps> = ({ user, onLogout, onSaveSuccess, forceE
           </div>
         )}
 
-        {/* 2-COLUMN MAIN GRID LAYOUT */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+        {/* MAIN GRID LAYOUT (Responsive Desktop 2-Col & Mobile Stacked) */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 lg:gap-8 items-start">
           
-          {/* LEFT COLUMN: SIDEBAR PROFILE CARD (4 COLS) */}
-          <div className="lg:col-span-4 bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden sticky top-24">
+          {/* LEFT COLUMN: TOP PROFILE CARD (Desktop: Sidebar with 4-box stats & buttons, Mobile: Top Banner Card) */}
+          <div className="lg:col-span-4 bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden lg:sticky lg:top-24">
             
             {/* Header Cover Gradient */}
             <div className="h-28 bg-gradient-to-r from-[#ff7a00] to-[#ea580c] relative p-3 flex justify-end items-start">
-              <span className="px-3 py-1 bg-white/20 backdrop-blur-md text-white text-[10px] font-black uppercase tracking-wider rounded-full border border-white/30 shadow-xs">
+              <span className="hidden lg:inline-block px-3 py-1 bg-white/20 backdrop-blur-md text-white text-[10px] font-black uppercase tracking-wider rounded-full border border-white/30 shadow-xs">
                 {isAdmin ? 'SISTEM UTAMA' : 'AKUN AKTIF'}
               </span>
             </div>
 
             {/* Avatar & Photo Area */}
-            <div className="px-6 pb-6">
+            <div className="px-5 pb-6">
               <div className="-mt-14 flex justify-center relative">
                 <div className="relative group">
-                  <div className="w-28 h-28 rounded-full border-4 border-white shadow-lg bg-[#0b1c30] text-white flex items-center justify-center relative overflow-hidden">
+                  <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-full border-4 border-white shadow-lg bg-[#0b1c30] text-white flex items-center justify-center relative overflow-hidden">
                     {/* Layer 1: Initials */}
-                    <div className="absolute inset-0 flex items-center justify-center text-3xl font-black">
+                    <div className="absolute inset-0 flex items-center justify-center text-2xl sm:text-3xl font-black">
                       {getInitials(formData.displayName)}
                     </div>
                     
@@ -495,7 +495,7 @@ const Profile: React.FC<ProfileProps> = ({ user, onLogout, onSaveSuccess, forceE
                   </div>
 
                   {/* Verified Badge on Avatar */}
-                  <div className="absolute bottom-1 right-1 bg-[#ff7a00] text-white p-1 rounded-full border-2 border-white shadow-sm z-20" title="Akun Terverifikasi">
+                  <div className="absolute bottom-0 right-0 bg-[#ff7a00] text-white p-1 rounded-full border-2 border-white shadow-xs z-20" title="Akun Terverifikasi">
                     <Check className="w-3.5 h-3.5 stroke-[3]" />
                   </div>
 
@@ -533,7 +533,7 @@ const Profile: React.FC<ProfileProps> = ({ user, onLogout, onSaveSuccess, forceE
               </div>
 
               {/* Name & Identity */}
-              <div className="text-center mt-3 mb-4">
+              <div className="text-center mt-3 mb-3">
                 {isEditing ? (
                   <div className="space-y-1">
                     <input
@@ -548,7 +548,7 @@ const Profile: React.FC<ProfileProps> = ({ user, onLogout, onSaveSuccess, forceE
                     <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Edit Nama Tampilan</p>
                   </div>
                 ) : (
-                  <h2 className="text-xl font-black text-gray-900 flex items-center justify-center gap-1.5">
+                  <h2 className="text-lg sm:text-xl font-black text-gray-900 flex items-center justify-center gap-1.5">
                     {formData.displayName || 'Pengguna Tanpa Nama'}
                     <CheckCircle2 className="w-4 h-4 text-[#ff7a00] fill-orange-50 shrink-0" />
                   </h2>
@@ -557,15 +557,15 @@ const Profile: React.FC<ProfileProps> = ({ user, onLogout, onSaveSuccess, forceE
               </div>
 
               {/* Role Badge Pill */}
-              <div className="flex justify-center mb-6">
-                <span className="px-3.5 py-1 bg-orange-50 border border-orange-200 text-[#ff7a00] text-[10px] font-black uppercase tracking-wider rounded-full flex items-center gap-1.5 shadow-2xs">
-                  <Check className="w-3 h-3 text-orange-500 stroke-[3]" />
-                  {isAdmin ? 'ADMINISTRATOR TERVERIFIKASI' : isAgent ? 'AGEN SURVEY TERVERIFIKASI' : isOwner ? 'MITRA PEMILIK KOST' : 'PENGGUNA TERVERIFIKASI'}
+              <div className="flex justify-center mb-1 lg:mb-6">
+                <span className="px-3.5 py-1 bg-orange-50/80 border border-orange-200 text-[#ff7a00] text-[11px] font-bold rounded-full flex items-center gap-1.5 shadow-2xs">
+                  <ShieldCheck className="w-3.5 h-3.5 text-orange-500" />
+                  {isAdmin ? 'Administrator Terverifikasi' : isAgent ? 'Agen Survey Terverifikasi' : isOwner ? 'Mitra Pemilik Kost' : 'Pengguna Terverifikasi'}
                 </span>
               </div>
 
-              {/* 4-Box Meta Grid */}
-              <div className="grid grid-cols-2 gap-2.5 mb-6">
+              {/* Desktop Only: 4-Box Meta Grid */}
+              <div className="hidden lg:grid grid-cols-2 gap-2.5 mb-6">
                 <div className="bg-gray-50/80 rounded-2xl p-3 border border-gray-100">
                   <span className="text-[9px] font-black uppercase tracking-wider text-gray-400 block">ROLE OTORITAS</span>
                   <div className="text-xs font-bold text-gray-800 flex items-center gap-1.5 mt-1 truncate">
@@ -599,8 +599,8 @@ const Profile: React.FC<ProfileProps> = ({ user, onLogout, onSaveSuccess, forceE
                 </div>
               </div>
 
-              {/* Action Buttons in Sidebar */}
-              <div className="space-y-2.5">
+              {/* Desktop Only: Action Buttons in Sidebar */}
+              <div className="hidden lg:block space-y-2.5">
                 {!isEditing ? (
                   <button
                     type="button"
@@ -646,22 +646,48 @@ const Profile: React.FC<ProfileProps> = ({ user, onLogout, onSaveSuccess, forceE
             </div>
           </div>
 
-          {/* RIGHT COLUMN: INFORMATION & SETTINGS PANELS (8 COLS) */}
-          <div className="lg:col-span-8 space-y-6">
+          {/* RIGHT COLUMN: INFORMATION & SETTINGS PANELS (Desktop: 8 Cols, Mobile: Stacked Cards) */}
+          <div className="lg:col-span-8 space-y-4 sm:space-y-6">
 
-            {/* CARD 1: INFORMASI KONTAK & PEKERJAAN */}
-            <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-6 sm:p-8">
-              <div className="flex items-center gap-3.5 mb-6 pb-4 border-b border-gray-50">
-                <div className="w-10 h-10 bg-orange-100/70 text-[#ff7a00] rounded-2xl flex items-center justify-center shrink-0">
-                  <User className="w-5 h-5" />
+            {/* BANNER ADMINISTRATOR / OTORITAS TERVERIFIKASI */}
+            <div className="bg-gradient-to-r from-orange-50/70 to-amber-50/40 border border-orange-200/80 rounded-2xl sm:rounded-3xl p-4 sm:p-6 flex items-start justify-between gap-3 sm:gap-4 relative shadow-2xs">
+              <div className="flex items-start gap-3 sm:gap-4">
+                <div className="w-10 h-10 sm:w-12 sm:h-12 bg-[#ff7a00] text-white rounded-xl sm:rounded-2xl flex items-center justify-center shrink-0 shadow-xs sm:shadow-md sm:shadow-orange-500/20">
+                  <ShieldCheck className="w-5 h-5 sm:w-6 sm:h-6" />
                 </div>
                 <div>
-                  <h3 className="text-base font-black text-gray-900 tracking-tight">Informasi Kontak & Pekerjaan</h3>
-                  <p className="text-xs text-gray-400 font-medium">Detail nomor kontak dan institusi kerja Anda yang terdaftar.</p>
+                  <h4 className="text-xs sm:text-sm font-black text-gray-900 uppercase tracking-tight">
+                    {isAdmin ? 'ADMINISTRATOR TERVERIFIKASI' : isAgent ? 'AGEN SURVEY RESMI' : isOwner ? 'MITRA PEMILIK TERVERIFIKASI' : 'AKUN PENGGUNA TERVERIFIKASI'}
+                  </h4>
+                  <p className="text-[11px] sm:text-xs text-gray-600 leading-relaxed mt-0.5 sm:mt-1">
+                    {isAdmin
+                      ? 'Akun ini memiliki hak akses penuh untuk pengelolaan dan pengawasan sistem.'
+                      : isAgent
+                      ? 'Akses terverifikasi untuk menerima penugasan survey, verifikasi lapangan, dan pelaporan kondisi properti di platform RuangSinggah.id.'
+                      : isOwner
+                      ? 'Akses manajemen properti hunian, manajemen kamar, penagihan sewa, dan penerimaan transaksi sewa kost.'
+                      : 'Akun Anda aktif dan siap digunakan untuk mencari hunian, memesan kost, dan memanfaatkan layanan survey resmi.'}
+                  </p>
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-5">
+              <span className="hidden sm:inline-block px-3 py-1 bg-[#ff7a00] text-white text-[10px] font-black uppercase tracking-wider rounded-full shrink-0 shadow-xs">
+                Resmi
+              </span>
+            </div>
+
+            {/* CARD 1: INFORMASI KONTAK & PEKERJAAN */}
+            <div className="bg-white rounded-2xl sm:rounded-3xl border border-gray-100 shadow-sm p-5 sm:p-8">
+              
+              {/* Header Title with Orange Dot */}
+              <div className="flex items-center gap-2 mb-4 sm:mb-6 sm:pb-4 sm:border-b sm:border-gray-50">
+                <span className="w-2 h-2 rounded-full bg-[#ff7a00] shrink-0"></span>
+                <h3 className="text-xs sm:text-base font-black text-gray-900 uppercase tracking-wider sm:tracking-tight">
+                  INFORMASI KONTAK & PEKERJAAN
+                </h3>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 sm:gap-5">
                 
                 {/* No. WhatsApp */}
                 <div className="space-y-1.5">
@@ -687,16 +713,14 @@ const Profile: React.FC<ProfileProps> = ({ user, onLogout, onSaveSuccess, forceE
                       />
                     </div>
                   ) : (
-                    <div className="p-3.5 bg-gray-50/80 rounded-xl border border-gray-100 flex items-center justify-between">
+                    <div className="px-4 py-3 bg-[#F8FAFC] rounded-xl border border-slate-100 flex items-center justify-between">
                       <div className="flex items-center gap-2.5">
-                        <MessageSquare className="w-4 h-4 text-emerald-500 shrink-0" />
-                        <span className="text-sm font-bold text-gray-900">{formData.phone ? `+62 ${formData.phone}` : '-'}</span>
+                        <Phone className="w-4 h-4 text-emerald-500 shrink-0" />
+                        <span className="text-sm font-bold text-gray-900">{formData.phone ? `+62${formData.phone}` : '-'}</span>
                       </div>
-                      {formData.phone && (
-                        <span className="text-[10px] font-extrabold text-emerald-600 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
-                          Aktif
-                        </span>
-                      )}
+                      <span className="hidden sm:inline-block text-[10px] font-extrabold text-emerald-600 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
+                        Aktif
+                      </span>
                     </div>
                   )}
                 </div>
@@ -718,8 +742,8 @@ const Profile: React.FC<ProfileProps> = ({ user, onLogout, onSaveSuccess, forceE
                       maxLength={100} 
                     />
                   ) : (
-                    <div className="p-3.5 bg-gray-50/80 rounded-xl border border-gray-100 flex items-center gap-2.5">
-                      <Briefcase className="w-4 h-4 text-gray-400 shrink-0" />
+                    <div className="px-4 py-3 bg-[#F8FAFC] rounded-xl border border-slate-100 flex items-center gap-2.5">
+                      <Briefcase className="hidden sm:inline-block w-4 h-4 text-gray-400 shrink-0" />
                       <span className="text-sm font-bold text-gray-900">{formData.occupation || '-'}</span>
                     </div>
                   )}
@@ -742,8 +766,8 @@ const Profile: React.FC<ProfileProps> = ({ user, onLogout, onSaveSuccess, forceE
                       maxLength={150} 
                     />
                   ) : (
-                    <div className="p-3.5 bg-gray-50/80 rounded-xl border border-gray-100 flex items-center gap-2.5">
-                      <Building2 className="w-4 h-4 text-gray-400 shrink-0" />
+                    <div className="px-4 py-3 bg-[#F8FAFC] rounded-xl border border-slate-100 flex items-center gap-2.5">
+                      <Building2 className="hidden sm:inline-block w-4 h-4 text-gray-400 shrink-0" />
                       <span className="text-sm font-bold text-gray-900 truncate">{formData.institution || '-'}</span>
                     </div>
                   )}
@@ -766,8 +790,8 @@ const Profile: React.FC<ProfileProps> = ({ user, onLogout, onSaveSuccess, forceE
                       <option value="Wanita">Wanita</option>
                     </select>
                   ) : (
-                    <div className="p-3.5 bg-gray-50/80 rounded-xl border border-gray-100 flex items-center gap-2.5">
-                      <Users className="w-4 h-4 text-gray-400 shrink-0" />
+                    <div className="px-4 py-3 bg-[#F8FAFC] rounded-xl border border-slate-100 flex items-center gap-2.5">
+                      <Users className="hidden sm:inline-block w-4 h-4 text-gray-400 shrink-0" />
                       <span className="text-sm font-bold text-gray-900">{formData.gender || <span className="text-gray-400 italic">Belum dipilih</span>}</span>
                     </div>
                   )}
@@ -776,19 +800,18 @@ const Profile: React.FC<ProfileProps> = ({ user, onLogout, onSaveSuccess, forceE
               </div>
             </div>
 
-            {/* CARD 2: DATA KELAHIRAN & DOMISILI */}
-            <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-6 sm:p-8">
-              <div className="flex items-center gap-3.5 mb-6 pb-4 border-b border-gray-50">
-                <div className="w-10 h-10 bg-blue-100/70 text-blue-600 rounded-2xl flex items-center justify-center shrink-0">
-                  <MapPin className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="text-base font-black text-gray-900 tracking-tight">Data Kelahiran & Domisili</h3>
-                  <p className="text-xs text-gray-400 font-medium">Informasi identitas kependudukan dan tempat tinggal saat ini.</p>
-                </div>
+            {/* CARD 2: IDENTITAS & DOMISILI */}
+            <div className="bg-white rounded-2xl sm:rounded-3xl border border-gray-100 shadow-sm p-5 sm:p-8">
+              
+              {/* Header Title with Slate Dot */}
+              <div className="flex items-center gap-2 mb-4 sm:mb-6 sm:pb-4 sm:border-b sm:border-gray-50">
+                <span className="w-2 h-2 rounded-full bg-slate-400 shrink-0"></span>
+                <h3 className="text-xs sm:text-base font-black text-gray-900 uppercase tracking-wider sm:tracking-tight">
+                  IDENTITAS & DOMISILI
+                </h3>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-5">
+              <div className="grid grid-cols-2 gap-3 sm:gap-5">
                 
                 {/* Agama */}
                 <div className="space-y-1.5">
@@ -806,8 +829,8 @@ const Profile: React.FC<ProfileProps> = ({ user, onLogout, onSaveSuccess, forceE
                       {religions.map(r => (<option key={r} value={r}>{r}</option>))}
                     </select>
                   ) : (
-                    <div className="p-3.5 bg-gray-50/80 rounded-xl border border-gray-100 flex items-center gap-2.5">
-                      <Sparkles className="w-4 h-4 text-gray-400 shrink-0" />
+                    <div className="px-4 py-3 bg-[#F8FAFC] rounded-xl border border-slate-100 flex items-center gap-2.5">
+                      <Sparkles className="hidden sm:inline-block w-4 h-4 text-gray-400 shrink-0" />
                       <span className="text-sm font-bold text-gray-900">{formData.religion || <span className="text-gray-400 italic">Belum dipilih</span>}</span>
                     </div>
                   )}
@@ -816,7 +839,7 @@ const Profile: React.FC<ProfileProps> = ({ user, onLogout, onSaveSuccess, forceE
                 {/* Status Hubungan */}
                 <div className="space-y-1.5">
                   <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block">
-                    STATUS HUBUNGAN <span className="text-red-500">*</span>
+                    STATUS <span className="text-red-500">*</span>
                   </label>
                   {isEditing ? (
                     <select 
@@ -831,15 +854,15 @@ const Profile: React.FC<ProfileProps> = ({ user, onLogout, onSaveSuccess, forceE
                       <option value="Menikah">Menikah</option>
                     </select>
                   ) : (
-                    <div className="p-3.5 bg-gray-50/80 rounded-xl border border-gray-100 flex items-center gap-2.5">
-                      <Heart className="w-4 h-4 text-gray-400 shrink-0" />
+                    <div className="px-4 py-3 bg-[#F8FAFC] rounded-xl border border-slate-100 flex items-center gap-2.5">
+                      <Heart className="hidden sm:inline-block w-4 h-4 text-gray-400 shrink-0" />
                       <span className="text-sm font-bold text-gray-900">{formData.relationshipStatus || <span className="text-gray-400 italic">Belum dipilih</span>}</span>
                     </div>
                   )}
                 </div>
 
-                {/* Tempat Lahir */}
-                <div className="space-y-1.5">
+                {/* Tempat Lahir (Col Span 2 on Mobile) */}
+                <div className="col-span-2 space-y-1.5">
                   <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block">
                     TEMPAT LAHIR
                   </label>
@@ -853,15 +876,15 @@ const Profile: React.FC<ProfileProps> = ({ user, onLogout, onSaveSuccess, forceE
                       placeholder="Contoh: Makassar, Jakarta, Surabaya" 
                     />
                   ) : (
-                    <div className="p-3.5 bg-gray-50/80 rounded-xl border border-gray-100 flex items-center gap-2.5">
-                      <Building2 className="w-4 h-4 text-gray-400 shrink-0" />
+                    <div className="px-4 py-3 bg-[#F8FAFC] rounded-xl border border-slate-100 flex items-center gap-2.5">
+                      <Building2 className="hidden sm:inline-block w-4 h-4 text-gray-400 shrink-0" />
                       <span className="text-sm font-bold text-gray-900">{formData.birthPlace || '-'}</span>
                     </div>
                   )}
                 </div>
 
-                {/* Tanggal Lahir */}
-                <div className="space-y-1.5">
+                {/* Tanggal Lahir (Col Span 2 on Mobile) */}
+                <div className="col-span-2 space-y-1.5">
                   <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block">
                     TANGGAL LAHIR <span className="text-red-500">*</span>
                   </label>
@@ -876,8 +899,8 @@ const Profile: React.FC<ProfileProps> = ({ user, onLogout, onSaveSuccess, forceE
                       max={new Date().toISOString().split('T')[0]} 
                     />
                   ) : (
-                    <div className="p-3.5 bg-gray-50/80 rounded-xl border border-gray-100 flex items-center gap-2.5">
-                      <Calendar className="w-4 h-4 text-gray-400 shrink-0" />
+                    <div className="px-4 py-3 bg-[#F8FAFC] rounded-xl border border-slate-100 flex items-center gap-2.5">
+                      <Calendar className="hidden sm:inline-block w-4 h-4 text-gray-400 shrink-0" />
                       <span className="text-sm font-bold text-gray-900">
                         {formData.birthDate
                           ? new Date(formData.birthDate).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })
@@ -887,10 +910,10 @@ const Profile: React.FC<ProfileProps> = ({ user, onLogout, onSaveSuccess, forceE
                   )}
                 </div>
 
-                {/* Alamat Asal / Domisili Lengkap (Full Width) */}
-                <div className="space-y-1.5 sm:col-span-2">
+                {/* Alamat Asal / Domisili Lengkap (Col Span 2) */}
+                <div className="col-span-2 space-y-1.5">
                   <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block">
-                    ALAMAT ASAL / DOMISILI LENGKAP <span className="text-red-500">*</span>
+                    ALAMAT ASAL <span className="text-red-500">*</span>
                   </label>
                   {isEditing ? (
                     <textarea 
@@ -904,8 +927,8 @@ const Profile: React.FC<ProfileProps> = ({ user, onLogout, onSaveSuccess, forceE
                       maxLength={500} 
                     />
                   ) : (
-                    <div className="p-3.5 bg-gray-50/80 rounded-xl border border-gray-100 flex items-start gap-2.5 min-h-[4rem]">
-                      <MapPin className="w-4 h-4 text-gray-400 shrink-0 mt-0.5" />
+                    <div className="px-4 py-3 bg-[#F8FAFC] rounded-xl border border-slate-100 flex items-start gap-2.5 min-h-[3.5rem]">
+                      <MapPin className="hidden sm:inline-block w-4 h-4 text-gray-400 shrink-0 mt-0.5" />
                       <span className="text-sm font-bold text-gray-900 leading-relaxed">{formData.address || '-'}</span>
                     </div>
                   )}
@@ -916,18 +939,18 @@ const Profile: React.FC<ProfileProps> = ({ user, onLogout, onSaveSuccess, forceE
 
             {/* KHUSUS AGEN: VERIFIKASI IDENTITAS KTP */}
             {isAgent && (
-              <div className="bg-white rounded-3xl border border-orange-100 shadow-sm p-6 sm:p-8">
+              <div className="bg-white rounded-2xl sm:rounded-3xl border border-orange-100 shadow-sm p-5 sm:p-8">
                 <div className="flex items-center gap-3.5 mb-6 pb-4 border-b border-gray-50">
                   <div className="w-10 h-10 bg-orange-500 text-white rounded-2xl flex items-center justify-center shrink-0 shadow-md shadow-orange-500/20">
                     <ShieldCheck className="w-5 h-5" />
                   </div>
                   <div>
-                    <h3 className="text-base font-black text-gray-900 tracking-tight">Verifikasi Identitas Agen</h3>
+                    <h3 className="text-sm sm:text-base font-black text-gray-900 tracking-tight">Verifikasi Identitas Agen</h3>
                     <p className="text-xs text-orange-600 font-bold uppercase tracking-wider">Wajib bagi Agen Survey RuangSinggah</p>
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
                   {/* NIK KTP */}
                   <div className="space-y-1.5">
                     <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block">
@@ -944,7 +967,7 @@ const Profile: React.FC<ProfileProps> = ({ user, onLogout, onSaveSuccess, forceE
                         required 
                       />
                     ) : (
-                      <div className="p-3.5 bg-gray-50 rounded-xl border border-gray-100 font-mono font-bold text-gray-900">
+                      <div className="px-4 py-3 bg-[#F8FAFC] rounded-xl border border-slate-100 font-mono font-bold text-gray-900">
                         {formData.ktp_number ? formData.ktp_number.replace(/(\d{4})/g, '$1 ').trim() : '-'}
                       </div>
                     )}
@@ -981,7 +1004,7 @@ const Profile: React.FC<ProfileProps> = ({ user, onLogout, onSaveSuccess, forceE
                           <img src={formData.ktp_photo_url} alt="KTP Verified" className="w-full h-full object-cover" />
                         </div>
                       ) : (
-                        <div className="p-3.5 bg-gray-50 rounded-xl border border-gray-100 text-xs font-bold text-red-400 italic">Belum upload foto KTP</div>
+                        <div className="px-4 py-3 bg-[#F8FAFC] rounded-xl border border-slate-100 text-xs font-bold text-red-400 italic">Belum upload foto KTP</div>
                       )
                     )}
                   </div>
@@ -1004,39 +1027,12 @@ const Profile: React.FC<ProfileProps> = ({ user, onLogout, onSaveSuccess, forceE
               </div>
             )}
 
-            {/* CARD 3: BANNER ADMINISTRATOR / OTORITAS TERVERIFIKASI */}
-            <div className="bg-gradient-to-r from-orange-50/70 to-amber-50/40 border border-orange-200/80 rounded-3xl p-5 sm:p-6 flex items-start justify-between gap-4 relative shadow-2xs">
-              <div className="flex items-start gap-4">
-                <div className="w-12 h-12 bg-[#ff7a00] text-white rounded-2xl flex items-center justify-center shrink-0 shadow-md shadow-orange-500/20">
-                  <ShieldCheck className="w-6 h-6" />
-                </div>
-                <div>
-                  <h4 className="text-sm font-black text-gray-900 uppercase tracking-tight">
-                    {isAdmin ? 'ADMINISTRATOR TERVERIFIKASI' : isAgent ? 'AGEN SURVEY RESMI' : isOwner ? 'MITRA PEMILIK TERVERIFIKASI' : 'AKUN PENGGUNA TERVERIFIKASI'}
-                  </h4>
-                  <p className="text-xs text-gray-600 leading-relaxed mt-1">
-                    {isAdmin
-                      ? 'Akses penuh ke pengelolaan sistem RuangSinggah.id termasuk manajemen kost, transaksi mitra, validasi data pengguna, dan survei lapangan.'
-                      : isAgent
-                      ? 'Akses terverifikasi untuk menerima penugasan survey, verifikasi lapangan, dan pelaporan kondisi properti di platform RuangSinggah.id.'
-                      : isOwner
-                      ? 'Akses manajemen properti hunian, manajemen kamar, penagihan sewa, dan penerimaan transaksi sewa kost.'
-                      : 'Akun Anda aktif dan siap digunakan untuk mencari hunian, memesan kost, dan memanfaatkan layanan survey resmi.'}
-                  </p>
-                </div>
-              </div>
-
-              <span className="px-3 py-1 bg-[#ff7a00] text-white text-[10px] font-black uppercase tracking-wider rounded-full shrink-0 shadow-xs">
-                Resmi
-              </span>
-            </div>
-
-            {/* BOTTOM ACTION BUTTONS */}
-            <div className="flex items-center justify-end gap-3 pt-2">
+            {/* ACTION BUTTONS (Responsive) */}
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-end gap-3 pt-2">
               <button
                 type="button"
                 onClick={() => onBack ? onBack() : navigate(Page.HOME)}
-                className="px-6 py-3 bg-white hover:bg-gray-50 border border-gray-200 text-gray-700 rounded-xl text-xs font-bold transition-all shadow-xs active:scale-95 cursor-pointer"
+                className="w-full sm:w-auto px-6 py-3.5 sm:py-3 bg-white hover:bg-gray-50 border border-orange-200 text-[#ff7a00] rounded-2xl sm:rounded-xl text-sm sm:text-xs font-bold transition-all shadow-xs active:scale-95 cursor-pointer text-center order-2 sm:order-1"
               >
                 Kembali
               </button>
@@ -1051,7 +1047,7 @@ const Profile: React.FC<ProfileProps> = ({ user, onLogout, onSaveSuccess, forceE
                   }
                 }}
                 disabled={loading}
-                className="px-6 py-3 bg-[#0b1c30] hover:bg-[#132840] text-white rounded-xl text-xs font-bold transition-all shadow-md active:scale-95 flex items-center gap-2 cursor-pointer disabled:opacity-50"
+                className="w-full sm:w-auto px-6 py-3.5 sm:py-3 bg-[#0b1c30] hover:bg-[#132840] text-white rounded-2xl sm:rounded-xl text-sm sm:text-xs font-bold transition-all shadow-md active:scale-95 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 order-1 sm:order-2"
               >
                 {loading ? (
                   <>
@@ -1093,7 +1089,7 @@ const Profile: React.FC<ProfileProps> = ({ user, onLogout, onSaveSuccess, forceE
               </div>
               <button
                 onClick={() => setIsPasswordModalOpen(false)}
-                className="p-2 text-gray-400 hover:text-gray-600 rounded-xl hover:bg-gray-100 transition-colors"
+                className="p-2 text-gray-400 hover:text-gray-600 rounded-xl hover:bg-gray-100 transition-colors cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -1125,7 +1121,7 @@ const Profile: React.FC<ProfileProps> = ({ user, onLogout, onSaveSuccess, forceE
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 cursor-pointer"
                   >
                     {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
