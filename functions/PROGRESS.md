@@ -2,6 +2,34 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 312. Perapihan & Peningkatan UI/UX Section Pesan Mitra di PC & Mobile (`ChatWindow.tsx`, `MitraDashboard.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  - Tampilan section Pesan pada dashboard Mitra di layar PC terlihat menggantung/mengambang di tengah dengan rongga kosong luas di bawah dan di kanan.
+  - Pada panel chat kanan saat percakapan dibuka, tidak ada header percakapan yang menampilkan nama kontak lawan bicara, status calon penghuni, dan nama properti kost terkait, sehingga gelembung chat langsung menempel ke tepi atas dan terlihat rancu.
+- **Implementasi Solusi**:
+  1. **Layout Proporsional Layar Penuh (*Full-Height Layout*) (`MitraDashboard.tsx`)**:
+     - Mengubah container chat menjadi `h-[calc(100vh-8.5rem)] min-h-[640px] flex flex-col` sehingga pas dan proporsional mengisi tinggi layar monitor desktop tanpa rongga kosong di bawah.
+     - Memperlebar sidebar daftar percakapan menjadi `w-full sm:w-80 md:w-96 lg:w-[360px] xl:w-[380px] shrink-0 border-r border-gray-100 bg-white`.
+     - Menyempurnakan visualisasi item daftar percakapan dengan active state beraksen oranye `border-l-4 border-l-orange-500` dan empty state modern yang informatif.
+  2. **Chat Header Terpadu Panel Pesan (`ChatWindow.tsx` mode `isEmbedded`)**:
+     - Menambahkan header di atas ruang chat aktif yang memuat:
+       - Avatar + inisial/foto lawan bicara dan indikator dot hijau online.
+       - Nama lengkap calon penghuni / penyewa.
+       - Role badge `"Calon Penghuni"` / `"Pemilik Kost"`.
+       - Badge nama properti kost: `🏠 {propertyName}`.
+       - Tombol kembali (Back) khusus untuk mobile.
+  3. **Penyempurnaan Gelembung Pesan & Input Formulir (`ChatWindow.tsx`)**:
+     - Latar belakang ruang pesan menggunakan `bg-slate-50/70` yang bersih dan nyaman dibaca.
+     - Gelembung pesan responsif (`max-w-[85%] sm:max-w-[70%]`) dengan signature warna oranye RuangSinggah untuk pengirim dan putih bersih untuk lawan bicara.
+     - Input bar balasan yang modern dengan focus ring lembut dan tombol kirim beranimasi active.
+- **File Tersentuh**:
+  - `functions/public/components/ChatWindow.tsx`
+  - `functions/public/pages/MitraDashboard.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi build Vite `cmd /c npm run build` di `functions/public/` lulus 100% (✓ 2509 modules transformed, built in 40.78s, 0 error).
+
 ### 311. Perbaikan Tuntas Sinkronisasi Unread Badge Pesan saat Refresh, Smart Unread Resolution & Auto-Heal (`chatService.ts`, `ChatWindow.tsx`, `MitraDashboard.tsx`) (September 2026)
 - **Permintaan & Masalah**:
   - Pengguna melaporkan bahwa saat halaman Dashboard Mitra di-refresh, badge unread pesan (misal "2 Pesan Belum Dibaca" atau badge `2` merah) masih muncul kembali meskipun pesan sudah dibaca dan dibalas ("masih ad").

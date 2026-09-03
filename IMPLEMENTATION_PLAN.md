@@ -1,15 +1,15 @@
-# Rencana Implementasi: Perbaikan Tuntas Unread Badge Pesan yang Masih Muncul Saat Refresh
+# Rencana Implementasi: Perapihan & Peningkatan UI/UX Section Pesan Mitra di Tampilan PC & Mobile
 
-## 1. Analisis Masalah & Akar Penyebab
-- **Gejala Masalah**:
-  - Pengguna melaporkan bahwa saat halaman Dashboard Mitra di-refresh, badge pesan belum dibaca (misal "2 Pesan Belum Dibaca" atau badge `2` merah pada Administrator) masih muncul kembali, padahal pesan tersebut sudah dibuka, dibaca, dan bahkan sudah dibalas ("masih ad").
-- **Akar Penyebab (Root Cause)**:
-  1. **Tidak Ada Sinkronisasi `markMessagesAsRead` saat Mengirim Balasan (`sendMessage`)**:
-     - Ketika pemilik membalas chat ("masih ad"), fungsi `sendMessage` hanya menyisipkan pesan balasan baru ke database `chat_messages`, namun tidak menandai pesan-pesan lawan bicara sebelumnya sebagai terbaca (`is_read = true`).
-  2. **Keterbatasan Filter `markMessagesAsRead`**:
-     - Fungsi `markMessagesAsRead` sebelumnya hanya menyaring berdasarkan `sender_type`. Jika `sender_id` pembaca disertakan (`neq('sender_id', readerId)`), database dapat secara akurat menandai seluruh pesan dari lawan bicara sebagai terbaca.
-  3. **Belum Ada Logika Pengaman (*Auto-Heal / Smart Unread Resolution*) pada `getMyChatSessions`**:
-     - Jika pengguna sudah membalas percakapan (pesan terakhir dalam sesi dikirim oleh pemilik), sistem seharusnya secara cerdas mengenali bahwa pemilik sudah membaca percakapan tersebut (`unread_count = 0`) dan menyinkronkan status `is_read = true` ke database di latar belakang agar tidak ada glitch saat refresh.
+## 1. Analisis Masalah & Kebutuhan UI/UX
+- **Kondisi & Masalah Saat Ini pada Tampilan PC**:
+  1. **Container Chat Menggantung / Kosong di Bawah**: Tinggi container chat dihitung `h-[calc(100vh-12rem)]` dengan margin bawah yang berlebihan, sehingga box percakapan terlihat mengambang di tengah layar dengan area kosong luas di sebelah kanan dan bawah.
+  2. **Panel Chat Kanan Tidak Memiliki Header Percakapan**: Saat percakapan aktif dipilih, bagian kanan langsung menampilkan gelembung pesan tanpa adanya header informasi lawan bicara (nama penyewa, foto/avatar, status, dan label nama kost terkait). Hal ini membuat tampilan terasa rancu, terpotong, dan tidak profesional.
+  3. **Proporsi Sidebar & Chat Area Kurang Optimal pada Layar Desktop**: Lebar sidebar daftar chat dan panel pesan perlu diseimbangkan (misal `sm:w-80 md:w-96` pada sidebar dan `flex-1` pada ruang pesan) agar gelembung pesan dan input percakapan memiliki ruang baca yang luas dan nyaman.
+
+- **Tujuan Solusi UI/UX**:
+  - Menghadirkan tata letak chat modern kelas dunia (*WhatsApp Web / Dashboard Enterprise Standard*) yang memenuhi tinggi layar desktop secara presisi (`h-[calc(100vh-8.5rem)] min-h-[640px]`).
+  - Menambahkan **Chat Header terpadu** di panel pesan aktif yang memuat avatar, nama calon penghuni, status "Calon Penghuni", dan pill badge nama kost properti.
+  - Merapikan visualisasi gelembung chat (*chat bubbles*), timestamp, indikator centang baca, serta input formulir pengiriman balasan.
 
 ---
 
@@ -17,43 +17,25 @@
 
 | File | Tindakan & Penjelasan Perubahan |
 | :--- | :--- |
-| `functions/public/chatService.ts` | 1. Perbarui `markMessagesAsRead(sessionId, readerSenderType, readerId)` agar memfilter `neq('sender_id', readerId)` untuk keandalan maksimal.<br>2. Di dalam `sendMessage`, otomatis panggil `markMessagesAsRead` agar saat pemilik/pengguna membalas pesan, seluruh pesan sebelumnya langsung berstatus `is_read = true`.<br>3. Di dalam `getMyChatSessions`, tambahkan validasi *smart unread*: jika pemilik adalah pengirim pesan terakhir dalam percakapan, otomatis set `unread_count = 0` dan perbarui status di DB (auto-heal). |
-| `functions/public/components/ChatWindow.tsx` | Panggil `markMessagesAsRead(session.id, currentSenderType, currentId)` saat memuat pesan, saat jendela chat terbuka, dan sesaat setelah mengirim balasan. |
-| `functions/public/pages/MitraDashboard.tsx` | Sertakan parameter `uid` saat memanggil `markMessagesAsRead(session.id, 'owner', uid)`. |
+| `functions/public/pages/MitraDashboard.tsx` | 1. Perbarui container chat agar memanfaatkan tinggi layar secara optimal (`h-[calc(100vh-8rem)] min-h-[640px]`).<br>2. Perlebar sidebar daftar chat menjadi `sm:w-80 lg:w-[380px]` dengan pembatas halus.<br>3. Sempurnakan tampilan state kosong percakapan (*Empty State*) dan card list chat. |
+| `functions/public/components/ChatWindow.tsx` | 1. Pada mode `isEmbedded`, tambahkan **Chat Header** elegan di bagian atas panel chat yang menampilkan avatar, nama lawan bicara, status online/calon penghuni, serta badge judul properti kost.<br>2. Sempurnakan area gelembung pesan (`bg-slate-50/70`, bubble styling rapi, timestamp & check status).<br>3. Rapikan input bar formulir dengan rounded styling dan tombol kirim responsif. |
 
 ---
 
 ## 3. Langkah-Langkah Eksekusi
 
-### Langkah 1: Modifikasi `chatService.ts`
-- Tingkatkan fungsi `markMessagesAsRead`:
-  ```typescript
-  export async function markMessagesAsRead(sessionId: string, readerSenderType: 'user' | 'owner', readerId?: string) {
-    try {
-      const targetSenderType = readerSenderType === 'user' ? 'owner' : 'user';
-      let query = supabase
-        .from('chat_messages')
-        .update({ is_read: true })
-        .eq('session_id', sessionId)
-        .eq('is_read', false);
+### Langkah 1: Sempurnakan `ChatWindow.tsx` untuk Mode Embedded
+- Tambahkan header informasi di bagian atas `if (isEmbedded)`:
+  - Avatar lingkaran / inisial calon penghuni.
+  - Nama calon penghuni / administrator.
+  - Badge nama properti kost: `🏠 KOST APALAH DAYA`.
+  - Status aktif / calon penghuni.
+- Rapikan bubble chat dan area list pesan agar scrolling mulus dan responsif di berbagai resolusi layar.
 
-      if (readerId) {
-        query = query.neq('sender_id', readerId);
-      } else {
-        query = query.eq('sender_type', targetSenderType);
-      }
-
-      await query;
-    } catch (err) {
-      console.warn('Failed to mark messages as read:', err);
-    }
-  }
-  ```
-- Di dalam `sendMessage`, panggil `await markMessagesAsRead(sessionId, senderType, senderId);`.
-- Di dalam `getMyChatSessions`, tambahkan pengecekan jika pemilik mengirim pesan terakhir (`sender_type === 'owner'` pada pesan terakhir), maka pesan sebelumnya dianggap sudah terbaca sehingga `unread_count` dipastikan `0`.
-
-### Langkah 2: Modifikasi `ChatWindow.tsx` & `MitraDashboard.tsx`
-- Sinkronkan pemanggilan `markMessagesAsRead` dengan menyertakan `currentId` / `uid`.
+### Langkah 2: Sempurnakan Layout Section Chat di `MitraDashboard.tsx`
+- Sesuaikan height container chat menjadi `h-[calc(100vh-8.5rem)] min-h-[640px]`.
+- Optimalkan pembagian lebar sidebar (`w-full sm:w-80 lg:w-[360px]`) dan ruang chat aktif (`flex-1`).
+- Pastikan tampilan mobile tetap mulus dengan transisi buka-tutup percakapan yang intuitif.
 
 ---
 
@@ -61,7 +43,6 @@
 
 1. **Uji Kompilasi & Build**:
    - Jalankan `cmd /c npm run build` di folder `functions/public` untuk memastikan 0 error kompilasi.
-2. **Verifikasi Kasus Uji**:
-   - **Kasus 1**: Buka percakapan yang sebelumnya memiliki unread count $\rightarrow$ pesan di DB otomatis ter-update menjadi `is_read = true`.
-   - **Kasus 2**: Lakukan hard refresh browser (F5 / Ctrl+R) $\rightarrow$ Pastikan badge merah "2 Pesan Belum Dibaca" dan badge angka di menu sidebar / daftar chat **hilang permanen (0 / bersih)**.
-   - **Kasus 3**: Kirim balasan baru $\rightarrow$ Pastikan unread count tetap `0` saat di-refresh.
+2. **Verifikasi Visual UI/UX**:
+   - **Tampilan Desktop (PC)**: Buka menu Pesan di Dashboard Mitra $\rightarrow$ Pastikan layout chat mengisi tinggi layar secara proporsional dan elegan, header percakapan muncul jelas di atas ruang chat dengan nama penghuni & kost, dan tidak ada ruang kosong mengambang yang rancu.
+   - **Tampilan Mobile (HP)**: Buka menu Pesan $\rightarrow$ Navigasi daftar chat dan buka percakapan tetap berjalan mulus dengan tombol kembali (*Back*).

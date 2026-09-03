@@ -147,46 +147,107 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ session, currentUser, onClose, 
   };
 
   if (isEmbedded) {
+    const partnerName = contactName || (currentId === session.user_id ? session.owner?.name : session.user?.name) || 'Calon Penghuni';
+    const partnerPhoto = (currentId === session.user_id ? session.owner?.photo_url : session.user?.photo_url) || '';
+    const propTitle = propertyName || (session as any).property?.title;
+
     return (
       <div className="flex flex-col h-full bg-white overflow-hidden">
+        {/* Modern Embedded Chat Header */}
+        <div className="px-5 py-3.5 bg-white border-b border-gray-100 flex items-center justify-between shadow-[0_1px_3px_rgba(0,0,0,0.02)] z-10 shrink-0">
+          <div className="flex items-center gap-3.5 min-w-0">
+            {/* Mobile Back button */}
+            <button
+              type="button"
+              onClick={onClose}
+              className="sm:hidden p-2 -ml-2 rounded-xl text-gray-500 hover:bg-gray-100 hover:text-gray-900 transition-colors cursor-pointer"
+              title="Kembali ke daftar pesan"
+            >
+              <ChevronLeft size={20} />
+            </button>
+
+            {/* Avatar */}
+            <div className="relative shrink-0">
+              <div className="w-11 h-11 rounded-2xl bg-gradient-to-tr from-orange-500 to-amber-400 flex items-center justify-center text-white font-black text-sm shadow-sm overflow-hidden">
+                {partnerPhoto ? (
+                  <img src={partnerPhoto} alt={partnerName} className="w-full h-full object-cover" />
+                ) : (
+                  <span>{partnerName.charAt(0).toUpperCase() || 'U'}</span>
+                )}
+              </div>
+              <span className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 bg-emerald-500 border-2 border-white rounded-full shadow-sm" />
+            </div>
+
+            {/* Contact Details */}
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2">
+                <h4 className="font-black text-gray-900 text-sm tracking-tight truncate">
+                  {partnerName}
+                </h4>
+                <span className="px-2 py-0.5 bg-orange-50 text-orange-600 border border-orange-100/80 rounded-full text-[9px] font-black uppercase tracking-wider shrink-0">
+                  {currentId === session.user_id ? 'Pemilik Kost' : 'Calon Penghuni'}
+                </span>
+              </div>
+              
+              {propTitle ? (
+                <div className="flex items-center gap-1.5 mt-0.5 text-gray-500">
+                  <span className="text-[11px] font-black text-orange-500 uppercase tracking-wider truncate max-w-[260px] sm:max-w-[400px]">
+                    🏠 {propTitle}
+                  </span>
+                </div>
+              ) : (
+                <p className="text-[11px] font-bold text-emerald-600 flex items-center gap-1 mt-0.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                  Online • Siap Berdiskusi
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+
         {/* Messages List */}
         <div 
           ref={scrollRef}
-          className="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50/50"
+          className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-3.5 bg-slate-50/70"
         >
           {loading ? (
-             <div className="flex justify-center py-10">
-               <div className="animate-spin h-8 w-8 border-4 border-orange-500 border-t-transparent rounded-full" />
+             <div className="flex flex-col items-center justify-center py-20 gap-3">
+               <div className="animate-spin h-8 w-8 border-3 border-orange-500 border-t-transparent rounded-full" />
+               <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">Memuat pesan...</p>
              </div>
           ) : messages.length === 0 ? (
-            <div className="text-center py-20 px-10">
-              <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4 border-2 border-dashed border-gray-200">
-                <MessageSquare className="w-8 h-8 text-gray-300" />
+            <div className="text-center py-24 px-10">
+              <div className="w-16 h-16 bg-white shadow-sm rounded-3xl flex items-center justify-center mx-auto mb-4 border border-gray-100">
+                <MessageSquare className="w-8 h-8 text-orange-400" />
               </div>
-              <h4 className="text-gray-900 font-black uppercase text-[10px] tracking-widest mb-1">Belum Ada Pesan</h4>
+              <h4 className="text-gray-900 font-black text-sm tracking-tight mb-1">Mulai Diskusi dengan Calon Penghuni</h4>
+              <p className="text-xs text-gray-400 max-w-xs mx-auto">Sapa calon penyewa kost Anda dan jawab pertanyaan ketersediaan kamar dengan ramah.</p>
             </div>
           ) : (
               messages.map((msg, idx) => {
-                const currentId = currentUser.uid || currentUser.id;
-                const isMe = msg.sender_id === currentId;
+                const isMe = msg.sender_id === currentId || (msg.sender_type === currentSenderType);
                 const isTemp = !msg.id || (!msg.id.includes('-') && msg.id.length < 20);
 
                 return (
-                  <div key={msg.id || idx} className={`flex ${isMe ? 'justify-end' : 'justify-start'} animate-in fade-in duration-300`}>
-                    <div className={`max-w-[85%] rounded-[1.25rem] px-4 py-2.5 shadow-sm relative ${isMe ? 'bg-orange-500 text-white rounded-tr-none' : 'bg-white border border-gray-100 text-gray-800 rounded-tl-none'}`}>
-                      <p className="text-[12px] font-medium leading-relaxed">{msg.message}</p>
-                      <div className={`flex items-center gap-1 mt-1 ${isMe ? 'justify-end' : 'justify-start'}`}>
-                        <span className={`text-[8px] font-bold uppercase ${isMe ? 'text-white/70' : 'text-gray-400'}`}>
-                          {msg.created_at ? new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
+                  <div key={msg.id || idx} className={`flex ${isMe ? 'justify-end' : 'justify-start'} animate-in fade-in duration-200`}>
+                    <div className={`max-w-[85%] sm:max-w-[70%] rounded-2xl px-4 py-2.5 shadow-sm relative transition-all ${
+                      isMe 
+                        ? 'bg-orange-500 text-white rounded-tr-xs shadow-orange-500/10' 
+                        : 'bg-white border border-gray-100/80 text-gray-900 rounded-tl-xs shadow-slate-100'
+                    }`}>
+                      <p className="text-[13px] font-medium leading-relaxed whitespace-pre-wrap break-words">{msg.message}</p>
+                      <div className={`flex items-center gap-1.5 mt-1.5 ${isMe ? 'justify-end text-white/75' : 'justify-start text-gray-400'}`}>
+                        <span className="text-[9px] font-bold">
+                          {msg.created_at ? new Date(msg.created_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : ''}
                         </span>
                         {isMe && (
                           <span className="inline-flex items-center ml-0.5" title={msg.is_read ? "Dibaca" : isTemp ? "Mengirim..." : "Terkirim ke server"}>
                             {msg.is_read ? (
-                              <CheckCheck size={12} className="text-sky-300 stroke-[2.5]" />
+                              <CheckCheck size={13} className="text-sky-200 stroke-[2.5]" />
                             ) : isTemp ? (
-                              <Check size={11} className="text-white/60" />
+                              <Clock size={11} className="text-white/60" />
                             ) : (
-                              <CheckCheck size={12} className="text-white/60" />
+                              <CheckCheck size={13} className="text-white/60" />
                             )}
                           </span>
                         )}
@@ -200,23 +261,23 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ session, currentUser, onClose, 
 
         {/* Warning Banner Anti-Disintermediation */}
         {warningMessage && (
-          <div className="px-4 py-2.5 bg-rose-50 border-t border-rose-100 flex items-start gap-2.5 text-rose-700 animate-in slide-in-from-bottom-2 duration-200">
-            <ShieldAlert size={16} className="shrink-0 text-rose-500 mt-0.5" />
+          <div className="px-5 py-3 bg-rose-50 border-t border-rose-100 flex items-start gap-3 text-rose-700 animate-in slide-in-from-bottom-2 duration-200 shrink-0">
+            <ShieldAlert size={18} className="shrink-0 text-rose-500 mt-0.5" />
             <div className="flex-1">
-              <p className="text-[11px] font-bold leading-tight">{warningMessage}</p>
+              <p className="text-xs font-bold leading-tight">{warningMessage}</p>
             </div>
             <button
               type="button"
               onClick={() => setWarningMessage(null)}
               className="text-rose-400 hover:text-rose-600 p-0.5"
             >
-              <X size={13} />
+              <X size={14} />
             </button>
           </div>
         )}
 
         {/* Input Area */}
-        <form onSubmit={handleSendMessage} className="p-4 bg-white border-t border-gray-50 flex items-center gap-3">
+        <form onSubmit={handleSendMessage} className="p-4 sm:p-5 bg-white border-t border-gray-100 flex items-center gap-3 shrink-0">
           <input
             type="text"
             value={newMessage}
@@ -224,16 +285,17 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ session, currentUser, onClose, 
               setNewMessage(e.target.value);
               if (warningMessage) setWarningMessage(null);
             }}
-            placeholder="Ketik balasan..."
+            placeholder="Ketik balasan untuk calon penghuni..."
             maxLength={1000}
-            className="flex-1 bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-orange-500/10 focus:border-orange-500 transition-all"
+            className="flex-1 bg-gray-50/80 border border-gray-200/80 focus:bg-white rounded-2xl px-5 py-3.5 text-xs sm:text-sm font-bold text-gray-900 focus:outline-none focus:ring-4 focus:ring-orange-500/10 focus:border-orange-500 transition-all placeholder:text-gray-400 placeholder:font-medium"
           />
           <button
             type="submit"
             disabled={!newMessage.trim() || sendingMessages.size > 0}
-            className="w-11 h-11 bg-orange-500 text-white rounded-xl flex items-center justify-center shadow-lg shadow-orange-100 active:scale-90 transition-all disabled:bg-gray-200"
+            className="h-12 w-12 sm:w-auto sm:px-6 bg-orange-500 hover:bg-orange-600 text-white rounded-2xl flex items-center justify-center gap-2 font-black text-xs uppercase tracking-wider shadow-lg shadow-orange-500/20 active:scale-95 transition-all disabled:opacity-40 disabled:hover:bg-orange-500 disabled:shadow-none cursor-pointer shrink-0"
           >
-            <Send className="w-4 h-4" />
+            <Send size={15} />
+            <span className="hidden sm:inline">Kirim</span>
           </button>
         </form>
       </div>

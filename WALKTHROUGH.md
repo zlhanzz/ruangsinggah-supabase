@@ -1,45 +1,52 @@
-# Walkthrough - Progres 311: Perbaikan Tuntas Sinkronisasi Unread Badge Pesan saat Refresh, Smart Unread Resolution & Auto-Heal
+# Walkthrough - Progres 312: Perapihan & Peningkatan UI/UX Section Pesan Mitra di PC & Mobile
 
 ## Ringkasan Perubahan
-Menyelesaikan masalah badge pesan belum dibaca yang sebelumnya muncul kembali saat halaman di-refresh meskipun pesan sudah dibaca dan dibalas. 
-
-Perbaikan dilakukan dengan menambahkan otomatisasi penandaan pesan terbaca saat membalas chat (`sendMessage`), memperkuat query `markMessagesAsRead` dengan filter ID pengguna pembaca (`readerId`), serta menambahkan logika *Smart Unread Resolution* & *Background Auto-Heal* pada `getMyChatSessions`.
+Menata ulang dan menyempurnakan visualisasi serta tata letak (UI/UX) pada section **Pesan & Diskusi** di Dashboard Mitra. Tata letak kini mengisi tinggi layar PC secara proporsional (*full-height layout*) tanpa ada area kosong mengambang, serta dilengkapi dengan **Chat Header terpadu** yang menampilkan identitas lawan bicara dan informasi properti kost terkait secara profesional.
 
 ---
 
 ## Daftar Perubahan File & Logika
 
-### 1. `functions/public/chatService.ts`
-- **Auto-Read saat Kirim Balasan (`sendMessage`)**:
-  - Menyisipkan pemanggilan `await markMessagesAsRead(sessionId, senderType, senderId)` di dalam `sendMessage`. Ketika pemilik/pengguna membalas pesan, seluruh pesan lawan bicara sebelumnya langsung berstatus `is_read = true` di database.
-- **Peningkatan Akurasi `markMessagesAsRead`**:
-  - Menambahkan parameter opsional `readerId?: string`. Jika `readerId` ada, fungsi menggunakan filter `.neq('sender_id', readerId)` sehingga seluruh pesan dari lawan bicara dijamin ter-update.
-- **Smart Unread Resolution & Background Auto-Heal (`getMyChatSessions`)**:
-  - Mengambil data pengirim pesan terbaru per sesi. Jika pesan terakhir dalam percakapan dikirim oleh pengguna saat ini (`latestMsg.sender_id === userId` atau pengirim bertipe `roleFilter`), sistem secara cerdas menyimpulkan percakapan sudah dibaca dan dibalas $\rightarrow$ `unread_count = 0`.
-  - Mengumpulkan sesi-sesi yang memiliki status pesan tertinggal dan secara otomatis memperbarui flag `is_read = true` di database di latar belakang (*background auto-heal*).
+### 1. `functions/public/components/ChatWindow.tsx`
+- **Chat Header Terpadu pada Mode Embedded**:
+  - Menambahkan bar header di bagian atas panel chat yang memuat:
+    - Avatar avatar/foto/inisial lawan bicara dengan dot status online.
+    - Nama calon penghuni / penyewa yang sedang berdiskusi.
+    - Label badge status (`Calon Penghuni` / `Pemilik Kost`).
+    - Badge nama properti kost: `🏠 {propertyName}`.
+    - Tombol kembali (*Back*) khusus untuk perangkat mobile.
+- **Penyempurnaan Ruang Pesan & Gelembung Chat**:
+  - Background ruang chat menggunakan warna lembut `bg-slate-50/70`.
+  - Gelembung pesan responsif (`max-w-[85%] sm:max-w-[70%]`) dengan warna oranye RuangSinggah untuk pemilik dan putih berbayang halus untuk calon penghuni.
+  - Penempatan stempel waktu dan indikator centang baca yang presisi.
+- **Penyempurnaan Bar Input Pesan**:
+  - Input field modern dengan rounded corners (`rounded-2xl`), focus ring lembut, dan tombol kirim responsif dengan efek klik active.
 
-### 2. `functions/public/components/ChatWindow.tsx` & `functions/public/pages/MitraDashboard.tsx`
-- Memastikan `currentId` dan `uid` diteruskan ke fungsi `markMessagesAsRead` saat inisialisasi window chat, saat pesan baru masuk, dan saat sesi chat dipilih dari daftar sidebar.
+### 2. `functions/public/pages/MitraDashboard.tsx`
+- **Full-Height Responsive Container**:
+  - Mengubah container chat menjadi `h-[calc(100vh-8.5rem)] min-h-[640px] flex flex-col`, sehingga mengisi tinggi layar secara proporsional dan tidak ada rongga kosong menggantung di bawahnya.
+- **Optimalisasi Proporsi Sidebar Daftar Pesan**:
+  - Memperlebar sidebar daftar percakapan menjadi `w-full sm:w-80 md:w-96 lg:w-[360px] xl:w-[380px] shrink-0 border-r border-gray-100 bg-white`.
+  - Memberikan active state beraksen oranye (`border-l-4 border-l-orange-500 bg-orange-50/60`) pada item percakapan yang sedang dibuka.
+  - Mempercantik tampilan *Empty State* ("Pilih Percakapan") di panel kanan saat belum ada chat yang dipilih.
 
 ---
 
 ## Hasil Pengujian & Kompilasi
 
 1. **Kompilasi Frontend Vite (`vite build`)**:
-   - `functions/public/`: **Lulus 100% (✓ 2509 modules transformed, built in 39.69s, 0 error)**.
+   - `functions/public/`: **Lulus 100% (✓ 2509 modules transformed, built in 40.78s, 0 error)**.
 
 ---
 
 ## Panduan Pengujian Pengguna (User Testing)
 
-1. **Uji Refresh Halaman Chat Mitra**:
-   - Buka menu **Pesan** di Dashboard Mitra.
-   - Perhatikan sesi percakapan yang sebelumnya sudah dibalas (seperti "Administrator").
-   - **Hasil**: Badge merah angka `2` dan tulisan "2 Pesan Belum Dibaca" **hilang / bersih (0)**.
-2. **Uji Hard Refresh (F5 / Ctrl+R)**:
-   - Lakukan refresh browser.
-   - **Hasil**: Badge unread tetap bersih `0`, tidak muncul kembali.
-3. **Uji Kirim Pesan Baru & Balasan**:
-   - Kirim pesan balasan baru ke percakapan.
-   - Lakukan refresh.
-   - **Hasil**: Status pesan tetap konsisten dan unread count tetap `0`.
+1. **Uji Tampilan PC (Desktop)**:
+   - Buka menu **Pesan** di Dashboard Mitra pada layar laptop/PC.
+   - **Hasil**: Box container chat membentang penuh dan proporsional ke bawah layar.
+   - Klik salah satu sesi percakapan (misal "Administrator").
+   - **Hasil**: Panel chat kanan menampilkan **Chat Header** lengkap di bagian atas dengan nama kontak, label role, dan badge nama kost `🏠 KOST APALAH DAYA`. Gelembung pesan dan input bar tersusun rapi dan nyaman dibaca.
+2. **Uji Tampilan Mobile (HP)**:
+   - Buka menu Pesan pada layar HP.
+   - Buka salah satu chat $\rightarrow$ Chat terbuka penuh dengan tombol panah kembali di kiri atas.
+   - Tekan tombol kembali $\rightarrow$ Layar kembali ke daftar percakapan dengan mulus.

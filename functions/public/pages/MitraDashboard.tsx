@@ -2006,14 +2006,14 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
 
                     {/* CHAT */}
                     {activeMenu === 'chat' && (
-                        <div className="animate-in fade-in duration-300 h-[calc(100vh-12rem)] flex flex-col">
-                            <div className="mb-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                        <div className="animate-in fade-in duration-300 h-[calc(100vh-8.5rem)] min-h-[640px] flex flex-col">
+                            <div className="mb-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 shrink-0">
                                 <div>
                                     <h3 className="font-black text-gray-900 text-lg">Pesan & Diskusi</h3>
                                     <p className="text-xs text-gray-400 font-bold mt-0.5 uppercase tracking-widest">Komunikasi dengan calon penghuni</p>
                                 </div>
                                 {chatUnreadCount > 0 && (
-                                    <span className="self-start sm:self-auto bg-rose-50 border border-rose-200 text-rose-600 text-xs font-black px-3 py-1.5 rounded-full flex items-center gap-1.5 shadow-sm">
+                                    <span className="self-start sm:self-auto bg-rose-50 border border-rose-200 text-rose-600 text-xs font-black px-3.5 py-1.5 rounded-full flex items-center gap-1.5 shadow-sm">
                                         <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse" />
                                         {chatUnreadCount} Pesan Belum Dibaca
                                     </span>
@@ -2021,16 +2021,16 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                             </div>
                             <div className="flex-1 bg-white rounded-3xl border border-gray-100 shadow-sm flex overflow-hidden">
                                 {/* Sidebar list */}
-                                <div className={`${activeChat ? 'hidden sm:flex' : 'flex'} w-full sm:w-80 flex-col border-r border-gray-50`}>
-                                    <div className="p-4 border-b border-gray-50">
+                                <div className={`${activeChat ? 'hidden sm:flex' : 'flex'} w-full sm:w-80 md:w-96 lg:w-[360px] xl:w-[380px] shrink-0 flex-col border-r border-gray-100 bg-white`}>
+                                    <div className="p-4 border-b border-gray-100 bg-white">
                                         <div className="relative">
-                                            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                                            <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
                                             <input
                                                 type="text"
                                                 value={chatSearchQuery}
                                                 onChange={(e) => setChatSearchQuery(e.target.value)}
                                                 placeholder="Cari percakapan..."
-                                                className="w-full h-10 bg-gray-50 rounded-xl pl-9 pr-3 text-xs font-bold text-gray-900 border border-gray-100 focus:outline-none focus:ring-2 focus:ring-orange-500/20"
+                                                className="w-full h-11 bg-gray-50/80 rounded-2xl pl-10 pr-4 text-xs font-bold text-gray-900 border border-gray-100 focus:bg-white focus:outline-none focus:ring-4 focus:ring-orange-500/10 focus:border-orange-500 transition-all placeholder:text-gray-400"
                                             />
                                         </div>
                                     </div>
@@ -2046,8 +2046,10 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
 
                                             if (filteredSessions.length === 0) {
                                                 return (
-                                                    <div className="p-8 text-center">
-                                                        <MessageSquare size={24} className="mx-auto text-gray-300 mb-2" />
+                                                    <div className="p-12 text-center">
+                                                        <div className="w-14 h-14 bg-gray-50 rounded-2xl flex items-center justify-center mx-auto mb-3 text-gray-300">
+                                                            <MessageSquare size={26} />
+                                                        </div>
                                                         <p className="text-xs font-bold text-gray-400">
                                                             {chatSearchQuery ? 'Tidak ada percakapan yang cocok' : 'Belum ada pesan masuk'}
                                                         </p>
@@ -2058,18 +2060,32 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                                             return filteredSessions.map(session => {
                                                 const ts = session.last_message_at ? new Date(session.last_message_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : '';
                                                 const hasUnread = Boolean(session.unread_count && session.unread_count > 0);
+                                                const isSelected = activeChat?.id === session.id;
                                                 return (
                                                     <button
                                                         key={session.id}
                                                         onClick={() => handleSelectChat(session)}
-                                                        className={`w-full p-4 flex items-start gap-3 hover:bg-gray-50 transition-colors text-left ${activeChat?.id === session.id ? 'bg-orange-50/50 border-l-2 border-l-orange-500' : ''}`}
+                                                        className={`w-full p-4 flex items-start gap-3.5 hover:bg-orange-50/30 transition-all text-left cursor-pointer ${
+                                                            isSelected 
+                                                                ? 'bg-orange-50/60 border-l-4 border-l-orange-500 shadow-[inset_0_1px_2px_rgba(0,0,0,0.02)]' 
+                                                                : ''
+                                                        }`}
                                                     >
-                                                        <div className="w-10 h-10 rounded-full bg-orange-100 flex items-center justify-center text-orange-600 font-bold text-sm shrink-0">
-                                                            {session.user?.name?.charAt(0) || '?'}
+                                                        <div className="relative shrink-0">
+                                                            <div className="w-11 h-11 rounded-2xl bg-orange-100 flex items-center justify-center text-orange-600 font-black text-sm shadow-sm overflow-hidden">
+                                                                {session.user?.photo_url ? (
+                                                                    <img src={session.user.photo_url} alt="" className="w-full h-full object-cover" />
+                                                                ) : (
+                                                                    session.user?.name?.charAt(0)?.toUpperCase() || '?'
+                                                                )}
+                                                            </div>
+                                                            {hasUnread && (
+                                                                <span className="absolute -top-1 -right-1 w-3 h-3 bg-rose-500 rounded-full border-2 border-white shadow-sm" />
+                                                            )}
                                                         </div>
                                                         <div className="flex-1 min-w-0">
-                                                            <div className="flex justify-between items-baseline">
-                                                                <div className="flex items-center gap-1.5 min-w-0">
+                                                            <div className="flex justify-between items-baseline mb-0.5">
+                                                                <div className="flex items-center gap-1.5 min-w-0 pr-1">
                                                                     <p className="text-xs font-black text-gray-900 truncate">{session.user?.name || 'Calon Penghuni'}</p>
                                                                     {hasUnread && (
                                                                         <span className="min-w-[18px] h-[18px] bg-rose-500 text-white text-[9px] font-black rounded-full flex items-center justify-center px-1 shrink-0 shadow-sm animate-pulse">
@@ -2077,10 +2093,10 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                                                                         </span>
                                                                     )}
                                                                 </div>
-                                                                <span className="text-[9px] font-bold text-gray-400 shrink-0 ml-2">{ts}</span>
+                                                                <span className="text-[10px] font-bold text-gray-400 shrink-0">{ts}</span>
                                                             </div>
-                                                            <p className="text-[10px] font-bold text-orange-500 uppercase tracking-wide truncate mt-0.5">{(session as any).property?.title}</p>
-                                                            <p className={`text-[10px] truncate mt-0.5 ${hasUnread ? 'text-gray-900 font-bold' : 'text-gray-400'}`}>{session.last_message}</p>
+                                                            <p className="text-[10px] font-bold text-orange-500 uppercase tracking-wide truncate">{(session as any).property?.title}</p>
+                                                            <p className={`text-[11px] truncate mt-0.5 ${hasUnread ? 'text-gray-900 font-bold' : 'text-gray-400'}`}>{session.last_message || 'Belum ada pesan'}</p>
                                                         </div>
                                                     </button>
                                                 );
@@ -2090,36 +2106,30 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                                 </div>
 
                                 {/* Chat area */}
-                                <div className={`${activeChat ? 'flex' : 'hidden sm:flex'} flex-1 flex-col`}>
+                                <div className={`${activeChat ? 'flex' : 'hidden sm:flex'} flex-1 flex-col bg-white`}>
                                     {activeChat ? (
-                                        <>
-                                            <div className="sm:hidden flex items-center gap-3 p-4 border-b border-gray-50">
-                                                <button onClick={() => setActiveChat(null)} className="p-2 rounded-xl hover:bg-gray-50">
-                                                    <ChevronRight size={18} className="rotate-180 text-gray-500" />
-                                                </button>
-                                                <p className="font-black text-sm text-gray-900">{activeChat.user?.name}</p>
-                                            </div>
-                                            <div className="flex-1 overflow-hidden">
-                                                <ChatWindow
-                                                    session={activeChat}
-                                                    currentUser={user}
-                                                    onClose={() => setActiveChat(null)}
-                                                    propertyName={(activeChat as any).property?.title}
-                                                    isEmbedded={true}
-                                                    onMessagesRead={() => {
-                                                        setChatSessions(prev => prev.map(s => s.id === activeChat.id ? { ...s, unread_count: 0 } : s));
-                                                    }}
-                                                />
-                                            </div>
-                                        </>
+                                        <div className="flex-1 overflow-hidden flex flex-col h-full">
+                                            <ChatWindow
+                                                session={activeChat}
+                                                currentUser={user}
+                                                onClose={() => setActiveChat(null)}
+                                                propertyName={(activeChat as any).property?.title}
+                                                isEmbedded={true}
+                                                onMessagesRead={() => {
+                                                    setChatSessions(prev => prev.map(s => s.id === activeChat.id ? { ...s, unread_count: 0 } : s));
+                                                }}
+                                            />
+                                        </div>
                                     ) : (
-                                        <div className="flex-1 flex items-center justify-center text-center p-8">
-                                            <div>
-                                                <div className="w-16 h-16 rounded-3xl bg-orange-50 flex items-center justify-center mx-auto mb-4 text-orange-400 border border-orange-100">
-                                                    <MessageSquare size={28} />
+                                        <div className="flex-1 flex items-center justify-center text-center p-8 bg-slate-50/40">
+                                            <div className="max-w-sm">
+                                                <div className="w-20 h-20 rounded-3xl bg-orange-50 flex items-center justify-center mx-auto mb-4 text-orange-500 border border-orange-100 shadow-sm">
+                                                    <MessageSquare size={36} />
                                                 </div>
-                                                <p className="font-black text-gray-900 text-sm uppercase tracking-tight">Pilih Percakapan</p>
-                                                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-2 max-w-[180px] mx-auto">Buka chat untuk membalas pesan penyewa</p>
+                                                <h4 className="font-black text-gray-900 text-base tracking-tight">Pilih Percakapan</h4>
+                                                <p className="text-xs font-medium text-gray-400 mt-1.5 leading-relaxed">
+                                                    Pilih salah satu calon penghuni dari daftar di sebelah kiri untuk membuka pesan dan membalas diskusi.
+                                                </p>
                                             </div>
                                         </div>
                                     )}
