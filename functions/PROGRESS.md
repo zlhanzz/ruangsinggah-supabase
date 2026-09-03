@@ -2,6 +2,27 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 303. Penerapan Portal Pemilihan Akses Masuk & Daftar (Pencari Kost vs Pemilik Kost) (`Login.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  - Pengguna merasa sistem *toggle chip* peran di dalam form login membingungkan bagi pengguna baru, dan meminta agar disediakan layar gerbang portal pemilihan peran di awal sebelum masuk ke form login/daftar, dengan dua kartu terpisah yang jelas untuk Pencari Kost dan Pemilik Kost.
+- **Implementasi Solusi**:
+  1. **Layar Portal Pemilihan Akses Masuk (`isRoleSelected`)**:
+     - Badge atas: `[ 🟠 PORTAL AKSES MASUK & DAFTAR ]` dengan indikator aktif.
+     - Judul: `Pilih Akses Masuk Anda di RuangSinggah` dengan subtitle deskriptif.
+     - **Kartu Pencari Kost**: Ikon `Compass`, badge `Pencari Hunian Kost`, deskripsi, 3 poin checklist fitur (*Akses 1.200+ database valid*, *Layanan Survey Langsung*, *Booking Aman & Transparan*), dan tombol `Lanjutkan sebagai Pencari →`.
+     - **Kartu Pemilik Kost**: Ikon `Building2`, badge `Mitra & Pengelola`, deskripsi, 3 poin checklist fitur (*Pasang listing gratis*, *Sistem KostManager & survey*, *Rekap laporan & dompet*), dan tombol `Lanjutkan sebagai Pemilik →`.
+  2. **Pembaruan Header Form Autentikasi**:
+     - Menghapus sistem segmented toggle chip lama dari form login.
+     - Menambahkan status peran aktif (`Pencari Kost` / `Pemilik / Mitra Kost`) dengan ikon representatif serta tombol `← Ganti Peran` (`RotateCcw`) untuk kembali ke portal pemilihan peran kapan saja.
+  3. **Preservasi Fungsionalitas Lengkap**:
+     - Menjaga seluruh alur autentikasi email & kata sandi, Google OAuth, verifikasi OTP WhatsApp bagi mitra, Forgot Password, dan Upgrade Role modal.
+- **File Tersentuh**:
+  - `functions/public/pages/Login.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi Vite `cmd /c npm run build` di `functions/public/` lulus 100% (✓ 2509 modules transformed, built in 29.42s, 0 error).
+
 ### 302. Perbaikan Dinamis UI/UX Kartu Fasilitas Umum Menghilangkan Gap Kosong (`KostDetail.tsx`) (September 2026)
 - **Permintaan & Masalah**:
   - Pada kartu fasilitas umum (seperti `Area Parkir` dan `Dapur Bersama`), penggunaan `justify-between` pada grid 2 kolom membuat kartu yang hanya memiliki 1 sub-kelengkapan (misal *Parkir Motor*) terdorong jauh ke dasar kartu, menyisakan ruang kosong putih canggung di tengah.

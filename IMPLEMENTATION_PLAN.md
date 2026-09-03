@@ -1,40 +1,55 @@
-# IMPLEMENTATION PLAN: Perbaikan Dinamis UI/UX Kartu Fasilitas Umum di KostDetail.tsx
+# IMPLEMENTATION PLAN: Portal Pemilihan Akses Masuk (Pencari Kost vs Pemilik Kost) di Login.tsx
 
 ## 1. Analisis Masalah & Kebutuhan
 - **Masalah Saat Ini**:
-  - Pada bagian **FASILITAS UMUM**, kartu fasilitas utama (misal `Area Parkir` dan `Dapur Bersama`) menggunakan layout `flex flex-col justify-between`.
-  - Ketika sebuah kartu memiliki banyak sub-item (misal `Dapur Bersama` dengan 5 kelengkapan), tinggi kartunya memanjang. Grid memaksa kartu di sebelahnya (`Area Parkir`) ikut memanjang.
-  - Akibat `justify-between`, chip sub-item pada kartu dengan sedikit kelengkapan (misal hanya `Parkir Motor`) terdorong jauh ke dasar kartu, menciptakan ruang kosong putih (gap) yang canggung di tengah-tengah kartu.
-- **Tujuan**:
-  - Mengubah alignment kartu menjadi `flex flex-col justify-start gap-3` sehingga chip kelengkapan selalu tersusun proporsional tepat di bawah header kartu.
-  - Memastikan tampilan kartu tetap dinamis, padat, dan elegan terlepas dari apakah sub-item kelengkapan berjumlah 1, banyak, ataupun tidak memiliki sub-kelengkapan.
-  - Menambahkan fallback state yang rapi jika sebuah fasilitas umum dicentang tanpa sub-item spesifik (misal menampilkan keterangan *"Tersedia untuk seluruh penghuni kost"*).
+  - Halaman login saat ini menggunakan sistem tombol *toggle chip* (`Segmented Tab Pemilih Peran`) di dalam form login yang membingungkan pengguna baru mengenai hak akses dan alur pendaftaran.
+- **Kebutuhan Pengguna**:
+  - Menggantikan sistem chip tersebut dengan **Layar Gerbang Pemilihan Peran (Role Selection Portal)** sebelum pengguna masuk ke formulir autentikasi.
+  - Menampilkan 2 kartu gerbang interaktif yang jelas dan elegan sesuai screenshot referensi:
+    1. **Kartu 1: Pencari Kost**
+       - Badge: `[ PENCARI HUNIAN KOST ]` (Oranye).
+       - Judul: `Pencari Kost`.
+       - Deskripsi: Penjelasan kemudahan mencari, membandingkan, dan menyewa kost.
+       - Checklist Fitur: Akses 1.200+ database, Layanan Jasa Survey, dan Booking aman.
+       - Tombol Aksi: `Lanjutkan sebagai Pencari →` (Oranye).
+    2. **Kartu 2: Pemilik Kost**
+       - Badge: `[ MITRA & PENGELOLA ]` (Biru/Indigo).
+       - Judul: `Pemilik Kost`.
+       - Deskripsi: Pengelolaan kamar, inventaris, pantauan okupansi, dan pemasaran ke ribuan mahasiswa.
+       - Checklist Fitur: Pasang listing gratis, Sistem KostManager, Rekap laporan sewa & dompet.
+       - Tombol Aksi: `Lanjutkan sebagai Pemilik →` (Navy/Indigo).
+  - Setelah memilih peran, pengguna diarahkan ke formulir Login / Daftar yang dikhususkan untuk peran tersebut, dilengkapi tombol navigasi `← Ganti Peran` untuk kembali ke portal pemilihan peran jika diperlukan.
 
 ---
 
 ## 2. Dampak Perubahan
 - **File Tersentuh**:
-  - `functions/public/pages/KostDetail.tsx` (Layout kartu grup fasilitas umum di dalam `structuredPublicFacilities.groups`)
+  - `functions/public/pages/Login.tsx` (Penambahan state `isRoleSelected`, render layar portal pemilihan akses, pembaruan layout form login tanpa chip lama, dan penambahan tombol ganti peran)
 
 ---
 
 ## 3. Langkah-Langkah Eksekusi
-1. **Perbaikan Layout & Alignment Kartu Fasilitas Utama**:
-   - Menghapus class `justify-between` dan menggantinya dengan `justify-start gap-3` pada container kartu `structuredPublicFacilities.groups`.
-   - Menata ulang container chips sub-kelengkapan (`flex flex-wrap gap-1.5 pt-2.5 border-t border-gray-100/80`) agar memiliki jarak yang harmonis dengan header fasilitas.
-2. **Penanganan Fallback Dinamis**:
-   - Jika `group.subItems.length === 0`, menampilkan pesan deskriptif mini yang halus agar kartu tidak terlihat kosong atau rusak.
-3. **Kompilasi & Build**:
+1. **Penambahan State Navigasi Portal (`isRoleSelected`)**:
+   - Menambahkan state `isRoleSelected` (default `false` jika belum ada pilihan atau tidak ada query params khusus, dan `true` jika ada parameter `role=owner`, `role=user`, `upgrade_to_owner`, atau `mode=recovery`).
+2. **Penyusunan Antarmuka Layar Portal Pemilihan Peran**:
+   - Membangun Header: Badge `PORTAL AKSES MASUK & DAFTAR`, Judul `Pilih Akses Masuk Anda di RuangSinggah`, Subtitle penjelas.
+   - Membangun Grid 2 Kartu Peran (Pencari Kost & Pemilik Kost) dengan ikon vector `lucide-react`, checklist fitur, dan tombol `Lanjutkan sebagai...`.
+3. **Penyusunan Formulir Login/Daftar Terpersonalisasi**:
+   - Menghapus chip selector lama dari dalam form login.
+   - Menambahkan badge peran aktif dan tombol `← Ganti Peran` di bagian atas kartu form login.
+   - Mempertahankan 100% fungsionalitas email/password, Google OAuth, OTP WhatsApp, Forgot Password, dan Upgrade Role modal.
+4. **Kompilasi & Build**:
    - Menjalankan `cmd /c npm run build` di `functions/public/` untuk memastikan 0 error kompilasi.
-4. **Pencatatan Progres & Git Push**:
-   - Mencatat progres nomor 302 di `functions/PROGRESS.md`.
+5. **Pencatatan Progres & Git Push**:
+   - Mencatat progres nomor 303 di `functions/PROGRESS.md`.
    - Memperbarui `WALKTHROUGH.md`.
    - Melakukan commit dan push ke branch `bukan-productions`.
 
 ---
 
 ## 4. Rencana Verifikasi
-- Membuka halaman detail kost (`/kost/:id`) di browser.
-- Memeriksa seksian **FASILITAS UMUM**:
-  - Memverifikasi kartu `Area Parkir` yang hanya memiliki 1 kelengkapan (`Parkir Motor`) tampil rapat, proporsional, dan menyatu secara visual tanpa gap kosong canggung di tengah.
-  - Memverifikasi kartu `Dapur Bersama` tetap tampil rapi dengan seluruh chips kelengkapannya.
+- Membuka halaman `/login` di browser tanpa parameter:
+  - Memverifikasi munculnya layar portal pemilihan akses 2 kartu (Pencari Kost vs Pemilik Kost).
+  - Mengklik `Lanjutkan sebagai Pencari` $\rightarrow$ formulir login/daftar Pencari Kost terbuka tanpa chip switcher lama.
+  - Mengklik `← Ganti Peran` $\rightarrow$ kembali ke portal pemilihan akses.
+  - Mengklik `Lanjutkan sebagai Pemilik` $\rightarrow$ formulir login/daftar Pemilik Kost terbuka dengan validasi OTP WhatsApp mitra.

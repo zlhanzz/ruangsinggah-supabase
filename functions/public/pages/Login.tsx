@@ -1,6 +1,22 @@
 
 import React, { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { 
+  Compass, 
+  Building2, 
+  CheckCircle2, 
+  MapPin, 
+  ShieldCheck, 
+  Store, 
+  Layers, 
+  Wallet, 
+  ArrowRight, 
+  User, 
+  RotateCcw, 
+  Eye, 
+  EyeOff, 
+  AlertCircle 
+} from 'lucide-react';
 import { supabase } from '../supabase';
 import { Page } from '../types';
 import { sendWhatsAppTemplate } from '../whatsappService';
@@ -42,9 +58,9 @@ const PasswordInput = ({
         className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 focus:outline-none transition-colors"
       >
         {show ? (
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268-2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" /></svg>
+          <EyeOff className="w-5 h-5 text-gray-400 hover:text-gray-600" />
         ) : (
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268-2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
+          <Eye className="w-5 h-5 text-gray-400 hover:text-gray-600" />
         )}
       </button>
     </div>
@@ -65,6 +81,17 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
   const [activeRole, setActiveRole] = useState<'user' | 'owner'>(() => {
     const saved = localStorage.getItem('portal_view');
     return (saved === 'owner' || saved === 'user') ? saved : 'user';
+  });
+  const [isRoleSelected, setIsRoleSelected] = useState<boolean>(() => {
+    const roleParam = searchParams.get('role');
+    const modeParam = searchParams.get('mode');
+    const verifiedParam = searchParams.get('verified');
+    const upgradeToOwnerParam = searchParams.get('upgrade_to_owner');
+    const upgradeSuccessParam = searchParams.get('upgrade_success');
+    if (roleParam === 'owner' || roleParam === 'user' || roleParam === 'mitra' || modeParam || verifiedParam || upgradeToOwnerParam || upgradeSuccessParam) {
+      return true;
+    }
+    return false;
   });
   const [referralCode, setReferralCode] = useState('');
 
@@ -134,6 +161,7 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
 
     if (mode === 'recovery') {
       setMode('PASSWORD_UPDATE');
+      setIsRoleSelected(true);
       setSuccessMsg('Silakan masukkan kata sandi baru Anda.');
       
       const checkSession = async () => {
@@ -145,13 +173,17 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
       checkSession();
     } else if (verified === 'true') {
       setSuccessMsg('Email berhasil diverifikasi! Silakan login dengan email dan kata sandi Anda.');
+      setIsRoleSelected(true);
       setSearchParams({}, { replace: true });
     } else if (error === 'blocked') {
       setErrorMsg('Akun Anda telah ditangguhkan. Silakan hubungi admin untuk informasi lebih lanjut.');
       setSuccessMsg('');
+      setIsRoleSelected(true);
       setSearchParams({}, { replace: true });
     } else if (error === 'role_mismatch') {
       setErrorMsg('Akun Anda tidak terdaftar sebagai Pemilik Kost. Silakan login sebagai Pencari Kost.');
+      setActiveRole('user');
+      setIsRoleSelected(true);
       setSuccessMsg('');
       setSearchParams({}, { replace: true });
     } else if (
@@ -161,6 +193,7 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
     ) {
       setErrorMsg('Tautan verifikasi email Anda telah kedaluwarsa atau sudah pernah digunakan. Silakan ajukan upgrade kembali.');
       setSuccessMsg('');
+      setIsRoleSelected(true);
       setSearchParams({}, { replace: true });
       // Bersihkan hash juga agar tidak terdeteksi terus
       if (window.location.hash) {
@@ -169,10 +202,12 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
     } else if (upgradeToOwner === 'true') {
       setMode('LOGIN');
       setActiveRole('owner');
+      setIsRoleSelected(true);
       setSearchParams({}, { replace: true });
     } else if (upgradeSuccess === 'true') {
       setMode('LOGIN');
       setActiveRole('owner');
+      setIsRoleSelected(true);
       setErrorMsg('');
       setSuccessMsg('✅ Akun berhasil diupgrade ke Pemilik Kost! Silakan login kembali untuk akses dashboard Mitra.');
       setSearchParams({}, { replace: true });
@@ -180,6 +215,10 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
       const roleParam = searchParams.get('role');
       if (roleParam === 'owner' || roleParam === 'mitra') {
         setActiveRole('owner');
+        setIsRoleSelected(true);
+      } else if (roleParam === 'user') {
+        setActiveRole('user');
+        setIsRoleSelected(true);
       }
       if (mode === 'register' || mode === 'signup') {
         setMode('REGISTER');
@@ -782,6 +821,152 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
   }
   // ──────────────────────────────────────────────────────────────────────────
 
+  // ── Layar Portal Pemilihan Akses Masuk & Daftar (Sebelum Masuk ke Form) ──
+  if (!isRoleSelected && (mode === 'LOGIN' || mode === 'REGISTER')) {
+    return (
+      <div className="min-h-screen bg-gray-50/60 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
+        <div className="max-w-4xl w-full mx-auto animate-in fade-in duration-300">
+          {/* Header Portal */}
+          <div className="text-center max-w-2xl mx-auto mb-10 sm:mb-12 space-y-3">
+            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-orange-50 border border-orange-200/60 shadow-2xs">
+              <span className="w-2 h-2 rounded-full bg-orange-500 animate-pulse"></span>
+              <span className="text-[11px] font-black text-orange-600 uppercase tracking-wider">
+                Portal Akses Masuk & Daftar
+              </span>
+            </div>
+
+            <h1 className="text-2xl sm:text-4xl font-black text-gray-900 tracking-tight">
+              Pilih Akses Masuk Anda di <span className="text-orange-500">RuangSinggah</span>
+            </h1>
+
+            <p className="text-xs sm:text-sm text-gray-500 font-medium leading-relaxed max-w-lg mx-auto">
+              Silakan tentukan peran Anda untuk melanjutkan ke proses masuk, pendaftaran akun baru, atau verifikasi Google secara aman.
+            </p>
+          </div>
+
+          {/* 2 Role Selection Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 sm:gap-8 max-w-3xl mx-auto">
+            {/* Card 1: Pencari Kost */}
+            <div 
+              onClick={() => {
+                setActiveRole('user');
+                setIsRoleSelected(true);
+                resetForm();
+              }}
+              className="group relative bg-white rounded-3xl p-6 sm:p-8 border border-gray-100 shadow-xl shadow-gray-100/60 hover:shadow-2xl hover:border-orange-300 transition-all duration-300 cursor-pointer flex flex-col justify-between hover:-translate-y-1"
+            >
+              <div className="space-y-5">
+                {/* Header Icon & Badge */}
+                <div className="flex items-start justify-between">
+                  <div className="w-14 h-14 rounded-2xl bg-orange-50 text-orange-600 flex items-center justify-center border border-orange-100 group-hover:bg-orange-500 group-hover:text-white transition-all duration-300 group-hover:scale-105 shadow-2xs">
+                    <Compass className="w-7 h-7" />
+                  </div>
+                  <span className="px-3 py-1 rounded-full bg-orange-50 text-orange-700 text-[10px] font-black uppercase tracking-wider border border-orange-100/80">
+                    Pencari Hunian Kost
+                  </span>
+                </div>
+
+                {/* Title & Description */}
+                <div className="space-y-2">
+                  <h3 className="text-xl sm:text-2xl font-black text-gray-900 tracking-tight group-hover:text-orange-600 transition-colors">
+                    Pencari Kost
+                  </h3>
+                  <p className="text-xs sm:text-sm text-gray-500 font-medium leading-relaxed">
+                    Temukan, bandingkan fasilitas, cek jarak kampus terdekat, dan sewa kamar kost nyaman tanpa ribet survey langsung ke lokasi.
+                  </p>
+                </div>
+
+                {/* Checklist Box */}
+                <div className="bg-orange-50/40 rounded-2xl p-4 border border-orange-100/50 space-y-2.5">
+                  <div className="flex items-center gap-2.5 text-xs font-bold text-gray-700">
+                    <CheckCircle2 className="w-4 h-4 text-orange-500 shrink-0" />
+                    <span>Akses 1.200+ database kost terverifikasi</span>
+                  </div>
+                  <div className="flex items-center gap-2.5 text-xs font-bold text-gray-700">
+                    <MapPin className="w-4 h-4 text-orange-500 shrink-0" />
+                    <span>Layanan Jasa Survey Lapangan langsung</span>
+                  </div>
+                  <div className="flex items-center gap-2.5 text-xs font-bold text-gray-700">
+                    <ShieldCheck className="w-4 h-4 text-orange-500 shrink-0" />
+                    <span>Booking aman & transparansi biaya sewa</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Bottom CTA Button */}
+              <div className="pt-6 flex items-center justify-between border-t border-gray-50 mt-6">
+                <span className="text-xs sm:text-sm font-extrabold text-orange-600 group-hover:text-orange-700">
+                  Lanjutkan sebagai Pencari
+                </span>
+                <div className="w-10 h-10 rounded-full bg-orange-500 text-white flex items-center justify-center shadow-md shadow-orange-500/20 group-hover:bg-orange-600 group-hover:translate-x-1 transition-all">
+                  <ArrowRight className="w-5 h-5" />
+                </div>
+              </div>
+            </div>
+
+            {/* Card 2: Pemilik Kost */}
+            <div 
+              onClick={() => {
+                setActiveRole('owner');
+                setIsRoleSelected(true);
+                resetForm();
+              }}
+              className="group relative bg-white rounded-3xl p-6 sm:p-8 border border-gray-100 shadow-xl shadow-gray-100/60 hover:shadow-2xl hover:border-indigo-300 transition-all duration-300 cursor-pointer flex flex-col justify-between hover:-translate-y-1"
+            >
+              <div className="space-y-5">
+                {/* Header Icon & Badge */}
+                <div className="flex items-start justify-between">
+                  <div className="w-14 h-14 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center border border-indigo-100 group-hover:bg-indigo-600 group-hover:text-white transition-all duration-300 group-hover:scale-105 shadow-2xs">
+                    <Building2 className="w-7 h-7" />
+                  </div>
+                  <span className="px-3 py-1 rounded-full bg-indigo-50 text-indigo-700 text-[10px] font-black uppercase tracking-wider border border-indigo-100/80">
+                    Mitra & Pengelola
+                  </span>
+                </div>
+
+                {/* Title & Description */}
+                <div className="space-y-2">
+                  <h3 className="text-xl sm:text-2xl font-black text-gray-900 tracking-tight group-hover:text-indigo-600 transition-colors">
+                    Pemilik Kost
+                  </h3>
+                  <p className="text-xs sm:text-sm text-gray-500 font-medium leading-relaxed">
+                    Kelola kamar, catat inventaris properti, pantau okupansi kamar, dan pasarkan langsung ke ribuan calon mahasiswa perantau.
+                  </p>
+                </div>
+
+                {/* Checklist Box */}
+                <div className="bg-indigo-50/40 rounded-2xl p-4 border border-indigo-100/50 space-y-2.5">
+                  <div className="flex items-center gap-2.5 text-xs font-bold text-gray-700">
+                    <Store className="w-4 h-4 text-indigo-500 shrink-0" />
+                    <span>Pasang listing & promosi properti gratis</span>
+                  </div>
+                  <div className="flex items-center gap-2.5 text-xs font-bold text-gray-700">
+                    <Layers className="w-4 h-4 text-indigo-500 shrink-0" />
+                    <span>Sistem KostManager & verifikasi survey</span>
+                  </div>
+                  <div className="flex items-center gap-2.5 text-xs font-bold text-gray-700">
+                    <Wallet className="w-4 h-4 text-indigo-500 shrink-0" />
+                    <span>Rekap laporan sewa & dompet penghasilan</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Bottom CTA Button */}
+              <div className="pt-6 flex items-center justify-between border-t border-gray-50 mt-6">
+                <span className="text-xs sm:text-sm font-extrabold text-indigo-600 group-hover:text-indigo-700">
+                  Lanjutkan sebagai Pemilik
+                </span>
+                <div className="w-10 h-10 rounded-full bg-indigo-600 text-white flex items-center justify-center shadow-md shadow-indigo-600/20 group-hover:bg-indigo-700 group-hover:translate-x-1 transition-all">
+                  <ArrowRight className="w-5 h-5" />
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
 
@@ -850,36 +1035,38 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
       <div className="max-w-md w-full bg-white rounded-[2.5rem] shadow-xl border border-gray-100 overflow-hidden">
         <div className="p-8 sm:p-12">
           
-          {/* Segmented Tab Pemilih Peran di Atas */}
+          {/* Header Status Peran Aktif & Tombol Ganti Peran */}
           {(mode === 'LOGIN' || mode === 'REGISTER') && (
-            <div className="mb-8">
-              <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest text-center mb-3">Portal Akses Masuk / Daftar</label>
-              <div className="grid grid-cols-2 gap-2 p-1 bg-gray-100 rounded-2xl">
-                <button
-                  type="button"
-                  onClick={() => { setActiveRole('user'); setErrorMsg(''); }}
-                  className={`py-3 rounded-xl text-xs font-black uppercase tracking-wider transition-all duration-300 flex items-center justify-center gap-1.5 ${
-                    activeRole === 'user'
-                      ? 'bg-white text-orange-500 shadow-md scale-[1.02]'
-                      : 'text-gray-500 hover:text-gray-900'
-                  }`}
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
-                  Pencari Kost
-                </button>
-                <button
-                  type="button"
-                  onClick={() => { setActiveRole('owner'); setErrorMsg(''); }}
-                  className={`py-3 rounded-xl text-xs font-black uppercase tracking-wider transition-all duration-300 flex items-center justify-center gap-1.5 ${
-                    activeRole === 'owner'
-                      ? 'bg-white text-orange-500 shadow-md scale-[1.02]'
-                      : 'text-gray-500 hover:text-gray-900'
-                  }`}
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
-                  Pemilik Kost
-                </button>
+            <div className="mb-6 pb-5 border-b border-gray-100 flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className={`w-8 h-8 rounded-xl flex items-center justify-center text-sm ${
+                  activeRole === 'user' ? 'bg-orange-100 text-orange-600' : 'bg-indigo-100 text-indigo-600'
+                }`}>
+                  {activeRole === 'user' ? <User className="w-4 h-4" /> : <Building2 className="w-4 h-4" />}
+                </div>
+                <div>
+                  <span className="text-[10px] font-black uppercase tracking-wider text-gray-400 block">
+                    Akses Masuk
+                  </span>
+                  <span className={`text-xs font-extrabold ${
+                    activeRole === 'user' ? 'text-orange-600' : 'text-indigo-600'
+                  }`}>
+                    {activeRole === 'user' ? 'Pencari Kost' : 'Pemilik / Mitra Kost'}
+                  </span>
+                </div>
               </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setIsRoleSelected(false);
+                  resetForm();
+                }}
+                className="text-[11px] font-extrabold text-gray-500 hover:text-orange-600 transition-colors flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-gray-50 hover:bg-orange-50 border border-gray-100"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                <span>Ganti Peran</span>
+              </button>
             </div>
           )}
 
