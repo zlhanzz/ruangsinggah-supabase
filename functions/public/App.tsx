@@ -680,8 +680,6 @@ const App: React.FC = () => {
              <Route path="/payment-status/:orderId" element={<OrderPaymentStatus user={user} />} />
               <Route path={Page.HOME} element={
                 user?.role === 'owner' ? <Navigate to={Page.DASHBOARD_MITRA} replace /> :
-                user?.role === 'admin' ? <Navigate to={Page.DASHBOARD_ADMIN} replace /> :
-                user?.role === 'survey_agent' ? <Navigate to={Page.DASHBOARD_AGENT} replace /> :
                 <Home onPageChange={(p: Page | string) => navigate(p)} onKostSelect={handleKostSelect} user={user} listings={listings} loading={loadingListings} />
               } />
               <Route path={Page.LISTINGS} element={

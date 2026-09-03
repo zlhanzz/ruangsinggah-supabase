@@ -1,25 +1,16 @@
-# Rencana Implementasi: Sinkronisasi Build Output Directory Cloudflare Pages (`functions/public/dist`)
+# Rencana Implementasi: Akses Peninjauan Mode User untuk Admin & Penyempurnaan Navigasi
 
-## 1. Analisis Masalah & Log Cloudflare Pages
-- **Temuan dari Log Terbaru**:
-  - Proses `git clone` sudah **100% SUKSES** setelah submodule `gitleaks` dibersihkan di commit sebelumnya.
-  - Proses instalasi dependensi (`npm install`) dan kompilasi Vite (`vite build`) juga **100% SUKSES (✓ 2509 modules transformed)**.
-  - **Titik Kegagalan**:
+## 1. Analisis Masalah & Kebutuhan
+- **Masalah**:
+  - Saat ini, ketika Admin berada di Dashboard Admin (`/dashboard-admin`) dan mengklik tombol **`[👁️ LIHAT SEBAGAI USER]`** atau tombol **`[Mode User]`** di Navbar, rute `Page.HOME` (`/`) pada `App.tsx` secara otomatis memaksa redirect kembali:
+    ```tsx
+    user?.role === 'admin' ? <Navigate to={Page.DASHBOARD_ADMIN} replace />
     ```
-    Validating asset output directory
-    Error: Output directory "functions/public/dist" not found.
-    Failed: build output directory not found
-    ```
-- **Akar Penyebab**:
-  - Cloudflare Pages pada proyek ini dikonfigurasi mencari output di **`functions/public/dist`** (standar bawaan preset Vite).
-  - Sementara itu, konfigurasi `vite.config.ts` diatur untuk mengeluarkan output ke `../../public` (root `public/`).
-  - Akibatnya, Cloudflare Pages menganggap folder output tidak ada karena folder `functions/public/dist` kosong/belum dibuat.
-
-- **Tujuan Solusi**:
-  1. Memperbarui script `"build"` di `functions/public/package.json` agar setelah `vite build` selesai, otomatis menyinkronkan seluruh file hasil build ke folder **`dist`** (`functions/public/dist`) menggunakan native Node `fs.cpSync`.
-  2. Memperbarui script `"build"` di root `package.json` agar juga membuat output di `dist/` dan `functions/public/dist`.
-  3. Memastikan semua direktori output (`public/`, `dist/`, dan `functions/public/dist/`) terisi lengkap dan siap disajikan oleh Cloudflare Pages.
-  4. Commit dan push ke `bukan-productions` dan `main` agar Cloudflare Pages langsung sukses melakukan deployment.
+  - Akibatnya, Admin ikut "terisolasi" dan tidak bisa membuka atau meninjau halaman Beranda/Home sebagai pengguna umum.
+- **Kebutuhan**:
+  - Role **`admin`** (dan `survey_agent`) harus dapat meninjau dan membuka tampilan Beranda (`Page.HOME`), Katalog Cari Kost, Detail Kost, Database Kost, dan Jasa Survey secara bebas.
+  - Role **`owner`** (pemilik kost) tetap dipertahankan 100% terisolasi ke `Page.DASHBOARD_MITRA` sesuai kebutuhan privasi portal mitra.
+  - Admin dapat berpindah antara **"Mode User"** (meninjau tampilan pengguna) dan **"Admin Panel"** kapan saja melalui tombol navigasi di Navbar dan tombol di sidebar Admin Dashboard.
 
 ---
 
@@ -27,32 +18,41 @@
 
 | File | Tindakan & Penjelasan Perubahan |
 | :--- | :--- |
-| `functions/public/package.json` | Perbarui script `"build": "vite build && node -e \"const fs=require('fs'); fs.cpSync('../../public', './dist', {recursive: true, force: true});\""`. |
-| `package.json` (Root) | Sinkronkan script delegasi build agar menyertakan penyalinan folder output. |
-| `.gitignore` | Pastikan `functions/public/dist/` atau `dist/` diatur dengan tepat. |
+| `functions/public/App.tsx` | Hapus redirect paksa `user?.role === 'admin'` pada rute `Page.HOME` (`/`). Hanya `user?.role === 'owner'` yang di-redirect ke Dashboard Mitra. |
+| `functions/public/components/Navbar.tsx` | Pastikan klik pada Logo RuangSinggah mengarahkan Admin ke `Page.HOME` saat dalam mode peninjauan, dan tombol toggle `"Mode User"` / `"Admin Panel"` bekerja dua arah secara mulus. |
 
 ---
 
 ## 3. Langkah-Langkah Eksekusi
 
-### Langkah 1: Perbarui Script Build
-- Modifikasi `functions/public/package.json` dan root `package.json`.
+### Langkah 1: Modifikasi Rute `Page.HOME` di `App.tsx`
+- Ubah rute `Page.HOME` menjadi:
+  ```tsx
+  <Route path={Page.HOME} element={
+    user?.role === 'owner' ? <Navigate to={Page.DASHBOARD_MITRA} replace /> :
+    <Home onPageChange={(p: Page | string) => navigate(p)} onKostSelect={handleKostSelect} user={user} listings={listings} loading={loadingListings} />
+  } />
+  ```
 
-### Langkah 2: Uji Kompilasi Lokal & Validasi Folder `dist`
-- Jalankan `cmd /c npm run build` di root repository.
-- Verifikasi keberadaan file `index.html` dan folder `assets/` di dalam `functions/public/dist/`.
+### Langkah 2: Sempurnakan Klik Logo di `Navbar.tsx`
+- Ubah `onClick` pada logo:
+  ```tsx
+  onClick={() => onPageChange(isOwner ? Page.DASHBOARD_MITRA : Page.HOME)}
+  ```
 
-### Langkah 3: Merge ke `main` & Push ke GitHub
-- Commit ke `bukan-productions`.
-- Merge ke branch `main` dan push ke `origin main`.
+### Langkah 3: Build & Validasi
+- Jalankan `cmd /c npm run build` untuk memverifikasi 0 error kompilasi dan sinkronisasi ke folder `dist` dan `public`.
+- Commit ke `bukan-productions`, merge ke `main`, dan push ke GitHub `origin main`.
 
 ---
 
 ## 4. Rencana Verifikasi
 
-1. **Uji Validasi Folder Lokal**:
-   - Memastikan `functions/public/dist/index.html` dan `functions/public/dist/assets/` ada dan terisi lengkap.
-2. **Verifikasi Deployment Cloudflare Pages**:
-   - Cloudflare Pages akan memvalidasi direktori `functions/public/dist` $\rightarrow$ Validasi asset sukses $\rightarrow$ Status berubah menjadi **Success / Active (Hijau)**.
-3. **Verifikasi Live Website `https://ruangsinggah.id`**:
-   - Website live akan langsung menyajikan versi terbaru dari commit `1d545634` / commit perbaikan ini.
+1. **Uji Peninjauan Mode User sebagai Admin**:
+   - Login sebagai Admin $\rightarrow$ Buka Dashboard Admin $\rightarrow$ Klik tombol **`[👁️ LIHAT SEBAGAI USER]`**.
+   - **Hasil**: Halaman Beranda (`/`) terbuka sempurna tanpa terlempar kembali ke Admin Dashboard.
+2. **Uji Kembali ke Admin Panel**:
+   - Di Navbar saat di halaman user, klik tombol **`[ADMIN PANEL]`**.
+   - **Hasil**: Halaman langsung kembali ke Dashboard Admin (`/dashboard-admin`).
+3. **Uji Isolasi Pemilik Kost (Owner)**:
+   - Login sebagai Pemilik Kost $\rightarrow$ Buka `/` $\rightarrow$ Tetap otomatis diarahkan ke `/dashboard-mitra` (isolasi mitra tetap utuh 100%).

@@ -2,6 +2,24 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 315. Pembebasan Akses Peninjauan Mode User bagi Akun Admin (`App.tsx`, `Navbar.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  - Admin melaporkan bahwa setelah implementasi isolasi portal mitra, Admin tidak dapat meninjau tampilan user umum karena ketika mengklik tombol `[👁️ LIHAT SEBAGAI USER]` atau `[Mode User]`, halaman `Page.HOME` (`/`) secara otomatis memaksa redirect kembali ke `/dashboard-admin`.
+- **Implementasi Solusi**:
+  1. **Penghapusan Redirect Paksa Admin pada `Page.HOME` (`App.tsx`)**:
+     - Menghapus aturan redirect paksa untuk role `admin` dan `survey_agent` pada rute `Page.HOME`, sehingga hanya pemilik kost (`user?.role === 'owner'`) yang tetap terisolasi ke `/dashboard-mitra`.
+     - Admin kini dapat meninjau halaman Beranda, Cari Kost, Detail Kost, Data Kost, dan Jasa Survey secara bebas sebagai pengguna umum.
+  2. **Penyempurnaan Navigasi Logo & Toggle Mode (`Navbar.tsx`)**:
+     - Memperbarui klik logo RuangSinggah agar mengarahkan ke `Page.HOME` saat sedang dalam mode peninjauan user.
+     - Memastikan tombol toggle `"Mode User"` (saat di Admin Panel) $\leftrightarrow$ `"Admin Panel"` (saat di Mode User) bekerja secara instan dan mulus.
+- **File Tersentuh**:
+  - `functions/public/App.tsx`
+  - `functions/public/components/Navbar.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi build lulus 100% (✓ 2509 modules transformed, built in 42.36s, 0 error).
+
 ### 314. Sinkronisasi Build Output Directory Cloudflare Pages `functions/public/dist` (`functions/public/package.json`, `package.json`) (September 2026)
 - **Permintaan & Masalah**:
   - Cloudflare Pages berhasil clone repository dan build Vite, namun gagal pada tahap validasi asset output:

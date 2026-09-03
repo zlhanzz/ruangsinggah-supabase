@@ -98,7 +98,7 @@ const Navbar: React.FC<NavbarProps> = ({ activePage, onPageChange, user, onLogou
           <div className="flex justify-between h-20 items-center">
             <div 
               className="flex-shrink-0 flex items-center cursor-pointer" 
-              onClick={() => onPageChange(isOwner ? Page.DASHBOARD_MITRA : (isAdmin ? Page.DASHBOARD_ADMIN : (isAgent ? Page.DASHBOARD_AGENT : Page.HOME)))}
+              onClick={() => onPageChange(isOwner ? Page.DASHBOARD_MITRA : Page.HOME)}
             >
               <img src="/logo.png" alt="RuangSinggah.id" className="h-10 sm:h-12 w-auto mr-1.5" width="48" height="48" fetchPriority="high" />
               <span className="text-[#ff7a00] font-extrabold text-2xl tracking-tight">RuangSinggah</span>
