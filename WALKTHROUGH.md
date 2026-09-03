@@ -1,40 +1,28 @@
-# WALKTHROUGH: Pembaruan Akurasi Ikon SVG Fasilitas Umum & Fasilitas Kamar
+# WALKTHROUGH: Penerapan Fitur Tombol 'Bagikan' & 'Simpan' Serta Peremajaan Header Card Listing
 
 ## 1. Ringkasan Pekerjaan
-Telah berhasil diimplementasikan pemetaan ikon SVG murni presisi tinggi dari package `lucide-react` untuk menggantikan seluruh fallback centang (`<Check />` dan `<CheckCircle2 />`) pada halaman detail kost [`KostDetail.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/KostDetail.tsx):
-- **Dapur Bersama & Peralatan Masak**:
-  - `Kompor` / `Gas` $\rightarrow$ `<Flame />`
-  - `Kulkas Bersama` / `Kulkas` $\rightarrow$ `<Refrigerator />`
-  - `Wastafel Cuci Piring` / `Sink` $\rightarrow$ `<Droplets />`
-  - `Peralatan Masak` $\rightarrow$ `<UtensilsCrossed />`
-  - `Peralatan Makan` $\rightarrow$ `<Utensils />`
-  - `Dispenser Air` $\rightarrow$ `<CupSoda />`
-  - `Rice Cooker` / `Panci` $\rightarrow$ `<CookingPot />`
-- **Area Parkir & Transportasi**:
-  - `Parkir Motor` $\rightarrow$ `<Bike />`
-  - `Parkir Mobil` $\rightarrow$ `<Car />`
-- **Kamar Mandi**:
-  - `Shower` $\rightarrow$ `<ShowerHead />`
-  - `Water Heater` / `Air Panas` $\rightarrow$ `<ThermometerSun />`
-  - `Bak Mandi` $\rightarrow$ `<Waves />`
-  - `Kloset` / `Toilet` $\rightarrow$ `<Bath />`
-- **Kamar Tidur**:
-  - `Kasur` / `Springbed` $\rightarrow$ `<Bed />`
-  - `Lemari` / `Storage` $\rightarrow$ `<Layers />`
-  - `Meja Belajar` / `Kursi` $\rightarrow$ `<Armchair />`
-  - `AC` $\rightarrow$ `<Wind />`
-  - `Kipas Angin` $\rightarrow$ `<Fan />`
-  - `TV` $\rightarrow$ `<Tv />`
+Telah berhasil diimplementasikan fitur tombol **Bagikan** (`Share2`) dan **Simpan** (`Heart`) serta peremajaan visual kartu informasi utama listing pada [`KostDetail.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/KostDetail.tsx):
+- **Tombol Bagikan (`Share`)**:
+  - Mendukung `navigator.share` untuk perangkat mobile dan desktop yang kompatibel.
+  - Fallback otomatis berupa *Copy Link ke Clipboard* disertai toast notifikasi: *"Tautan kost berhasil disalin ke clipboard!"*.
+- **Tombol Simpan (`Save / Wishlist`)**:
+  - Menyimpan ID properti ke penyimpanan lokal peramban (`localStorage` `ruangsinggah_saved_kosts`).
+  - Status ikon dinamis: Berubah menjadi merah hati (`fill-rose-500 text-rose-500`) dan teks menjadi *"Tersimpan"*.
+  - Notifikasi feedback visual instan saat kost disimpan atau dihapus dari daftar simpanan.
+- **Peremajaan Header Card**:
+  - Penataan baris atas memuat badge gender (`KOST PUTRA / PUTRI / CAMPUR`) dan badge `Terverifikasi RuangSinggah` di sebelah kiri, serta tombol aksi di sebelah kanan.
+  - Tipografi judul listing dan alamat berikon `MapPin` yang bersih dan modern.
+  - Floating toast notification mengambang dengan timer auto-dismiss 3 detik.
 
 ---
 
 ## 2. Rincian Perubahan Berkas
 
 ### [`KostDetail.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/KostDetail.tsx)
-- Menambahkan import: `Flame`, `UtensilsCrossed`, `ShowerHead`, `Fan`, `Dumbbell`, `CupSoda`, `ThermometerSun`, `Waves`, `Trash2`, `Zap`.
-- Membuat resolver universal `getFacilityItemIcon(name, customClass)` yang menangani pemetaan seluruh kata kunci fasilitas.
-- Mengganti tag `<Check />` di dalam `group.subItems.map` menjadi `{getFacilityItemIcon(sub, "w-3.5 h-3.5 text-orange-500 shrink-0")}`.
-- Memperbarui icon kamar mandi dan dapur pribadi pada kolom utama serta dropdown sidebar agar menggunakan ikon spesifik.
+- Menambahkan import `Share2`, `Heart` dari package `lucide-react`.
+- Menambahkan state `isSaved` dan `toastMessage` beserta helper `handleShare()` dan `handleToggleSave()`.
+- Memperbarui komponen `Main Header Information Card` dengan layout responsif yang memuat badge dan tombol aksi.
+- Menambahkan komponen `Floating Toast Notification`.
 
 ---
 
@@ -46,7 +34,7 @@ cmd /c npm run build
 **Output:**
 ```text
 ✓ 2509 modules transformed.
-✓ built in 32.23s
+✓ built in 33.02s
 Exit code: 0 (0 error)
 ```
 
@@ -54,8 +42,8 @@ Exit code: 0 (0 error)
 
 ## 4. Panduan Verifikasi Pengguna
 1. Buka halaman detail kost (`/kost/:id`) di browser Anda.
-2. Periksa bagian **FASILITAS UMUM**:
-   - Pada kartu **Dapur Bersama**: Kompor kini berikon Api (`Flame`), Kulkas berikon Kulkas (`Refrigerator`), Wastafel Cuci Piring berikon Tetes Air (`Droplets`), Peralatan Masak berikon Sendok Garpu Bersilang (`UtensilsCrossed`), dan Dispenser Air berikon Minuman (`CupSoda`).
-   - Pada kartu **Area Parkir**: Parkir Motor kini berikon Sepeda Motor (`Bike`).
-3. Periksa bagian **FASILITAS KAMAR**:
-   - Seluruh item perabot, kamar mandi (Shower, Kloset, Water Heater), dan dapur kini tampil dengan ikon spesifik masing-masing.
+2. Periksa kartu informasi properti di bagian atas:
+   - **Tombol Bagikan**: Klik tombol *"Bagikan"* di kanan atas. Dialog share akan muncul, atau tautan akan tersalin ke clipboard dengan notifikasi toast hitam mengambang di kanan bawah.
+   - **Tombol Simpan**: Klik tombol *"Simpan"*. Ikon hati akan terisi warna merah muda/rose dan teks berubah menjadi *"Tersimpan"*.
+   - Refresh browser Anda, dan status *"Tersimpan"* akan tetap tersimpan.
+   - Klik kembali untuk menghapus dari simpanan.

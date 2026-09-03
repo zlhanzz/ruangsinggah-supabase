@@ -1,44 +1,61 @@
-# IMPLEMENTATION PLAN: Pembaruan Akurasi Ikon SVG Fasilitas Umum & Fasilitas Kamar di KostDetail.tsx
+# IMPLEMENTATION PLAN: Penerapan Fitur Tombol 'Bagikan' & 'Simpan' (Favorit) Serta Pembaruan Header Listing di KostDetail.tsx
 
 ## 1. Analisis Masalah & Kebutuhan
-- **Masalah Saat Ini**:
-  - Pada seksian *Fasilitas Umum*, sub-kelengkapan seperti *Kompor*, *Kulkas Bersama*, *Wastafel Cuci Piring*, *Peralatan Masak*, *Dispenser Air*, dan *Parkir Motor* masih menggunakan ikon centang generik (`<Check />`).
-  - Beberapa fasilitas kamar dan gedung juga masih menggunakan fallback centang (`<CheckCircle2 />`).
-- **Tujuan**:
-  - Mengganti seluruh ikon centang generik dengan **ikon vector SVG murni yang akurat dan presisi** dari paket `lucide-react` (seperti `<Flame />` untuk Kompor, `<Refrigerator />` untuk Kulkas, `<UtensilsCrossed />` untuk Peralatan Masak, `<Droplets />` untuk Wastafel/Dispenser, `<Bike />` untuk Parkir Motor, `<Car />` untuk Parkir Mobil, `<ShowerHead />` untuk Shower, `<Fan />` untuk Kipas Angin, `<KeyRound />` untuk Akses 24 Jam, dll.).
-  - Memastikan gaya visual (warna oranye/biru/amber dengan rounded container yang halus) seragam, rapi, dan konsisten di seluruh halaman detail.
+- **Kondisi Saat Ini**:
+  - Header kartu utama listing pada `KostDetail.tsx` hanya menampilkan badge tipe kost polos (`[ PUTRA ]`), badge `Terverifikasi`, nama kost, dan alamat.
+  - Belum tersedia tombol aksi cepat untuk membagikan tautan kost ke media sosial/teman (**Tombol Bagikan**) maupun menyimpan properti ke daftar favorit pengguna (**Tombol Simpan**).
+- **Kebutuhan Pengguna**:
+  - Menerapkan **Tombol Bagikan** (`Share2`) dan **Tombol Simpan** (`Heart`) di baris atas kartu informasi listing (sebelah kanan, sejajar dengan badge tipe & verifikasi).
+  - **Fitur Tombol Bagikan**:
+    - Mendukung `navigator.share` (Native Mobile/Desktop Share dialog).
+    - Fallback otomatis berupa penyalinan tautan listing ke clipboard (*Copy to Clipboard*) disertai toast notifikasi sukses yang elegan.
+  - **Fitur Tombol Simpan**:
+    - Menyimpan ID kost ke daftar favorit (`localStorage` `ruangsinggah_saved_kosts` dan sinkron state).
+    - Status visual dinamis: Ikon hati berubah merah terisi (`fill-rose-500 text-rose-500`) dan teks menjadi *"Tersimpan"* saat aktif.
+    - Notifikasi toast visual saat kost berhasil ditambahkan/dihapus dari daftar simpanan.
+  - **Penyempurnaan Tampilan Header**:
+    - Badge tipe kost yang lebih representatif: `KOST PUTRA` / `KOST PUTRI` / `KOST CAMPUR` dengan ikon user.
+    - Badge `Terverifikasi RuangSinggah` dengan centang hijau/emerald yang rapi.
+    - Ikon `MapPin` oranye untuk alamat.
 
 ---
 
 ## 2. Dampak Perubahan
 - **File Tersentuh**:
-  - `functions/public/pages/KostDetail.tsx` (Parser ikon fasilitas umum & fasilitas kamar)
+  - `functions/public/pages/KostDetail.tsx` (Penambahan state & handler `handleShare`, `handleToggleSave`, rendering tombol Bagikan & Simpan, serta peremajaan header card).
 
 ---
 
 ## 3. Langkah-Langkah Eksekusi
-1. **Pembuatan Icon Resolver Terpadu & Akurat (`getFacilityIcon`)**:
-   - Menambahkan helper fungsi yang memetakan nama fasilitas ke ikon SVG `lucide-react` yang sangat spesifik dan akurat:
-     - Dapur & Masak: `Flame` (Kompor/Gas), `Refrigerator` (Kulkas), `UtensilsCrossed` (Peralatan Masak), `Utensils` (Peralatan Makan), `Droplets` (Wastafel/Dispenser/Air), `CookingPot` (Rice Cooker/Panci), `Zap` (Microwave).
-     - Parkir: `Bike` (Parkir Motor/Sepeda), `Car` (Parkir Mobil/Garasi), `ShieldCheck` (Parkir Gratis/Aman).
-     - Kamar Mandi: `Bath` (Kamar Mandi/Bak), `ShowerHead` (Shower), `Droplets` (Wastafel/Gayung/Air Panas), `Flame` / `ThermometerSun` (Water Heater).
-     - Kamar Tidur: `Bed` (Kasur/Springbed), `Layers` (Lemari/Storage/Rak), `Armchair` (Meja/Kursi), `Wind` (AC/Ventilasi), `Fan` (Kipas Angin), `Tv` (TV), `Sun` / `AppWindow` (Jendela/Balkon).
-     - Gedung & Keamanan: `Wifi` (WiFi), `Camera` (CCTV), `ShieldCheck` (Security), `KeyRound` / `Clock` (Akses 24 Jam), `Shirt` (Laundry), `Sun` (Jemuran/Rooftop), `Building2` (Lift), `Dumbbell` (Gym).
-2. **Penerapan pada Sub-Kelengkapan Fasilitas Umum**:
-   - Mengganti `<Check />` pada chips sub-kelengkapan Dapur Bersama, Area Parkir, WC Umum, dan Ruang Tamu menjadi ikon SVG spesifik hasil resolve `getFacilityIcon(sub)`.
-3. **Penerapan pada Fasilitas Kamar & Gedung**:
-   - Memastikan seluruh item fasilitas kamar dan fasilitas mandiri menggunakan ikon spesifik tanpa centang generic.
-4. **Kompilasi & Build**:
-   - Menjalankan `cmd /c npm run build` untuk memverifikasi 0 error kompilasi.
-5. **Pencatatan Progres & Git Push**:
-   - Mencatat progres nomor 298 di `functions/PROGRESS.md`.
+1. **State & Helper Logic**:
+   - Menambahkan import `Share2`, `Heart`, `Check` dari `lucide-react`.
+   - Menambahkan state `isSaved` yang menginisialisasi dari `localStorage` (`ruangsinggah_saved_kosts`).
+   - Menambahkan state `toastMessage` untuk menampilkan feedback mini saat share atau save dilakukan.
+   - Membuat fungsi `handleShare()`:
+     - Menggunakan `navigator.share({ title, url })` jika tersedia.
+     - Fallback: `navigator.clipboard.writeText(window.location.href)` dan menampilkan toast *"Tautan berhasil disalin ke clipboard!"*.
+   - Membuat fungsi `handleToggleSave()`:
+     - Toggle ID kost pada `localStorage`.
+     - Update state `isSaved` dan menampilkan toast *"Kost berhasil disimpan ke favorit!"* / *"Kost dihapus dari favorit"*.
+2. **Pembaruan Layout Header Card di `KostDetail.tsx`**:
+   - Mengubah baris atas header card menjadi flex container yang memuat:
+     - Sisi Kiri: Badge `KOST PUTRA/PUTRI/CAMPUR` + Badge `Terverifikasi RuangSinggah`.
+     - Sisi Kanan: Tombol `Bagikan` (icon `Share2`) + Tombol `Simpan` / `Tersimpan` (icon `Heart`).
+   - Merapikan tipografi nama kost dan alamat dengan ikon `MapPin`.
+3. **Kompilasi & Build**:
+   - Menjalankan `cmd /c npm run build` di `functions/public/` untuk memastikan 0 error kompilasi.
+4. **Pencatatan Progres & Git Push**:
+   - Mencatat progres nomor 299 di `functions/PROGRESS.md`.
    - Memperbarui `WALKTHROUGH.md`.
    - Melakukan commit dan push ke branch `bukan-productions`.
 
 ---
 
 ## 4. Rencana Verifikasi
-- Membuka halaman detail kost (`/kost/:id`) pada layar desktop dan mobile.
-- Memeriksa chips pada *Dapur Bersama* (Kompor = Api/Flame, Kulkas = Refrigerator, Wastafel = Droplets, Alat Masak = Utensils, Dispenser = Droplets/Cup).
-- Memeriksa chips pada *Area Parkir* (Parkir Motor = Bike, Parkir Mobil = Car).
-- Memeriksa bahwa tidak ada lagi ikon centang generik pada kartu fasilitas.
+- Membuka halaman detail kost (`/kost/:id`) di desktop dan mobile.
+- Menguji klik **Tombol Bagikan**:
+  - Memverifikasi dialog share muncul atau URL tersalin ke clipboard disertai toast notifikasi.
+- Menguji klik **Tombol Simpan**:
+  - Memverifikasi ikon hati berubah menjadi merah (`Tersimpan`), tersimpan di `localStorage`, dan jika di-refresh statusnya tetap tersimpan.
+  - Memverifikasi klik kedua menghapus dari daftar simpanan.
+- Memverifikasi badge tipe dan verifikasi tampil serasi dan rapi sesuai desain referensi.

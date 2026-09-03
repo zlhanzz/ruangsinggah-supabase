@@ -2,6 +2,28 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 299. Penerapan Fitur Tombol 'Bagikan' & 'Simpan' (Wishlist) Serta Peremajaan Header Card Listing (`KostDetail.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  - Pengguna menginginkan tombol aksi cepat **Bagikan** dan **Simpan** (Favorit / Wishlist) pada kartu informasi utama listing halaman detail kost, serta peremajaan visual header card agar tampil modern dan selaras dengan referensi desain ruangsinggah.
+- **Implementasi Solusi**:
+  1. **Tombol Bagikan (`Share2`)**:
+     - Mendukung dialog bawaan peramban/perangkat (`navigator.share`) untuk membagikan tautan kost secara instan.
+     - Menyediakan fallback otomatis penyalinan tautan ke clipboard (`navigator.clipboard.writeText`) disertai notifikasi toast visual yang elegan.
+  2. **Tombol Simpan / Favorit (`Heart`)**:
+     - Mengelola status bookmark/favorit secara lokal di `localStorage` (`ruangsinggah_saved_kosts`).
+     - Ikon hati dinamis: berubah warna merah hati (`fill-rose-500 text-rose-500`) dan teks menjadi *"Tersimpan"* saat aktif.
+     - Menyajikan toast notifikasi saat kost berhasil disimpan atau dihapus dari daftar simpanan.
+  3. **Peremajaan Header Card Listing**:
+     - Menata ulang layout kartu informasi properti dengan badge representatif `KOST PUTRA / PUTRI / CAMPUR` berikon user dan badge `Terverifikasi RuangSinggah` dengan centang hijau emerald.
+     - Tipografi judul properti yang tajam dan alamat berikon `MapPin` oranye.
+     - Floating toast notification dengan timer auto-dismiss 3 detik.
+- **File Tersentuh**:
+  - `functions/public/pages/KostDetail.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi Vite `cmd /c npm run build` di `functions/public/` lulus 100% (✓ 2509 modules transformed, built in 33.02s, 0 error).
+
 ### 298. Pembaruan Akurasi Ikon SVG Fasilitas Umum & Kamar Menggantikan Fallback Centang (`KostDetail.tsx`) (September 2026)
 - **Permintaan & Masalah**:
   - Sub-kelengkapan fasilitas umum (kompor, kulkas, wastafel cuci piring, alat masak, dispenser, parkir motor, dll.) serta beberapa fasilitas kamar dan gedung sebelumnya masih menggunakan ikon centang generik (`<Check />` / `<CheckCircle2 />`).

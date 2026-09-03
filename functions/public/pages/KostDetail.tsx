@@ -17,7 +17,7 @@ import {
   Bike, Bath, ShieldCheck, KeyRound, Shirt, Sun, Building2, Armchair, 
   Wind, Tv, Droplets, Utensils, Refrigerator, Lock, MapPin, Navigation, 
   GraduationCap, RotateCcw, Star, Flame, UtensilsCrossed, ShowerHead, Fan, 
-  Dumbbell, CupSoda, ThermometerSun, Waves, Trash2, Zap
+  Dumbbell, CupSoda, ThermometerSun, Waves, Trash2, Zap, Share2, Heart
 } from 'lucide-react';
 import { createKostSlug } from '../utils/slugUtils';
 
@@ -145,6 +145,82 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
   const [showChatWindow, setShowChatWindow] = useState(false);
   const [activeChatSession, setActiveChatSession] = useState<any>(null);
   const [isSubmittingChat, setIsSubmittingChat] = useState(false);
+
+  // --- FITUR SIMPAN (WISHLIST) & BAGIKAN (SHARE) ---
+  const [isSaved, setIsSaved] = useState<boolean>(() => {
+    try {
+      const raw = localStorage.getItem('ruangsinggah_saved_kosts');
+      if (!raw) return false;
+      const ids: string[] = JSON.parse(raw);
+      return Array.isArray(ids) && ids.includes(kost.id);
+    } catch {
+      return false;
+    }
+  });
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (toastMessage) {
+      const timer = setTimeout(() => {
+        setToastMessage(null);
+      }, 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [toastMessage]);
+
+  const handleShare = async () => {
+    const shareUrl = window.location.href;
+    const shareData = {
+      title: `${kost.title} - RuangSinggah`,
+      text: `Sewa ${kost.title} di ${kost.city}. Cek detail dan booking langsung di RuangSinggah:`,
+      url: shareUrl,
+    };
+
+    if (navigator.share && navigator.canShare && navigator.canShare(shareData)) {
+      try {
+        await navigator.share(shareData);
+      } catch (err: any) {
+        if (err.name !== 'AbortError') {
+          try {
+            await navigator.clipboard.writeText(shareUrl);
+            setToastMessage('Tautan kost berhasil disalin ke clipboard!');
+          } catch {
+            setToastMessage('Gagal menyalin tautan');
+          }
+        }
+      }
+    } else {
+      try {
+        await navigator.clipboard.writeText(shareUrl);
+        setToastMessage('Tautan kost berhasil disalin ke clipboard!');
+      } catch {
+        setToastMessage('Gagal menyalin tautan');
+      }
+    }
+  };
+
+  const handleToggleSave = () => {
+    try {
+      const raw = localStorage.getItem('ruangsinggah_saved_kosts');
+      let savedIds: string[] = raw ? JSON.parse(raw) : [];
+      if (!Array.isArray(savedIds)) savedIds = [];
+
+      let nextSaved = false;
+      if (savedIds.includes(kost.id)) {
+        savedIds = savedIds.filter(id => id !== kost.id);
+        nextSaved = false;
+        setToastMessage('Kost dihapus dari daftar simpanan');
+      } else {
+        savedIds.push(kost.id);
+        nextSaved = true;
+        setToastMessage('Kost berhasil disimpan ke favorit!');
+      }
+      localStorage.setItem('ruangsinggah_saved_kosts', JSON.stringify(savedIds));
+      setIsSaved(nextSaved);
+    } catch (err) {
+      console.error('Error toggling saved kost:', err);
+    }
+  };
 
   // --- LAPOR IKLAN KOST STATES ---
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
@@ -1571,24 +1647,87 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
               </div>
             )}
 
-            {/* Main Header Information */}
-            <div className="bg-white rounded-[2rem] p-8 lg:p-10 border border-gray-100 shadow-sm">
-              <div className="flex flex-wrap items-center gap-3 mb-6">
-                <span className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest ${kost.type === 'Putra' ? 'bg-blue-500 text-white' :
-                  kost.type === 'Putri' ? 'bg-pink-500 text-white' :
-                    'bg-purple-500 text-white'
-                  }`}>{kost.type}</span>
-                {kost.isManaged && (
-                  <span className="bg-orange-500 text-white px-4 py-1.5 rounded-full text-[10px] font-black flex items-center gap-2 border border-orange-400 shadow-lg shadow-orange-100 uppercase tracking-widest">
-                    Terverifikasi
+            {/* Main Header Information Card */}
+            <div className="bg-white rounded-[2rem] p-6 sm:p-8 lg:p-10 border border-gray-100 shadow-sm space-y-4 sm:space-y-5">
+              {/* Top Bar: Badges on Left, Action Buttons (Bagikan & Simpan) on Right */}
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                {/* Left Badges */}
+                <div className="flex flex-wrap items-center gap-2 sm:gap-2.5">
+                  <span className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-[11px] font-black uppercase tracking-wider ${
+                    kost.type?.toLowerCase() === 'putra' ? 'bg-blue-50 text-blue-700 border border-blue-200' :
+                    kost.type?.toLowerCase() === 'putri' ? 'bg-pink-50 text-pink-700 border border-pink-200' :
+                    'bg-purple-50 text-purple-700 border border-purple-200'
+                  }`}>
+                    <UserIcon size={12} className="shrink-0" />
+                    <span>Kost {kost.type}</span>
                   </span>
-                )}
+
+                  {kost.isManaged && (
+                    <span className="inline-flex items-center gap-1.5 bg-emerald-50 text-emerald-700 border border-emerald-200 px-3.5 py-1.5 rounded-full text-[11px] font-black uppercase tracking-wider">
+                      <Check size={13} className="text-emerald-600 stroke-[3] shrink-0" />
+                      <span>Terverifikasi RuangSinggah</span>
+                    </span>
+                  )}
+                </div>
+
+                {/* Right Action Buttons: Bagikan & Simpan */}
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleShare}
+                    className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-white hover:bg-orange-50 border border-gray-200 hover:border-orange-300 text-gray-700 hover:text-orange-600 text-xs font-bold transition-all shadow-2xs active:scale-95 cursor-pointer"
+                    title="Bagikan tautan kost ini"
+                  >
+                    <Share2 size={13} className="shrink-0 text-gray-500" />
+                    <span>Bagikan</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleToggleSave}
+                    className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-bold transition-all shadow-2xs active:scale-95 cursor-pointer border ${
+                      isSaved
+                        ? 'bg-rose-50 border-rose-200 text-rose-600'
+                        : 'bg-white hover:bg-rose-50 border-gray-200 hover:border-rose-300 text-gray-700 hover:text-rose-600'
+                    }`}
+                    title={isSaved ? "Hapus dari simpanan" : "Simpan kost ke favorit"}
+                  >
+                    <Heart
+                      size={13}
+                      className={`shrink-0 transition-colors ${
+                        isSaved ? 'fill-rose-500 text-rose-500' : 'text-gray-500'
+                      }`}
+                    />
+                    <span>{isSaved ? 'Tersimpan' : 'Simpan'}</span>
+                  </button>
+                </div>
               </div>
-              <h1 className="text-3xl lg:text-6xl font-black text-gray-900 mb-4 uppercase tracking-tighter leading-none">{kost.title}</h1>
-              <div className="flex items-center text-gray-500 font-medium text-sm lg:text-lg">
-                <svg className="w-5 h-5 mr-2 text-orange-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
-                <span>{kost.address}, {kost.city}</span>
+
+              {/* Title */}
+              <h1 className="text-2xl sm:text-3xl lg:text-4xl font-black text-gray-900 uppercase tracking-tight leading-tight">
+                {kost.title}
+              </h1>
+
+              {/* Address / Location */}
+              <div className="flex items-start text-gray-600 font-medium text-xs sm:text-sm lg:text-base gap-2">
+                <MapPin className="w-4 h-4 sm:w-5 sm:h-5 text-orange-500 shrink-0 mt-0.5" />
+                <span className="leading-relaxed">{kost.address}, {kost.city}</span>
               </div>
+
+              {/* Optional Highlights / Keunggulan Chips */}
+              {((kost as any).features || (kost as any).highlights || []).length > 0 && (
+                <div className="flex flex-wrap gap-2 pt-2 border-t border-gray-100">
+                  {((kost as any).features || (kost as any).highlights).map((feat: string, fIdx: number) => (
+                    <span
+                      key={fIdx}
+                      className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-gray-50 text-gray-700 text-[11px] font-bold border border-gray-200/80"
+                    >
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                      <span>{feat}</span>
+                    </span>
+                  ))}
+                </div>
+              )}
             </div>
 
             {kost.description && (
@@ -2838,6 +2977,21 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
               )}
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Floating Toast Notification */}
+      {toastMessage && (
+        <div className="fixed bottom-6 right-6 z-50 bg-slate-900/95 backdrop-blur-md text-white px-4 py-3 rounded-2xl shadow-2xl border border-white/15 flex items-center gap-2.5 text-xs font-bold animate-in fade-in slide-in-from-bottom-3 duration-200">
+          <Sparkles className="w-4 h-4 text-orange-400 shrink-0" />
+          <span>{toastMessage}</span>
+          <button 
+            type="button" 
+            onClick={() => setToastMessage(null)}
+            className="ml-2 text-white/50 hover:text-white transition-colors cursor-pointer"
+          >
+            <X size={14} />
+          </button>
         </div>
       )}
     </div>
