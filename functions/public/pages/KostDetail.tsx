@@ -1641,6 +1641,190 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
               </InfoSection>
             )}
 
+            {/* Seksian Dinamis Fasilitas Kamar pada Badan Utama Listing */}
+            {parentRoomGroups.length > 0 && (
+              <InfoSection title="Fasilitas Kamar">
+                <div className="space-y-4">
+                  {/* Room Type Switcher Tabs (jika lebih dari 1 tipe kamar) */}
+                  {parentRoomGroups.length > 1 && (
+                    <div className="flex flex-wrap gap-2 pb-1">
+                      {parentRoomGroups.map((grp, gIdx) => {
+                        const isSelected = selectedParentTypeIdx === gIdx;
+                        return (
+                          <button
+                            key={gIdx}
+                            type="button"
+                            onClick={() => {
+                              setSelectedParentTypeIdx(gIdx);
+                              const firstChild = grp.rooms.find(r => r.isAvailable) || grp.rooms[0];
+                              if (firstChild) {
+                                setSelectedVariantIdx(firstChild.variantIdx);
+                              }
+                            }}
+                            className={`px-4 py-2.5 rounded-2xl text-xs font-black uppercase tracking-wider transition-all flex items-center gap-2 cursor-pointer ${
+                              isSelected
+                                ? 'bg-orange-500 text-white shadow-md shadow-orange-500/20 ring-2 ring-orange-500 ring-offset-1'
+                                : 'bg-white text-gray-700 border border-gray-200 hover:border-orange-300 hover:bg-orange-50/40 shadow-2xs'
+                            }`}
+                          >
+                            <Layers size={14} className={isSelected ? "text-white" : "text-orange-500"} />
+                            <span>{grp.typeName}</span>
+                            {grp.size && (
+                              <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded-md ${isSelected ? 'bg-orange-600 text-orange-100' : 'bg-gray-100 text-gray-600'}`}>
+                                {grp.size}
+                              </span>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {/* Rincian Lengkap Fasilitas Tipe Kamar Aktif */}
+                  {(() => {
+                    const activeGroup = parentRoomGroups[selectedParentTypeIdx] || parentRoomGroups[0];
+                    if (!activeGroup) return null;
+                    const facData = getGroupStructuredFacilities(activeGroup);
+
+                    return (
+                      <div className="bg-white p-5 sm:p-6 rounded-2xl sm:rounded-3xl border border-gray-100 shadow-sm shadow-gray-100/50 space-y-6 animate-in fade-in duration-200">
+                        {/* Header Info Tipe Kamar */}
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-gray-100 gap-3">
+                          <div className="flex items-center gap-3">
+                            <div className="w-11 h-11 rounded-2xl bg-orange-50 text-orange-600 flex items-center justify-center shrink-0 border border-orange-100">
+                              <Bed className="w-6 h-6 text-orange-500" />
+                            </div>
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <h4 className="font-black text-base text-gray-900 tracking-tight">{activeGroup.typeName}</h4>
+                                <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1 ${
+                                  activeGroup.isAvailable ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+                                }`}>
+                                  <span className={`w-1.5 h-1.5 rounded-full ${activeGroup.isAvailable ? 'bg-green-600' : 'bg-red-600'}`}></span>
+                                  {activeGroup.isAvailable ? 'Tersedia' : 'Penuh'}
+                                </span>
+                              </div>
+                              <p className="text-xs font-bold text-orange-600 mt-0.5">
+                                Mulai {FORMAT_CURRENCY(activeGroup.minPrice)} /bulan
+                              </p>
+                            </div>
+                          </div>
+
+                          {facData.size && (
+                            <div className="flex items-center gap-1.5 self-start sm:self-auto bg-gray-50 border border-gray-200/80 px-3 py-1.5 rounded-xl">
+                              <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Ukuran Kamar:</span>
+                              <span className="text-xs font-extrabold text-gray-800">{facData.size}</span>
+                            </div>
+                          )}
+                        </div>
+
+                        {facData.isKosongan ? (
+                          <div className="p-4 bg-amber-50 border border-amber-200 rounded-2xl text-center space-y-1">
+                            <p className="text-sm font-black text-amber-900 flex items-center justify-center gap-2">
+                              <AlertCircle size={16} className="text-amber-600 shrink-0" />
+                              Kamar Kosongan (Tanpa Perabot)
+                            </p>
+                            <p className="text-xs text-amber-700 leading-relaxed">
+                              Tipe kamar ini disewakan dalam kondisi kosongan tanpa kasur dan perabot kamar tidur.
+                            </p>
+                          </div>
+                        ) : (
+                          <div className="space-y-5">
+                            {/* 1. Perabot & Ruangan */}
+                            {facData.bedroomItems.length > 0 && (
+                              <div className="space-y-2.5">
+                                <div className="flex items-center gap-2">
+                                  <span className="text-[11px] font-black text-gray-900 uppercase tracking-wider">
+                                    Perabot & Ruangan Kamar
+                                  </span>
+                                  <span className="text-[10px] font-bold text-gray-400">
+                                    ({facData.bedroomItems.length} Fasilitas)
+                                  </span>
+                                </div>
+                                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+                                  {facData.bedroomItems.map((item, idx) => (
+                                    <div 
+                                      key={idx} 
+                                      className="flex items-center gap-2.5 p-3 rounded-2xl bg-gray-50/70 border border-gray-100 hover:border-orange-200 hover:bg-orange-50/30 transition-all group"
+                                    >
+                                      <div className="w-8 h-8 rounded-xl bg-white text-orange-600 flex items-center justify-center shrink-0 border border-gray-100 shadow-2xs group-hover:scale-105 group-hover:bg-orange-500 group-hover:text-white transition-all">
+                                        {getRoomItemIcon(item)}
+                                      </div>
+                                      <span className="text-xs font-bold text-gray-800 truncate" title={item}>
+                                        {item}
+                                      </span>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+
+                            {/* 2. Kamar Mandi */}
+                            {facData.bathroomItems.length > 0 && (
+                              <div className="space-y-2.5 pt-3 border-t border-gray-100">
+                                <div className="flex items-center gap-2">
+                                  <span className="text-[11px] font-black text-gray-900 uppercase tracking-wider">
+                                    Kamar Mandi
+                                  </span>
+                                  <span className="text-[10px] font-bold text-gray-400">
+                                    ({facData.bathroomItems.length} Fasilitas)
+                                  </span>
+                                </div>
+                                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+                                  {facData.bathroomItems.map((item, idx) => (
+                                    <div 
+                                      key={idx} 
+                                      className="flex items-center gap-2.5 p-3 rounded-2xl bg-gray-50/70 border border-gray-100 hover:border-blue-200 hover:bg-blue-50/30 transition-all group"
+                                    >
+                                      <div className="w-8 h-8 rounded-xl bg-white text-blue-600 flex items-center justify-center shrink-0 border border-gray-100 shadow-2xs group-hover:scale-105 group-hover:bg-blue-500 group-hover:text-white transition-all">
+                                        <Bath className="w-4 h-4 text-blue-500 shrink-0" />
+                                      </div>
+                                      <span className="text-xs font-bold text-gray-800 truncate" title={item}>
+                                        {item}
+                                      </span>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+
+                            {/* 3. Dapur Pribadi */}
+                            {facData.kitchenItems.length > 0 && (
+                              <div className="space-y-2.5 pt-3 border-t border-gray-100">
+                                <div className="flex items-center gap-2">
+                                  <span className="text-[11px] font-black text-gray-900 uppercase tracking-wider">
+                                    Dapur Pribadi
+                                  </span>
+                                  <span className="text-[10px] font-bold text-gray-400">
+                                    ({facData.kitchenItems.length} Fasilitas)
+                                  </span>
+                                </div>
+                                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+                                  {facData.kitchenItems.map((item, idx) => (
+                                    <div 
+                                      key={idx} 
+                                      className="flex items-center gap-2.5 p-3 rounded-2xl bg-gray-50/70 border border-gray-100 hover:border-amber-200 hover:bg-amber-50/30 transition-all group"
+                                    >
+                                      <div className="w-8 h-8 rounded-xl bg-white text-amber-600 flex items-center justify-center shrink-0 border border-gray-100 shadow-2xs group-hover:scale-105 group-hover:bg-amber-500 group-hover:text-white transition-all">
+                                        <CookingPot className="w-4 h-4 text-amber-500 shrink-0" />
+                                      </div>
+                                      <span className="text-xs font-bold text-gray-800 truncate" title={item}>
+                                        {item}
+                                      </span>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
+                </div>
+              </InfoSection>
+            )}
+
             {kost.rules && kost.rules.length > 0 && (
               <InfoSection title="Peraturan Kost">
                 <ul className="space-y-4">

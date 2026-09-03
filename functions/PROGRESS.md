@@ -2,6 +2,23 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 297. Seksian Dinamis Fasilitas Kamar pada Kolom Utama Listing di Bawah Fasilitas Umum (`KostDetail.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  - Pengguna meminta agar seluruh informasi fasilitas untuk setiap tipe kamar yang terdaftar di listing ditampilkan secara dinamis di kolom utama listing tepat di bawah bagian "Fasilitas Umum".
+- **Implementasi Solusi**:
+  1. **Komponen InfoSection 'Fasilitas Kamar'**:
+     - Menambahkan `InfoSection title="Fasilitas Kamar"` di bawah `InfoSection title="Fasilitas Umum"` pada kolom utama listing.
+  2. **Navigasi Tab Tipe Kamar Interaktif**:
+     - Jika listing memiliki lebih dari 1 tipe kamar (*Standard*, *Premium*, *VIP*, dll.), disediakan tombol tab tipe kamar yang sinkron dengan seleksi tipe kamar.
+  3. **Penyajian Rincian Fasilitas Lengkap**:
+     - Menampilkan informasi ukuran kamar, status ketersediaan, perabot & ruangan, kamar mandi, dapur pribadi, atau status kosongan lengkap dengan ikon vector SVG murni dari `lucide-react`.
+- **File Tersentuh**:
+  - `functions/public/pages/KostDetail.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi Vite `cmd /c npm run build` di `functions/public/` lulus 100% (✓ 2509 modules transformed, built in 37.00s, 0 error).
+
 ### 296. Fasilitas Kamar Terintegrasi Dropdown (Maximize/Minimize) pada Setiap Kartu Tipe Kamar (`KostDetail.tsx`) (September 2026)
 - **Permintaan & Masalah**:
   - Pengguna menginginkan rincian fasilitas kamar menjadi dropdown interaktif langsung di dalam setiap kartu tipe kamar (dapat di-maximize / minimize). Selain itu, duplikasi blok fasilitas kamar terpisah di bawah pilihan durasi sewa dihapus agar antarmuka lebih bersih dan mudah dipahami.
