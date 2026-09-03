@@ -2,6 +2,27 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 298. Pembaruan Akurasi Ikon SVG Fasilitas Umum & Kamar Menggantikan Fallback Centang (`KostDetail.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  - Sub-kelengkapan fasilitas umum (kompor, kulkas, wastafel cuci piring, alat masak, dispenser, parkir motor, dll.) serta beberapa fasilitas kamar dan gedung sebelumnya masih menggunakan ikon centang generik (`<Check />` / `<CheckCircle2 />`).
+- **Implementasi Solusi**:
+  1. **Pemetaan Icon SVG Murni Presisi Tinggi (`getFacilityItemIcon`)**:
+     - Menambahkan fungsi resolver komprehensif yang memetakan puluhan kata kunci fasilitas ke ikon SVG murni `lucide-react` (0 FOUT):
+       - Dapur & Masak: `Flame` (Kompor/Gas), `Refrigerator` (Kulkas), `UtensilsCrossed` (Alat Masak), `Utensils` (Alat Makan/Meja Makan), `CupSoda` (Dispenser/Air), `Droplets` (Wastafel Cuci Piring/Sink), `CookingPot` (Rice Cooker/Panci), `Zap` (Microwave).
+       - Parkir: `Bike` (Parkir Motor/Sepeda), `Car` (Parkir Mobil/Garasi).
+       - Kamar Mandi: `ShowerHead` (Shower), `ThermometerSun` (Water Heater), `Waves` (Bak Mandi), `Bath` (Kloset/Toilet/Kamar Mandi), `Droplets` (Wastafel).
+       - Kamar Tidur: `Bed` (Kasur/Springbed/Bantal), `Layers` (Lemari/Wardrobe/Storage), `Armchair` (Meja/Kursi/Sofa), `Wind` (AC), `Fan` (Kipas Angin), `Tv` (TV), `Sun` (Jendela), `Home` (Balkon), `Trash2` (Tempat Sampah).
+       - Gedung & Keamanan: `Wifi`, `Camera`, `ShieldCheck`, `KeyRound`, `Shirt`, `Sun`, `Building2`, `Dumbbell`, `Waves`.
+  2. **Penggantian Seluruh Ikon Centang Generik**:
+     - Mengganti `<Check />` pada chips sub-kelengkapan Dapur Bersama, Area Parkir, WC Umum, dan Ruang Tamu dengan `getFacilityItemIcon(sub)`.
+     - Memperbarui icon pada fasilitas kamar mandi dan dapur pribadi di kolom utama listing dan dropdown sidebar.
+- **File Tersentuh**:
+  - `functions/public/pages/KostDetail.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi Vite `cmd /c npm run build` di `functions/public/` lulus 100% (✓ 2509 modules transformed, built in 32.23s, 0 error).
+
 ### 297. Seksian Dinamis Fasilitas Kamar pada Kolom Utama Listing di Bawah Fasilitas Umum (`KostDetail.tsx`) (September 2026)
 - **Permintaan & Masalah**:
   - Pengguna meminta agar seluruh informasi fasilitas untuk setiap tipe kamar yang terdaftar di listing ditampilkan secara dinamis di kolom utama listing tepat di bawah bagian "Fasilitas Umum".

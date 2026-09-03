@@ -16,7 +16,8 @@ import {
   Phone, User as UserIcon, MessageSquare, Clock, Wifi, CookingPot, Car, 
   Bike, Bath, ShieldCheck, KeyRound, Shirt, Sun, Building2, Armchair, 
   Wind, Tv, Droplets, Utensils, Refrigerator, Lock, MapPin, Navigation, 
-  GraduationCap, RotateCcw, Star
+  GraduationCap, RotateCcw, Star, Flame, UtensilsCrossed, ShowerHead, Fan, 
+  Dumbbell, CupSoda, ThermometerSun, Waves, Trash2, Zap
 } from 'lucide-react';
 import { createKostSlug } from '../utils/slugUtils';
 
@@ -1016,6 +1017,67 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
     icon: React.ReactNode;
   }
 
+  const getFacilityItemIcon = (name: string, customClass?: string): React.ReactNode => {
+    const lower = name.toLowerCase().trim();
+    const cls = customClass || "w-4 h-4 text-orange-500 shrink-0";
+
+    // 1. Dapur & Masak / Makanan & Minuman
+    if (lower.includes('kompor') || lower.includes('gas') || lower.includes('tabung gas')) return <Flame className={cls} />;
+    if (lower.includes('kulkas') || lower.includes('lemari es') || lower.includes('freezer')) return <Refrigerator className={cls} />;
+    if (lower.includes('peralatan masak') || lower.includes('alat masak') || lower.includes('wajan') || lower.includes('panci')) return <UtensilsCrossed className={cls} />;
+    if (lower.includes('peralatan makan') || lower.includes('alat makan') || lower.includes('piring') || lower.includes('sendok') || lower.includes('garpu')) return <Utensils className={cls} />;
+    if (lower.includes('dispenser') || lower.includes('galon') || lower.includes('air minum') || lower.includes('air mineral')) return <CupSoda className={cls} />;
+    if (lower.includes('wastafel') || lower.includes('cuci piring') || lower.includes('sink')) return <Droplets className={cls} />;
+    if (lower.includes('rice cooker') || lower.includes('magic com') || lower.includes('penanak nasi')) return <CookingPot className={cls} />;
+    if (lower.includes('microwave') || lower.includes('oven')) return <Zap className={cls} />;
+    if (lower.includes('meja makan')) return <Utensils className={cls} />;
+    if (lower.includes('kitchen') || lower.includes('dapur')) return <CookingPot className={cls} />;
+
+    // 2. Area Parkir & Kendaraan
+    if (lower.includes('motor') || lower.includes('sepeda') || lower.includes('garasi motor') || lower.includes('parkir motor')) return <Bike className={cls} />;
+    if (lower.includes('mobil') || lower.includes('garasi mobil') || lower.includes('parkir mobil')) return <Car className={cls} />;
+    if (lower.includes('parkir')) return <Car className={cls} />;
+
+    // 3. Kamar Mandi / WC
+    if (lower.includes('shower')) return <ShowerHead className={cls} />;
+    if (lower.includes('water heater') || lower.includes('air panas')) return <ThermometerSun className={cls} />;
+    if (lower.includes('bak mandi') || lower.includes('ember') || lower.includes('gayung')) return <Waves className={cls} />;
+    if (lower.includes('kloset') || lower.includes('wc') || lower.includes('toilet') || lower.includes('kamar mandi')) return <Bath className={cls} />;
+
+    // 4. Perabot Kamar Tidur
+    if (lower.includes('kasur') || lower.includes('bed') || lower.includes('springbed') || lower.includes('tempat tidur') || lower.includes('bantal') || lower.includes('guling')) return <Bed className={cls} />;
+    if (lower.includes('lemari') || lower.includes('wardrobe') || lower.includes('storage') || lower.includes('pakaian') || lower.includes('rak')) return <Layers className={cls} />;
+    if (lower.includes('meja') || lower.includes('kursi') || lower.includes('sofa') || lower.includes('belajar') || lower.includes('santai') || lower.includes('kerja')) return <Armchair className={cls} />;
+    if (lower.includes('ac') || lower.includes('air conditioner')) return <Wind className={cls} />;
+    if (lower.includes('kipas')) return <Fan className={cls} />;
+    if (lower.includes('tv') || lower.includes('televisi')) return <Tv className={cls} />;
+    if (lower.includes('jendela') || lower.includes('ventilasi')) return <Sun className={cls} />;
+    if (lower.includes('balkon') || lower.includes('teras')) return <Home className={cls} />;
+    if (lower.includes('cermin') || lower.includes('kaca')) return <Sparkles className={cls} />;
+    if (lower.includes('colokan') || lower.includes('listrik') || lower.includes('stop kontak')) return <Zap className={cls} />;
+    if (lower.includes('sampah')) return <Trash2 className={cls} />;
+
+    // 5. Gedung & Keamanan
+    if (lower.includes('wifi') || lower.includes('internet') || lower.includes('hotspot')) return <Wifi className={cls} />;
+    if (lower.includes('cctv') || lower.includes('kamera')) return <Camera className={cls} />;
+    if (lower.includes('security') || lower.includes('keamanan') || lower.includes('satpam') || lower.includes('penjaga')) return <ShieldCheck className={cls} />;
+    if (lower.includes('24 jam') || lower.includes('akses') || lower.includes('gerbang') || lower.includes('bebas')) return <KeyRound className={cls} />;
+    if (lower.includes('laundry') || lower.includes('cuci') || lower.includes('mesin cuci')) return <Shirt className={cls} />;
+    if (lower.includes('jemuran') || lower.includes('jemur')) return <Sun className={cls} />;
+    if (lower.includes('mushola') || lower.includes('musholla') || lower.includes('ibadah') || lower.includes('sholat')) return <Sparkles className={cls} />;
+    if (lower.includes('lift') || lower.includes('elevator')) return <Building2 className={cls} />;
+    if (lower.includes('cleaning') || lower.includes('kebersihan')) return <Sparkles className={cls} />;
+    if (lower.includes('kolam') || lower.includes('renang')) return <Waves className={cls} />;
+    if (lower.includes('gym') || lower.includes('fitness')) return <Dumbbell className={cls} />;
+    if (lower.includes('rooftop')) return <Sun className={cls} />;
+
+    return <Sparkles className={cls} />;
+  };
+
+  const getRoomItemIcon = (name: string): React.ReactNode => {
+    return getFacilityItemIcon(name, "w-3.5 h-3.5 text-orange-500 shrink-0");
+  };
+
   const structuredPublicFacilities = useMemo(() => {
     const rawFacilities = kost.facilities || [];
     const extraKitchen = (kost as any).publicKitchenFacilities || (kost as any).public_kitchen_facilities || [];
@@ -1071,7 +1133,7 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
     // 3. WC UMUM / LUAR
     const wcKeywords = ['wc umum', 'toilet umum', 'kamar mandi luar', 'wc luar'];
     const wcSubOptions = ['kloset duduk', 'kloset jongkok', 'shower', 'wastafel', 'bak mandi', 'ember & gayung'];
-    const hasWcParent = allFacilities.some(f => wcKeywords.includes(f.toLowerCase().trim()));
+    const hasWcParent = allFacilities.some(f => kitchenKeywords.includes(f.toLowerCase().trim()) ? false : wcKeywords.includes(f.toLowerCase().trim()));
     const wcSubs: string[] = [];
 
     allFacilities.forEach(f => {
@@ -1138,32 +1200,12 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
       });
     }
 
-    const getStandaloneIcon = (name: string): React.ReactNode => {
-      const lower = name.toLowerCase().trim();
-      if (lower.includes('wifi') || lower.includes('internet')) return <Wifi className="w-4 h-4 text-orange-500" />;
-      if (lower.includes('cctv') || lower.includes('kamera')) return <Camera className="w-4 h-4 text-orange-500" />;
-      if (lower.includes('security') || lower.includes('keamanan') || lower.includes('satpam')) return <ShieldCheck className="w-4 h-4 text-orange-500" />;
-      if (lower.includes('24 jam') || lower.includes('akses') || lower.includes('bebas')) return <KeyRound className="w-4 h-4 text-orange-500" />;
-      if (lower.includes('laundry') || lower.includes('cuci')) return <Shirt className="w-4 h-4 text-orange-500" />;
-      if (lower.includes('jemuran') || lower.includes('jemur')) return <Sun className="w-4 h-4 text-orange-500" />;
-      if (lower.includes('mushola') || lower.includes('musholla') || lower.includes('ibadah')) return <Sparkles className="w-4 h-4 text-orange-500" />;
-      if (lower.includes('lift') || lower.includes('elevator')) return <Building2 className="w-4 h-4 text-orange-500" />;
-      if (lower.includes('cleaning') || lower.includes('kebersihan')) return <Sparkles className="w-4 h-4 text-orange-500" />;
-      if (lower.includes('ac')) return <Wind className="w-4 h-4 text-orange-500" />;
-      if (lower.includes('water heater') || lower.includes('air panas')) return <Droplets className="w-4 h-4 text-orange-500" />;
-      if (lower.includes('kolam') || lower.includes('renang')) return <Droplets className="w-4 h-4 text-orange-500" />;
-      if (lower.includes('gym') || lower.includes('fitness')) return <Sparkles className="w-4 h-4 text-orange-500" />;
-      if (lower.includes('rooftop')) return <Sun className="w-4 h-4 text-orange-500" />;
-      if (lower.includes('balkon')) return <Home className="w-4 h-4 text-orange-500" />;
-      return <CheckCircle2 className="w-4 h-4 text-orange-500" />;
-    };
-
     const standalones: StandaloneFacilityItem[] = [];
     allFacilities.forEach(f => {
       if (!matchedItems.has(f)) {
         standalones.push({
           name: f,
-          icon: getStandaloneIcon(f)
+          icon: getFacilityItemIcon(f, "w-4 h-4 text-orange-500")
         });
       }
     });
@@ -1171,21 +1213,6 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
     return { groups, standalones, totalCount: allFacilities.length };
   }, [kost.facilities, (kost as any).publicKitchenFacilities, (kost as any).publicParkingFacilities]);
 
-  const getRoomItemIcon = (name: string): React.ReactNode => {
-    const lower = name.toLowerCase().trim();
-    if (lower.includes('kasur') || lower.includes('bed') || lower.includes('springbed')) return <Bed className="w-3.5 h-3.5 text-orange-500 shrink-0" />;
-    if (lower.includes('lemari') || lower.includes('storage') || lower.includes('pakaian')) return <Layers className="w-3.5 h-3.5 text-orange-500 shrink-0" />;
-    if (lower.includes('meja') || lower.includes('kursi') || lower.includes('belajar')) return <Armchair className="w-3.5 h-3.5 text-orange-500 shrink-0" />;
-    if (lower.includes('ac')) return <Wind className="w-3.5 h-3.5 text-orange-500 shrink-0" />;
-    if (lower.includes('kipas')) return <Wind className="w-3.5 h-3.5 text-orange-500 shrink-0" />;
-    if (lower.includes('tv') || lower.includes('televisi')) return <Tv className="w-3.5 h-3.5 text-orange-500 shrink-0" />;
-    if (lower.includes('kulkas')) return <Refrigerator className="w-3.5 h-3.5 text-orange-500 shrink-0" />;
-    if (lower.includes('water heater') || lower.includes('air panas')) return <Droplets className="w-3.5 h-3.5 text-orange-500 shrink-0" />;
-    if (lower.includes('shower') || lower.includes('mandi') || lower.includes('wc') || lower.includes('kloset') || lower.includes('wastafel') || lower.includes('gayung') || lower.includes('bak')) return <Bath className="w-3.5 h-3.5 text-blue-500 shrink-0" />;
-    if (lower.includes('kompor') || lower.includes('dapur') || lower.includes('kitchen') || lower.includes('dispenser') || lower.includes('cuci piring')) return <CookingPot className="w-3.5 h-3.5 text-amber-500 shrink-0" />;
-    if (lower.includes('jendela') || lower.includes('ventilasi') || lower.includes('balkon')) return <Sun className="w-3.5 h-3.5 text-orange-500 shrink-0" />;
-    return <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />;
-  };
 
   const getGroupStructuredFacilities = (group: ParentRoomGroup) => {
     const repRoom = group.rooms[0]?.rawRoom || group.rooms[0] || {};
@@ -1599,9 +1626,9 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
                               {group.subItems.map(sub => (
                                 <span 
                                   key={sub} 
-                                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-orange-50/70 text-orange-950 text-xs font-bold border border-orange-100/80 hover:bg-orange-100 transition-colors"
+                                  className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-orange-50/70 text-orange-950 text-xs font-bold border border-orange-100/80 hover:bg-orange-100 transition-colors shadow-2xs"
                                 >
-                                  <Check className="w-3 h-3 text-orange-500 shrink-0 stroke-[3]" />
+                                  {getFacilityItemIcon(sub, "w-3.5 h-3.5 text-orange-500 shrink-0")}
                                   <span>{sub}</span>
                                 </span>
                               ))}
@@ -1777,7 +1804,7 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
                                       className="flex items-center gap-2.5 p-3 rounded-2xl bg-gray-50/70 border border-gray-100 hover:border-blue-200 hover:bg-blue-50/30 transition-all group"
                                     >
                                       <div className="w-8 h-8 rounded-xl bg-white text-blue-600 flex items-center justify-center shrink-0 border border-gray-100 shadow-2xs group-hover:scale-105 group-hover:bg-blue-500 group-hover:text-white transition-all">
-                                        <Bath className="w-4 h-4 text-blue-500 shrink-0" />
+                                        {getFacilityItemIcon(item, "w-4 h-4 text-blue-500 group-hover:text-white transition-colors shrink-0")}
                                       </div>
                                       <span className="text-xs font-bold text-gray-800 truncate" title={item}>
                                         {item}
@@ -1806,7 +1833,7 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
                                       className="flex items-center gap-2.5 p-3 rounded-2xl bg-gray-50/70 border border-gray-100 hover:border-amber-200 hover:bg-amber-50/30 transition-all group"
                                     >
                                       <div className="w-8 h-8 rounded-xl bg-white text-amber-600 flex items-center justify-center shrink-0 border border-gray-100 shadow-2xs group-hover:scale-105 group-hover:bg-amber-500 group-hover:text-white transition-all">
-                                        <CookingPot className="w-4 h-4 text-amber-500 shrink-0" />
+                                        {getFacilityItemIcon(item, "w-4 h-4 text-amber-500 group-hover:text-white transition-colors shrink-0")}
                                       </div>
                                       <span className="text-xs font-bold text-gray-800 truncate" title={item}>
                                         {item}
@@ -2351,7 +2378,7 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
                                         <div className="grid grid-cols-2 gap-1.5">
                                           {facData.bathroomItems.map((item, idx) => (
                                             <div key={idx} className="flex items-center gap-1.5 text-[11px] font-bold text-gray-700 bg-white px-2.5 py-1.5 rounded-lg border border-gray-200/80 shadow-2xs">
-                                              <Bath size={12} className="text-blue-500 shrink-0" />
+                                              {getFacilityItemIcon(item, "w-3.5 h-3.5 text-blue-500 shrink-0")}
                                               <span className="truncate" title={item}>{item}</span>
                                             </div>
                                           ))}
@@ -2368,7 +2395,7 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
                                         <div className="grid grid-cols-2 gap-1.5">
                                           {facData.kitchenItems.map((item, idx) => (
                                             <div key={idx} className="flex items-center gap-1.5 text-[11px] font-bold text-gray-700 bg-white px-2.5 py-1.5 rounded-lg border border-gray-200/80 shadow-2xs">
-                                              <CookingPot size={12} className="text-amber-500 shrink-0" />
+                                              {getFacilityItemIcon(item, "w-3.5 h-3.5 text-amber-500 shrink-0")}
                                               <span className="truncate" title={item}>{item}</span>
                                             </div>
                                           ))}
