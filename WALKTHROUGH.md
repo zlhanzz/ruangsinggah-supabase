@@ -1,52 +1,48 @@
-# Walkthrough - Progres 315: Pembebasan Akses Peninjauan Mode User bagi Akun Admin
+# Walkthrough - Progres 316: Redesain Ringkas & Tegas Pemilihan Peran Login
 
 ## Ringkasan Perubahan
-Memperbaiki mekanisme peninjauan tampilan pengguna bagi role **Admin**. Admin kini dapat berpindah secara bebas antara **Admin Panel** dan **Mode User** (Beranda, Cari Kost, Detail Kost, Database Kost, Jasa Survey, dll.) dengan mengklik tombol **`[👁️ LIHAT SEBAGAI USER]`** atau tombol **`[Mode User]`** di Navbar, tanpa terlempar kembali ke Admin Dashboard. Isolasi dashboard tetap berlaku penuh dan aman untuk pemilik kost (`role === 'owner'`).
+Menata ulang tampilan pemilihan peran (*Role Selection*) pada halaman Login. Menghilangkan teks panjang, paragraf penjelasan berlebih, dan checklist brosur, serta menggantikannya dengan **2 tombol aksi yang tegas, bersih, dan interaktif (Pencari Kost vs Pemilik Kost)** yang langsung pas dalam 1 layar (*single-screen view*) tanpa perlu scroll di HP.
 
 ---
 
-## Detail Perubahan File & Logika
+## Detail Perubahan File & Desain
 
-### 1. `functions/public/App.tsx`
-- Menghapus redirect paksa `user?.role === 'admin'` pada rute `Page.HOME` (`/`):
-  ```tsx
-  <Route path={Page.HOME} element={
-    user?.role === 'owner' ? <Navigate to={Page.DASHBOARD_MITRA} replace /> :
-    <Home onPageChange={(p: Page | string) => navigate(p)} onKostSelect={handleKostSelect} user={user} listings={listings} loading={loadingListings} />
-  } />
-  ```
-- Role `admin` dan `survey_agent` kini dapat mengakses dan merender komponen `Home` dan halaman publik lainnya secara bebas.
-- Role `owner` (pemilik kost) tetap 100% terisolasi ke `Page.DASHBOARD_MITRA`.
-
-### 2. `functions/public/components/Navbar.tsx`
-- Memperbarui interaksi klik pada logo RuangSinggah di Navbar:
-  ```tsx
-  onClick={() => onPageChange(isOwner ? Page.DASHBOARD_MITRA : Page.HOME)}
-  ```
-  Sehingga saat Admin sedang meninjau mode user, klik logo membawanya ke Beranda (`Page.HOME`), bukan memaksanya kembali ke `/dashboard-admin`.
-- Tombol toggle di kanan Navbar bekerja dua arah:
-  - Di halaman Admin Panel $\rightarrow$ Menampilkan tombol **`[Mode User]`** (klik untuk buka Beranda).
-  - Di halaman User biasa $\rightarrow$ Menampilkan tombol **`[Admin Panel]`** (klik untuk kembali ke Admin Panel).
+### 1. `functions/public/pages/Login.tsx`
+- **Layout Terpusat & Ringkas**:
+  - Mengubah container menjadi box card elegan berukuran `max-w-md` dengan logo RuangSinggah di atas, judul ringkas *"Masuk ke RuangSinggah"*, dan subjudul *"Pilih peran Anda untuk melanjutkan ke halaman login"*.
+- **2 Tombol Aksi Kontras & Bersebelahan**:
+  - **Tombol 1: Pencari Kost**
+    - Border oranye tebal (`border-2 border-orange-200 hover:border-orange-500 hover:bg-orange-50/60`).
+    - Icon box `Compass` oranye menyala.
+    - Judul peran *"Pencari Kost"* + badge *"User"*.
+    - Sub-teks singkat *"Cari, sewa, & survey kamar kost"*.
+    - Tombol panah aksi `→` di sisi kanan.
+  - **Tombol 2: Pemilik Kost**
+    - Border indigo tebal (`border-2 border-indigo-200 hover:border-indigo-600 hover:bg-indigo-50/60`).
+    - Icon box `Building2` indigo menyala.
+    - Judul peran *"Pemilik Kost"* + badge *"Mitra"*.
+    - Sub-teks singkat *"Kelola kamar & pantau sewa kost"*.
+    - Tombol panah aksi `→` di sisi kanan.
+- **Interaktivitas Visual**:
+  - Animasi tekan `active:scale-[0.98]` dan hover shadow halus memberikan kepastian bahwa seluruh elemen adalah tombol yang siap di-klik.
+  - Tautan *"← Kembali ke Beranda"* di bagian bawah untuk navigasi cepat.
 
 ---
 
 ## Hasil Pengujian & Kompilasi
 
 1. **Kompilasi Root Build (`npm run build`)**:
-   - **Lulus 100% (✓ 2509 modules transformed, built in 42.36s, 0 error)**.
+   - **Lulus 100% (✓ 2509 modules transformed, built in 41.78s, 0 error)**.
    - Seluruh direktori (`public/`, `dist/`, dan `functions/public/dist/`) ter-update dengan asset terbaru.
 
 ---
 
-## Panduan Pengujian Admin
+## Panduan Pengujian Pengguna
 
-1. **Uji Masuk ke Mode User**:
-   - Login sebagai **Admin**.
-   - Buka menu **Admin Panel** (`/dashboard-admin/analytics`).
-   - Klik tombol hitam **`[👁️ LIHAT SEBAGAI USER]`** di sidebar atas kiri.
-   - **Hasil**: Halaman Beranda (`https://ruangsinggah.id/`) terbuka penuh dan tidak ter-redirect balik. Anda dapat menguji search bar, filter kampus, melihat katalog, dan detail kost seperti pengguna umum.
-2. **Uji Kembali ke Admin Panel**:
-   - Di navbar bagian atas saat berada di mode user, klik tombol **`[ADMIN PANEL]`**.
-   - **Hasil**: Langsung kembali ke Dashboard Admin secara instan.
-3. **Uji Akun Pemilik Kost (Mitra)**:
-   - Login sebagai Pemilik Kost $\rightarrow$ Buka `/` $\rightarrow$ Tetap otomatis diarahkan ke `/dashboard-mitra` (keamanan isolasi mitra terjaga).
+1. **Uji Tampilan Mobile (HP)**:
+   - Buka halaman login di HP (`https://ruangsinggah.id/login`).
+   - **Hasil**: Layar pemilihan peran langsung tampil utuh dalam 1 layar tanpa terpotong dan tanpa perlu scroll.
+   - Terdapat 2 tombol besar yang jelas: **Pencari Kost** dan **Pemilik Kost**.
+2. **Uji Klik Pemilihan**:
+   - Klik tombol **Pencari Kost** $\rightarrow$ Form login Pencari Kost langsung terbuka.
+   - Klik tombol **Pemilik Kost** $\rightarrow$ Form login Pemilik Kost (Mitra) langsung terbuka.

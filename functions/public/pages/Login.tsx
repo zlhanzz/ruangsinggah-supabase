@@ -826,143 +826,100 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
   // ── Layar Portal Pemilihan Akses Masuk & Daftar (Sebelum Masuk ke Form) ──
   if (!isRoleSelected && (mode === 'LOGIN' || mode === 'REGISTER')) {
     return (
-      <div className="min-h-screen bg-gray-50/60 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-4xl w-full mx-auto animate-in fade-in duration-300">
-          {/* Header Portal */}
-          <div className="text-center max-w-2xl mx-auto mb-10 sm:mb-12 space-y-3">
-            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-orange-50 border border-orange-200/60 shadow-2xs">
-              <span className="w-2 h-2 rounded-full bg-orange-500 animate-pulse"></span>
-              <span className="text-[11px] font-black text-orange-600 uppercase tracking-wider">
-                Portal Akses Masuk & Daftar
-              </span>
+      <div className="min-h-screen bg-gradient-to-b from-gray-50 via-white to-orange-50/20 flex items-center justify-center py-10 px-4 sm:px-6">
+        <div className="max-w-md w-full bg-white rounded-3xl p-6 sm:p-8 shadow-xl border border-gray-100 animate-in fade-in zoom-in-95 duration-200">
+          {/* Logo & Header */}
+          <div className="text-center mb-8">
+            <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-orange-500/10 text-orange-600 mb-4 shadow-sm border border-orange-100">
+              <img src="/logo.png" alt="RuangSinggah" className="h-9 w-auto" />
             </div>
-
-            <h1 className="text-2xl sm:text-4xl font-black text-gray-900 tracking-tight">
-              Pilih Akses Masuk Anda di <span className="text-orange-500">RuangSinggah</span>
-            </h1>
-
-            <p className="text-xs sm:text-sm text-gray-500 font-medium leading-relaxed max-w-lg mx-auto">
-              Silakan tentukan peran Anda untuk melanjutkan ke proses masuk, pendaftaran akun baru, atau verifikasi Google secara aman.
+            <h2 className="text-2xl font-black text-gray-900 tracking-tight">
+              Masuk ke <span className="text-orange-500">RuangSinggah</span>
+            </h2>
+            <p className="text-xs font-semibold text-gray-400 mt-1.5">
+              Pilih peran Anda untuk melanjutkan ke halaman login
             </p>
           </div>
 
-          {/* 2 Role Selection Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 sm:gap-8 max-w-3xl mx-auto">
-            {/* Card 1: Pencari Kost */}
-            <div 
+          {/* 2 Pilihan Tombol Yang Jelas */}
+          <div className="space-y-4">
+            {/* Tombol 1: Pencari Kost */}
+            <button
+              type="button"
               onClick={() => {
                 setActiveRole('user');
                 setIsRoleSelected(true);
                 resetForm();
               }}
-              className="group relative bg-white rounded-3xl p-6 sm:p-8 border border-gray-100 shadow-xl shadow-gray-100/60 hover:shadow-2xl hover:border-orange-300 transition-all duration-300 cursor-pointer flex flex-col justify-between hover:-translate-y-1"
+              className="w-full group bg-white hover:bg-orange-50/60 border-2 border-orange-200 hover:border-orange-500 rounded-2xl p-4 sm:p-5 flex items-center justify-between text-left transition-all duration-200 shadow-sm hover:shadow-md active:scale-[0.98] cursor-pointer"
             >
-              <div className="space-y-5">
-                {/* Header Icon & Badge */}
-                <div className="flex items-start justify-between">
-                  <div className="w-14 h-14 rounded-2xl bg-orange-50 text-orange-600 flex items-center justify-center border border-orange-100 group-hover:bg-orange-500 group-hover:text-white transition-all duration-300 group-hover:scale-105 shadow-2xs">
-                    <Compass className="w-7 h-7" />
-                  </div>
-                  <span className="px-3 py-1 rounded-full bg-orange-50 text-orange-700 text-[10px] font-black uppercase tracking-wider border border-orange-100/80">
-                    Pencari Hunian Kost
-                  </span>
+              <div className="flex items-center gap-4 min-w-0">
+                <div className="w-12 h-12 rounded-2xl bg-orange-500 text-white flex items-center justify-center shrink-0 shadow-sm shadow-orange-500/30 group-hover:scale-105 transition-transform">
+                  <Compass size={24} />
                 </div>
-
-                {/* Title & Description */}
-                <div className="space-y-2">
-                  <h3 className="text-xl sm:text-2xl font-black text-gray-900 tracking-tight group-hover:text-orange-600 transition-colors">
-                    Pencari Kost
-                  </h3>
-                  <p className="text-xs sm:text-sm text-gray-500 font-medium leading-relaxed">
-                    Temukan, bandingkan fasilitas, cek jarak kampus terdekat, dan sewa kamar kost nyaman tanpa ribet survey langsung ke lokasi.
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <h3 className="font-black text-gray-900 text-base group-hover:text-orange-600 transition-colors">
+                      Pencari Kost
+                    </h3>
+                    <span className="px-2 py-0.5 rounded-full bg-orange-100 text-orange-700 text-[9px] font-black uppercase tracking-wider">
+                      User
+                    </span>
+                  </div>
+                  <p className="text-xs text-gray-500 font-medium truncate mt-0.5">
+                    Cari, sewa, & survey kamar kost
                   </p>
                 </div>
-
-                {/* Checklist Box */}
-                <div className="bg-orange-50/40 rounded-2xl p-4 border border-orange-100/50 space-y-2.5">
-                  <div className="flex items-center gap-2.5 text-xs font-bold text-gray-700">
-                    <CheckCircle2 className="w-4 h-4 text-orange-500 shrink-0" />
-                    <span>Akses 1.200+ database kost terverifikasi</span>
-                  </div>
-                  <div className="flex items-center gap-2.5 text-xs font-bold text-gray-700">
-                    <MapPin className="w-4 h-4 text-orange-500 shrink-0" />
-                    <span>Layanan Jasa Survey Lapangan langsung</span>
-                  </div>
-                  <div className="flex items-center gap-2.5 text-xs font-bold text-gray-700">
-                    <ShieldCheck className="w-4 h-4 text-orange-500 shrink-0" />
-                    <span>Booking aman & transparansi biaya sewa</span>
-                  </div>
-                </div>
               </div>
 
-              {/* Bottom CTA Button */}
-              <div className="pt-6 flex items-center justify-between border-t border-gray-50 mt-6">
-                <span className="text-xs sm:text-sm font-extrabold text-orange-600 group-hover:text-orange-700">
-                  Lanjutkan sebagai Pencari
-                </span>
-                <div className="w-10 h-10 rounded-full bg-orange-500 text-white flex items-center justify-center shadow-md shadow-orange-500/20 group-hover:bg-orange-600 group-hover:translate-x-1 transition-all">
-                  <ArrowRight className="w-5 h-5" />
-                </div>
+              <div className="w-9 h-9 rounded-xl bg-orange-100 text-orange-600 flex items-center justify-center shrink-0 ml-2 group-hover:bg-orange-500 group-hover:text-white transition-all">
+                <ArrowRight size={18} />
               </div>
-            </div>
+            </button>
 
-            {/* Card 2: Pemilik Kost */}
-            <div 
+            {/* Tombol 2: Pemilik Kost */}
+            <button
+              type="button"
               onClick={() => {
                 setActiveRole('owner');
                 setIsRoleSelected(true);
                 resetForm();
               }}
-              className="group relative bg-white rounded-3xl p-6 sm:p-8 border border-gray-100 shadow-xl shadow-gray-100/60 hover:shadow-2xl hover:border-indigo-300 transition-all duration-300 cursor-pointer flex flex-col justify-between hover:-translate-y-1"
+              className="w-full group bg-white hover:bg-indigo-50/60 border-2 border-indigo-200 hover:border-indigo-600 rounded-2xl p-4 sm:p-5 flex items-center justify-between text-left transition-all duration-200 shadow-sm hover:shadow-md active:scale-[0.98] cursor-pointer"
             >
-              <div className="space-y-5">
-                {/* Header Icon & Badge */}
-                <div className="flex items-start justify-between">
-                  <div className="w-14 h-14 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center border border-indigo-100 group-hover:bg-indigo-600 group-hover:text-white transition-all duration-300 group-hover:scale-105 shadow-2xs">
-                    <Building2 className="w-7 h-7" />
-                  </div>
-                  <span className="px-3 py-1 rounded-full bg-indigo-50 text-indigo-700 text-[10px] font-black uppercase tracking-wider border border-indigo-100/80">
-                    Mitra & Pengelola
-                  </span>
+              <div className="flex items-center gap-4 min-w-0">
+                <div className="w-12 h-12 rounded-2xl bg-indigo-600 text-white flex items-center justify-center shrink-0 shadow-sm shadow-indigo-600/30 group-hover:scale-105 transition-transform">
+                  <Building2 size={24} />
                 </div>
-
-                {/* Title & Description */}
-                <div className="space-y-2">
-                  <h3 className="text-xl sm:text-2xl font-black text-gray-900 tracking-tight group-hover:text-indigo-600 transition-colors">
-                    Pemilik Kost
-                  </h3>
-                  <p className="text-xs sm:text-sm text-gray-500 font-medium leading-relaxed">
-                    Kelola kamar, catat inventaris properti, pantau okupansi kamar, dan pasarkan langsung ke ribuan calon mahasiswa perantau.
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <h3 className="font-black text-gray-900 text-base group-hover:text-indigo-600 transition-colors">
+                      Pemilik Kost
+                    </h3>
+                    <span className="px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700 text-[9px] font-black uppercase tracking-wider">
+                      Mitra
+                    </span>
+                  </div>
+                  <p className="text-xs text-gray-500 font-medium truncate mt-0.5">
+                    Kelola kamar & pantau sewa kost
                   </p>
                 </div>
-
-                {/* Checklist Box */}
-                <div className="bg-indigo-50/40 rounded-2xl p-4 border border-indigo-100/50 space-y-2.5">
-                  <div className="flex items-center gap-2.5 text-xs font-bold text-gray-700">
-                    <Store className="w-4 h-4 text-indigo-500 shrink-0" />
-                    <span>Pasang listing & promosi properti gratis</span>
-                  </div>
-                  <div className="flex items-center gap-2.5 text-xs font-bold text-gray-700">
-                    <Layers className="w-4 h-4 text-indigo-500 shrink-0" />
-                    <span>Sistem KostManager & verifikasi survey</span>
-                  </div>
-                  <div className="flex items-center gap-2.5 text-xs font-bold text-gray-700">
-                    <Wallet className="w-4 h-4 text-indigo-500 shrink-0" />
-                    <span>Rekap laporan sewa & dompet penghasilan</span>
-                  </div>
-                </div>
               </div>
 
-              {/* Bottom CTA Button */}
-              <div className="pt-6 flex items-center justify-between border-t border-gray-50 mt-6">
-                <span className="text-xs sm:text-sm font-extrabold text-indigo-600 group-hover:text-indigo-700">
-                  Lanjutkan sebagai Pemilik
-                </span>
-                <div className="w-10 h-10 rounded-full bg-indigo-600 text-white flex items-center justify-center shadow-md shadow-indigo-600/20 group-hover:bg-indigo-700 group-hover:translate-x-1 transition-all">
-                  <ArrowRight className="w-5 h-5" />
-                </div>
+              <div className="w-9 h-9 rounded-xl bg-indigo-100 text-indigo-600 flex items-center justify-center shrink-0 ml-2 group-hover:bg-indigo-600 group-hover:text-white transition-all">
+                <ArrowRight size={18} />
               </div>
-            </div>
+            </button>
+          </div>
+
+          {/* Footer Back */}
+          <div className="mt-8 text-center pt-4 border-t border-gray-100">
+            <a
+              href="/"
+              className="text-xs font-bold text-gray-400 hover:text-orange-500 transition-colors inline-flex items-center gap-1.5"
+            >
+              ← Kembali ke Beranda
+            </a>
           </div>
         </div>
       </div>

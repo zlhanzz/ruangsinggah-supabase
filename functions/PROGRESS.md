@@ -2,6 +2,24 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 316. Redesain Ringkas & Tegas Pemilihan Peran Login (`Login.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  - Pengguna merasa layar awal pemilihan peran sebelum login/register membingungkan karena menampilkan 2 kartu raksasa yang dipenuhi banyak teks panjang, 3 butir checklist di setiap kartu, dan badge berlebih yang tampak seperti artikel brosur promosi daripada tombol yang bisa di-klik. Di layar HP, kartu terpotong sehingga pengguna tidak menyadari bahwa kartu tersebut harus di-klik.
+- **Implementasi Solusi**:
+  1. **Penyederhanaan Layout Single-Screen Card (`Login.tsx`)**:
+     - Mengganti grid kartu teks panjang dengan modal card ringkas (`max-w-md`) yang langsung pas dalam 1 layar tanpa perlu scroll di HP.
+  2. **2 Tombol Aksi Kontras & Jelas**:
+     - **Tombol 1: Pencari Kost** $\rightarrow$ Tombol putih ber-border oranye tebal (`border-2 border-orange-200 hover:border-orange-500`), icon `Compass`, label role *"Pencari Kost"*, sub-teks singkat *"Cari, sewa, & survey kamar kost"*, dan indikator panah aksi `→`.
+     - **Tombol 2: Pemilik Kost** $\rightarrow$ Tombol putih ber-border indigo tebal (`border-2 border-indigo-200 hover:border-indigo-600`), icon `Building2`, label role *"Pemilik Kost"*, sub-teks singkat *"Kelola kamar & pantau sewa kost"*, dan indikator panah aksi `→`.
+  3. **Efek Interaktivitas Visual**:
+     - Menggunakan efek active-click (`active:scale-[0.98]`) dan hover transisi yang memberikan kepastian visual kepada pengguna bahwa kedua pilihan tersebut adalah tombol aksi utama.
+- **File Tersentuh**:
+  - `functions/public/pages/Login.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi build lulus 100% (✓ 2509 modules transformed, built in 41.78s, 0 error).
+
 ### 315. Pembebasan Akses Peninjauan Mode User bagi Akun Admin (`App.tsx`, `Navbar.tsx`) (September 2026)
 - **Permintaan & Masalah**:
   - Admin melaporkan bahwa setelah implementasi isolasi portal mitra, Admin tidak dapat meninjau tampilan user umum karena ketika mengklik tombol `[👁️ LIHAT SEBAGAI USER]` atau `[Mode User]`, halaman `Page.HOME` (`/`) secara otomatis memaksa redirect kembali ke `/dashboard-admin`.
