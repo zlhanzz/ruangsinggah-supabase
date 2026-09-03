@@ -2,6 +2,28 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 306. Perbaikan Navigasi Tombol Promo KostManager (/kost-manager vs /kostmanager) (`App.tsx`, `MitraDashboard.tsx`, `adminService.ts`, `BannerManagement.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  - Tombol *"Pelajari Sekarang ↗"* pada modal popup promo KostManager di Dashboard Mitra masih belum bisa membuka landing page KostManager karena terjadi ketidakcocokan URL default: database dan adminService menggunakan `'/kost-manager'` (dengan tanda hubung), sedangkan router aplikasi terdaftar sebagai `Page.KOSTMANAGER = '/kostmanager'` (tanpa tanda hubung), sehingga terjadi 404 $\rightarrow$ fallback redirect kembali ke Dashboard Mitra.
+- **Implementasi Solusi**:
+  1. **Penambahan Rute Alias di `App.tsx`**:
+     - Menambahkan `<Route path="/kost-manager" element={<Navigate to={Page.KOSTMANAGER} replace />} />` sehingga format URL dengan tanda hubung maupun tanpa tanda hubung selalu valid dan membuka `KostManagerLanding`.
+  2. **Normalisasi Navigasi di `MitraDashboard.tsx`**:
+     - Membuat helper `handlePromoNavigate(url)` yang menormalisasi URL internal `'/kost-manager'` menjadi `Page.KOSTMANAGER` dan mengeksekusi navigasi secara aman baik via `onPageChange` maupun `navigate`.
+     - Menerapkan helper ini pada gambar banner dan seluruh tombol aksi popup promo.
+  3. **Penyelarasan Nilai Default di `adminService.ts` & `BannerManagement.tsx`**:
+     - Mengubah default `link_url` dari `'/kost-manager'` menjadi `'/kostmanager'` di `DEFAULT_MITRA_PROMO_POPUP`.
+     - Memperbarui placeholder dan teks bantuan form setting banner promo mitra.
+- **File Tersentuh**:
+  - `functions/public/App.tsx`
+  - `functions/public/pages/MitraDashboard.tsx`
+  - `functions/public/adminService.ts`
+  - `functions/public/components/admin/BannerManagement.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi Vite `cmd /c npm run build` di `functions/public/` lulus 100% (✓ 2509 modules transformed, built in 56.82s, 0 error).
+
 ### 305. Integrasi & Pembukaan Akses Landing Page KostManager bagi Pemilik Kost (`App.tsx`, `KostManagerLanding.tsx`, `MitraDashboard.tsx`) (September 2026)
 - **Permintaan & Masalah**:
   - Setelah penerapan isolasi role sebelumnya, rute `Page.KOSTMANAGER` (`/kostmanager`) terblokir dan me-redirect pemilik kost kembali ke `/dashboard-mitra`. Akibatnya, pemilik kost tidak bisa mempelajari rincian program KostManager atau mendaftarkan propertinya saat mengklik banner/popup promo KostManager.

@@ -4406,7 +4406,7 @@ export const DEFAULT_MITRA_PROMO_POPUP: MitraPromoPopupSetting = {
   is_active: true,
   title: 'Gak Punya Waktu Kelola Kost? Upgrade ke KostManager!',
   image_url: '',
-  link_url: '/kost-manager',
+  link_url: '/kostmanager',
   alt_text: 'Promo KostManager RuangSinggah'
 };
 

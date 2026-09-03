@@ -716,6 +716,20 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
         }
     };
 
+    const handlePromoNavigate = (url?: string) => {
+        setShowPromoPopup(false);
+        if (url && url.startsWith('http')) {
+            window.open(url, '_blank');
+            return;
+        }
+        const target = url ? (url === '/kost-manager' ? Page.KOSTMANAGER : url) : Page.KOSTMANAGER;
+        if (onPageChange) {
+            onPageChange(target as Page);
+        } else {
+            navigate(target);
+        }
+    };
+
     const inTx = bookings
         .filter(b => ['PAID', 'COMPLETED'].includes((b.status || '').toUpperCase()))
         .map(b => ({
@@ -2736,10 +2750,7 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                             /* Model 1: Desain Grafis Banner Yang Diunggah Super Admin */
                             <div className="relative rounded-3xl overflow-hidden shadow-2xl bg-gray-900 border border-white/20 group">
                                 <div 
-                                    onClick={() => {
-                                        setShowPromoPopup(false);
-                                        navigate(promoPopupSetting.link_url || Page.KOSTMANAGER);
-                                    }}
+                                    onClick={() => handlePromoNavigate(promoPopupSetting.link_url)}
                                     className="cursor-pointer overflow-hidden block"
                                 >
                                     <img 
@@ -2754,10 +2765,7 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                                     </p>
                                     <button
                                         type="button"
-                                        onClick={() => {
-                                            setShowPromoPopup(false);
-                                            navigate(promoPopupSetting.link_url || Page.KOSTMANAGER);
-                                        }}
+                                        onClick={() => handlePromoNavigate(promoPopupSetting.link_url)}
                                         className="px-4 py-1.5 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-black text-xs uppercase tracking-wider shrink-0 shadow-md transition-all active:scale-95 cursor-pointer flex items-center gap-1"
                                     >
                                         Pelajari <ArrowUpRight size={13} />
@@ -2801,10 +2809,7 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                                     <div className="pt-2 flex items-center gap-3">
                                         <button
                                             type="button"
-                                            onClick={() => {
-                                                setShowPromoPopup(false);
-                                                navigate(promoPopupSetting.link_url || Page.KOSTMANAGER);
-                                            }}
+                                            onClick={() => handlePromoNavigate(promoPopupSetting.link_url)}
                                             className="flex-1 py-3 bg-white hover:bg-orange-50 text-orange-600 rounded-xl font-black text-xs uppercase tracking-widest transition-all shadow-lg active:scale-95 flex items-center justify-center gap-1.5 cursor-pointer"
                                         >
                                             Pelajari Sekarang <ArrowUpRight size={14} />

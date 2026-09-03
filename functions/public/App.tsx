@@ -747,6 +747,7 @@ const App: React.FC = () => {
                 onBack={() => navigate(user?.role === 'owner' ? Page.DASHBOARD_MITRA : Page.HOME)} 
               />
             } />
+            <Route path="/kost-manager" element={<Navigate to={Page.KOSTMANAGER} replace />} />
             <Route path={Page.ARTICLES} element={<Articles />} />
             <Route path={Page.ARTICLE_DETAIL} element={<Articles />} />
             <Route path={Page.SURVEY_CHECKOUT} element={

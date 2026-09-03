@@ -246,13 +246,13 @@ const BannerManagement: React.FC<BannerManagementProps> = ({
                                     type="text"
                                     value={mitraPopupSetting.link_url || ''}
                                     onChange={e => setMitraPopupSetting(prev => ({ ...prev, link_url: e.target.value }))}
-                                    placeholder="/kost-manager atau https://..."
+                                    placeholder="/kostmanager atau https://..."
                                     className="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-xl text-xs font-bold text-white placeholder-gray-500 focus:outline-none focus:border-orange-500 transition-colors pr-10"
                                 />
                                 <ExternalLink size={14} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
                             </div>
                             <p className="text-[11px] text-gray-400 mt-1">
-                                Default: <code>/kost-manager</code> (mengarah ke halaman promosi KostManager)
+                                Default: <code>/kostmanager</code> (mengarah ke halaman promosi KostManager)
                             </p>
                         </div>
 
