@@ -93,8 +93,10 @@ const Navbar: React.FC<NavbarProps> = ({ activePage, onPageChange, user, onLogou
 
   return (
     <>
-      <nav className="sticky top-0 z-50 bg-white/90 backdrop-blur-md border-b border-gray-100">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      {/* Top Navbar: Sembunyikan saat di halaman login agar layout bersih dan terpusat presisi */}
+      {!activePage.startsWith('/login') && activePage !== Page.LOGIN && (
+        <nav className="sticky top-0 z-50 bg-white/90 backdrop-blur-md border-b border-gray-100">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between h-20 items-center">
             <div 
               className="flex-shrink-0 flex items-center cursor-pointer" 
@@ -456,6 +458,7 @@ const Navbar: React.FC<NavbarProps> = ({ activePage, onPageChange, user, onLogou
           </div>
         </div>
       </nav>
+      )}
 
       {/* Mobile Bottom Navigation Bar */}
       {!hideBottomNav && !isAdminPage && !activePage.startsWith('/dashboard') && !activePage.startsWith(Page.DASHBOARD_MITRA) && !activePage.startsWith(Page.DASHBOARD_AGENT) && !activePage.startsWith(Page.DASHBOARD_OWNER) && (

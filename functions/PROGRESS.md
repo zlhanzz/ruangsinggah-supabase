@@ -2,6 +2,24 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 317. Pembersihan Redundansi Top Navbar & Layout Presisi Tengah Halaman Login (`Navbar.tsx`, `Login.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  - Pada halaman login (`/login`), top navbar website (`RuangSinggah.id Masuk [Daftar]`) masih muncul di bagian atas. Hal ini membuat tata letak terdorong ke bawah, tidak presisi berada di tengah layar (*not vertically centered*), dan menampilkan informasi ganda karena pengguna sudah berada di halaman login.
+- **Implementasi Solusi**:
+  1. **Penyembunyian Top Navbar di Halaman Login (`Navbar.tsx`)**:
+     - Mengondisikan elemen top `<nav>` agar otomatis disembunyikan saat `activePage` berada pada rute `/login` (`Page.LOGIN`).
+     - Bottom navigation mobile tetap dipertahankan aktif di bagian bawah layar.
+  2. **Presisi Layout Tengah (*Vertical & Horizontal Perfect Center*) (`Login.tsx`)**:
+     - Menyesuaikan kalkulasi tinggi wrapper utama dengan `min-h-[calc(100vh-4.5rem)] md:min-h-screen flex items-center justify-center p-4 sm:p-6`.
+     - Tampilan card pemilihan peran dan form login kini 100% presisi berada tepat di tengah layar secara vertikal dan horizontal baik di mobile maupun desktop.
+- **File Tersentuh**:
+  - `functions/public/components/Navbar.tsx`
+  - `functions/public/pages/Login.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi build lulus 100% (✓ 2509 modules transformed, built in 44.84s, 0 error).
+
 ### 316. Redesain Ringkas & Tegas Pemilihan Peran Login (`Login.tsx`) (September 2026)
 - **Permintaan & Masalah**:
   - Pengguna merasa layar awal pemilihan peran sebelum login/register membingungkan karena menampilkan 2 kartu raksasa yang dipenuhi banyak teks panjang, 3 butir checklist di setiap kartu, dan badge berlebih yang tampak seperti artikel brosur promosi daripada tombol yang bisa di-klik. Di layar HP, kartu terpotong sehingga pengguna tidak menyadari bahwa kartu tersebut harus di-klik.

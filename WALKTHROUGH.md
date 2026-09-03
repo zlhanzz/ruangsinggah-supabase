@@ -1,38 +1,37 @@
-# Walkthrough - Progres 316: Redesain Ringkas & Tegas Pemilihan Peran Login
+# Walkthrough - Progres 317: Pembersihan Redundansi Top Navbar & Layout Presisi Tengah Halaman Login
 
 ## Ringkasan Perubahan
-Menata ulang tampilan pemilihan peran (*Role Selection*) pada halaman Login. Menghilangkan teks panjang, paragraf penjelasan berlebih, dan checklist brosur, serta menggantikannya dengan **2 tombol aksi yang tegas, bersih, dan interaktif (Pencari Kost vs Pemilik Kost)** yang langsung pas dalam 1 layar (*single-screen view*) tanpa perlu scroll di HP.
+Menyempurnakan tata letak halaman Login agar **100% bersih, terpusat presisi di tengah layar (*perfect center*)**, serta menghilangkan top navbar website (`RuangSinggah.id Masuk [Daftar]`) yang redundan di rute `/login`.
 
 ---
 
 ## Detail Perubahan File & Desain
 
-### 1. `functions/public/pages/Login.tsx`
-- **Layout Terpusat & Ringkas**:
-  - Mengubah container menjadi box card elegan berukuran `max-w-md` dengan logo RuangSinggah di atas, judul ringkas *"Masuk ke RuangSinggah"*, dan subjudul *"Pilih peran Anda untuk melanjutkan ke halaman login"*.
-- **2 Tombol Aksi Kontras & Bersebelahan**:
-  - **Tombol 1: Pencari Kost**
-    - Border oranye tebal (`border-2 border-orange-200 hover:border-orange-500 hover:bg-orange-50/60`).
-    - Icon box `Compass` oranye menyala.
-    - Judul peran *"Pencari Kost"* + badge *"User"*.
-    - Sub-teks singkat *"Cari, sewa, & survey kamar kost"*.
-    - Tombol panah aksi `→` di sisi kanan.
-  - **Tombol 2: Pemilik Kost**
-    - Border indigo tebal (`border-2 border-indigo-200 hover:border-indigo-600 hover:bg-indigo-50/60`).
-    - Icon box `Building2` indigo menyala.
-    - Judul peran *"Pemilik Kost"* + badge *"Mitra"*.
-    - Sub-teks singkat *"Kelola kamar & pantau sewa kost"*.
-    - Tombol panah aksi `→` di sisi kanan.
-- **Interaktivitas Visual**:
-  - Animasi tekan `active:scale-[0.98]` dan hover shadow halus memberikan kepastian bahwa seluruh elemen adalah tombol yang siap di-klik.
-  - Tautan *"← Kembali ke Beranda"* di bagian bawah untuk navigasi cepat.
+### 1. `functions/public/components/Navbar.tsx`
+- Mengondisikan elemen top `<nav>`:
+  ```tsx
+  {!activePage.startsWith('/login') && activePage !== Page.LOGIN && (
+    <nav className="sticky top-0 z-50 bg-white/90 backdrop-blur-md border-b border-gray-100">
+      ...
+    </nav>
+  )}
+  ```
+- Top navbar disembunyikan saat pengguna berada di halaman login.
+- Bottom navigation bar mobile (`Home, Search, Chat, Orders, Profile`) tetap aktif dan mudah diakses di bagian bawah layar HP.
+
+### 2. `functions/public/pages/Login.tsx`
+- Memperbarui wrapper utama dengan kalkulasi tinggi presisi:
+  ```tsx
+  <div className="min-h-[calc(100vh-4.5rem)] md:min-h-screen bg-gradient-to-b from-gray-50 via-white to-orange-50/20 flex items-center justify-center p-4 sm:p-6">
+  ```
+- Card pemilihan peran (*Role Selection*) dan form login kini berada tepat di tengah layar secara vertikal dan horizontal (*perfect vertical & horizontal center*), tanpa ada pergeseran atau header yang mendorong card ke bawah.
 
 ---
 
 ## Hasil Pengujian & Kompilasi
 
 1. **Kompilasi Root Build (`npm run build`)**:
-   - **Lulus 100% (✓ 2509 modules transformed, built in 41.78s, 0 error)**.
+   - **Lulus 100% (✓ 2509 modules transformed, built in 44.84s, 0 error)**.
    - Seluruh direktori (`public/`, `dist/`, dan `functions/public/dist/`) ter-update dengan asset terbaru.
 
 ---
@@ -41,8 +40,10 @@ Menata ulang tampilan pemilihan peran (*Role Selection*) pada halaman Login. Men
 
 1. **Uji Tampilan Mobile (HP)**:
    - Buka halaman login di HP (`https://ruangsinggah.id/login`).
-   - **Hasil**: Layar pemilihan peran langsung tampil utuh dalam 1 layar tanpa terpotong dan tanpa perlu scroll.
-   - Terdapat 2 tombol besar yang jelas: **Pencari Kost** dan **Pemilik Kost**.
-2. **Uji Klik Pemilihan**:
-   - Klik tombol **Pencari Kost** $\rightarrow$ Form login Pencari Kost langsung terbuka.
-   - Klik tombol **Pemilik Kost** $\rightarrow$ Form login Pemilik Kost (Mitra) langsung terbuka.
+   - **Hasil**:
+     - Top navbar dengan tulisan *RuangSinggah.id Masuk [Daftar]* sudah tidak ada.
+     - Card pilihan peran (Pencari Kost vs Pemilik Kost) berada **tepat di tengah layar**.
+     - Bottom navigation bar tetap ada di bagian bawah.
+2. **Uji Tampilan Desktop (PC)**:
+   - Buka `/login` di browser desktop.
+   - **Hasil**: Card login tampil bersih, elegan, dan presisi di tengah layar (*vertical center*).

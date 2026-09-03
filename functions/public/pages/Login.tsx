@@ -826,7 +826,7 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
   // ── Layar Portal Pemilihan Akses Masuk & Daftar (Sebelum Masuk ke Form) ──
   if (!isRoleSelected && (mode === 'LOGIN' || mode === 'REGISTER')) {
     return (
-      <div className="min-h-screen bg-gradient-to-b from-gray-50 via-white to-orange-50/20 flex items-center justify-center py-10 px-4 sm:px-6">
+      <div className="min-h-[calc(100vh-4.5rem)] md:min-h-screen bg-gradient-to-b from-gray-50 via-white to-orange-50/20 flex items-center justify-center p-4 sm:p-6">
         <div className="max-w-md w-full bg-white rounded-3xl p-6 sm:p-8 shadow-xl border border-gray-100 animate-in fade-in zoom-in-95 duration-200">
           {/* Logo & Header */}
           <div className="text-center mb-8">
@@ -927,7 +927,7 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
+    <div className="min-h-[calc(100vh-4.5rem)] md:min-h-screen bg-gray-50 flex items-center justify-center py-6 sm:py-10 px-4 sm:px-6 lg:px-8">
 
       {/* ── MODAL KONFIRMASI UPGRADE ROLE ───────────────────────────────────── */}
       {showUpgradeModal && (

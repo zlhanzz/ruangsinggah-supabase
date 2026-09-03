@@ -1,16 +1,14 @@
-# Rencana Implementasi: Redesain Sederhana & Tegas Pemilihan Peran Login (`Login.tsx`)
+# Rencana Implementasi: Layout Login Presisi Tengah & Pembersihan Redundansi Top Navbar
 
 ## 1. Analisis Masalah & Kebutuhan
-- **Masalah dari Pengalaman Pengguna**:
-  - Pada layar pemilihan peran sebelum login/register, saat ini disajikan 2 kartu berukuran sangat besar yang dipenuhi banyak teks (paragraf panjang, 3 butir checklist bullet point, badge ganda, dll.).
-  - Di layar HP maupun PC, kartu tersebut terpotong dan terlihat seperti artikel/brosur promosi daripada tombol yang bisa di-klik. Pengguna tidak menyadari bahwa kartu tersebut adalah tombol untuk melanjutkan login.
+- **Masalah dari Tangkapan Layar & Feedback Pengguna**:
+  - Pada halaman `/login`, top navbar website (`RuangSinggah.id Masuk [Daftar]`) masih tampil di bagian atas. Hal ini menimbulkan:
+    1. **Redundansi Visual**: Pengguna sudah berada di halaman Masuk/Daftar, sehingga tombol "Masuk" dan "Daftar" di header atas menjadi tidak perlu dan membingungkan.
+    2. **Layout Kurang Presisi ke Tengah**: Adanya top header setinggi 80px mendorong card login ke bawah sehingga tidak presisi berada di tengah layar (*vertical center*).
 - **Kebutuhan Pengguna**:
-  - Tampilan dibuat **sangat simpel, bersih, dan langsung to-the-point**:
-    - Cukup 2 tombol pilihan peran yang kontras dan jelas sebagai tombol yang bisa di-klik:
-      1. **Pencari Kost** (dengan icon, teks peran jelas, dan tombol panah `→`).
-      2. **Pemilik Kost** (dengan icon, teks peran jelas, dan tombol panah `→`).
-    - Langsung pas dalam satu layar (*single-screen view*), tanpa perlu scroll panjang di HP.
-    - Interaksi hover, active click effect (`active:scale-[0.98]`), dan border yang tegas sehingga pengguna 100% paham mana yang harus di-klik.
+  - Sembunyikan top navbar (`<nav>`) khusus ketika pengguna berada di halaman login/register (`Page.LOGIN` / `/login`).
+  - Pertahankan bottom navigation bar di mobile (`Home, Search, Chat, Orders, Profile`) agar pengguna tetap dapat berpindah menu dengan mudah.
+  - Buat container halaman login menggunakan kalkulasi tinggi yang presisi (`min-h-[calc(100vh-4.5rem)] md:min-h-screen`) sehingga card pemilihan peran dan form login **100% presisi berada di tengah layar secara vertikal dan horizontal** persis seperti yang dilampirkan pengguna.
 
 ---
 
@@ -18,23 +16,30 @@
 
 | File | Tindakan & Penjelasan Perubahan |
 | :--- | :--- |
-| `functions/public/pages/Login.tsx` | Menata ulang bagian `!isRoleSelected` menjadi box modal ringkas dengan 2 tombol aksi peran (Pencari Kost vs Pemilik Kost), menghilangkan teks berlebih/checklist panjang. |
+| `functions/public/components/Navbar.tsx` | Menambahkan kondisi pada top `<nav>` agar disembunyikan saat `activePage` adalah `/login` (`Page.LOGIN`). Mobile bottom nav tetap aktif. |
+| `functions/public/pages/Login.tsx` | Menyesuaikan min-height container (`min-h-[calc(100vh-4.5rem)] md:min-h-screen`) dan padding agar card berada tepat di tengah layar (*perfect center*) baik di HP maupun PC. |
 
 ---
 
 ## 3. Langkah-Langkah Eksekusi
 
-### Langkah 1: Redesain Komponen Pemilihan Peran di `Login.tsx`
-- Mengganti grid kartu raksasa dengan container terpusat (`max-w-md mx-auto`) berlatar putih bersih dengan header ringkas:
-  - Logo RuangSinggah.
-  - Judul: **Masuk ke RuangSinggah**.
-  - Subjudul: **Pilih peran Anda untuk melanjutkan**.
-- Menghadirkan 2 elemen tombol `<button>` dengan border tebal, icon, label role, dan indikator panah aksi:
-  - **Tombol 1**: `Pencari Kost` (Aksen Oranye, icon Compass, label "User", deskripsi singkat "Cari, sewa, & survey kamar kost").
-  - **Tombol 2**: `Pemilik Kost` (Aksen Indigo, icon Building, label "Mitra", deskripsi singkat "Kelola kamar & pantau sewa kost").
-- Menambahkan tautan kembali ke Beranda di bagian bawah.
+### Langkah 1: Modifikasi Top Navbar di `Navbar.tsx`
+- Tambahkan pengecekan rute login pada rendering top navbar:
+  ```tsx
+  {!activePage.startsWith('/login') && activePage !== Page.LOGIN && (
+    <nav className="sticky top-0 z-50 bg-white/90 backdrop-blur-md border-b border-gray-100">
+      ...
+    </nav>
+  )}
+  ```
 
-### Langkah 2: Build & Validasi
+### Langkah 2: Sempurnakan Center Alignment di `Login.tsx`
+- Perbarui wrapper layout utama agar presisi di tengah layar:
+  ```tsx
+  <div className="min-h-[calc(100vh-4.5rem)] md:min-h-screen bg-gradient-to-b from-gray-50 via-white to-orange-50/20 flex items-center justify-center p-4 sm:p-6">
+  ```
+
+### Langkah 3: Build & Validasi
 - Jalankan `cmd /c npm run build` untuk memverifikasi 0 error kompilasi dan sinkronisasi ke folder `dist` dan `public`.
 - Commit ke `bukan-productions`, merge ke `main`, dan push ke GitHub `origin main`.
 
@@ -42,8 +47,7 @@
 
 ## 4. Rencana Verifikasi
 
-1. **Uji Tampilan Mobile (HP)**:
-   - Buka halaman login di HP $\rightarrow$ Kedua tombol peran (Pencari Kost & Pemilik Kost) langsung terlihat jelas dalam satu layar tanpa perlu scroll.
-2. **Uji Klik Pemilihan Peran**:
-   - Klik tombol **Pencari Kost** $\rightarrow$ Langsung masuk ke form login Pencari Kost dengan mulus.
-   - Klik tombol **Pemilik Kost** $\rightarrow$ Langsung masuk ke form login Pemilik Kost (Mitra) dengan mulus.
+1. **Uji Tampilan Halaman Login di HP & PC**:
+   - Buka `/login` $\rightarrow$ Top navbar `RuangSinggah.id Masuk [Daftar]` bersih tidak muncul.
+   - Card pilihan peran berada tepat di tengah layar secara vertikal & horizontal (*perfect center*).
+   - Bottom navigation di HP tetap muncul rapi di bagian bawah.
