@@ -1,8 +1,8 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Kost } from '../types';
 import { FORMAT_CURRENCY } from '../constants';
 import { getRoomEffectivePrice } from '../userService';
-import { Star, MapPin } from 'lucide-react';
+import { Star, MapPin, ImageOff } from 'lucide-react';
 
 interface KostCardProps {
   kost: Kost;
@@ -11,6 +11,9 @@ interface KostCardProps {
 }
 
 const KostCard: React.FC<KostCardProps> = ({ kost, onClick, onDelete }) => {
+  const [imageLoaded, setImageLoaded] = useState(false);
+  const [imageError, setImageError] = useState(false);
+
   const variantCount = kost.isManaged 
     ? (Array.from(new Set(kost.roomTypes?.map((rt: any) => rt.type?.trim() || rt.roomTypeName || 'Standard') || [])).length || 1)
     : (kost.roomTypes?.length || 1);
@@ -34,7 +37,6 @@ const KostCard: React.FC<KostCardProps> = ({ kost, onClick, onDelete }) => {
       displayUnit = '/bln';
     } else {
       // If no monthly options exist at all, take the available ones (likely daily/weekly)
-      // We take the unit of the first one for simplicity, or mixed if multiple
       displayPrices = effectivePrices.map(p => p.price);
       displayUnit = effectivePrices[0]?.unit || '/bln';
     }
@@ -65,17 +67,38 @@ const KostCard: React.FC<KostCardProps> = ({ kost, onClick, onDelete }) => {
     );
   };
 
+  const primaryImageUrl = kost.imageUrls && kost.imageUrls.length > 0 ? kost.imageUrls[0] : '';
+
   return (
     <div 
       onClick={() => onClick?.(kost.id)}
       className="group bg-white rounded-2xl border border-gray-100/90 overflow-hidden shadow-[0_4px_20px_rgba(0,0,0,0.05)] hover:shadow-[0_8px_24px_rgba(0,0,0,0.08)] transition-all duration-300 flex flex-col h-full cursor-pointer"
     >
-      <div className="relative h-48 sm:h-52 w-full overflow-hidden bg-gray-50">
-        <img 
-          src={kost.imageUrls[0]} 
-          alt={kost.title}
-          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-        />
+      <div className="relative h-48 sm:h-52 w-full overflow-hidden bg-slate-100">
+        {/* Lazy Shimmer Skeleton Loader */}
+        {!imageLoaded && !imageError && (
+          <div className="absolute inset-0 bg-gradient-to-r from-slate-100 via-slate-200 to-slate-100 animate-pulse" />
+        )}
+
+        {/* Fallback Image */}
+        {imageError || !primaryImageUrl ? (
+          <div className="w-full h-full flex flex-col items-center justify-center bg-slate-100 text-slate-400">
+            <ImageOff className="w-8 h-8 stroke-1 mb-1" />
+            <span className="text-[10px] font-bold uppercase tracking-wider">Foto Tidak Tersedia</span>
+          </div>
+        ) : (
+          <img 
+            src={primaryImageUrl} 
+            alt={kost.title}
+            loading="lazy"
+            decoding="async"
+            onLoad={() => setImageLoaded(true)}
+            onError={() => setImageError(true)}
+            className={`w-full h-full object-cover group-hover:scale-105 transition-all duration-500 ${
+              imageLoaded ? 'opacity-100' : 'opacity-0'
+            }`}
+          />
+        )}
         
         {/* Top Badges */}
         <div className="absolute top-3 left-3 flex flex-wrap gap-1.5 z-10">

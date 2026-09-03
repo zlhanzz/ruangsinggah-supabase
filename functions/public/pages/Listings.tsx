@@ -1,5 +1,4 @@
-
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useLocation, useParams } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
 import { Kost } from '../types';
@@ -7,6 +6,9 @@ import KostCard from '../components/KostCard';
 import { getRoomEffectivePrice } from '../userService';
 import FilterDrawer from '../components/FilterDrawer';
 import FilterControls, { FilterState } from '../components/FilterControls';
+import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Search, Frown } from 'lucide-react';
+
+const ITEMS_PER_PAGE = 9; // 3 Baris x 3 Kolom pada Desktop
 
 const slugify = (text: string) => {
   return text
@@ -33,6 +35,7 @@ const Listings: React.FC<ListingsProps> = ({ onKostClick, listings = [], loading
   const { search } = useLocation();
   const { campusSlug, areaSlug } = useParams<{ campusSlug?: string; areaSlug?: string }>();
   const queryParams = useMemo(() => new URLSearchParams(search), [search]);
+  const resultsTopRef = useRef<HTMLDivElement>(null);
 
   const [filters, setFilters] = useState<FilterState>({
     searchTerm: '',
@@ -42,6 +45,7 @@ const Listings: React.FC<ListingsProps> = ({ onKostClick, listings = [], loading
     maxPrice: 5000000,
   });
   
+  const [currentPage, setCurrentPage] = useState<number>(1);
   const [isMobileFilterOpen, setIsMobileFilterOpen] = useState(false);
   
   // Initialize and sync with URL query parameters & dynamic route parameters (pSEO)
@@ -99,6 +103,11 @@ const Listings: React.FC<ListingsProps> = ({ onKostClick, listings = [], loading
       maxPrice: qMaxPrice ? parseInt(qMaxPrice) : prev.maxPrice,
     }));
   }, [queryParams, campusSlug, areaSlug, listings]);
+
+  // Reset pagination to page 1 whenever filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [filters, campusSlug, areaSlug]);
 
   useEffect(() => {
     if (onFilterToggle) onFilterToggle(isMobileFilterOpen);
@@ -182,6 +191,47 @@ const Listings: React.FC<ListingsProps> = ({ onKostClick, listings = [], loading
     return result;
   }, [filters, listings]);
 
+  // Pagination calculations
+  const totalPages = Math.max(1, Math.ceil(filteredKosts.length / ITEMS_PER_PAGE));
+  
+  const paginatedKosts = useMemo(() => {
+    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+    return filteredKosts.slice(startIndex, startIndex + ITEMS_PER_PAGE);
+  }, [filteredKosts, currentPage]);
+
+  const startIndex = (currentPage - 1) * ITEMS_PER_PAGE + 1;
+  const endIndex = Math.min(currentPage * ITEMS_PER_PAGE, filteredKosts.length);
+
+  const handlePageChange = (page: number) => {
+    if (page < 1 || page > totalPages || page === currentPage) return;
+    setCurrentPage(page);
+    
+    // Smooth scroll to top of results
+    if (resultsTopRef.current) {
+      resultsTopRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    } else {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  };
+
+  // Generate pagination numbers array with smart ellipsis
+  const getPaginationNumbers = () => {
+    const delta = 1;
+    const range: (number | string)[] = [];
+    const left = Math.max(2, currentPage - delta);
+    const right = Math.min(totalPages - 1, currentPage + delta);
+
+    range.push(1);
+    if (left > 2) range.push('...');
+    for (let i = left; i <= right; i++) {
+      if (i > 1 && i < totalPages) range.push(i);
+    }
+    if (right < totalPages - 1) range.push('...');
+    if (totalPages > 1) range.push(totalPages);
+
+    return range;
+  };
+
   const activeFilterCount = useMemo(() => {
     let count = 0;
     if (filters.searchTerm) count++;
@@ -200,6 +250,7 @@ const Listings: React.FC<ListingsProps> = ({ onKostClick, listings = [], loading
       selectedCampus: 'Semua',
       maxPrice: 5000000,
     });
+    setCurrentPage(1);
   };
 
   const seoMetadata = useMemo(() => {
@@ -270,16 +321,15 @@ const Listings: React.FC<ListingsProps> = ({ onKostClick, listings = [], loading
         <meta name="twitter:description" content={seoMetadata.description} />
         <meta name="twitter:image" content="https://ruangsinggah.id/logo.png" />
       </Helmet>
-       {/* MOBILE STICKY FILTER BAR */}
+
+      {/* MOBILE STICKY FILTER BAR */}
       <div className="lg:hidden sticky top-[80px] z-40 bg-white/95 backdrop-blur-md px-4 py-3 border-b border-gray-100 shadow-sm transition-all">
         <button 
           onClick={() => setIsMobileFilterOpen(true)}
-          className="w-full bg-white border border-gray-200 rounded-full py-3 px-5 shadow-sm active:scale-[0.98] transition-all flex items-center gap-4"
+          className="w-full bg-white border border-gray-200 rounded-full py-3 px-5 shadow-sm active:scale-[0.98] transition-all flex items-center gap-4 cursor-pointer"
         >
-           <div className="text-orange-500 shrink-0">
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
-              </svg>
+           <div className="text-[#ff7a00] shrink-0">
+              <Search className="w-5 h-5 stroke-[2.5]" />
            </div>
            <div className="text-left flex-1">
                <p className="text-xs font-black uppercase tracking-tight text-gray-900 leading-none mb-1">CARI KOST SEKARANG</p>
@@ -288,19 +338,19 @@ const Listings: React.FC<ListingsProps> = ({ onKostClick, listings = [], loading
                </p>
            </div>
            {activeFilterCount > 0 && (
-             <div className="bg-orange-500 text-white w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-black shrink-0">
+             <div className="bg-[#ff7a00] text-white w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-black shrink-0">
                {activeFilterCount}
              </div>
            )}
         </button>
       </div>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 lg:pt-12 pb-12">
+      <div ref={resultsTopRef} className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 lg:pt-12 pb-16">
         <div className="flex flex-col lg:flex-row gap-8 items-start">
             
             {/* DESKTOP SIDEBAR FILTER */}
             <aside className="hidden lg:block w-1/4 sticky top-24 z-30">
-                <div className="bg-gray-50/50 rounded-[2rem] border border-gray-100 p-6">
+                <div className="bg-gray-50/50 rounded-[2rem] border border-gray-100 p-6 shadow-xs">
                     <div className="mb-6 pb-6 border-b border-gray-100">
                         <h3 className="text-lg font-black uppercase tracking-tight text-gray-900">Filter</h3>
                     </div>
@@ -327,7 +377,7 @@ const Listings: React.FC<ListingsProps> = ({ onKostClick, listings = [], loading
                availableCampuses={availableCampuses}
             />
 
-            {/* RESULTS GRID */}
+            {/* RESULTS GRID & PAGINATION */}
             <main className="w-full lg:w-3/4">
                 <div className="flex justify-between items-end mb-6">
                    <div>
@@ -337,7 +387,7 @@ const Listings: React.FC<ListingsProps> = ({ onKostClick, listings = [], loading
                           {filters.selectedCampus !== 'Semua' ? ` • ${filters.selectedCampus}` : ''}
                       </p>
                    </div>
-                   <span className="bg-gray-900 text-white px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest shadow-lg">
+                   <span className="bg-gray-900 text-white px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest shadow-md">
                       {filteredKosts.length} Unit
                    </span>
                 </div>
@@ -346,29 +396,112 @@ const Listings: React.FC<ListingsProps> = ({ onKostClick, listings = [], loading
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
                         {[1, 2, 3, 4, 5, 6].map((n) => (
                             <div key={n} className="bg-white rounded-2xl border border-gray-100 overflow-hidden h-full flex flex-col animate-pulse">
-                                <div className="bg-gray-200 aspect-[4/3] w-full"></div>
+                                <div className="bg-slate-200 aspect-[4/3] w-full"></div>
                                 <div className="p-5 space-y-3">
-                                    <div className="h-4 bg-gray-200 rounded w-3/4"></div>
-                                    <div className="h-3 bg-gray-200 rounded w-1/2"></div>
-                                    <div className="h-8 bg-gray-200 rounded w-full mt-4"></div>
+                                    <div className="h-4 bg-slate-200 rounded w-3/4"></div>
+                                    <div className="h-3 bg-slate-200 rounded w-1/2"></div>
+                                    <div className="h-8 bg-slate-200 rounded w-full mt-4"></div>
                                 </div>
                             </div>
                         ))}
                     </div>
-                ) : filteredKosts.length > 0 ? (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                        {filteredKosts.map(kost => (
-                            <KostCard key={kost.id} kost={kost} onClick={onKostClick} onDelete={onDelete} />
-                        ))}
-                    </div>
+                ) : paginatedKosts.length > 0 ? (
+                    <>
+                      {/* Property Cards Grid (Lazy-Loaded) */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                          {paginatedKosts.map(kost => (
+                              <KostCard key={kost.id} kost={kost} onClick={onKostClick} onDelete={onDelete} />
+                          ))}
+                      </div>
+
+                      {/* MODERN PAGINATION CONTROLS */}
+                      {totalPages > 1 && (
+                        <div className="mt-12 pt-8 border-t border-gray-100 flex flex-col sm:flex-row items-center justify-between gap-4">
+                          
+                          {/* Info Text */}
+                          <p className="text-xs font-bold text-gray-500 order-2 sm:order-1">
+                            Menampilkan <span className="text-gray-900 font-extrabold">{startIndex}-{endIndex}</span> dari <span className="text-gray-900 font-extrabold">{filteredKosts.length}</span> Unit Kost
+                          </p>
+
+                          {/* Page Buttons */}
+                          <div className="flex items-center gap-1.5 order-1 sm:order-2">
+                            {/* First Page */}
+                            <button
+                              onClick={() => handlePageChange(1)}
+                              disabled={currentPage === 1}
+                              title="Halaman Pertama"
+                              className="p-2 rounded-xl border border-gray-200 text-gray-500 hover:bg-gray-50 hover:text-gray-900 disabled:opacity-30 disabled:hover:bg-transparent disabled:cursor-not-allowed transition-all cursor-pointer"
+                            >
+                              <ChevronsLeft className="w-4 h-4" />
+                            </button>
+
+                            {/* Prev Page */}
+                            <button
+                              onClick={() => handlePageChange(currentPage - 1)}
+                              disabled={currentPage === 1}
+                              title="Sebelumnya"
+                              className="px-3 py-2 rounded-xl border border-gray-200 text-xs font-bold text-gray-600 hover:bg-gray-50 hover:text-gray-900 disabled:opacity-30 disabled:hover:bg-transparent disabled:cursor-not-allowed transition-all flex items-center gap-1 cursor-pointer"
+                            >
+                              <ChevronLeft className="w-4 h-4" />
+                              <span className="hidden md:inline">Sebelumnya</span>
+                            </button>
+
+                            {/* Page Numbers */}
+                            <div className="flex items-center gap-1">
+                              {getPaginationNumbers().map((pageNum, idx) => (
+                                typeof pageNum === 'number' ? (
+                                  <button
+                                    key={idx}
+                                    onClick={() => handlePageChange(pageNum)}
+                                    className={`w-9 h-9 rounded-xl text-xs font-extrabold transition-all cursor-pointer flex items-center justify-center ${
+                                      currentPage === pageNum
+                                        ? 'bg-[#ff7a00] text-white shadow-md shadow-orange-500/20 scale-105'
+                                        : 'bg-white border border-gray-200 text-gray-700 hover:bg-orange-50 hover:text-[#ff7a00] hover:border-orange-200'
+                                    }`}
+                                  >
+                                    {pageNum}
+                                  </button>
+                                ) : (
+                                  <span key={idx} className="w-6 text-center text-xs font-bold text-gray-400">
+                                    ...
+                                  </span>
+                                )
+                              ))}
+                            </div>
+
+                            {/* Next Page */}
+                            <button
+                              onClick={() => handlePageChange(currentPage + 1)}
+                              disabled={currentPage === totalPages}
+                              title="Berikutnya"
+                              className="px-3 py-2 rounded-xl border border-gray-200 text-xs font-bold text-gray-600 hover:bg-gray-50 hover:text-gray-900 disabled:opacity-30 disabled:hover:bg-transparent disabled:cursor-not-allowed transition-all flex items-center gap-1 cursor-pointer"
+                            >
+                              <span className="hidden md:inline">Berikutnya</span>
+                              <ChevronRight className="w-4 h-4" />
+                            </button>
+
+                            {/* Last Page */}
+                            <button
+                              onClick={() => handlePageChange(totalPages)}
+                              disabled={currentPage === totalPages}
+                              title="Halaman Terakhir"
+                              className="p-2 rounded-xl border border-gray-200 text-gray-500 hover:bg-gray-50 hover:text-gray-900 disabled:opacity-30 disabled:hover:bg-transparent disabled:cursor-not-allowed transition-all cursor-pointer"
+                            >
+                              <ChevronsRight className="w-4 h-4" />
+                            </button>
+                          </div>
+
+                        </div>
+                      )}
+                    </>
                 ) : (
                     <div className="text-center py-20 bg-gray-50 rounded-[2rem] border border-dashed border-gray-200">
                         <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center mx-auto mb-4 shadow-sm text-gray-300">
-                            <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                            <Frown className="w-8 h-8 text-gray-400 stroke-[1.5]" />
                         </div>
                         <p className="text-gray-900 font-black text-sm uppercase tracking-tight">Tidak ada kost ditemukan</p>
                         <p className="text-gray-400 text-xs mt-1">Coba kurangi filter atau cari area lain</p>
-                        <button onClick={resetFilters} className="mt-4 text-orange-500 text-xs font-bold uppercase tracking-widest hover:underline">Reset Filter</button>
+                        <button onClick={resetFilters} className="mt-4 text-[#ff7a00] text-xs font-bold uppercase tracking-widest hover:underline cursor-pointer">Reset Filter</button>
                     </div>
                 )}
             </main>

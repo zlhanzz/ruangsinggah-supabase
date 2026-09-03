@@ -1,59 +1,52 @@
-# IMPLEMENTATION PLAN: Penyesuaian UI/UX Halaman Profil Mode Mobile Presisi Mockup Google Stitch
+# IMPLEMENTATION PLAN: Penerapan Lazy Loading & Paginasi Halaman pada Menu Listing (`Listings.tsx` & `KostCard.tsx`)
 
 ## 1. Analisis Masalah & Kebutuhan
 - **Kondisi Saat Ini**:
-  - Tampilan desktop telah disempurnakan menjadi 2-kolom, namun pada viewport mobile (`< lg`) tampilan form dan kartu masih perlu dioptimalkan agar 100% presisi dengan mockup mobile Google Stitch yang diberikan pengguna.
-- **Kebutuhan Desain Mobile (Mockup Referensi)**:
-  - **1. Card Profil Utama (Mobile Top Card)**:
-    - Cover header gradasi oranye `#ff7a00` tinggi proporsional (`h-28`).
-    - Avatar lingkaran besar (`w-24 h-24`) dengan badge centang verifikasi oranye di sudut bawah.
-    - Nama pengguna (`text-lg font-black`), icon verified checkmark, email pengguna, dan badge pill terverifikasi (`Administrator Terverifikasi` / `Pengguna Terverifikasi`).
-  - **2. Banner Administrator / Otoritas Ringkas**:
-    - Box oranye berikon shield di kiri (`w-10 h-10`), judul huruf kapital tebal `ADMINISTRATOR TERVERIFIKASI`, dan deskripsi ringkas tanpa teks terpotong.
-  - **3. Card Informasi Kontak & Pekerjaan**:
-    - Header ber-indikator dot oranye `● INFORMASI KONTAK & PEKERJAAN`.
-    - Field vertikal berlatar belakang lembut `#F8FAFC` dengan border halus:
-      - `NO. WHATSAPP *` (Ikon telepon/chat hijau + nomor telepon).
-      - `PEKERJAAN *` (Nilai teks tebal).
-      - `NAMA KAMPUS / TEMPAT KERJA *`.
-      - `JENIS KELAMIN *`.
-  - **4. Card Identitas & Domisili**:
-    - Header ber-indikator dot slate `● IDENTITAS & DOMISILI`.
-    - Baris 2-kolom untuk `AGAMA *` dan `STATUS *` (Status Hubungan).
-    - Baris full-width untuk `TEMPAT LAHIR`, `TANGGAL LAHIR *`, dan `ALAMAT ASAL *`.
-  - **5. Tombol Aksi Mobile Bawah**:
-    - Tombol utama dark navy `Edit Profil` (dengan ikon pensil oranye).
-    - Tombol sekunder putih dengan border & teks oranye `Kembali`.
-    - Spacing bawah `pb-28` agar tidak tertutup oleh Mobile Bottom Navigation Bar.
+  - Halaman `Listings.tsx` merender seluruh unit kost yang ditemukan secara sekaligus dalam 1 halaman panjang tanpa batasan.
+  - Gambar listing dimuat bersamaan tanpa mekanisme *native lazy loading*, yang dapat menyebabkan konsumsi bandwidth tinggi, render blocking, dan lag saat pengguna pertama kali membuka katalog.
+- **Kebutuhan Pengguna**:
+  1. **Lazy Loading Gambar**: Gambar kartu kost hanya dimuat saat mendekati viewport pengguna dengan atribut `loading="lazy"`, `decoding="async"`, dan efek shimmer placeholder halus saat loading.
+  2. **Paginasi Halaman (Pagination)**:
+     - Membatasi jumlah listing yang dirender per halaman (misal: **9 unit per halaman**, pas 3 baris pada grid 3-kolom desktop).
+     - Menyediakan navigasi paginasi modern: Tombol *Sebelumnya*, nomor halaman (*1, 2, 3, 4...*), dan tombol *Berikutnya*.
+     - Menampilkan indikator informasi: *"Menampilkan **1-9** dari **{total}** Unit Kost"*.
+     - Efek *Smooth Scroll* otomatis ke bagian atas daftar listing ketika berpindah halaman.
+     - Reset otomatis ke halaman 1 ketika pengguna mengubah kriteria filter atau pencarian.
 
 ---
 
 ## 2. Batasan Cakupan & Proteksi Logika (Strict Scope Boundary)
-- **File Terdampak**: `functions/public/pages/Profile.tsx`.
+- **File Terdampak**:
+  - `functions/public/pages/Listings.tsx` (Logika Paginasi & UI Kontrol Paginasi).
+  - `functions/public/components/KostCard.tsx` (Lazy loading gambar, shimmer placeholder & fallback).
 - **Proteksi Logika**:
-  - Mempertahankan seluruh logika state (`formData`, `handleSave`, `handlePhotoUpload`, `handleKtpUpload`, `handleCancel`, `handleDeletePhoto`).
-  - Menjaga keselarasan tampilan mode Desktop (2-kolom) dan mode Mobile (stacked card) menggunakan breakpoint Tailwind (`hidden lg:block`, `lg:grid-cols-12`, dll.).
-  - Menggunakan ikon vector SVG murni dari `lucide-react` (bebas FOUT 100%).
+  - Mempertahankan seluruh logika filtering (Kota, Kampus, Tipe Kost, Rentang Harga, Search Term).
+  - Mempertahankan integrasi pSEO (`campusSlug`, `areaSlug`, meta tags Helmet).
+  - Seluruh ikon menggunakan komponen SVG murni dari `lucide-react` (bebas FOUT 100%).
 
 ---
 
 ## 3. Langkah-Langkah Eksekusi
-1. **Modifikasi `Profile.tsx`**:
-   - Selaraskan styling komponen pada breakpoint mobile (`< lg`) agar menampilkan:
-     - Top Profile Card dengan avatar, nama, email, dan pill terverifikasi.
-     - Banner status terverifikasi.
-     - Card Informasi Kontak & Pekerjaan dengan dot badge oranye dan input rounded background `#F8FAFC`.
-     - Card Identitas & Domisili dengan dot badge slate.
-     - Tombol aksi mobile `Edit Profil` (dark navy) dan `Kembali` (white with orange border).
-   - Pastikan mode desktop (`lg:`) tetap mempertahankan layout 2-kolom yang sudah rapi.
+1. **Optimasi Lazy Loading di `KostCard.tsx`**:
+   - Menambahkan atribut `loading="lazy"` dan `decoding="async"` pada tag `<img>`.
+   - Menambahkan state `imageLoaded` dan skeleton placeholder shimmer saat gambar sedang dimuat.
+   - Menambahkan fallback handling jika URL gambar gagal dimuat.
+2. **Implementasi Paginasi di `Listings.tsx`**:
+   - Menentukan konstanta `ITEMS_PER_PAGE = 9` (3 baris $\times$ 3 kolom).
+   - Menambahkan state `currentPage` (default 1) dan efek `useEffect` untuk mereset `currentPage = 1` saat `filters`, `campusSlug`, atau `areaSlug` berubah.
+   - Menghitung `totalPages = Math.ceil(filteredKosts.length / ITEMS_PER_PAGE)`.
+   - Mengambil slice data aktif `paginatedKosts = filteredKosts.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE)`.
+   - Merender UI Paginasi elegan di bagian bawah grid listing dengan tombol *Sebelumnya*, nomor halaman, dan *Berikutnya* yang responsif di mobile dan desktop.
+   - Menambahkan scroll halus ke atas daftar ketika halaman berganti.
 
 ---
 
 ## 4. Rencana Verifikasi
 1. **Uji Kompilasi Build**:
    - Menjalankan `cmd /c npm run build` di `functions/public/` untuk memastikan 0 error kompilasi.
-2. **Uji Tampilan & Interaksi Mobile**:
-   - Membuka halaman `/profile` pada resolusi smartphone (375px - 430px) untuk memastikan desain 100% presisi dengan screenshot mockup mobile.
-   - Memastikan pengeditan data dan tombol aksi berfungsi normal.
+2. **Uji Fungsionalitas di Browser**:
+   - Membuka halaman `/listings` dan memverifikasi hanya 9 unit kost yang tampil di halaman 1.
+   - Menguji klik tombol halaman 2, 3, Next, dan Prev, serta memastikan scroll otomatis kembali ke atas dengan mulus.
+   - Menguji filter pencarian dan memastikan halaman mereset ke page 1 secara otomatis.
 3. **Pencatatan & Git Push**:
-   - Mencatat progres pada `functions/PROGRESS.md` (Nomor 287), memperbarui `WALKTHROUGH.md`, dan push ke `bukan-productions`.
+   - Mencatat progres pada `functions/PROGRESS.md` (Nomor 288), memperbarui `WALKTHROUGH.md`, dan push ke branch `bukan-productions`.

@@ -2,6 +2,28 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 288. Penerapan Lazy Loading Gambar & Paginasi Halaman pada Menu Listing (`Listings.tsx` & `KostCard.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  - Pengguna meminta agar halaman katalog listing menerapkan *lazy load* gambar untuk mencegah lag saat render awal, serta menerapkan paginasi halaman (page 1, 2, 3...) jika jumlah unit kost mencapai batas tertentu sehingga tidak menumpuk dalam 1 halaman panjang.
+- **Implementasi Solusi**:
+  1. **Lazy Loading Gambar & Skeleton Shimmer (`KostCard.tsx`)**:
+     - Menambahkan atribut `loading="lazy"` dan `decoding="async"` pada elemen `<img>` kartu properti.
+     - Mengimplementasikan state `imageLoaded` dengan skeleton loader shimmer bergradasi lembut (`from-slate-100 via-slate-200 to-slate-100 animate-pulse`) agar transisi render gambar mulus tanpa *layout shift*.
+     - Menyediakan fallback icon dan pesan jika gambar gagal dimuat.
+  2. **Paginasi Halaman 9 Unit per Halaman (`Listings.tsx`)**:
+     - Mengatur konstanta `ITEMS_PER_PAGE = 9` (pas 3 baris $\times$ 3 kolom pada desktop).
+     - Menambahkan perhitungan dinamis `totalPages`, `startIndex`, `endIndex`, serta pemotongan data `paginatedKosts = filteredKosts.slice(...)`.
+     - Menyediakan navigasi paginasi modern: Tombol *Sebelumnya*, nomor halaman (*1, 2, 3...* dengan smart ellipsis `...` dan highlight oranye pada halaman aktif), serta tombol *Berikutnya*.
+     - Menambahkan *Smooth Scroll* otomatis ke bagian atas hasil pencarian setiap kali pengguna berganti halaman.
+     - Mereset nomor halaman ke 1 secara otomatis setiap kali kriteria filter atau pencarian diperbarui.
+- **File Tersentuh**:
+  - `functions/public/components/KostCard.tsx`
+  - `functions/public/pages/Listings.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi Vite `cmd /c npm run build` di `functions/public/` lulus 100% (✓ 2509 modules transformed, built in 23.66s, 0 error).
+
 ### 287. Penyesuaian UI/UX Halaman Profil Mode Mobile Presisi Mockup Google Stitch (`Profile.tsx`) (September 2026)
 - **Permintaan & Masalah**:
   - Pengguna meminta penyesuaian khusus tampilan mode mobile halaman Profil agar persis dengan desain mockup Google Stitch mobile (avatar atas terpusat, banner otoritas ringkas, card informasi bertanda dot, dan tombol aksi ergonomis).
