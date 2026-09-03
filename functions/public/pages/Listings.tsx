@@ -10,16 +10,14 @@ import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Search, Frown, 
 
 const ITEMS_PER_PAGE = 9; // 3 Baris x 3 Kolom pada Desktop
 
-const slugify = (text: string) => {
-  return text
-    .toString()
-    .toLowerCase()
-    .trim()
-    .replace(/\s+/g, '-')
-    .replace(/[^\w\-]+/g, '')
-    .replace(/\-\-+/g, '-')
-    .replace(/^-+/, '')
-    .replace(/-+$/, '');
+const defaultFilters: FilterState = {
+  searchTerm: '',
+  typeFilter: 'Semua',
+  selectedProvince: 'Semua',
+  selectedCity: 'Semua',
+  selectedDistrict: 'Semua',
+  selectedCampus: 'Semua',
+  maxPrice: 5000000,
 };
 
 interface ListingsProps {
@@ -37,14 +35,11 @@ const Listings: React.FC<ListingsProps> = ({ onKostClick, listings: initialListi
   const queryParams = useMemo(() => new URLSearchParams(search), [search]);
   const resultsTopRef = useRef<HTMLDivElement>(null);
 
-  // Filter State
-  const [filters, setFilters] = useState<FilterState>({
-    searchTerm: '',
-    typeFilter: 'Semua',
-    selectedCity: 'Semua',
-    selectedCampus: 'Semua',
-    maxPrice: 5000000,
-  });
+  // Draft Filters (Edited in Form without immediate query execution)
+  const [draftFilters, setDraftFilters] = useState<FilterState>(defaultFilters);
+
+  // Applied Filters (Trigger the actual Supabase database query)
+  const [appliedFilters, setAppliedFilters] = useState<FilterState>(defaultFilters);
 
   // Server-Side Data & Pagination State
   const [kosts, setKosts] = useState<Kost[]>(initialListings.slice(0, ITEMS_PER_PAGE));
@@ -54,17 +49,21 @@ const Listings: React.FC<ListingsProps> = ({ onKostClick, listings: initialListi
   const [isMobileFilterOpen, setIsMobileFilterOpen] = useState(false);
 
   // Dynamic Filter Options from Database
+  const [availableProvinces, setAvailableProvinces] = useState<string[]>([]);
   const [availableCities, setAvailableCities] = useState<string[]>([]);
+  const [availableDistricts, setAvailableDistricts] = useState<string[]>([]);
   const [availableCampuses, setAvailableCampuses] = useState<string[]>([]);
 
-  // Fetch available filter options (Cities & Campuses) on mount
+  // Fetch available filter options (Provinces, Cities, Districts, Campuses) on mount
   useEffect(() => {
     let isMounted = true;
     const loadOptions = async () => {
       try {
-        const { cities, campuses } = await getAvailableFilterOptions();
+        const { provinces, cities, districts, campuses } = await getAvailableFilterOptions();
         if (isMounted) {
+          if (provinces.length > 0) setAvailableProvinces(provinces);
           if (cities.length > 0) setAvailableCities(cities);
+          if (districts.length > 0) setAvailableDistricts(districts);
           if (campuses.length > 0) setAvailableCampuses(campuses);
         }
       } catch (err) {
@@ -75,29 +74,12 @@ const Listings: React.FC<ListingsProps> = ({ onKostClick, listings: initialListi
     return () => { isMounted = false; };
   }, []);
 
-  // Fallback to initialListings if availableCities/Campuses are empty
-  useEffect(() => {
-    if (availableCities.length === 0 && initialListings.length > 0) {
-      const cities = Array.from(new Set(initialListings.map(k => k.city).filter(c => c && c.trim() !== ''))).sort();
-      setAvailableCities(cities);
-    }
-    if (availableCampuses.length === 0 && initialListings.length > 0) {
-      const campuses = new Set<string>();
-      initialListings.forEach(k => {
-        if (k.campuses) {
-          k.campuses.forEach(c => {
-            if (c.name && c.name.trim() !== '') campuses.add(c.name.trim());
-          });
-        }
-      });
-      setAvailableCampuses(Array.from(campuses).sort());
-    }
-  }, [initialListings, availableCities.length, availableCampuses.length]);
-
-  // Sync route parameters & URL query params into filters
+  // Sync route parameters & URL query params into filters on initial load
   useEffect(() => {
     const qSearch = queryParams.get('search');
+    const qProvince = queryParams.get('province');
     const qCity = queryParams.get('city');
+    const qDistrict = queryParams.get('district');
     const qCampus = queryParams.get('campus');
     const qType = queryParams.get('type');
     const qMaxPrice = queryParams.get('maxPrice');
@@ -122,44 +104,36 @@ const Listings: React.FC<ListingsProps> = ({ onKostClick, listings: initialListi
       finalSearch = areaSlug.replace(/-/g, ' ');
     }
 
-    setFilters(prev => ({
-      ...prev,
-      searchTerm: finalSearch || prev.searchTerm,
-      selectedCity: qCity || prev.selectedCity,
-      selectedCampus: finalCampus !== 'Semua' ? finalCampus : (qCampus || prev.selectedCampus),
-      typeFilter: qType || prev.typeFilter,
-      maxPrice: qMaxPrice ? parseInt(qMaxPrice) : prev.maxPrice,
-    }));
+    const newFilters: FilterState = {
+      searchTerm: finalSearch || defaultFilters.searchTerm,
+      typeFilter: qType || defaultFilters.typeFilter,
+      selectedProvince: qProvince || defaultFilters.selectedProvince,
+      selectedCity: qCity || defaultFilters.selectedCity,
+      selectedDistrict: qDistrict || defaultFilters.selectedDistrict,
+      selectedCampus: finalCampus !== 'Semua' ? finalCampus : (qCampus || defaultFilters.selectedCampus),
+      maxPrice: qMaxPrice ? parseInt(qMaxPrice) : defaultFilters.maxPrice,
+    };
+
+    setDraftFilters(newFilters);
+    setAppliedFilters(newFilters);
+    setCurrentPage(1);
   }, [queryParams, campusSlug, areaSlug]);
 
-  // Reset pagination to page 1 whenever filters change
-  const prevFiltersRef = useRef(filters);
-  useEffect(() => {
-    if (
-      prevFiltersRef.current.searchTerm !== filters.searchTerm ||
-      prevFiltersRef.current.typeFilter !== filters.typeFilter ||
-      prevFiltersRef.current.selectedCity !== filters.selectedCity ||
-      prevFiltersRef.current.selectedCampus !== filters.selectedCampus ||
-      prevFiltersRef.current.maxPrice !== filters.maxPrice
-    ) {
-      setCurrentPage(1);
-      prevFiltersRef.current = filters;
-    }
-  }, [filters]);
-
-  // Execute Database Backend Query with Debouncing on Search Input
+  // Execute Database Backend Query ONLY when appliedFilters or currentPage changes
   useEffect(() => {
     let isCancelled = false;
     setLoading(true);
 
-    const debounceTimer = setTimeout(async () => {
+    const fetchProperties = async () => {
       try {
         const { kosts: fetchedKosts, totalCount: fetchedTotal } = await getFilteredProperties({
-          searchTerm: filters.searchTerm,
-          typeFilter: filters.typeFilter,
-          selectedCity: filters.selectedCity,
-          selectedCampus: filters.selectedCampus,
-          maxPrice: filters.maxPrice,
+          searchTerm: appliedFilters.searchTerm,
+          typeFilter: appliedFilters.typeFilter,
+          selectedProvince: appliedFilters.selectedProvince,
+          selectedCity: appliedFilters.selectedCity,
+          selectedDistrict: appliedFilters.selectedDistrict,
+          selectedCampus: appliedFilters.selectedCampus,
+          maxPrice: appliedFilters.maxPrice,
           page: currentPage,
           limit: ITEMS_PER_PAGE
         });
@@ -175,13 +149,14 @@ const Listings: React.FC<ListingsProps> = ({ onKostClick, listings: initialListi
           setLoading(false);
         }
       }
-    }, 250); // 250ms debounce for instantaneous feel while preventing excessive SQL hits
+    };
+
+    fetchProperties();
 
     return () => {
       isCancelled = true;
-      clearTimeout(debounceTimer);
     };
-  }, [filters, currentPage]);
+  }, [appliedFilters, currentPage]);
 
   useEffect(() => {
     if (onFilterToggle) onFilterToggle(isMobileFilterOpen);
@@ -190,8 +165,25 @@ const Listings: React.FC<ListingsProps> = ({ onKostClick, listings: initialListi
     };
   }, [isMobileFilterOpen, onFilterToggle]);
 
-  const updateFilters = (newFilters: Partial<FilterState>) => {
-    setFilters(prev => ({ ...prev, ...newFilters }));
+  const updateDraftFilters = (newFilters: Partial<FilterState>) => {
+    setDraftFilters(prev => ({ ...prev, ...newFilters }));
+  };
+
+  const handleApplyFilters = () => {
+    setAppliedFilters({ ...draftFilters });
+    setCurrentPage(1);
+    setIsMobileFilterOpen(false);
+
+    if (resultsTopRef.current) {
+      resultsTopRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  };
+
+  const handleResetFilters = () => {
+    setDraftFilters(defaultFilters);
+    setAppliedFilters(defaultFilters);
+    setCurrentPage(1);
+    setIsMobileFilterOpen(false);
   };
 
   // Pagination calculations based on backend total count
@@ -231,24 +223,15 @@ const Listings: React.FC<ListingsProps> = ({ onKostClick, listings: initialListi
 
   const activeFilterCount = useMemo(() => {
     let count = 0;
-    if (filters.searchTerm) count++;
-    if (filters.typeFilter !== 'Semua') count++;
-    if (filters.selectedCity !== 'Semua') count++;
-    if (filters.selectedCampus !== 'Semua') count++;
-    if (filters.maxPrice < 5000000) count++;
+    if (appliedFilters.searchTerm) count++;
+    if (appliedFilters.typeFilter !== 'Semua') count++;
+    if (appliedFilters.selectedProvince !== 'Semua') count++;
+    if (appliedFilters.selectedCity !== 'Semua') count++;
+    if (appliedFilters.selectedDistrict !== 'Semua') count++;
+    if (appliedFilters.selectedCampus !== 'Semua') count++;
+    if (appliedFilters.maxPrice < 5000000) count++;
     return count;
-  }, [filters]);
-
-  const resetFilters = () => {
-    setFilters({
-      searchTerm: '',
-      typeFilter: 'Semua',
-      selectedCity: 'Semua',
-      selectedCampus: 'Semua',
-      maxPrice: 5000000,
-    });
-    setCurrentPage(1);
-  };
+  }, [appliedFilters]);
 
   const seoMetadata = useMemo(() => {
     let title = "Cari Kost Murah Makassar Terverifikasi - RuangSinggah.id";
@@ -266,8 +249,8 @@ const Listings: React.FC<ListingsProps> = ({ onKostClick, listings: initialListi
         unismuh: 'Unismuh (Universitas Muhammadiyah Makassar)'
       };
       let campusName = campusSlug;
-      if (filters.selectedCampus && filters.selectedCampus !== 'Semua') {
-        campusName = filters.selectedCampus;
+      if (appliedFilters.selectedCampus && appliedFilters.selectedCampus !== 'Semua') {
+        campusName = appliedFilters.selectedCampus;
       } else {
         campusName = campusMap[campusSlug.toLowerCase()] || campusSlug.toUpperCase();
       }
@@ -277,27 +260,27 @@ const Listings: React.FC<ListingsProps> = ({ onKostClick, listings: initialListi
       canonical = `https://ruangsinggah.id/kost-dekat/${campusSlug.toLowerCase()}`;
     } else if (areaSlug) {
       let areaName = areaSlug.replace(/-/g, ' ');
-      if (filters.searchTerm) {
-        areaName = filters.searchTerm;
+      if (appliedFilters.searchTerm) {
+        areaName = appliedFilters.searchTerm;
       }
       areaName = areaName.replace(/\b\w/g, c => c.toUpperCase());
 
       title = `Kost Area ${areaName} Makassar Murah Terverifikasi - RuangSinggah.id`;
       description = `Daftar kost murah terdekat di area ${areaName} Makassar. Temukan hunian kos putra, putri, campur dengan fasilitas lengkap dan terverifikasi lapangan di RuangSinggah.id.`;
       canonical = `https://ruangsinggah.id/kost-area/${areaSlug.toLowerCase()}`;
-    } else if (filters.selectedCampus !== 'Semua') {
-      title = `Kost Dekat Kampus ${filters.selectedCampus} Makassar Murah - RuangSinggah.id`;
-      description = `Cari kost dekat kampus ${filters.selectedCampus} Makassar. Dapatkan kos putra, putri, campur terverifikasi lapangan di RuangSinggah.id.`;
-    } else if (filters.searchTerm) {
-      title = `Kost Dekat ${filters.searchTerm} Makassar Murah - RuangSinggah.id`;
-      description = `Temukan kost murah terdekat di sekitar ${filters.searchTerm} Makassar. Ulasan jujur, bebas penipuan, verifikasi lapangan 100% di RuangSinggah.id.`;
+    } else if (appliedFilters.selectedCampus !== 'Semua') {
+      title = `Kost Dekat Kampus ${appliedFilters.selectedCampus} Makassar Murah - RuangSinggah.id`;
+      description = `Cari kost dekat kampus ${appliedFilters.selectedCampus} Makassar. Dapatkan kos putra, putri, campur terverifikasi lapangan di RuangSinggah.id.`;
+    } else if (appliedFilters.searchTerm) {
+      title = `Kost Dekat ${appliedFilters.searchTerm} Makassar Murah - RuangSinggah.id`;
+      description = `Temukan kost murah terdekat di sekitar ${appliedFilters.searchTerm} Makassar. Ulasan jujur, bebas penipuan, verifikasi lapangan 100% di RuangSinggah.id.`;
     }
 
     return { title, description, canonical };
-  }, [campusSlug, areaSlug, filters.selectedCampus, filters.searchTerm]);
+  }, [campusSlug, areaSlug, appliedFilters.selectedCampus, appliedFilters.searchTerm]);
 
   return (
-    <div className="min-h-screen bg-white">
+    <div className="min-h-screen bg-white font-sans">
       <Helmet>
         <title>{seoMetadata.title}</title>
         <meta name="description" content={seoMetadata.description} />
@@ -320,16 +303,19 @@ const Listings: React.FC<ListingsProps> = ({ onKostClick, listings: initialListi
       {/* MOBILE STICKY FILTER BAR */}
       <div className="lg:hidden sticky top-[80px] z-40 bg-white/95 backdrop-blur-md px-4 py-3 border-b border-gray-100 shadow-sm transition-all">
         <button 
-          onClick={() => setIsMobileFilterOpen(true)}
+          onClick={() => {
+            setDraftFilters(appliedFilters);
+            setIsMobileFilterOpen(true);
+          }}
           className="w-full bg-white border border-gray-200 rounded-full py-3 px-5 shadow-sm active:scale-[0.98] transition-all flex items-center gap-4 cursor-pointer"
         >
            <div className="text-[#ff7a00] shrink-0">
               <Search className="w-5 h-5 stroke-[2.5]" />
            </div>
            <div className="text-left flex-1">
-               <p className="text-xs font-black uppercase tracking-tight text-gray-900 leading-none mb-1">CARI KOST SEKARANG</p>
+               <p className="text-xs font-black uppercase tracking-tight text-gray-900 leading-none mb-1">CARI & FILTER KOST</p>
                <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest leading-none truncate">
-                  {activeFilterCount > 0 ? `${activeFilterCount} Filter Aktif` : 'FILTER KOTA & KAMPUS...'}
+                  {activeFilterCount > 0 ? `${activeFilterCount} Filter Aktif` : 'PROVINSI, KOTA, KECAMATAN, KAMPUS...'}
                </p>
            </div>
            {activeFilterCount > 0 && (
@@ -346,16 +332,24 @@ const Listings: React.FC<ListingsProps> = ({ onKostClick, listings: initialListi
             {/* DESKTOP SIDEBAR FILTER */}
             <aside className="hidden lg:block w-1/4 sticky top-24 z-30">
                 <div className="bg-gray-50/50 rounded-[2rem] border border-gray-100 p-6 shadow-xs">
-                    <div className="mb-6 pb-6 border-b border-gray-100">
+                    <div className="mb-5 pb-4 border-b border-gray-100 flex items-center justify-between">
                         <h3 className="text-lg font-black uppercase tracking-tight text-gray-900">Filter</h3>
+                        {activeFilterCount > 0 && (
+                          <span className="bg-orange-50 border border-orange-200 text-[#ff7a00] text-[10px] font-black px-2.5 py-0.5 rounded-full">
+                            {activeFilterCount} Aktif
+                          </span>
+                        )}
                     </div>
                     <FilterControls 
-                      filters={filters}
-                      setFilters={updateFilters}
+                      filters={draftFilters}
+                      setFilters={updateDraftFilters}
+                      availableProvinces={availableProvinces}
                       availableCities={availableCities}
+                      availableDistricts={availableDistricts}
                       availableCampuses={availableCampuses}
-                      onReset={resetFilters}
-                      showApplyButton={false}
+                      onReset={handleResetFilters}
+                      onApply={handleApplyFilters}
+                      showApplyButton={true}
                     />
                 </div>
             </aside>
@@ -364,11 +358,13 @@ const Listings: React.FC<ListingsProps> = ({ onKostClick, listings: initialListi
             <FilterDrawer 
                isOpen={isMobileFilterOpen}
                onClose={() => setIsMobileFilterOpen(false)}
-               onApply={() => setIsMobileFilterOpen(false)}
-               filters={filters}
-               setFilters={updateFilters}
-               onReset={resetFilters}
+               onApply={handleApplyFilters}
+               filters={draftFilters}
+               setFilters={updateDraftFilters}
+               onReset={handleResetFilters}
+               availableProvinces={availableProvinces}
                availableCities={availableCities}
+               availableDistricts={availableDistricts}
                availableCampuses={availableCampuses}
             />
 
@@ -378,8 +374,10 @@ const Listings: React.FC<ListingsProps> = ({ onKostClick, listings: initialListi
                    <div>
                       <h2 className="text-xl lg:text-3xl font-black text-gray-900 uppercase tracking-tight">Hasil Pencarian</h2>
                       <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-1">
-                          {filters.selectedCity !== 'Semua' ? filters.selectedCity : 'Semua Kota'} 
-                          {filters.selectedCampus !== 'Semua' ? ` • ${filters.selectedCampus}` : ''}
+                          {appliedFilters.selectedProvince !== 'Semua' ? `${appliedFilters.selectedProvince} • ` : ''}
+                          {appliedFilters.selectedCity !== 'Semua' ? appliedFilters.selectedCity : 'Semua Kota'} 
+                          {appliedFilters.selectedDistrict !== 'Semua' ? ` • Kec. ${appliedFilters.selectedDistrict}` : ''}
+                          {appliedFilters.selectedCampus !== 'Semua' ? ` • ${appliedFilters.selectedCampus}` : ''}
                       </p>
                    </div>
                    <div className="flex items-center gap-2">
@@ -499,7 +497,7 @@ const Listings: React.FC<ListingsProps> = ({ onKostClick, listings: initialListi
                         </div>
                         <p className="text-gray-900 font-black text-sm uppercase tracking-tight">Tidak ada kost ditemukan</p>
                         <p className="text-gray-400 text-xs mt-1">Coba kurangi filter atau cari area lain</p>
-                        <button onClick={resetFilters} className="mt-4 text-[#ff7a00] text-xs font-bold uppercase tracking-widest hover:underline cursor-pointer">Reset Filter</button>
+                        <button onClick={handleResetFilters} className="mt-4 text-[#ff7a00] text-xs font-bold uppercase tracking-widest hover:underline cursor-pointer">Reset Filter</button>
                     </div>
                 )}
             </main>

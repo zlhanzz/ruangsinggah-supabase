@@ -120,7 +120,9 @@ export const getRoomEffectivePrice = (room: any) => {
 export interface PropertyFilterParams {
   searchTerm?: string;
   typeFilter?: string;
+  selectedProvince?: string;
   selectedCity?: string;
+  selectedDistrict?: string;
   selectedCampus?: string;
   maxPrice?: number;
   page?: number;
@@ -219,12 +221,22 @@ export async function getFilteredProperties(params: PropertyFilterParams = {}): 
       query = query.eq('type', params.typeFilter);
     }
 
-    // 3. City Filter
+    // 3. Province Filter
+    if (params.selectedProvince && params.selectedProvince !== 'Semua') {
+      query = query.eq('province', params.selectedProvince);
+    }
+
+    // 4. City Filter
     if (params.selectedCity && params.selectedCity !== 'Semua') {
       query = query.eq('city', params.selectedCity);
     }
 
-    // 4. Max Price Filter
+    // 5. District / Area Filter
+    if (params.selectedDistrict && params.selectedDistrict !== 'Semua') {
+      query = query.eq('area', params.selectedDistrict);
+    }
+
+    // 6. Max Price Filter
     if (params.maxPrice && params.maxPrice < 5000000) {
       query = query.lte('price', params.maxPrice);
     }
@@ -232,7 +244,7 @@ export async function getFilteredProperties(params: PropertyFilterParams = {}): 
     // Sort newest updated first
     query = query.order('updated_at', { ascending: false });
 
-    // 5. Server-Side Pagination Range (if no custom campus post-filter needed)
+    // 7. Server-Side Pagination Range (if no custom campus post-filter needed)
     const isCampusFiltered = params.selectedCampus && params.selectedCampus !== 'Semua';
     if (!isCampusFiltered && params.page && params.limit) {
       const from = (params.page - 1) * params.limit;
@@ -271,26 +283,37 @@ export async function getFilteredProperties(params: PropertyFilterParams = {}): 
 }
 
 /**
- * Fetch unique cities and campuses available in the database for dropdown filter options
+ * Fetch unique provinces, cities, districts/areas, and campuses available in the database for dropdown filter options
  */
 export async function getAvailableFilterOptions(): Promise<{
+  provinces: string[];
   cities: string[];
+  districts: string[];
   campuses: string[];
 }> {
   try {
     const { data, error } = await supabase
       .from('properties')
-      .select('city, campuses')
+      .select('province, city, area, campuses, metadata')
       .eq('status', 'published');
 
-    if (error || !data) return { cities: [], campuses: [] };
+    if (error || !data) return { provinces: [], cities: [], districts: [], campuses: [] };
 
+    const provinces = new Set<string>();
     const cities = new Set<string>();
+    const districts = new Set<string>();
     const campuses = new Set<string>();
 
     data.forEach((row: any) => {
+      const prov = row.province || row.metadata?.province;
+      if (prov && prov.trim() !== '') {
+        provinces.add(prov.trim());
+      }
       if (row.city && row.city.trim() !== '') {
         cities.add(row.city.trim());
+      }
+      if (row.area && row.area.trim() !== '') {
+        districts.add(row.area.trim());
       }
       if (Array.isArray(row.campuses)) {
         row.campuses.forEach((c: any) => {
@@ -302,12 +325,14 @@ export async function getAvailableFilterOptions(): Promise<{
     });
 
     return {
+      provinces: Array.from(provinces).sort(),
       cities: Array.from(cities).sort(),
+      districts: Array.from(districts).sort(),
       campuses: Array.from(campuses).sort()
     };
   } catch (error: any) {
     console.error('Error fetching available filter options:', error);
-    return { cities: [], campuses: [] };
+    return { provinces: [], cities: [], districts: [], campuses: [] };
   }
 }
 

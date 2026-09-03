@@ -2,6 +2,29 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 290. Penambahan Filter Provinsi & Kecamatan Serta Implementasi Tombol "Terapkan Filter" On-Demand (`FilterControls.tsx`, `FilterDrawer.tsx`, `Listings.tsx`, `userService.ts`) (September 2026)
+- **Permintaan & Masalah**:
+  - Pengguna meminta penambahan filter kategori Provinsi dan Kecamatan/Area, serta meminta agar sistem tidak langsung bereaksi saat pengguna sedang mengatur filter/mengetik pencarian (menggunakan tombol "Terapkan Filter" aktif on-demand).
+- **Implementasi Solusi**:
+  1. **Penambahan Filter Kategori Provinsi & Kecamatan**:
+     - Menambahkan field `selectedProvince` dan `selectedDistrict` ke `FilterState` dan `PropertyFilterParams`.
+     - Memperbarui `getFilteredProperties` di `userService.ts` untuk memfilter `.eq('province', selectedProvince)` dan `.eq('area', selectedDistrict)`.
+     - Memperbarui `getAvailableFilterOptions` untuk mengumpulkan daftar unik `provinces` dan `districts` dari tabel `properties`.
+  2. **Implementasi Tombol "Terapkan Filter" On-Demand**:
+     - Di `Listings.tsx`: Memisahkan state `draftFilters` (state isian form sementara) dan `appliedFilters` (state aktif query database).
+     - Query database Supabase hanya dieksekusi saat tombol **"Terapkan Filter"** diklik atau saat menekan `Enter` pada kolom pencarian.
+     - Menyediakan tombol **"Terapkan Filter"** berwarna oranye `#ff7a00` tebal dengan bayangan modern baik pada Desktop Sidebar Filter maupun Mobile Filter Drawer.
+     - Tombol **"Reset Filter"** mengembalikan form dan langsung mengeksekusi query database ke kondisi awal.
+- **File Tersentuh**:
+  - `functions/public/userService.ts`
+  - `functions/public/components/FilterControls.tsx`
+  - `functions/public/components/FilterDrawer.tsx`
+  - `functions/public/pages/Listings.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi Vite `cmd /c npm run build` di `functions/public/` lulus 100% (✓ 2509 modules transformed, built in 30.82s, 0 error).
+
 ### 289. Migrasi Filter, Pencarian, dan Paginasi Listing Kost ke Backend Supabase Query (Mitra Biasa & Mitra KostManager) (`userService.ts` & `Listings.tsx`) (September 2026)
 - **Permintaan & Masalah**:
   - Pengguna meminta agar filter, pencarian teks, dan paginasi pada katalog listing kost diproses langsung di level backend database (Supabase PostgreSQL Query) daripada di browser (client-side), serta memastikan query bekerja untuk kedua jenis properti (Mitra Biasa dan Mitra KostManager).
