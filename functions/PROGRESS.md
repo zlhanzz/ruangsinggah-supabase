@@ -2,6 +2,25 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 296. Fasilitas Kamar Terintegrasi Dropdown (Maximize/Minimize) pada Setiap Kartu Tipe Kamar (`KostDetail.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  - Pengguna menginginkan rincian fasilitas kamar menjadi dropdown interaktif langsung di dalam setiap kartu tipe kamar (dapat di-maximize / minimize). Selain itu, duplikasi blok fasilitas kamar terpisah di bawah pilihan durasi sewa dihapus agar antarmuka lebih bersih dan mudah dipahami.
+- **Implementasi Solusi**:
+  1. **State Dropdown & Parser Per Grup**:
+     - Menambahkan state `expandedFacilityTypeIdxs` dan handler `toggleFacilityDropdown(pIdx, e)` di `KostDetail.tsx`.
+     - Menyediakan fungsi `getGroupStructuredFacilities(group)` dan `getRoomItemIcon(name)` untuk memilah perabot kamar, kamar mandi, dapur pribadi, dan status kosongan per tipe kamar.
+  2. **Komponen Dropdown (Maximize / Minimize)**:
+     - Menambahkan trigger tombol *"Lihat Rincian Fasilitas"* / *"Tutup Rincian Fasilitas"* dengan status Maximize/Minimize dan animasi putar ikon `<ChevronDown />`.
+     - Merender grid rincian fasilitas lengkap berikon SVG murni `lucide-react` di dalam kartu tipe kamar saat terbuka.
+  3. **Pembersihan Seksian Terpisah Redundan**:
+     - Menghapus blok fasilitas statis terpisah di bawah pilihan durasi sewa, sehingga alur pemesanan langsung mengalir ke pemilihan durasi dan tombol "Ajukan Sewa".
+- **File Tersentuh**:
+  - `functions/public/pages/KostDetail.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi Vite `cmd /c npm run build` di `functions/public/` lulus 100% (✓ 2509 modules transformed, built in 28.43s, 0 error).
+
 ### 295. Tampilan Penuh Menyeluruh Right Sidebar Booking Card di KostDetail.tsx (`KostDetail.tsx`) (September 2026)
 - **Permintaan & Masalah**:
   - Pada layar desktop, card samping (*Right Sidebar Booking Card*) yang memuat harga sewa, tipe kamar, nomor kamar, durasi sewa, fasilitas, dan tombol pengajuan sewa memiliki batasan tinggi `max-h` dan `overflow-y-auto`. Hal ini memotong informasi serta memunculkan scrollbar internal yang membuat user tidak menyadari keberadaan tombol "Ajukan Sewa".

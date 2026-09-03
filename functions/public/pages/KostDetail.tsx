@@ -62,6 +62,14 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
   const [currentPhoto, setCurrentPhoto] = useState(0);
   const [selectedParentTypeIdx, setSelectedParentTypeIdx] = useState(0);
   const [selectedVariantIdx, setSelectedVariantIdx] = useState(0);
+  const [expandedFacilityTypeIdxs, setExpandedFacilityTypeIdxs] = useState<number[]>([]);
+
+  const toggleFacilityDropdown = (pIdx: number, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setExpandedFacilityTypeIdxs(prev => 
+      prev.includes(pIdx) ? prev.filter(i => i !== pIdx) : [...prev, pIdx]
+    );
+  };
 
   // === SEO: Dynamic Meta Tags ===
   const kostName = kost.name || 'Kost Makassar';
@@ -1163,11 +1171,29 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
     return { groups, standalones, totalCount: allFacilities.length };
   }, [kost.facilities, (kost as any).publicKitchenFacilities, (kost as any).publicParkingFacilities]);
 
-  // Structured Room Facilities for currently selected room
-  const structuredRoomFacilities = useMemo(() => {
-    const rawRoomFacs = selectedRoom.roomFacilities || [];
-    const rawBathFacs = selectedRoom.bathroomFacilities || [];
-    const rawKitchenFacs = selectedRoom.kitchenFacilities || [];
+  const getRoomItemIcon = (name: string): React.ReactNode => {
+    const lower = name.toLowerCase().trim();
+    if (lower.includes('kasur') || lower.includes('bed') || lower.includes('springbed')) return <Bed className="w-3.5 h-3.5 text-orange-500 shrink-0" />;
+    if (lower.includes('lemari') || lower.includes('storage') || lower.includes('pakaian')) return <Layers className="w-3.5 h-3.5 text-orange-500 shrink-0" />;
+    if (lower.includes('meja') || lower.includes('kursi') || lower.includes('belajar')) return <Armchair className="w-3.5 h-3.5 text-orange-500 shrink-0" />;
+    if (lower.includes('ac')) return <Wind className="w-3.5 h-3.5 text-orange-500 shrink-0" />;
+    if (lower.includes('kipas')) return <Wind className="w-3.5 h-3.5 text-orange-500 shrink-0" />;
+    if (lower.includes('tv') || lower.includes('televisi')) return <Tv className="w-3.5 h-3.5 text-orange-500 shrink-0" />;
+    if (lower.includes('kulkas')) return <Refrigerator className="w-3.5 h-3.5 text-orange-500 shrink-0" />;
+    if (lower.includes('water heater') || lower.includes('air panas')) return <Droplets className="w-3.5 h-3.5 text-orange-500 shrink-0" />;
+    if (lower.includes('shower') || lower.includes('mandi') || lower.includes('wc') || lower.includes('kloset') || lower.includes('wastafel') || lower.includes('gayung') || lower.includes('bak')) return <Bath className="w-3.5 h-3.5 text-blue-500 shrink-0" />;
+    if (lower.includes('kompor') || lower.includes('dapur') || lower.includes('kitchen') || lower.includes('dispenser') || lower.includes('cuci piring')) return <CookingPot className="w-3.5 h-3.5 text-amber-500 shrink-0" />;
+    if (lower.includes('jendela') || lower.includes('ventilasi') || lower.includes('balkon')) return <Sun className="w-3.5 h-3.5 text-orange-500 shrink-0" />;
+    return <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />;
+  };
+
+  const getGroupStructuredFacilities = (group: ParentRoomGroup) => {
+    const repRoom = group.rooms[0]?.rawRoom || group.rooms[0] || {};
+    const rawRoomFacs: string[] = (group.roomFacilities && group.roomFacilities.length > 0)
+      ? group.roomFacilities
+      : (repRoom.roomFacilities || []);
+    const rawBathFacs: string[] = repRoom.bathroomFacilities || [];
+    const rawKitchenFacs: string[] = repRoom.kitchenFacilities || [];
 
     const isKosongan = rawRoomFacs.some(f => f.toLowerCase().includes('kosongan'));
 
@@ -1178,38 +1204,29 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
 
     const bathroomItems = Array.from(new Set([
       ...rawBathFacs,
-      ...rawRoomFacs.filter(f => f.toLowerCase().includes('kamar mandi'))
+      ...rawRoomFacs.filter(f => {
+        const l = f.toLowerCase().trim();
+        return l.includes('kamar mandi') || l.includes('kloset') || l.includes('shower') || l.includes('bak mandi') || l.includes('gayung') || l.includes('wastafel') || l.includes('water heater');
+      })
     ]));
 
     const kitchenItems = Array.from(new Set([
       ...rawKitchenFacs,
-      ...rawRoomFacs.filter(f => f.toLowerCase().includes('dapur dalam'))
+      ...rawRoomFacs.filter(f => {
+        const l = f.toLowerCase().trim();
+        return l.includes('dapur dalam') || l.includes('kompor') || l.includes('sink') || l.includes('kitchen set');
+      })
     ]));
-
-    const getRoomItemIcon = (name: string): React.ReactNode => {
-      const lower = name.toLowerCase().trim();
-      if (lower.includes('kasur') || lower.includes('bed')) return <Bed className="w-3.5 h-3.5 text-orange-500 shrink-0" />;
-      if (lower.includes('lemari') || lower.includes('storage')) return <Layers className="w-3.5 h-3.5 text-orange-500 shrink-0" />;
-      if (lower.includes('meja') || lower.includes('kursi')) return <Armchair className="w-3.5 h-3.5 text-orange-500 shrink-0" />;
-      if (lower.includes('ac')) return <Wind className="w-3.5 h-3.5 text-orange-500 shrink-0" />;
-      if (lower.includes('kipas')) return <Wind className="w-3.5 h-3.5 text-orange-500 shrink-0" />;
-      if (lower.includes('tv') || lower.includes('televisi')) return <Tv className="w-3.5 h-3.5 text-orange-500 shrink-0" />;
-      if (lower.includes('kulkas')) return <Refrigerator className="w-3.5 h-3.5 text-orange-500 shrink-0" />;
-      if (lower.includes('water heater') || lower.includes('air panas')) return <Droplets className="w-3.5 h-3.5 text-orange-500 shrink-0" />;
-      if (lower.includes('shower') || lower.includes('mandi') || lower.includes('wc') || lower.includes('kloset') || lower.includes('wastafel') || lower.includes('gayung') || lower.includes('bak')) return <Bath className="w-3.5 h-3.5 text-blue-500 shrink-0" />;
-      if (lower.includes('kompor') || lower.includes('dapur') || lower.includes('kitchen') || lower.includes('dispenser') || lower.includes('cuci piring')) return <CookingPot className="w-3.5 h-3.5 text-amber-500 shrink-0" />;
-      if (lower.includes('jendela') || lower.includes('ventilasi') || lower.includes('balkon')) return <Sun className="w-3.5 h-3.5 text-orange-500 shrink-0" />;
-      return <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />;
-    };
 
     return {
       isKosongan,
       bedroomItems,
       bathroomItems,
       kitchenItems,
-      getRoomItemIcon
+      size: group.size || repRoom.size || '3x3'
     };
-  }, [selectedRoom]);
+  };
+
 
   // Helper to calculate discount percentage
   const calculateDiscount = (scheme: { period: PricingPeriod; price: number }) => {
@@ -2023,6 +2040,9 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
                     <div className="space-y-3">
                       {parentRoomGroups.map((group, pIdx) => {
                         const isSelectedParent = selectedParentTypeIdx === pIdx;
+                        const isExpanded = expandedFacilityTypeIdxs.includes(pIdx);
+                        const facData = getGroupStructuredFacilities(group);
+
                         return (
                           <div
                             key={pIdx}
@@ -2038,7 +2058,7 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
                               }
                             }}
                             className={`p-4 rounded-2xl border-2 cursor-pointer transition-all relative ${isSelectedParent
-                                ? 'border-orange-500 bg-orange-50/40 shadow-sm ring-1 ring-orange-500/30'
+                                ? 'border-orange-500 bg-orange-50/30 shadow-sm ring-1 ring-orange-500/30'
                                 : 'border-gray-150 hover:border-orange-200 bg-white'
                               }`}
                           >
@@ -2064,9 +2084,9 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
                               Mulai {FORMAT_CURRENCY(group.minPrice)} /bln
                             </p>
 
-                            {/* Specs/Features */}
-                            <div className="flex flex-wrap gap-1.5 mb-1">
-                              <span className="text-[9px] font-bold bg-gray-100 text-gray-600 px-2 py-0.5 rounded-md border border-gray-200">
+                            {/* Specs/Features Compact Tags */}
+                            <div className="flex flex-wrap gap-1.5 mb-2">
+                              <span className="text-[9px] font-bold bg-gray-100 text-gray-700 px-2 py-0.5 rounded-md border border-gray-200">
                                 {group.size}
                               </span>
                               {group.roomFacilities.slice(0, 2).map((fac, fIdx) => (
@@ -2075,6 +2095,106 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
                                 </span>
                               ))}
                             </div>
+
+                            {/* DROPDOWN TRIGGER BUTTON (Maximize / Minimize) */}
+                            <div 
+                              onClick={(e) => toggleFacilityDropdown(pIdx, e)}
+                              className="pt-2 border-t border-gray-100 flex items-center justify-between text-xs font-black transition-colors group/btn cursor-pointer"
+                            >
+                              <span className="flex items-center gap-1.5 text-orange-600 group-hover/btn:text-orange-700 text-[11px]">
+                                <Sparkles size={12} className="text-orange-500 shrink-0" />
+                                {isExpanded ? 'Tutup Rincian Fasilitas' : 'Lihat Rincian Fasilitas'}
+                              </span>
+                              <div className="flex items-center gap-1 text-[10px] font-bold text-gray-400 group-hover/btn:text-orange-500">
+                                <span>{isExpanded ? 'Minimize' : 'Maximize'}</span>
+                                <ChevronDown size={14} className={`transform transition-transform duration-200 ${isExpanded ? 'rotate-180 text-orange-600' : 'text-gray-400'}`} />
+                              </div>
+                            </div>
+
+                            {/* EXPANDED DROPDOWN CONTENT (Full Facility Breakdown) */}
+                            {isExpanded && (
+                              <div 
+                                className="mt-3 p-3.5 bg-gray-50/90 rounded-xl border border-gray-200/80 space-y-3 animate-in fade-in slide-in-from-top-2 duration-200 cursor-default"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                <div className="flex items-center justify-between border-b border-gray-200/60 pb-2">
+                                  <span className="text-[10px] font-black text-gray-700 uppercase tracking-widest flex items-center gap-1.5">
+                                    <Bed size={13} className="text-orange-500" />
+                                    Fasilitas {group.typeName}
+                                  </span>
+                                  {facData.size && (
+                                    <span className="text-[9px] font-extrabold bg-white px-2 py-0.5 rounded-md border border-gray-200 text-gray-700 shadow-2xs">
+                                      {facData.size}
+                                    </span>
+                                  )}
+                                </div>
+
+                                {facData.isKosongan ? (
+                                  <div className="p-2.5 bg-amber-50 border border-amber-200 rounded-lg text-center">
+                                    <p className="text-[11px] font-black text-amber-900 flex items-center justify-center gap-1.5">
+                                      <AlertCircle size={13} className="text-amber-600 shrink-0" />
+                                      Kosongan (Tanpa Perabot)
+                                    </p>
+                                    <p className="text-[10px] text-amber-700 mt-0.5 leading-relaxed">
+                                      Kamar disewakan tanpa kasur & perabot kamar.
+                                    </p>
+                                  </div>
+                                ) : (
+                                  <div className="space-y-2.5">
+                                    {/* 1. Perabot & Ruangan */}
+                                    {facData.bedroomItems.length > 0 && (
+                                      <div>
+                                        <span className="text-[9px] font-black text-gray-400 uppercase tracking-wider block mb-1">
+                                          Perabot & Ruangan
+                                        </span>
+                                        <div className="grid grid-cols-2 gap-1.5">
+                                          {facData.bedroomItems.map((item, idx) => (
+                                            <div key={idx} className="flex items-center gap-1.5 text-[11px] font-bold text-gray-700 bg-white px-2.5 py-1.5 rounded-lg border border-gray-200/80 shadow-2xs">
+                                              {getRoomItemIcon(item)}
+                                              <span className="truncate" title={item}>{item}</span>
+                                            </div>
+                                          ))}
+                                        </div>
+                                      </div>
+                                    )}
+
+                                    {/* 2. Kamar Mandi */}
+                                    {facData.bathroomItems.length > 0 && (
+                                      <div className="pt-1.5 border-t border-gray-200/50">
+                                        <span className="text-[9px] font-black text-gray-400 uppercase tracking-wider block mb-1">
+                                          Kamar Mandi
+                                        </span>
+                                        <div className="grid grid-cols-2 gap-1.5">
+                                          {facData.bathroomItems.map((item, idx) => (
+                                            <div key={idx} className="flex items-center gap-1.5 text-[11px] font-bold text-gray-700 bg-white px-2.5 py-1.5 rounded-lg border border-gray-200/80 shadow-2xs">
+                                              <Bath size={12} className="text-blue-500 shrink-0" />
+                                              <span className="truncate" title={item}>{item}</span>
+                                            </div>
+                                          ))}
+                                        </div>
+                                      </div>
+                                    )}
+
+                                    {/* 3. Dapur Pribadi */}
+                                    {facData.kitchenItems.length > 0 && (
+                                      <div className="pt-1.5 border-t border-gray-200/50">
+                                        <span className="text-[9px] font-black text-gray-400 uppercase tracking-wider block mb-1">
+                                          Dapur Pribadi
+                                        </span>
+                                        <div className="grid grid-cols-2 gap-1.5">
+                                          {facData.kitchenItems.map((item, idx) => (
+                                            <div key={idx} className="flex items-center gap-1.5 text-[11px] font-bold text-gray-700 bg-white px-2.5 py-1.5 rounded-lg border border-gray-200/80 shadow-2xs">
+                                              <CookingPot size={12} className="text-amber-500 shrink-0" />
+                                              <span className="truncate" title={item}>{item}</span>
+                                            </div>
+                                          ))}
+                                        </div>
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                            )}
 
                             {/* INTERACTIVE CHIP / PILL GRID: Nomor Kamar Tersedia */}
                             {kost.isManaged && isSelectedParent && (
@@ -2176,85 +2296,6 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
                   </div>
                 )}
 
-                {/* Facilities of Selected Room - Structured Display */}
-                <div className="mb-8 p-5 bg-gray-50/80 rounded-2xl border border-gray-100 space-y-3.5">
-                  <div className="flex items-center justify-between">
-                    <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest flex items-center gap-1.5">
-                      <Bed size={13} className="text-orange-500" />
-                      Fasilitas {selectedRoom.name}
-                    </p>
-                    {selectedRoom.size && (
-                      <span className="text-[10px] font-extrabold bg-white px-2 py-0.5 rounded-md border border-gray-200 text-gray-700 shadow-2xs">
-                        {selectedRoom.size}
-                      </span>
-                    )}
-                  </div>
-
-                  {structuredRoomFacilities.isKosongan ? (
-                    <div className="p-3 bg-amber-50/80 border border-amber-200 rounded-xl text-center space-y-1">
-                      <p className="text-xs font-black text-amber-900 flex items-center justify-center gap-1.5">
-                        <AlertCircle size={14} className="text-amber-600 shrink-0" />
-                        Kosongan (Tanpa Perabot)
-                      </p>
-                      <p className="text-[10px] text-amber-700 font-medium leading-relaxed">
-                        Kamar disewakan dalam kondisi kosongan tanpa kasur & perabot kamar.
-                      </p>
-                    </div>
-                  ) : (
-                    <div className="space-y-3">
-                      {/* Sub 1: Perabot Kamar */}
-                      {structuredRoomFacilities.bedroomItems.length > 0 && (
-                        <div className="space-y-1.5">
-                          <span className="text-[9px] font-black text-gray-400 uppercase tracking-wider block">
-                            Perabot & Ruangan
-                          </span>
-                          <div className="grid grid-cols-2 gap-1.5">
-                            {structuredRoomFacilities.bedroomItems.map((item, idx) => (
-                              <div key={idx} className="flex items-center gap-1.5 text-xs font-bold text-gray-700 bg-white px-2.5 py-1.5 rounded-xl border border-gray-100 shadow-2xs">
-                                {structuredRoomFacilities.getRoomItemIcon(item)}
-                                <span className="truncate" title={item}>{item}</span>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Sub 2: Kamar Mandi */}
-                      {structuredRoomFacilities.bathroomItems.length > 0 && (
-                        <div className="space-y-1.5 pt-1 border-t border-gray-200/60">
-                          <span className="text-[9px] font-black text-gray-400 uppercase tracking-wider block">
-                            Kamar Mandi
-                          </span>
-                          <div className="grid grid-cols-2 gap-1.5">
-                            {structuredRoomFacilities.bathroomItems.map((item, idx) => (
-                              <div key={idx} className="flex items-center gap-1.5 text-xs font-bold text-gray-700 bg-white px-2.5 py-1.5 rounded-xl border border-gray-100 shadow-2xs">
-                                <Bath size={13} className="text-blue-500 shrink-0" />
-                                <span className="truncate" title={item}>{item}</span>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Sub 3: Dapur Kamar (jika ada Dapur Dalam) */}
-                      {structuredRoomFacilities.kitchenItems.length > 0 && (
-                        <div className="space-y-1.5 pt-1 border-t border-gray-200/60">
-                          <span className="text-[9px] font-black text-gray-400 uppercase tracking-wider block">
-                            Dapur Pribadi
-                          </span>
-                          <div className="grid grid-cols-2 gap-1.5">
-                            {structuredRoomFacilities.kitchenItems.map((item, idx) => (
-                              <div key={idx} className="flex items-center gap-1.5 text-xs font-bold text-gray-700 bg-white px-2.5 py-1.5 rounded-xl border border-gray-100 shadow-2xs">
-                                <CookingPot size={13} className="text-amber-500 shrink-0" />
-                                <span className="truncate" title={item}>{item}</span>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
 
                 {hideBookingAndChat ? (
                   <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200 text-center space-y-1.5">
