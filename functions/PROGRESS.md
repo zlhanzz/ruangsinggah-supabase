@@ -2,6 +2,25 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 310. Penyembunyian Header Navigation Khusus Landing Page KostManager (`App.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  - Ketika membuka landing page KostManager (`/kostmanager` / `/kost-manager`), header navigation utama (Navbar) di bagian atas tetap muncul sehingga tampilan bertumpuk dengan navigasi landing page.
+  - Pengguna meminta agar header navigation disembunyikan khusus pada landing page KostManager, sedangkan menu "Jadi Mitra" umum (`/owner` / `/mitra`) dan halaman lainnya tetap menampilkan Navbar normal.
+- **Implementasi Solusi**:
+  1. **Kondisi Khusus `isKostManagerPage`**:
+     - Menambahkan konstanta `isKostManagerPage` yang memeriksa secara presisi apakah rute yang dibuka adalah `Page.KOSTMANAGER`, `/kost-manager`, atau `/kostmanager`.
+  2. **Penyembunyian Navbar & Footer**:
+     - Memperbarui kondisi rendering `<Navbar />` menjadi `{!isDashboardPage && !isKostManagerPage && (<Navbar ... />)}`.
+     - Memperbarui kondisi rendering `<Footer />` menjadi `{!isDashboardPage && !isKostManagerPage && (<Footer ... />)}`.
+  3. **Keutuhan Halaman Lain**:
+     - Halaman menu "Jadi Mitra" (`Page.OWNER` / `/owner`) dan halaman user lainnya tetap menampilkan Header Navigation normal 100%.
+- **File Tersentuh**:
+  - `functions/public/App.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi build Vite `cmd /c npm run build` di `functions/public/` lulus 100% (✓ 2509 modules transformed, built in 41.34s, 0 error).
+
 ### 309. Penyempurnaan Menu Pesan Mitra, Reset Unread Badge, Isolasi Role Chat, dan Sensor Nomor Kontak Luar (`chatService.ts`, `ChatWindow.tsx`, `MitraDashboard.tsx`, `Chat.tsx`) (September 2026)
 - **Permintaan & Masalah**:
   - Badge angka pada menu "Pesan" di sidebar Mitra sebelumnya menghitung seluruh percakapan (`chatSessions.length`) alih-alih jumlah pesan belum dibaca, sehingga badge angka tetap menyala merah meski pesan sudah dibaca/dibalas.

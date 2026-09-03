@@ -569,6 +569,12 @@ const App: React.FC = () => {
     Page.DASHBOARD_OWNER,
   ].some(p => location.pathname.startsWith(p));
 
+  const isKostManagerPage = [
+    Page.KOSTMANAGER,
+    '/kost-manager',
+    '/kostmanager'
+  ].some(p => location.pathname === p || location.pathname.startsWith(`${p}/`));
+
   // --- WRAPPER FOR DEEP LINK DETAIL ---
   const KostDetailWrapper = ({ listings, user, isProfileComplete, setPendingTransaction }: any) => {
     const { id } = useParams();
@@ -649,7 +655,7 @@ const App: React.FC = () => {
 
   return (
     <div className="min-h-screen flex flex-col font-sans selection:bg-orange-100 selection:text-orange-900">
-      {!isDashboardPage && (
+      {!isDashboardPage && !isKostManagerPage && (
         <Navbar
           activePage={location.pathname as Page}
           onPageChange={(page) => {
@@ -886,7 +892,7 @@ const App: React.FC = () => {
         )}
       </main>
 
-      {!isDashboardPage && location.pathname !== Page.KOSTMANAGER && <Footer onPageChange={(p: Page) => navigate(p)} />}
+      {!isDashboardPage && !isKostManagerPage && <Footer onPageChange={(p: Page) => navigate(p)} />}
     </div>
   );
 };
