@@ -2510,7 +2510,101 @@ export async function deleteProperty(propertyId: string): Promise<void> {
   const isAdmin = await checkIfUserIsAdmin(user.id);
   if (!isOwner && !isAdmin) throw new Error('Anda tidak memiliki izin untuk menghapusnya.');
 
-  // Delete all media files
+  // 1. Amankan & lepaskan relasi transaksi yang merujuk pada resident_status properti ini
+  try {
+    const { data: residentRows } = await supabase
+      .from('resident_status')
+      .select('id')
+      .eq('kost_id', propertyId);
+
+    if (residentRows && residentRows.length > 0) {
+      const resIds = residentRows.map((r: any) => r.id);
+      await supabase
+        .from('transactions')
+        .update({ resident_status_id: null })
+        .in('resident_status_id', resIds);
+    }
+  } catch (resTrxErr) {
+    console.warn('[deleteProperty] Warning unlinking transactions from resident_status:', resTrxErr);
+  }
+
+  // 2. Hapus seluruh data riwayat penghuni (resident_status) yang terikat pada kost ini
+  try {
+    const { error: resErr } = await supabase
+      .from('resident_status')
+      .delete()
+      .eq('kost_id', propertyId);
+    if (resErr) console.warn('[deleteProperty] Warning deleting resident_status:', resErr);
+  } catch (resErr) {
+    console.warn('[deleteProperty] Warning deleting resident_status:', resErr);
+  }
+
+  // 3. Hapus kamar fisik (rooms) dan riwayat pemesanan kamar (room_bookings)
+  try {
+    const { data: propRooms } = await supabase
+      .from('rooms')
+      .select('id')
+      .eq('property_id', propertyId);
+
+    if (propRooms && propRooms.length > 0) {
+      const roomIds = propRooms.map((rm: any) => rm.id);
+      // Hapus room_bookings terlebih dahulu
+      await supabase
+        .from('room_bookings')
+        .delete()
+        .in('room_id', roomIds);
+
+      // Hapus kamar fisik
+      await supabase
+        .from('rooms')
+        .delete()
+        .eq('property_id', propertyId);
+    }
+  } catch (roomErr) {
+    console.warn('[deleteProperty] Warning deleting rooms/bookings:', roomErr);
+  }
+
+  // 4. Hapus komplain terkait properti ini
+  try {
+    await supabase
+      .from('complaints')
+      .delete()
+      .eq('kost_id', propertyId);
+  } catch (compErr) {
+    console.warn('[deleteProperty] Warning deleting complaints:', compErr);
+  }
+
+  // 5. Hapus laporan properti (property_reports)
+  try {
+    await supabase
+      .from('property_reports')
+      .delete()
+      .eq('property_id', propertyId);
+  } catch (repErr) {
+    console.warn('[deleteProperty] Warning deleting property_reports:', repErr);
+  }
+
+  // 6. Hapus sesi chat yang terikat dengan properti ini
+  try {
+    await supabase
+      .from('chat_sessions')
+      .delete()
+      .eq('property_id', propertyId);
+  } catch (chatErr) {
+    console.warn('[deleteProperty] Warning deleting chat_sessions:', chatErr);
+  }
+
+  // 7. Hapus relasi di tabel mitra_kostmanager jika ada
+  try {
+    await supabase
+      .from('mitra_kostmanager')
+      .delete()
+      .or(`property_id.eq.${propertyId},id.eq.${propertyId}`);
+  } catch (kmErr) {
+    console.warn('[deleteProperty] Warning deleting mitra_kostmanager:', kmErr);
+  }
+
+  // 8. Hapus seluruh file media foto dan video dari Supabase Storage
   const deletePromises: Promise<void>[] = [];
   (existing.image_urls || []).forEach((img: any) => {
     if (typeof img === 'string') {
@@ -2529,9 +2623,10 @@ export async function deleteProperty(propertyId: string): Promise<void> {
 
   await Promise.all(deletePromises);
 
+  // 9. Eksekusi penghapusan baris induk properti setelah seluruh relasi anak bersih
   const { error } = await supabase.from('properties').delete().eq('id', propertyId);
   if (error) throw error;
-  console.log('Properti berhasil dihapus:', propertyId);
+  console.log('Properti dan seluruh relasi data berhasil dihapus permanen:', propertyId);
 }
 
 export async function getPropertyDetails(propertyId: string): Promise<any | null> {

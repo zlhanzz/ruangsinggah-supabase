@@ -2628,20 +2628,10 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
 
         setIsSubmittingDelete(true);
         try {
-            // 1. Hapus dari tabel properties & storage media
+            // 1. Hapus berjenjang dari tabel properties, relasi anak (penghuni, kamar, chat, komplain), & storage media
             await deleteProperty(propToDelete.id);
 
-            // 2. Hapus dari tabel mitra_kostmanager jika ada
-            try {
-                await supabase
-                    .from('mitra_kostmanager')
-                    .delete()
-                    .or(`property_id.eq.${propToDelete.id},id.eq.${propToDelete.id}`);
-            } catch (kmErr) {
-                console.warn('Delete from mitra_kostmanager warning:', kmErr);
-            }
-
-            // 3. Hapus dari state lokal
+            // 2. Hapus dari state lokal
             setProperties(prev => prev.filter(p => p.id !== propToDelete.id));
 
             alert(`🗑️ Properti "${propToDelete.title}" berhasil DIHAPUS SECARA PERMANEN dari sistem.`);
@@ -2650,7 +2640,7 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
             loadAllData(false);
         } catch (err: any) {
             console.error('Error deleting property:', err);
-            alert('Gagal menghapus properti permanen: ' + err.message);
+            alert('Gagal menghapus properti permanen: ' + (err.message || err));
         } finally {
             setIsSubmittingDelete(false);
         }
@@ -4955,7 +4945,7 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
                                                     {isSubmittingDelete ? (
                                                         <>
                                                             <RotateCw size={12} className="animate-spin" />
-                                                            <span>Menghapus...</span>
+                                                            <span>Membersihkan data...</span>
                                                         </>
                                                     ) : (
                                                         <>
