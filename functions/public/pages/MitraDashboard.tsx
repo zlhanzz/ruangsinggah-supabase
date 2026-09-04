@@ -298,11 +298,36 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
 
     // --- PANDUAN MULAI CEPAT (QUICK START GUIDE) STATE ---
     const [hasViewedListing, setHasViewedListing] = useState<boolean>(() => {
-        return localStorage.getItem(`mitra_viewed_listing_${uid}`) === 'true';
+        try {
+            return localStorage.getItem(`mitra_viewed_listing_${uid || 'guest'}`) === 'true';
+        } catch {
+            return false;
+        }
     });
     const [tourCompleted, setTourCompleted] = useState<boolean>(() => {
-        return localStorage.getItem('mitraTourCompleted') === 'true';
+        try {
+            return localStorage.getItem(`mitra_tour_completed_${uid || 'guest'}`) === 'true';
+        } catch {
+            return false;
+        }
     });
+    const [isGuideDismissed, setIsGuideDismissed] = useState<boolean>(() => {
+        try {
+            return localStorage.getItem(`mitra_tour_dismissed_${uid || 'guest'}`) === 'true';
+        } catch {
+            return false;
+        }
+    });
+
+    useEffect(() => {
+        try {
+            const isCompleted = localStorage.getItem(`mitra_tour_completed_${uid || 'guest'}`) === 'true';
+            const isDismissed = localStorage.getItem(`mitra_tour_dismissed_${uid || 'guest'}`) === 'true';
+            setTourCompleted(isCompleted);
+            setIsGuideDismissed(isDismissed);
+            setHasViewedListing(localStorage.getItem(`mitra_viewed_listing_${uid || 'guest'}`) === 'true');
+        } catch { }
+    }, [uid]);
 
     const handleViewListing = () => {
         if (properties.length > 0) {
@@ -311,12 +336,32 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
             navigate(Page.LISTINGS);
         }
         setHasViewedListing(true);
-        localStorage.setItem(`mitra_viewed_listing_${uid}`, 'true');
+        try {
+            localStorage.setItem(`mitra_viewed_listing_${uid || 'guest'}`, 'true');
+        } catch { }
+    };
+
+    const handleDismissGuide = () => {
+        setIsGuideDismissed(true);
+        try {
+            localStorage.setItem(`mitra_tour_dismissed_${uid || 'guest'}`, 'true');
+        } catch { }
+    };
+
+    const handleOpenGuide = () => {
+        setIsGuideDismissed(false);
+        try {
+            localStorage.removeItem(`mitra_tour_dismissed_${uid || 'guest'}`);
+        } catch { }
     };
 
     const handleCompleteTour = () => {
-        localStorage.setItem('mitraTourCompleted', 'true');
+        try {
+            localStorage.setItem(`mitra_tour_completed_${uid || 'guest'}`, 'true');
+            localStorage.setItem(`mitra_tour_dismissed_${uid || 'guest'}`, 'true');
+        } catch { }
         setTourCompleted(true);
+        setIsGuideDismissed(true);
     };
 
     const handleSubmitKmRequest = async () => {
@@ -1060,186 +1105,217 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                             })()}
 
                             {/* ── ALUR PEMILIK KOST (TIMELINE) & PANDUAN MULAI CEPAT ── */}
-                            {!tourCompleted && (
-                                <div className="space-y-6 animate-in slide-in-from-bottom-4 duration-500">
-                                    {(() => {
-                                        const isKmManaged = properties.some(p => p.isManaged);
-                                        const step1Done = Boolean(isVerified);
-                                        const step2Done = step1Done && properties.length > 0;
-                                        const step3Done = step2Done && (hasViewedListing || isKmManaged || stats.totalViews > 0);
-                                        const step4Done = step3Done;
+                            {(() => {
+                                const isKmManaged = properties.some(p => p.isManaged);
+                                const step1Done = Boolean(isVerified);
+                                const step2Done = step1Done && properties.length > 0;
+                                const step3Done = step2Done && (hasViewedListing || isKmManaged || stats.totalViews > 0);
+                                const step4Done = step3Done;
 
-                                        const completedStepsCount = [step1Done, step2Done, step3Done, step4Done].filter(Boolean).length;
-                                        const progressPercent = Math.round((completedStepsCount / 4) * 100);
+                                const completedStepsCount = [step1Done, step2Done, step3Done, step4Done].filter(Boolean).length;
+                                const progressPercent = Math.round((completedStepsCount / 4) * 100);
 
-                                        return (
-                                            <div className="bg-white border border-gray-100 rounded-3xl p-6 lg:p-7 shadow-sm relative overflow-hidden">
-                                                {/* Decorative background element */}
-                                                <div className="absolute -top-10 -right-10 w-48 h-48 bg-orange-50 rounded-full blur-3xl opacity-60 pointer-events-none"></div>
-
-                                                {/* Header & Dismiss Button */}
-                                                <div className="flex items-start justify-between relative z-10 mb-4">
-                                                    <div>
-                                                        <div className="flex items-center gap-2 mb-1">
-                                                            <h3 className="text-lg font-black text-gray-900 tracking-tight">Panduan Mulai Cepat</h3>
-                                                            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-orange-100 text-orange-700">
-                                                                {completedStepsCount}/4 Langkah ({progressPercent}%)
-                                                            </span>
-                                                        </div>
-                                                        <p className="text-xs text-gray-500">
-                                                            Klik setiap langkah untuk navigasi cepat atau selesaikan panduan untuk mulai mengelola kost.
-                                                        </p>
+                                if (isGuideDismissed || tourCompleted) {
+                                    return (
+                                        <div className="bg-gradient-to-r from-orange-50/80 via-amber-50/50 to-orange-50/30 border border-orange-200/80 rounded-3xl p-4 lg:p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-sm hover:border-orange-300 transition-all">
+                                            <div className="flex items-center gap-3.5">
+                                                <div className="w-11 h-11 rounded-2xl bg-orange-500 text-white flex items-center justify-center font-black shadow-md shadow-orange-500/20 shrink-0">
+                                                    <Compass size={22} />
+                                                </div>
+                                                <div>
+                                                    <div className="flex items-center gap-2">
+                                                        <h4 className="text-sm font-black text-gray-900">Alur Pemasaran Kost RuangSinggah</h4>
+                                                        <span className="px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-orange-100 text-orange-700">
+                                                            {completedStepsCount}/4 Langkah ({progressPercent}%)
+                                                        </span>
                                                     </div>
-                                                    <button
-                                                        onClick={handleCompleteTour}
-                                                        className="w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-400 hover:text-gray-700 flex items-center justify-center transition-colors cursor-pointer shrink-0 ml-2"
-                                                        title="Sembunyikan Panduan"
-                                                    >
-                                                        <X size={16} />
-                                                    </button>
-                                                </div>
-
-                                                {/* Progress Bar */}
-                                                <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden mb-6 relative z-10">
-                                                    <div
-                                                        className="h-full bg-gradient-to-r from-orange-500 via-amber-500 to-emerald-500 rounded-full transition-all duration-700"
-                                                        style={{ width: `${progressPercent}%` }}
-                                                    />
-                                                </div>
-
-                                                {/* Steps Grid (Interactive Clickable Cards) */}
-                                                <div className="relative z-10">
-                                                    {/* Connecting Line (Desktop) */}
-                                                    <div className="hidden lg:block absolute top-[20px] left-12 right-12 h-0.5 bg-gray-100 z-0" />
-
-                                                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 relative z-10">
-                                                        {/* Step 1 */}
-                                                        <button
-                                                            onClick={() => handleMenuChange('profile')}
-                                                            className={`p-4 rounded-2xl border text-left transition-all flex lg:flex-col items-center lg:items-center gap-3.5 cursor-pointer group ${step1Done
-                                                                ? 'bg-emerald-50/40 border-emerald-100 hover:bg-emerald-50/80'
-                                                                : 'bg-orange-50/40 border-orange-200 hover:bg-orange-50 ring-2 ring-orange-100'
-                                                                }`}
-                                                        >
-                                                            <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold shrink-0 transition-transform group-hover:scale-110 shadow-sm ${step1Done ? 'bg-emerald-500 text-white shadow-emerald-500/20' : 'bg-orange-500 text-white'
-                                                                }`}>
-                                                                {step1Done ? <Check size={18} /> : '1'}
-                                                            </div>
-                                                            <div className="lg:text-center min-w-0">
-                                                                <p className={`text-xs font-black uppercase tracking-tight ${step1Done ? 'text-gray-900' : 'text-orange-600'}`}>
-                                                                    Verifikasi Identitas
-                                                                </p>
-                                                                <p className="text-[10px] text-gray-500 mt-0.5 leading-tight">
-                                                                    {step1Done ? 'Identitas terverifikasi ✓' : 'Upload KTP untuk keamanan'}
-                                                                </p>
-                                                            </div>
-                                                        </button>
-
-                                                        {/* Step 2 */}
-                                                        <button
-                                                            onClick={() => { if (checkVerification()) handleMenuChange('properties'); }}
-                                                            className={`p-4 rounded-2xl border text-left transition-all flex lg:flex-col items-center lg:items-center gap-3.5 cursor-pointer group ${step2Done
-                                                                ? 'bg-emerald-50/40 border-emerald-100 hover:bg-emerald-50/80'
-                                                                : (step1Done ? 'bg-orange-50/40 border-orange-200 hover:bg-orange-50 ring-2 ring-orange-100' : 'bg-gray-50/60 border-gray-100 opacity-60')
-                                                                }`}
-                                                        >
-                                                            <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold shrink-0 transition-transform group-hover:scale-110 shadow-sm ${step2Done ? 'bg-emerald-500 text-white shadow-emerald-500/20' : (step1Done ? 'bg-orange-500 text-white' : 'bg-gray-200 text-gray-500')
-                                                                }`}>
-                                                                {step2Done ? <Check size={18} /> : '2'}
-                                                            </div>
-                                                            <div className="lg:text-center min-w-0">
-                                                                <p className={`text-xs font-black uppercase tracking-tight ${step2Done ? 'text-gray-900' : (step1Done ? 'text-orange-600' : 'text-gray-500')}`}>
-                                                                    Kelola & Upload Kost
-                                                                </p>
-                                                                <p className="text-[10px] text-gray-500 mt-0.5 leading-tight">
-                                                                    {step2Done ? `${properties.length} properti terdaftar ✓` : 'Isi detail & foto sewa'}
-                                                                </p>
-                                                            </div>
-                                                        </button>
-
-                                                        {/* Step 3 */}
-                                                        <button
-                                                            onClick={handleViewListing}
-                                                            className={`p-4 rounded-2xl border text-left transition-all flex lg:flex-col items-center lg:items-center gap-3.5 cursor-pointer group ${step3Done
-                                                                ? 'bg-emerald-50/40 border-emerald-100 hover:bg-emerald-50/80'
-                                                                : (step2Done ? 'bg-blue-50/50 border-blue-200 hover:bg-blue-50 ring-2 ring-blue-100' : 'bg-gray-50/60 border-gray-100 opacity-60')
-                                                                }`}
-                                                        >
-                                                            <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold shrink-0 transition-transform group-hover:scale-110 shadow-sm ${step3Done ? 'bg-emerald-500 text-white shadow-emerald-500/20' : (step2Done ? 'bg-blue-500 text-white' : 'bg-gray-200 text-gray-500')
-                                                                }`}>
-                                                                {step3Done ? <Check size={18} /> : '3'}
-                                                            </div>
-                                                            <div className="lg:text-center min-w-0">
-                                                                <p className={`text-xs font-black uppercase tracking-tight ${step3Done ? 'text-gray-900' : (step2Done ? 'text-blue-600' : 'text-gray-500')}`}>
-                                                                    Tampil di Marketplace
-                                                                </p>
-                                                                <p className="text-[10px] text-gray-500 mt-0.5 leading-tight">
-                                                                    {step3Done ? 'Listing aktif & siap dicari ✓' : 'Klik untuk preview POV user'}
-                                                                </p>
-                                                            </div>
-                                                        </button>
-
-                                                        {/* Step 4 */}
-                                                        <button
-                                                            onClick={() => handleMenuChange('bookings')}
-                                                            className={`p-4 rounded-2xl border text-left transition-all flex lg:flex-col items-center lg:items-center gap-3.5 cursor-pointer group ${step4Done
-                                                                ? 'bg-emerald-50/40 border-emerald-100 hover:bg-emerald-50/80'
-                                                                : (step3Done ? 'bg-orange-50/40 border-orange-200 hover:bg-orange-50' : 'bg-gray-50/60 border-gray-100 opacity-60')
-                                                                }`}
-                                                        >
-                                                            <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold shrink-0 transition-transform group-hover:scale-110 shadow-sm ${step4Done ? 'bg-emerald-500 text-white shadow-emerald-500/20' : 'bg-gray-200 text-gray-500'
-                                                                }`}>
-                                                                {step4Done ? <Check size={18} /> : '4'}
-                                                            </div>
-                                                            <div className="lg:text-center min-w-0">
-                                                                <p className={`text-xs font-black uppercase tracking-tight ${step4Done ? 'text-gray-900' : 'text-gray-500'}`}>
-                                                                    Siap Terima Sewa
-                                                                </p>
-                                                                <p className="text-[10px] text-gray-500 mt-0.5 leading-tight">
-                                                                    {step4Done ? 'Siap terima transaksi ✓' : 'Terima pembayaran & sewa'}
-                                                                </p>
-                                                            </div>
-                                                        </button>
-                                                    </div>
-                                                </div>
-
-                                                {/* Action Button CTA */}
-                                                <div className="mt-7 flex justify-center relative z-10">
-                                                    {!step1Done ? (
-                                                        <button
-                                                            onClick={() => handleMenuChange('profile')}
-                                                            className="bg-orange-500 hover:bg-orange-600 text-white px-8 py-3.5 rounded-2xl text-xs font-black uppercase tracking-widest transition-transform active:scale-95 shadow-lg shadow-orange-500/25 flex items-center gap-2 cursor-pointer"
-                                                        >
-                                                            <User size={15} /> Verifikasi Identitas Sekarang
-                                                        </button>
-                                                    ) : !step2Done ? (
-                                                        <button
-                                                            onClick={() => handleMenuChange('properties')}
-                                                            className="bg-gray-900 hover:bg-black text-white px-8 py-3.5 rounded-2xl text-xs font-black uppercase tracking-widest transition-transform active:scale-95 shadow-md flex items-center gap-2 cursor-pointer"
-                                                        >
-                                                            <Plus size={15} /> Mulai Upload Kost Sekarang
-                                                        </button>
-                                                    ) : !step3Done ? (
-                                                        <button
-                                                            onClick={handleViewListing}
-                                                            className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white px-8 py-3.5 rounded-2xl text-xs font-black uppercase tracking-widest transition-transform active:scale-95 shadow-lg shadow-blue-500/25 flex items-center gap-2 cursor-pointer"
-                                                        >
-                                                            <Eye size={15} /> Lihat Listing Saya (POV User)
-                                                        </button>
-                                                    ) : (
-                                                        <button
-                                                            onClick={handleCompleteTour}
-                                                            className="bg-gradient-to-r from-emerald-500 via-teal-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white px-8 py-3.5 rounded-2xl text-xs font-black uppercase tracking-widest transition-transform active:scale-95 shadow-lg shadow-emerald-500/25 flex items-center gap-2 cursor-pointer"
-                                                        >
-                                                            <Check size={16} /> Selesaikan Panduan & Buka Dashboard Penuh
-                                                        </button>
-                                                    )}
+                                                    <p className="text-xs text-gray-500 mt-0.5">
+                                                        Pelajari alur praktis mulai dari verifikasi identitas, upload unit kost, hingga pencairan uang sewa.
+                                                    </p>
                                                 </div>
                                             </div>
-                                        );
-                                    })()}
-                                </div>
-                            )}
+                                            <button
+                                                type="button"
+                                                onClick={handleOpenGuide}
+                                                className="w-full sm:w-auto px-5 py-2.5 bg-white hover:bg-orange-50 text-orange-600 border border-orange-200 hover:border-orange-300 rounded-xl text-xs font-black uppercase tracking-wider shadow-sm transition-all active:scale-95 shrink-0 flex items-center justify-center gap-1.5 cursor-pointer"
+                                            >
+                                                <Compass size={14} /> Buka Panduan Alur
+                                            </button>
+                                        </div>
+                                    );
+                                }
+
+                                return (
+                                    <div className="space-y-6 animate-in slide-in-from-bottom-4 duration-500">
+                                        <div className="bg-white border-2 border-orange-200/80 rounded-3xl p-6 lg:p-7 shadow-md shadow-orange-500/5 relative overflow-hidden">
+                                            {/* Decorative background element */}
+                                            <div className="absolute -top-10 -right-10 w-48 h-48 bg-orange-100/60 rounded-full blur-3xl opacity-60 pointer-events-none"></div>
+
+                                            {/* Header & Dismiss Button */}
+                                            <div className="flex items-start justify-between relative z-10 mb-4">
+                                                <div>
+                                                    <div className="flex items-center gap-2 mb-1">
+                                                        <div className="w-7 h-7 rounded-lg bg-orange-500 text-white flex items-center justify-center shrink-0 shadow-sm">
+                                                            <Compass size={16} />
+                                                        </div>
+                                                        <h3 className="text-lg font-black text-gray-900 tracking-tight">Alur Pemasaran Kost Mitra Baru</h3>
+                                                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-orange-100 text-orange-700">
+                                                            {completedStepsCount}/4 Langkah ({progressPercent}%)
+                                                        </span>
+                                                    </div>
+                                                    <p className="text-xs text-gray-500">
+                                                        Ikuti 4 tahapan praktis berikut agar kost Anda segera tayang di katalog marketplace dan menghasilkan sewa maksimal.
+                                                    </p>
+                                                </div>
+                                                <button
+                                                    onClick={handleDismissGuide}
+                                                    className="w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-400 hover:text-gray-700 flex items-center justify-center transition-colors cursor-pointer shrink-0 ml-2"
+                                                    title="Minimalkan Panduan (Dapat dibuka kembali kapan saja)"
+                                                >
+                                                    <X size={16} />
+                                                </button>
+                                            </div>
+
+                                            {/* Progress Bar */}
+                                            <div className="w-full h-2.5 bg-gray-100 rounded-full overflow-hidden mb-6 relative z-10">
+                                                <div
+                                                    className="h-full bg-gradient-to-r from-orange-500 via-amber-500 to-emerald-500 rounded-full transition-all duration-700"
+                                                    style={{ width: `${progressPercent}%` }}
+                                                />
+                                            </div>
+
+                                            {/* Steps Grid (Interactive Clickable Cards) */}
+                                            <div className="relative z-10">
+                                                {/* Connecting Line (Desktop) */}
+                                                <div className="hidden lg:block absolute top-[24px] left-12 right-12 h-0.5 bg-gray-100 z-0" />
+
+                                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 relative z-10">
+                                                    {/* Step 1 */}
+                                                    <button
+                                                        onClick={() => handleMenuChange('profile')}
+                                                        className={`p-4 rounded-2xl border text-left transition-all flex lg:flex-col items-center lg:items-center gap-3.5 cursor-pointer group ${step1Done
+                                                            ? 'bg-emerald-50/40 border-emerald-200 hover:bg-emerald-50/80'
+                                                            : 'bg-orange-50/60 border-orange-300 hover:bg-orange-100/70 ring-2 ring-orange-200'
+                                                            }`}
+                                                    >
+                                                        <div className={`w-11 h-11 rounded-full flex items-center justify-center text-sm font-bold shrink-0 transition-transform group-hover:scale-110 shadow-sm ${step1Done ? 'bg-emerald-500 text-white shadow-emerald-500/20' : 'bg-orange-500 text-white'
+                                                            }`}>
+                                                            {step1Done ? <Check size={20} /> : '1'}
+                                                        </div>
+                                                        <div className="lg:text-center min-w-0">
+                                                            <p className={`text-xs font-black uppercase tracking-tight ${step1Done ? 'text-gray-900' : 'text-orange-600'}`}>
+                                                                1. Verifikasi Identitas
+                                                            </p>
+                                                            <p className="text-[10px] text-gray-500 mt-1 leading-tight">
+                                                                {step1Done ? 'Identitas terverifikasi ✓' : 'Upload KTP pemilik kost'}
+                                                            </p>
+                                                        </div>
+                                                    </button>
+
+                                                    {/* Step 2 */}
+                                                    <button
+                                                        onClick={() => { if (checkVerification()) handleMenuChange('properties'); }}
+                                                        className={`p-4 rounded-2xl border text-left transition-all flex lg:flex-col items-center lg:items-center gap-3.5 cursor-pointer group ${step2Done
+                                                            ? 'bg-emerald-50/40 border-emerald-200 hover:bg-emerald-50/80'
+                                                            : (step1Done ? 'bg-orange-50/60 border-orange-300 hover:bg-orange-100/70 ring-2 ring-orange-200' : 'bg-gray-50/60 border-gray-100 opacity-60')
+                                                            }`}
+                                                    >
+                                                        <div className={`w-11 h-11 rounded-full flex items-center justify-center text-sm font-bold shrink-0 transition-transform group-hover:scale-110 shadow-sm ${step2Done ? 'bg-emerald-500 text-white shadow-emerald-500/20' : (step1Done ? 'bg-orange-500 text-white' : 'bg-gray-200 text-gray-500')
+                                                            }`}>
+                                                            {step2Done ? <Check size={20} /> : '2'}
+                                                        </div>
+                                                        <div className="lg:text-center min-w-0">
+                                                            <p className={`text-xs font-black uppercase tracking-tight ${step2Done ? 'text-gray-900' : (step1Done ? 'text-orange-600' : 'text-gray-500')}`}>
+                                                                2. Upload & Kelola Kost
+                                                            </p>
+                                                            <p className="text-[10px] text-gray-500 mt-1 leading-tight">
+                                                                {step2Done ? `${properties.length} unit kost terdaftar ✓` : 'Isi tarif, kamar & foto'}
+                                                            </p>
+                                                        </div>
+                                                    </button>
+
+                                                    {/* Step 3 */}
+                                                    <button
+                                                        onClick={handleViewListing}
+                                                        className={`p-4 rounded-2xl border text-left transition-all flex lg:flex-col items-center lg:items-center gap-3.5 cursor-pointer group ${step3Done
+                                                            ? 'bg-emerald-50/40 border-emerald-200 hover:bg-emerald-50/80'
+                                                            : (step2Done ? 'bg-blue-50/60 border-blue-300 hover:bg-blue-100/70 ring-2 ring-blue-200' : 'bg-gray-50/60 border-gray-100 opacity-60')
+                                                            }`}
+                                                    >
+                                                        <div className={`w-11 h-11 rounded-full flex items-center justify-center text-sm font-bold shrink-0 transition-transform group-hover:scale-110 shadow-sm ${step3Done ? 'bg-emerald-500 text-white shadow-emerald-500/20' : (step2Done ? 'bg-blue-500 text-white' : 'bg-gray-200 text-gray-500')
+                                                            }`}>
+                                                            {step3Done ? <Check size={20} /> : '3'}
+                                                        </div>
+                                                        <div className="lg:text-center min-w-0">
+                                                            <p className={`text-xs font-black uppercase tracking-tight ${step3Done ? 'text-gray-900' : (step2Done ? 'text-blue-600' : 'text-gray-500')}`}>
+                                                                3. Tayang di Marketplace
+                                                            </p>
+                                                            <p className="text-[10px] text-gray-500 mt-1 leading-tight">
+                                                                {step3Done ? 'Listing aktif & siap dicari ✓' : 'Cek tampilan katalog (POV User)'}
+                                                            </p>
+                                                        </div>
+                                                    </button>
+
+                                                    {/* Step 4 */}
+                                                    <button
+                                                        onClick={() => handleMenuChange('bookings')}
+                                                        className={`p-4 rounded-2xl border text-left transition-all flex lg:flex-col items-center lg:items-center gap-3.5 cursor-pointer group ${step4Done
+                                                            ? 'bg-emerald-50/40 border-emerald-200 hover:bg-emerald-50/80'
+                                                            : (step3Done ? 'bg-purple-50/60 border-purple-300 hover:bg-purple-100/70 ring-2 ring-purple-200' : 'bg-gray-50/60 border-gray-100 opacity-60')
+                                                            }`}
+                                                    >
+                                                        <div className={`w-11 h-11 rounded-full flex items-center justify-center text-sm font-bold shrink-0 transition-transform group-hover:scale-110 shadow-sm ${step4Done ? 'bg-emerald-500 text-white shadow-emerald-500/20' : (step3Done ? 'bg-purple-600 text-white' : 'bg-gray-200 text-gray-500')
+                                                            }`}>
+                                                            {step4Done ? <Check size={20} /> : '4'}
+                                                        </div>
+                                                        <div className="lg:text-center min-w-0">
+                                                            <p className={`text-xs font-black uppercase tracking-tight ${step4Done ? 'text-gray-900' : (step3Done ? 'text-purple-600' : 'text-gray-500')}`}>
+                                                                4. Terima Sewa & Dana
+                                                            </p>
+                                                            <p className="text-[10px] text-gray-500 mt-1 leading-tight">
+                                                                {step4Done ? 'Siap terima transaksi ✓' : 'Terima pesanan & tarik uang sewa'}
+                                                            </p>
+                                                        </div>
+                                                    </button>
+                                                </div>
+                                            </div>
+
+                                            {/* Action Button CTA */}
+                                            <div className="mt-7 flex flex-col sm:flex-row items-center justify-center gap-3 relative z-10">
+                                                {!step1Done ? (
+                                                    <button
+                                                        onClick={() => handleMenuChange('profile')}
+                                                        className="w-full sm:w-auto bg-orange-500 hover:bg-orange-600 text-white px-8 py-3.5 rounded-2xl text-xs font-black uppercase tracking-widest transition-transform active:scale-95 shadow-lg shadow-orange-500/25 flex items-center justify-center gap-2 cursor-pointer"
+                                                    >
+                                                        <User size={15} /> Langkah 1: Verifikasi Identitas Sekarang
+                                                    </button>
+                                                ) : !step2Done ? (
+                                                    <button
+                                                        onClick={() => handleMenuChange('properties')}
+                                                        className="w-full sm:w-auto bg-gray-900 hover:bg-black text-white px-8 py-3.5 rounded-2xl text-xs font-black uppercase tracking-widest transition-transform active:scale-95 shadow-md flex items-center justify-center gap-2 cursor-pointer"
+                                                    >
+                                                        <Plus size={15} /> Langkah 2: Mulai Upload Kost Sekarang
+                                                    </button>
+                                                ) : !step3Done ? (
+                                                    <button
+                                                        onClick={handleViewListing}
+                                                        className="w-full sm:w-auto bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white px-8 py-3.5 rounded-2xl text-xs font-black uppercase tracking-widest transition-transform active:scale-95 shadow-lg shadow-blue-500/25 flex items-center justify-center gap-2 cursor-pointer"
+                                                    >
+                                                        <Eye size={15} /> Langkah 3: Lihat Listing Saya (POV User)
+                                                    </button>
+                                                ) : (
+                                                    <button
+                                                        onClick={handleCompleteTour}
+                                                        className="w-full sm:w-auto bg-gradient-to-r from-emerald-500 via-teal-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white px-8 py-3.5 rounded-2xl text-xs font-black uppercase tracking-widest transition-transform active:scale-95 shadow-lg shadow-emerald-500/25 flex items-center justify-center gap-2 cursor-pointer"
+                                                    >
+                                                        <Check size={16} /> Selesaikan Panduan & Minimalkan
+                                                    </button>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+                                );
+                            })()}
 
                             {/* ── MOBILE QUICK MENU (PINTAS MENU) ─────────────────── */}
                             <div className="lg:hidden grid grid-cols-2 gap-4">

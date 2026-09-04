@@ -2,6 +2,30 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 320. Pengaktifan & Penyempurnaan Roadmap Alur Step-by-Step Pemasaran Kost Mitra Baru (`MitraDashboard.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  - Alur *step-by-step* untuk mitra baru tidak tampil / jarang muncul pada halaman Dashboard Mitra. Hal ini terjadi karena state `tourCompleted` tersimpan secara global pada `localStorage.getItem('mitraTourCompleted')` tanpa namespace user, sehingga ketika sekali saja di-close pada browser di masa lalu, setiap akun mitra baru yang login berikutnya secara otomatis kehilangan alur panduan tersebut.
+  - Selain itu, tidak tersedia mekanisme toggle atau banner untuk membuka kembali panduan alur jika mitra membutuhkannya.
+- **Implementasi Solusi**:
+  1. **Persistensi State Storage Berbasis Akun Mitra (`MitraDashboard.tsx`)**:
+     - Mengubah pembacaan dan penyimpanan status penyelesaian panduan ke key `mitra_tour_completed_${uid || 'guest'}` dan `mitra_tour_dismissed_${uid || 'guest'}`.
+     - Menjamin setiap akun mitra baru yang belum menyelesaikan seluruh tahapan akan selalu melihat alur panduan secara otomatis saat login.
+  2. **Dukungan Buka Ulang / Toggle Panduan (`handleOpenGuide`, `handleDismissGuide`)**:
+     - Menambahkan fungsi pembuka dan penutup panduan yang fleksibel.
+     - Ketika panduan diminimalkan atau diselesaikan, dashboard menampilkan banner ringkas elegan *"Alur Pemasaran Kost RuangSinggah [Buka Panduan Alur]"* sehingga mitra dapat membuka kembali roadmap 4 langkah kapan saja dengan 1 klik.
+  3. **Penyempurnaan Visual & Edukasi Alur 4 Langkah**:
+     - **Langkah 1: Verifikasi Identitas (KTP)** $\rightarrow$ Legalitas pemilik kost & izin tayang publik.
+     - **Langkah 2: Upload & Kelola Kost** $\rightarrow$ Input informasi kamar, harga, fasilitas, & foto sewa.
+     - **Langkah 3: Tayang di Marketplace & Promosi** $\rightarrow$ Listing live di katalog pencari, siap dipantau dengan statistik Kunjungan (Views) & CTR.
+     - **Langkah 4: Terima Sewa & Penarikan Dana** $\rightarrow$ Menerima pesanan booking masuk, chat calon penyewa, dan penarikan uang sewa ke rekening bank.
+     - Menghubungkan setiap kartu langkah dan tombol aksi CTA langsung ke aksi yang relevan.
+- **File Tersentuh**:
+  - `functions/public/pages/MitraDashboard.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi build lulus 100% (✓ 2509 modules transformed, built in 53.83s, 0 error).
+
 ### 319. Pengendalian & Pembatasan Frekuensi Popup Promo KostManager di Dashboard Mitra (`MitraDashboard.tsx`) (September 2026)
 - **Permintaan & Masalah**:
   - Pop-up promosi KostManager (*"Gak Punya Waktu Kelola Kost? Upgrade ke KostManager!"*) muncul secara agresif dan terus-menerus setiap kali mitra membuka Beranda atau mengklik tab Kelola Kost.

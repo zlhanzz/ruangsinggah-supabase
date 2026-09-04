@@ -1,78 +1,59 @@
-# Rencana Implementasi: Pengendalian & Pembatasan Frekuensi Popup KostManager di Dashboard Mitra
+# IMPLEMENTATION PLAN - Pengaktifan & Penyempurnaan Alur Step-by-Step Pemasaran Kost bagi Mitra Baru di Dashboard Mitra
 
 ## 1. Analisis Masalah & Kebutuhan
-- **Masalah dari Keluhan Pengguna**:
-  1. **Tampil di Tahap yang Salah**: Pop-up promosi program KostManager saat ini muncul bahkan saat mitra masih dalam tahap awal (verifikasi identitas). Hal ini membingungkan dan mengganggu fokus mitra yang sedang memverifikasi akunnya.
-  2. **Muncul Berulang Setiap Saat**: Setiap kali mitra mengklik menu "Beranda" atau "Kelola Kost", pop-up promosi tersebut selalu muncul kembali tanpa henti karena `useEffect` memicunya tanpa pengecekan riwayat penutupan (*dismiss history*).
-- **Kebutuhan Pengguna**:
-  - Pop-up promosi KostManager **HANYA boleh tampil ketika mitra sudah lolos verifikasi identitas (`isVerified === true`) dan masuk ke Flow 2 (upload/kelola properti kost)**.
-  - Jika mitra masih dalam tahap verifikasi identitas (`!isVerified`), pop-up **DILARANG MUNCUL**.
-  - Pop-up **CUKUP MUNCUL SESEKALI** (dibatasi maksimal 1x per 24 jam atau 1x per sesi) dan **TIDAK BOLEH muncul terus-menerus setiap kali klik menu atau ganti tab**.
+- **Keluhan Pengguna**:
+  Alur *step-by-step* untuk mitra baru belum / jarang ditampilkan di Dashboard Mitra, padahal panduan alur ini sangat penting agar pemilik kost baru memahami urutan proses pemasaran properti mereka di RuangSinggah.
+- **Akar Masalah Teknis**:
+  1. **Bug Penyimpanan Global `localStorage` (`mitraTourCompleted`)**:
+     - State `tourCompleted` sebelumnya menggunakan key tunggal non-user `localStorage.getItem('mitraTourCompleted')`.
+     - Jika pernah diklik *dismiss/close* satu kali pada browser tersebut di masa lalu, nilai `'mitraTourCompleted'` menjadi `'true'` permanen. Akibatnya, setiap akun mitra baru yang login berikutnya secara otomatis kehilangan alur panduan tersebut (`tourCompleted = true`).
+  2. **Ketiadaan Fitur Buka Ulang / Toggle Panduan**:
+     - Ketika alur panduan ditutup, tidak ada tombol atau banner elegan untuk memanggil/menampilkan kembali panduan alur step-by-step tersebut.
+  3. **Kejelasan Edukasi Alur Pemasaran**:
+     - Mitra baru memerlukan kejelasan alur 4 tahap:
+       1. **Tahap 1: Verifikasi Identitas (KTP)** $\rightarrow$ Membuka izin publikasi dan menjamin keamanan properti.
+       2. **Tahap 2: Upload & Kelola Kost (Listing)** $\rightarrow$ Input informasi kamar, harga, fasilitas, & foto terbaik.
+       3. **Tahap 3: Tampil di Marketplace & Promosi** $\rightarrow$ Kost tayang di katalog pencarian, siap dipantau dengan statistik Kunjungan & CTR.
+       4. **Tahap 4: Terima Booking, Chat Calon Penyewa, & Penarikan Dana** $\rightarrow$ Menerima pengajuan sewa, tanya jawab via chat, dan pencairan penghasilan sewa ke rekening bank.
 
 ---
 
-## 2. Dampak Perubahan File
-
-| File | Tindakan & Penjelasan Perubahan |
-| :--- | :--- |
-| `functions/public/pages/MitraDashboard.tsx` | 1. Menambahkan validasi syarat verifikasi (`isVerified`) sebelum pop-up diizinkan muncul.<br>2. Menerapkan kontrol frekuensi kemunculan via `localStorage` (timestamp interval 24 jam / sesi) pada `useEffect` inisialisasi pop-up.<br>3. Menyimpan status dismiss saat tombol 'X', 'Nanti Saja', 'Esc', atau 'Pelajari Sekarang' ditekan agar tidak muncul kembali berulang kali saat bernavigasi. |
+## 2. Dampak Perubahan
+File yang akan disentuh:
+- [`functions/public/pages/MitraDashboard.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/MitraDashboard.tsx):
+  - Memperbaiki inisialisasi state `tourCompleted` agar berbasis `uid` (`mitra_tour_completed_${uid}`).
+  - Menambahkan state *toggle expand/collapse* (`isGuideExpanded`) sehingga panduan dapat dibuka dan ditutup dengan fleksibel kapan saja.
+  - Mempercantik card & timeline panduan alur step-by-step dengan kartu interaktif, progress bar, indikator status dinamis, dan tombol aksi (*Call to Action*) yang relevan untuk setiap tahapan.
+  - Menambahkan banner/tombol akses cepat buka panduan pada halaman Beranda (Overview) dan Sidebar navigasi.
+- [`functions/PROGRESS.md`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/PROGRESS.md):
+  - Mencatat riwayat implementasi Progres 320.
+- `WALKTHROUGH.md`:
+  - Menerbitkan panduan pengujian dan detail perubahan bagi User.
 
 ---
 
-## 3. Langkah-Langkah Eksekusi
-
-### Langkah 1: Tambahkan Pemeriksaan Syarat & Frekuensi di `MitraDashboard.tsx`
-- Perbarui `useEffect` pemicu pop-up promosi:
-  ```tsx
-  useEffect(() => {
-      getMitraPromoPopupSetting().then(setting => {
-          setPromoPopupSetting(setting);
-          if (!setting?.is_active) return;
-
-          // Syarat 1: Jangan tampilkan jika masih tahap verifikasi identitas
-          if (!isVerified) return;
-
-          // Syarat 2: Hanya izinkan jika masuk ke Flow 2 (Kelola Properti / Upload Kost)
-          if (tab !== 'properties') return;
-
-          // Syarat 3: Cek frekuensi kemunculan (cukup sesekali, max 1x per 24 jam)
-          const storageKey = `km_promo_popup_last_shown_${uid || 'guest'}`;
-          const lastShown = localStorage.getItem(storageKey);
-          const now = Date.now();
-          const COOLDOWN_MS = 24 * 60 * 60 * 1000; // 24 Jam
-
-          if (!lastShown || (now - Number(lastShown)) > COOLDOWN_MS) {
-              setShowPromoPopup(true);
-              localStorage.setItem(storageKey, String(now));
-          }
-      });
-  }, [tab, isVerified, uid]);
-  ```
-
-### Langkah 2: Buat Handler Penutupan yang Konsisten
-- Buat fungsi penutup pop-up:
-  ```tsx
-  const handleClosePromoPopup = () => {
-      setShowPromoPopup(false);
-      if (uid) {
-          localStorage.setItem(`km_promo_popup_last_shown_${uid}`, String(Date.now()));
-      }
-  };
-  ```
-- Terapkan ke tombol `[X]`, tombol `[Nanti Saja]`, event tombol `Esc`, dan navigasi `handlePromoNavigate`.
-
-### Langkah 3: Build & Validasi
-- Jalankan `cmd /c npm run build` untuk memverifikasi 0 error kompilasi dan sinkronisasi ke folder `dist` dan `public`.
-- Commit ke `bukan-productions`, merge ke `main`, dan push ke GitHub `origin main`.
+## 3. Langkah-Langkah Eksekusi (Fase 2 - Setelah Approval)
+1. **Perbaikan Persistensi State Storage Berbasis Akun Mitra**:
+   - Mengubah pembacaan dan penyimpanan status penyelesaian panduan ke key `mitra_tour_completed_${uid}`.
+   - Menyediakan fungsi `toggleGuide()` untuk membuka/menutup panduan tanpa menghapus riwayat progres.
+2. **Penyempurnaan Komponen UI Alur Step-by-Step**:
+   - Menyajikan 4 langkah pemasaran kost dengan visual yang atraktif, ringkas, responsif (mobile & desktop), dan dilengkapi ikon SVG `lucide-react`.
+   - Mengintegrasikan deteksi progres riil:
+     - **Step 1**: Status verifikasi KTP mitra (`isVerified`).
+     - **Step 2**: Jumlah properti terdaftar (`properties.length > 0`).
+     - **Step 3**: Tampilan listing / views aktif (`hasViewedListing || stats.totalViews > 0`).
+     - **Step 4**: Kesiapan transaksi & rekening bank (`properties.length > 0`).
+3. **Banner Widget Buka Panduan**:
+   - Jika panduan diminimalkan/ditutup oleh mitra yang sudah mahir, tampilkan banner ringkas di Beranda: *"📘 Panduan Alur Pemasaran Kost [Buka Panduan]"*.
+4. **Verifikasi & Kompilasi**:
+   - Menjalankan `npm run build` untuk memastikan 0 error kompilasi.
+   - Mencatat ke `functions/PROGRESS.md` dan menerbitkan `WALKTHROUGH.md`.
+   - Melakukan git commit dan push ke branch `bukan-productions` dan `main`.
 
 ---
 
 ## 4. Rencana Verifikasi
-
-1. **Uji Tahap Verifikasi Identitas (Belum Verified)**:
-   - Login dengan akun mitra baru yang belum terverifikasi $\rightarrow$ Buka Beranda/Kelola Kost $\rightarrow$ **Hasil**: Pop-up KostManager **TIDAK MUNCUL sama sekali**.
-2. **Uji Flow 2 (Sudah Verified & Buka Kelola Kost)**:
-   - Login dengan akun mitra yang sudah terverifikasi $\rightarrow$ Buka tab Kelola Kost $\rightarrow$ **Hasil**: Pop-up muncul 1 kali.
-3. **Uji Anti-Spam Navigasi**:
-   - Tutup pop-up $\rightarrow$ Klik menu Beranda $\rightarrow$ Klik menu Kelola Kost $\rightarrow$ Klik menu Chat $\rightarrow$ Kembali ke Beranda.
-   - **Hasil**: Pop-up **TIDAK MUNCUL LAGI**, alur navigasi berjalan tenang dan lancar.
+- [ ] Buka Dashboard Mitra dengan akun mitra baru (belum verified / 0 properti) $\rightarrow$ Alur panduan 4 langkah langsung tampil jelas dan interaktif.
+- [ ] Klik setiap langkah kartu panduan $\rightarrow$ Mengarahkan langsung ke halaman aksi terkait (Verifikasi KTP, Upload Kost, Preview POV Marketplace, Pesanan/Dompet).
+- [ ] Tutup/minimalkan panduan $\rightarrow$ Banner ringkas tetap tersedia untuk membuka kembali panduan kapan saja.
+- [ ] Build project dengan `npm run build` $\rightarrow$ Pastikan kelulusan 100% tanpa error.
