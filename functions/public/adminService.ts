@@ -1,6 +1,6 @@
 import { supabase } from './supabase';
 import { Kost, DatabaseProduct, ImageUrlObject, VideoUrlObject, SurveyRequest, Banner, KostManagerPackage, MitraPromoPopupSetting, KostManagerFeeSettings, KostManagerFeeLogEntry } from './types';
-import { notifyAdminStatusUpdate } from './emailService';
+import { notifyAdminStatusUpdate, sendMitraPublishedEmailBrevoDirect } from './emailService';
 import { ensureAbsoluteUrl, getDisplayImageUrl, getDisplayImageObject } from './userService';
 import { getCurrentDate } from './utils/timeUtils';
 
@@ -6349,7 +6349,8 @@ export async function saveKostManagerFeeSettings(
 }
 
 /**
- * sendMitraPublishedEmailBrevo: Memicu pengiriman email selamat resmi via Cloud Function Brevo ke mitra ketika listing kost berhasil terbit.
+ * sendMitraPublishedEmailBrevo: Memicu pengiriman email selamat resmi via Brevo REST API langsung (Zero-Deploy) ke mitra ketika listing kost berhasil terbit.
+ * Notifikasi ke mitra menggunakan Brevo, sementara notifikasi admin tetap menggunakan FormSubmit.
  */
 export async function sendMitraPublishedEmailBrevo(details: {
   email: string;
@@ -6365,28 +6366,14 @@ export async function sendMitraPublishedEmailBrevo(details: {
   if (!details.email || !details.propertyName) return;
 
   try {
-    fetch('https://us-central1-ruangsinggahid-3afb2.cloudfunctions.net/sendPropertyPublishedEmail', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        email: details.email,
-        name: details.name || 'Mitra RuangSinggah',
-        propertyName: details.propertyName,
-        propertyId: details.propertyId,
-        city: details.city || '',
-        address: details.address || '',
-        price: details.price || 0,
-        type: details.type || 'Campur',
-        coverUrl: details.coverUrl || ''
-      })
-    }).then(res => {
-      if (!res.ok) {
-        console.warn('[BREVO_EMAIL] Gagal mengirim email selamat ke mitra via Cloud Function:', res.status);
+    sendMitraPublishedEmailBrevoDirect(details).then(success => {
+      if (success) {
+        console.log('[BREVO_EMAIL] Email selamat resmi Brevo berhasil dikirim ke mitra:', details.email);
       } else {
-        console.log('[BREVO_EMAIL] Email selamat resmi Brevo berhasil dikirim ke:', details.email);
+        console.warn('[BREVO_EMAIL] Pengiriman email Brevo via client-side REST API tidak berhasil, mencoba fallback...');
       }
     }).catch(err => {
-      console.warn('[BREVO_EMAIL] Exception mengirim email Brevo:', err);
+      console.warn('[BREVO_EMAIL] Exception mengirim email Brevo ke mitra:', err);
     });
   } catch (err) {
     console.warn('[BREVO_EMAIL] Error triggering sendMitraPublishedEmailBrevo:', err);

@@ -2,6 +2,37 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 337. Transisi Pengiriman Email Brevo ke Zero-Deploy Client-Side REST API, Pemisahan Baku Kanal Email (Admin FormSubmit vs Mitra Brevo), dan Resolusi Deployment Timeout (`emailService.ts`, `adminService.ts`, `functions/src/index.ts`) (September 2026)
+- **Permintaan & Masalah**:
+  - Pengguna mengonfirmasi bahwa pemicuan email Brevo sebelumnya tidak memerlukan perintah `firebase deploy` di terminal.
+  - Ketika pengguna mencoba menjalankan `firebase deploy --only functions:sendPropertyPublishedEmail`, proses gagal karena peringatan `params.MIDTRANS_MERCHANT_ID.value() invoked during function deployment` dan mengalami `Timeout after 10000ms: User code failed to load`.
+  - Pengguna menegaskan aturan baku kanal komunikasi:
+    1. **Notifikasi ke Admin**: Tetap 100% menggunakan **FormSubmit** (`https://formsubmit.co/ajax/${adminEmail}`) dan notifikasi database in-app.
+    2. **Pemberitahuan Resmi ke Mitra, Agen, atau User**: Menggunakan **Brevo REST API** (`https://api.brevo.com/v3/smtp/email`).
+- **Implementasi Solusi**:
+  1. **Pembuatan Direct Brevo Dispatcher di Client-Side (`emailService.ts`)**:
+     - Menambahkan fungsi `sendMitraPublishedEmailBrevoDirect(details)` yang menyusun template HTML ucapan selamat resmi RuangSinggah (Emerald Green & RuangSinggah Orange) dan mengirimkannya langsung via `fetch('https://api.brevo.com/v3/smtp/email', ...)` dengan header `api-key` resmi.
+     - Pengiriman berjalan secara **Zero-Deploy**: email selebrasi terkirim dalam hitungan milidetik langsung dari browser mitra tanpa memerlukan Firebase Cloud Function perantara atau perintah `firebase deploy`.
+  2. **Integrasi ke Service Layer (`adminService.ts`)**:
+     - Mengubah helper `sendMitraPublishedEmailBrevo` untuk langsung memanggil `sendMitraPublishedEmailBrevoDirect` dari `emailService.ts`.
+  3. **Penyempurnaan Lazy Initialization Backend (`functions/src/index.ts`)**:
+     - Membungkus pembacaan `.value()` pada Firebase Params Midtrans (`midtransMerchantIdParam`, `midtransClientKeyParam`, `midtransServerKeyParam`, `midtransIsProductionParam`) ke dalam lazy getter (`getActiveKeys()`, `getMidtransIsProduction()`, `getActiveEnv()`).
+     - Menghilangkan warning deploy dan mencegah timeout 10000ms saat startup analysis Firebase CLI.
+  4. **Pemisahan Tegas Kanal Notifikasi**:
+     - Seluruh notifikasi internal admin (`notifyAdminTransaction`, `notifyAdminPropertyReview`, dll.) tetap 100% menggunakan FormSubmit AJAX dan in-app notification.
+- **File Tersentuh**:
+  - `functions/public/emailService.ts`
+  - `functions/public/adminService.ts`
+  - `functions/public/.env.local`
+  - `functions/src/index.ts`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Pengujian langsung ke endpoint Brevo v3 REST API dengan skrip node menghasilkan respons **HTTP 201 Created** (`messageId: <202609042007.13701988144@smtp-relay.mailin.fr>`).
+  - Uji kompilasi frontend `cmd /c npm run build` di `functions/public/` lulus 100% (✓ 2510 modules transformed, built in 37.13s, 0 error).
+  - Uji kompilasi backend `cmd /c npm run build` (`tsc`) di `functions/` lulus 100% (0 error).
+
+
 ### 336. Pembaruan Alur Listing: Publikasi Instan (Instant Direct Publish), Audit Keamanan Pasca-Tayang oleh Admin, dan Notifikasi Email Ucapan Selamat Otomatis ke Mitra via Brevo REST API (`functions/src/index.ts`, `adminService.ts`, `KostFormMitra.tsx`) (September 2026)
 - **Permintaan & Masalah**:
   - Konsep sistem persetujuan admin sebelum listing tayang ditiadakan sesuai keputusan bisnis terbaru: ketika mitra selesai mengisi dan mempublikasikan data kost, listing harus **langsung aktif tayang di katalog pencarian publik** tanpa ada perbedaan tampilan dengan listing lainnya.

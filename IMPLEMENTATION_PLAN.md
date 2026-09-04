@@ -1,103 +1,82 @@
-# Rencana Implementasi: Publikasi Instan Listing Kost & Notifikasi Email Ucapan Selamat ke Mitra via Brevo
+# Rencana Implementasi: Zero-Deploy Pengiriman Email Brevo ke Mitra & Pemisahan Kanal Email (Admin vs Mitra/User)
 
-Dokumen ini adalah **Implementation Plan (Fase 1)** untuk merevisi alur publikasi listing properti sesuai arahan terbaru dari pengguna:
-1. **Tidak Ada Lagi Sistem Hambatan Persetujuan Admin (Instant Direct Publish)**: Ketika mitra mengisi data kost, listing langsung berstatus `published` dan langsung tayang di katalog pencarian publik untuk calon penyewa, dengan tampilan yang normal dan sama persis dengan listing lainnya.
-2. **Fungsi Peninjauan Admin Menjadi Audit Pasca-Tayang (Post-Publish Quality & Safety Audit)**: Listing baru tetap tercatat dalam antrean peninjauan admin (`is_verified: false`) untuk memastikan keaslian data dan mendeteksi apakah ada indikasi kecurangan/penipuan yang memerlukan tindakan pembekuan (*suspend/ban*). Jika admin melakukan ACC, artinya listing dinyatakan lolos verifikasi resmi tanpa ada kecurigaan.
-3. **Email Ucapan Selamat Resmi dari RuangSinggah via Brevo**: Begitu mitra mempublikasikan kost miliknya, sistem otomatis mengirimkan email resmi ucapan selamat ke email mitra melalui layanan **Brevo REST API**.
+Dokumen ini adalah **Implementation Plan (Fase 1)** yang telah diperbarui dengan arahan baku dari pengguna:
+1. **Kanal Notifikasi Admin**: Tetap **100% menggunakan FormSubmit** (`https://formsubmit.co/ajax/${email}`) dan in-app notification. Tidak dialihkan ke Brevo.
+2. **Kanal Mitra, Agen, & User**: Menggunakan **Brevo REST API** (`https://api.brevo.com/v3/smtp/email`) untuk komunikasi resmi berdesain premium (seperti ucapan selamat listing terbit, invoice, dll.).
+3. **Mekanisme Zero-Deploy Brevo**: Pemicuan email ucapan selamat mitra berjalan langsung dari front-end (`emailService.ts` & `adminService.ts`) tanpa membutuhkan perintah `firebase deploy`.
+4. **Pencegahan Timeout Backend**: Merapikan inisialisasi `.value()` di `functions/src/index.ts` agar modul backend bersih dan tidak mengalami timeout 10000ms.
 
 ---
 
-## 1. Analisis Alur & Kebutuhan
+## 1. Analisis & Pemisahan Arsitektur Kanal Email
 
-### A. Alur Publikasi Langsung (Instant Publish)
-- **Sebelumnya**: Listing baru disimpan dengan `status: 'draft'` dan `is_verified: false`. Calon penyewa tidak dapat melihat listing di katalog publik hingga admin menekan tombol publikasikan.
-- **Pembaruan**:
-  - Listing baru disimpan dengan `status: 'published'` dan `is_verified: false`.
-  - Properti langsung dapat dicari dan dilihat oleh calon penyewa di katalog (`/listings`, `/kost/:id`).
-  - Tidak ada badge peringatan "SEDANG DITINJAU" yang ditampilkan di sisi publik (calon penyewa melihat listing biasa yang aktif dan siap disewa).
+| Jenis Notifikasi | Penerima Sasaran | Layanan Pengiriman | Lokasi Implementasi | Status |
+| :--- | :--- | :--- | :--- | :--- |
+| **Notifikasi Transaksi / Aduan / Pendaftaran** | **Admin RuangSinggah** | **FormSubmit** (`https://formsubmit.co/ajax/${adminEmail}`) | `emailService.ts` (`notifyAdminTransaction`, `notifyAdminPropertyReview`) | **Tetap & Dipertahankan** |
+| **Ucapan Selamat Listing Terbit** | **Mitra Pemilik Kost** | **Brevo REST API** (`https://api.brevo.com/v3/smtp/email`) | `emailService.ts` (`sendMitraPublishedEmailBrevoDirect`) | **Baru (Zero-Deploy)** |
+| **Notifikasi Akun & Transaksi Pengguna** | **User / Mitra / Agen** | **Brevo REST API** / Email Template | `emailService.ts` & helper | **Sesuai Standar** |
 
-### B. Audit Pasca-Tayang di Sisi Admin
-- Admin di Pusat Moderasi Listing (`PropertyManagement.tsx`) tetap dapat melihat daftar properti yang belum diverifikasi (`is_verified === false`).
-- Jika data kost sesuai dan tidak ada indikasi penipuan, admin menekan tombol Verifikasi / ACC (`is_verified: true`).
-- Jika ditemukan pelanggaran berat, penipuan, atau indikasi mencurigakan, admin dapat membekukan listing (`status: 'suspended'`).
+### A. Konfirmasi Aturan Pengguna
+- **Notifikasi Admin**: Setiap kali ada pengajuan listing baru atau pembaruan kost yang masuk ke tahap peninjauan admin, sistem mengirimkan email ke admin via **FormSubmit**, bukan Brevo.
+- **Pemberitahuan Mitra**: Ketika kost berhasil diterbitkan dan tayang, email selebrasi ucapan selamat dikirim ke email **Mitra** menggunakan **Brevo**.
 
-### C. Email Ucapan Selamat Otomatis via Brevo
-- Dikirimkan segera setelah mitra berhasil mempublikasikan kost (baik kost baru maupun setelah pembaruan data).
-- **Pengirim Resmi**: `RuangSinggah.id <system@ruangsinggah.id>` via Brevo REST API (`https://api.brevo.com/v3/smtp/email`).
-- **Subjek**: `🎉 Selamat! Listing Kost "${propertyName}" Berhasil Dipublikasikan di RuangSinggah.id`
-- **Template HTML**:
-  - Banner Selebrasi Hijau Zamrud & Oranye RuangSinggah yang elegan.
-  - Salam hangat personal kepada mitra.
-  - Konfirmasi bahwa kost sudah **Resmi Aktif & Tayang** di katalog RuangSinggah.
-  - Rincian Properti: Nama Kost, Alamat/Kota, Harga Mulai, Tipe Kost.
-  - Tombol Aksi Utama: **"LIHAT LISTING KOST ANDA"** (`https://ruangsinggah.id/kost/${propertyId}`) dan **"BUKA DASHBOARD MITRA"** (`https://ruangsinggah.id/dashboard-mitra/properties`).
-  - Catatan Integritas: Keterangan bahwa tim RuangSinggah melakukan peninjauan berkala untuk memastikan keamanan dan kenyamanan komunitas sewa kost.
+### B. Solusi Error Timeout `firebase deploy` (Zero-Deploy)
+- Pengguna tidak perlu menjalankan `firebase deploy` lagi di terminal.
+- Fungsi `sendMitraPublishedEmailBrevoDirect` di front-end mengirimkan HTTP POST langsung ke `https://api.brevo.com/v3/smtp/email` dengan API Key resmi dan template HTML selebrasi.
+- Di sisi backend `functions/src/index.ts`, pemanggilan parameter `.value()` pada global scope diubah menjadi lazy getter sehingga modul tidak lagi memicu warning timeout 10000ms.
 
 ---
 
 ## 2. Dampak Perubahan (Files Touched)
 
-1. **`functions/src/index.ts` (Backend Cloud Functions)**:
-   - Menambahkan Cloud Function `sendPropertyPublishedEmail` yang memproses pengiriman email ucapan selamat resmi ke mitra via Brevo REST API menggunakan template HTML premium.
-2. **`functions/public/adminService.ts` (Core Property Service)**:
-   - Menyesuaikan `addPropertyWithMedia`: mengizinkan properti baru dari mitra langsung berstatus `status: 'published'` (dengan `is_verified: false`).
-   - Menyesuaikan `updatePropertyWithMedia`: menjaga status tetap `published` (kecuali jika sedang berstatus `suspended` oleh admin).
-   - Menambahkan fungsi helper `sendMitraPublishedEmailBrevo` untuk memanggil endpoint Cloud Function Brevo secara asinkron (*non-blocking*).
-3. **`functions/public/components/KostFormMitra.tsx` (Formulir Mitra)**:
-   - Mengubah status saat `addPropertyWithMedia` menjadi `status: 'published'`.
-   - Mengganti teks alert sukses: *"Selamat! Listing kost Anda berhasil dipublikasikan dan sudah langsung tayang di katalog pencarian RuangSinggah.id!"*.
-   - Memicu pengiriman email Brevo ucapan selamat ke mitra seketika setelah listing tersimpan.
-4. **`functions/PROGRESS.md`**:
-   - Mencatat penyesuaian alur Instant Publish dan integrasi email selamat Brevo pada entri **#336**.
-5. **`WALKTHROUGH.md`**:
-   - Dokumentasi alur baru, panduan deploy function, dan panduan pengujian pengguna.
+1. **`functions/public/emailService.ts`**:
+   - Menjaga keutuhan fungsi FormSubmit untuk admin (`notifyAdminTransaction`, `notifyAdminPropertyReview`, dll.).
+   - Menambahkan fungsi `sendMitraPublishedEmailBrevoDirect`:
+     - Khusus dikirim ke email **Mitra**.
+     - Template selebrasi RuangSinggah warna zamrud-oranye.
+     - Direct HTTP fetch ke Brevo REST API (Zero-Deploy, non-blocking).
+
+2. **`functions/public/adminService.ts`**:
+   - Memperbarui `sendMitraPublishedEmailBrevo` agar memanggil `sendMitraPublishedEmailBrevoDirect` dari `emailService.ts`.
+
+3. **`functions/public/.env.local`**:
+   - Memastikan `VITE_BREVO_API_KEY` terkonfigurasi untuk front-end.
+
+4. **`functions/src/index.ts`**:
+   - Mengubah pembacaan parameter Midtrans `.value()` di top-level menjadi lazy evaluation di dalam fungsi saat runtime, sehingga aman dari deployment timeout.
+
+5. **`functions/PROGRESS.md` & `WALKTHROUGH.md`**:
+   - Mencatat penegasan aturan kanal email (Admin = FormSubmit, Mitra/User = Brevo) dan panduan Zero-Deploy.
 
 ---
 
 ## 3. Langkah-Langkah Eksekusi (Fase 2 - Setelah di-ACC)
 
-### Tahap 1: Backend Cloud Function Brevo (`functions/src/index.ts`)
-- Membuat endpoint `sendPropertyPublishedEmail`:
-  - Menerima payload: `{ email, name, propertyName, propertyId, city, address, price, type, coverUrl }`.
-  - Mengambil `brevoApiKey = brevoApiKeyParam.value()`.
-  - Menyusun template HTML responsif dengan desain modern RuangSinggah.
-  - Mengirimkan POST ke `https://api.brevo.com/v3/smtp/email`.
+### Tahap 1: Pembuatan `sendMitraPublishedEmailBrevoDirect` di `emailService.ts`
+- Implementasikan fungsi pengiriman email Brevo khusus mitra dengan template HTML responsif.
+- Pastikan tidak menyentuh atau mengubah fungsi notifikasi admin yang menggunakan FormSubmit.
 
-### Tahap 2: Penyesuaian Service Listing & Trigger Frontend (`functions/public/adminService.ts`)
-- Di `addPropertyWithMedia`:
-  - Mengatur `const targetStatus = kostData.status || 'published';`.
-  - Memastikan properti langsung tersimpan sebagai `published`.
-- Di `sendMitraPublishedEmailBrevo`:
-  - Mengirimkan payload ke endpoint `sendPropertyPublishedEmail` secara non-blocking.
+### Tahap 2: Sambungkan `adminService.ts` ke Direct Brevo Dispatcher
+- Ubah `sendMitraPublishedEmailBrevo` untuk langsung memanggil `sendMitraPublishedEmailBrevoDirect`.
 
-### Tahap 3: Pembaruan Formulir Mitra (`functions/public/components/KostFormMitra.tsx`)
-- Pada saat submit pendaftaran kost baru:
-  - Panggil `addPropertyWithMedia({ ...data, status: 'published', isVerified: false }, pendingUploadPayload, [])`.
-  - Pemicuan otomatis `sendMitraPublishedEmailBrevo` ke email mitra pemilik.
-  - Notifikasi admin peninjauan tetap berjalan di background agar admin dapat melakukan audit mutu/keamanan.
+### Tahap 3: Perapian Lazy Params di `functions/src/index.ts`
+- Buat helper `getActiveKeys()` dan `getMidtransIsProduction()` untuk membungkus `.value()` agar tidak dievaluasi saat module import.
 
-### Tahap 4: Uji Kompilasi & Build
-- Menjalankan `cmd /c npm run build` di `functions/public/` (memastikan frontend lulus kompilasi Vite 0 error).
-- Menjalankan `cmd /c npm run build` di `functions/` (memastikan backend TypeScript `tsc` 0 error).
+### Tahap 4: Verifikasi Kompilasi & Build
+- `npm run build` di `functions/public/` (memastikan 0 error).
+- `npm run build` di `functions/` (memastikan backend TypeScript 0 error).
 
 ### Tahap 5: Dokumentasi & Git Push
-- Memperbarui `functions/PROGRESS.md` dan `WALKTHROUGH.md`.
-- Melakukan git commit dan push ke branch `bukan-productions`.
+- Perbarui `functions/PROGRESS.md` dan `WALKTHROUGH.md`.
+- Commit dan push ke branch `bukan-productions`.
 
 ---
 
 ## 4. Rencana Verifikasi
-
-1. **Uji Kompilasi**:
-   - Build frontend dan backend lulus 100% dengan 0 error.
-2. **Verifikasi Publikasi Instan**:
-   - Saat mitra mendaftarkan kost baru, status langsung tersimpan sebagai `published`.
-   - Listing langsung dapat ditemukan di halaman katalog publik (`/listings`) dan detail kost (`/kost/:id`) tanpa ada blokir "Tahap Peninjauan Admin".
-3. **Verifikasi Pengiriman Email Brevo**:
-   - Email ucapan selamat resmi dari RuangSinggah berhasil dipicu dan dikirimkan ke alamat email mitra yang terdaftar.
-
----
-
-> [!IMPORTANT]
-> **Menunggu Persetujuan (Approval) User**:  
-> Sesuai protokol baku siklus kerja 2-fase repositori ini, kami tidak akan memodifikasi file kode sampai dokumen perencanaan ini disetujui (ACC / Proceed) oleh Anda.
+1. **Verifikasi Jalur Email**:
+   - Admin menerima notifikasi submission via **FormSubmit**.
+   - Mitra menerima ucapan selamat listing terbit via **Brevo REST API**.
+2. **Verifikasi Zero-Deploy**:
+   - Pengguna tidak perlu menjalankan `firebase deploy` di terminal; email selamat otomatis meluncur saat kost dipublikasikan dari UI.
+3. **Verifikasi Build**:
+   - `npm run build` front-end dan backend sukses tanpa peringatan fatal ataupun error.

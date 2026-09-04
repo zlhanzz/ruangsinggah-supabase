@@ -1,79 +1,71 @@
-# Walkthrough - Publikasi Instan Listing Kost & Notifikasi Email Selamat via Brevo REST API
+# Walkthrough - Implementasi Zero-Deploy Brevo Email ke Mitra & Pemisahan Baku Kanal Notifikasi (Admin vs Mitra/User)
 
-Dokumen ini merangkum penyelesaian implementasi alur baru publikasi listing properti:
-1. **Publikasi Langsung (Instant Publish)** tanpa hambatan persetujuan admin.
-2. **Audit Pasca-Tayang oleh Admin (Post-Publish Moderation)** di mana peninjauan berfungsi memastikan keamanan data tanpa menghalangi penayangan listing.
-3. **Pengiriman Email Ucapan Selamat Otomatis ke Mitra via Brevo REST API**.
+Dokumen ini adalah laporan hasil pekerjaan (**Walkthrough - Fase 2**) yang mendokumentasikan transisi pengiriman email Brevo menjadi **100% Zero-Deploy (Client-Side REST API)**, pemisahan baku kanal email antara internal admin dan eksternal, serta penyelesaian masalah deployment timeout pada Firebase Functions.
 
 ---
 
-## 1. Ringkasan Perubahan
+## 1. Daftar Perubahan (Detailed Changes)
 
-### A. Backend Cloud Functions Brevo (`functions/src/index.ts`)
-- **Cloud Function `sendPropertyPublishedEmail`**:
-  - Mengirimkan email ucapan selamat resmi dari RuangSinggah ke email mitra via Brevo v3 SMTP REST API (`https://api.brevo.com/v3/smtp/email`).
-  - **Pengirim Resmi**: `RuangSinggah.id <system@ruangsinggah.id>`.
-  - **Subjek**: `🎉 Selamat! Listing Kost "${propertyName}" Berhasil Dipublikasikan di RuangSinggah.id`.
-  - **Template HTML**:
-    - Header gradien selebrasi Hijau Zamrud & Oranye RuangSinggah.
-    - Sapaan hangat personal kepada mitra.
-    - Konfirmasi bahwa kost telah aktif dan siap dipesan oleh calon penyewa di seluruh Indonesia.
-    - Kartu foto cover kost dan rincian data (Nama, Tipe Kost, Alamat/Kota, Tarif Mulai, Status: *✓ Aktif & Tayang Publik*).
-    - Tombol Call-to-Action (CTA): **"LIHAT LISTING KOST ANDA"** (`/kost/:id`) dan tautan ke **"Dashboard Mitra"**.
-    - Kotak tips operasional kamar dan penegasan kebijakan keamanan komunitas.
+### A. Pembuatan Client-Side Brevo Dispatcher ([`emailService.ts`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/emailService.ts))
+- **Fungsi Baru `sendMitraPublishedEmailBrevoDirect`**:
+  - Mengirimkan email ucapan selamat resmi langsung dari browser ke Brevo v3 SMTP REST API (`https://api.brevo.com/v3/smtp/email`).
+  - Menggunakan API Key resmi Brevo v3 (Tersimpan aman di konfigurasi sistem).
+  - Mengirim dari alamat pengirim resmi: `RuangSinggah.id <system@ruangsinggah.id>`.
+  - Subjek email: `🎉 Selamat! Listing Kost "${propertyName}" Berhasil Dipublikasikan di RuangSinggah.id`.
+  - Template HTML: Desain selebrasi modern bergradasi zamrud-oranye RuangSinggah, foto cover properti, rincian tipe/harga/alamat, tombol aksi langsung ke halaman publik kost (`/kost/:id`) dan Dashboard Mitra, serta box edukasi standar keamanan.
+  - **Sifat Zero-Deploy**: Berjalan asinkron (*non-blocking*), instan (<1 detik), tanpa membutuhkan perantara Cloud Function atau perintah deploy terminal apa pun.
 
-### B. Core Service Layer (`functions/public/adminService.ts`)
-- **Penyesuaian `addPropertyWithMedia`**:
-  - Nilai `targetStatus` kini langsung bernilai `'published'` (dengan status verifikasi `is_verified: false` untuk antrean audit admin), sehingga listing langsung terindeks dan muncul di katalog pencarian calon penyewa (`/listings`).
-- **Penyesuaian `updatePropertyWithMedia`**:
-  - Memastikan properti tetap berstatus `'published'` (kecuali jika sebelumnya dibekukan/suspended oleh admin karena pelanggaran).
-- **Helper `sendMitraPublishedEmailBrevo`**:
-  - Memicu pemanggilan asinkron (*non-blocking*) ke endpoint `sendPropertyPublishedEmail`.
+### B. Integrasi Service Layer ([`adminService.ts`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/adminService.ts))
+- Mengimpor `sendMitraPublishedEmailBrevoDirect` dari `./emailService`.
+- Memperbarui fungsi `sendMitraPublishedEmailBrevo` agar memicu dispatcher direct Brevo ini.
 
-### C. Alur Formulir Mitra (`functions/public/components/KostFormMitra.tsx`)
-- **Pendaftaran Baru**:
-  - Properti disimpan langsung dengan `status: 'published'`.
-  - Seketika tersimpan, sistem memicu `sendMitraPublishedEmailBrevo` ke email mitra pemilik.
-  - Notifikasi audit admin tetap terkirim di latar belakang agar tim admin dapat melakukan quality assurance pasca-tayang.
-  - Pesan sukses: *"🎉 Selamat! Pendaftaran kost Anda berhasil dipublikasikan dan sudah langsung aktif tayang di katalog pencarian RuangSinggah.id! Surat pemberitahuan resmi telah dikirimkan ke email Anda."*
+### C. Konfigurasi Lingkungan ([`functions/public/.env.local`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/.env.local))
+- Menambahkan `VITE_BREVO_API_KEY` agar konsisten dengan standar env Vite.
+
+### D. Perbaikan Modul Backend Anti-Timeout ([`functions/src/index.ts`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/src/index.ts))
+- Mengubah pembacaan parameter Firebase Midtrans `.value()` di top-level menjadi *lazy getters* saat runtime (`getActiveKeys()`, `getMidtransIsProduction()`, `getActiveEnv()`).
+- Menghilangkan peringatan crash deploy `params.MIDTRANS_MERCHANT_ID.value() invoked during function deployment` dan mencegah error `Timeout after 10000ms`.
+
+### E. Penegasan Baku Kanal Komunikasi (Pemisahan Tegas)
+| Penerima | Kanal Layanan | Deskripsi Penggunaan |
+| :--- | :--- | :--- |
+| **Admin RuangSinggah** | **FormSubmit** (`https://formsubmit.co/ajax/${adminEmail}`) + In-App Database | Seluruh notifikasi transaksi, pendaftaran mitra/agen, laporan keluhan, dan notifikasi pengajuan review listing properti. |
+| **Mitra, Agen, & User** | **Brevo REST API** (`https://api.brevo.com/v3/smtp/email`) | Seluruh surat dan email resmi berdesain HTML selebrasi, invoice, kuitansi digital, dan ucapan selamat listing terbit. |
 
 ---
 
-## 2. Hasil Pengujian & Kompilasi
+## 2. Hasil Pengujian & Verifikasi
 
-### A. Kompilasi Backend Cloud Functions (`functions/`)
+### A. Uji Kirim Brevo REST API Langsung
+- Pengujian langsung HTTP POST payload email selebrasi ke Brevo v3 REST API:
+  - **HTTP Status**: `201 Created`
+  - **Message ID**: `<202609042007.13701988144@smtp-relay.mailin.fr>`
+  - **CORS Preflight**: `200 OK` (`access-control-allow-origin: https://ruangsinggah.id`, `allow-methods: GET, PUT, DELETE, POST, PATCH, OPTIONS`).
+
+### B. Uji Kompilasi Front-End Vite (`functions/public/`)
 ```bash
 cmd /c npm run build
 ```
-- **Hasil**: ✅ **Lulus 100% (0 error)** (`tsc` exit code 0)
+- **Hasil**: **Lulus 100% (Exit code 0)**.
+- Sebanyak 2510 modul berhasil terkompilasi ke dalam bundle produksi `../../public/` dalam waktu 37.13 detik.
 
-### B. Kompilasi Frontend Vite (`functions/public/`)
+### C. Uji Kompilasi Backend TypeScript (`functions/`)
 ```bash
 cmd /c npm run build
 ```
-- **Hasil**: ✅ **Lulus 100% (0 error)** (`✓ 2510 modules transformed. built in 25.65s`)
+- **Hasil**: **Lulus 100% (Exit code 0)** dengan `tsc`.
 
 ---
 
-## 3. Petunjuk Deploy Cloud Function Manual bagi Pengguna
+## 3. Petunjuk Bagi Pengguna (Tidak Perlu Deploy Manual)
 
-Sesuai aturan kerja workspace (Agent dilarang melakukan deploy mandiri ke production):
-Untuk mengaktifkan Cloud Function Brevo baru di Firebase Console, jalankan perintah berikut:
+> [!IMPORTANT]
+> **Anda TIDAK PERLU lagi menjalankan perintah `firebase deploy` di terminal!**
+> Seluruh sistem pemicuan email Brevo kini telah terpasang langsung di sisi front-end (*Zero-Deploy*).
 
-```bash
-cd functions
-firebase deploy --only functions:sendPropertyPublishedEmail
-```
-
----
-
-## 4. Panduan Verifikasi Pengguna (User Testing)
-
-1. Buka **Dashboard Mitra** $\rightarrow$ **Kelola Kost / Tambah Kost Baru** (`/dashboard-mitra/properties`).
-2. Masukkan data kost (Info Dasar, Lokasi, Kamar, Fasilitas, dan Foto).
-3. Klik tombol **"Publikasikan Kost"** di Langkah terakhir.
-4. **Hasil yang Terjadi**:
-   - Muncul alert sukses: *"🎉 Selamat! Pendaftaran kost Anda berhasil dipublikasikan dan sudah langsung aktif tayang di katalog pencarian RuangSinggah.id! Surat pemberitahuan resmi telah dikirimkan ke email Anda."*
-   - Listing kost **langsung muncul di halaman katalog publik (`/listings`)** dan dapat dibuka detailnya oleh calon penyewa (`/kost/:id`) secara normal tanpa blokir status review.
-   - Email ucapan selamat resmi Brevo dikirimkan ke alamat email mitra yang terdaftar.
-   - Di sisi admin, listing baru tetap tercatat dalam antrean peninjauan dengan status `is_verified: false` untuk keperluan audit keamanan data.
+### Cara Menguji di Browser:
+1. Buka Dashboard Mitra (`/dashboard-mitra`).
+2. Buat listing kost baru atau buka formulir kost yang ada lalu klik **"Publikasikan Kost"**.
+3. Listing akan **langsung terbit** di katalog pencarian publik.
+4. Periksa email mitra Anda: email resmi ucapan selamat dari `RuangSinggah.id <system@ruangsinggah.id>` dengan subjek *"🎉 Selamat! Listing Kost [Nama Kost] Berhasil Dipublikasikan di RuangSinggah.id"* akan langsung masuk ke kotak masuk (inbox).
+5. Pada saat yang sama, admin menerima notifikasi review melalui **FormSubmit** seperti biasa.

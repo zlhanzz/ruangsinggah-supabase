@@ -24,31 +24,37 @@ const midtransIsProductionParam = defineBoolean('MIDTRANS_IS_PRODUCTION', { defa
 const googlePrivateKeyParam = defineString('GOOGLE_PRIVATE_KEY');
 const googleClientEmailParam = defineString('GOOGLE_SERVICE_ACCOUNT_EMAIL');
 
-const activeKeys = {
+function getActiveKeys() {
+  return {
     merchant_id: midtransMerchantIdParam.value(),
     client_key: midtransClientKeyParam.value(),
     server_key: midtransServerKeyParam.value()
-};
+  };
+}
 
-const MIDTRANS_IS_PRODUCTION = midtransIsProductionParam.value();
+function getMidtransIsProduction(): boolean {
+  try {
+    return midtransIsProductionParam.value();
+  } catch {
+    return false;
+  }
+}
 
-// --- DIAGNOSTIC LOGS ---
-console.log("MIDTRANS_DIAGNOSTIC: Environment is", MIDTRANS_IS_PRODUCTION ? "PRODUCTION" : "SANDBOX");
-console.log("MIDTRANS_DIAGNOSTIC: Server Key Length:", activeKeys.server_key?.length);
-console.log("MIDTRANS_DIAGNOSTIC: Client Key Length:", activeKeys.client_key?.length);
-console.log("MIDTRANS_DIAGNOSTIC: Merchant ID:", activeKeys.merchant_id);
-// -----------------------
-const activeEnv = MIDTRANS_IS_PRODUCTION ? 'PRODUCTION' : 'SANDBOX';
+function getActiveEnv(): string {
+  return getMidtransIsProduction() ? 'PRODUCTION' : 'SANDBOX';
+}
 
 let snap: any = null;
 function getMidtransSnap() {
   if (!snap) {
+    const keys = getActiveKeys();
+    const isProd = getMidtransIsProduction();
     const midtransClient = require('midtrans-client');
     snap = new midtransClient.Snap({
-      isProduction: MIDTRANS_IS_PRODUCTION,
-      serverKey: activeKeys.server_key,
-      clientKey: activeKeys.client_key,
-      merchantId: activeKeys.merchant_id
+      isProduction: isProd,
+      serverKey: keys.server_key,
+      clientKey: keys.client_key,
+      merchantId: keys.merchant_id
     });
   }
   return snap;
@@ -57,12 +63,14 @@ function getMidtransSnap() {
 let coreApi: any = null;
 function getMidtransCoreApi() {
   if (!coreApi) {
+    const keys = getActiveKeys();
+    const isProd = getMidtransIsProduction();
     const midtransClient = require('midtrans-client');
     coreApi = new midtransClient.CoreApi({
-      isProduction: MIDTRANS_IS_PRODUCTION,
-      serverKey: activeKeys.server_key,
-      clientKey: activeKeys.client_key,
-      merchantId: activeKeys.merchant_id
+      isProduction: isProd,
+      serverKey: keys.server_key,
+      clientKey: keys.client_key,
+      merchantId: keys.merchant_id
     });
   }
   return coreApi;
@@ -131,10 +139,11 @@ const MASTER_PAYMENT_METHODS = [
  * getPaymentConfig: Returns current active gateway configuration and enabled methods to frontend.
  */
 export const getPaymentConfig = functions.https.onRequest({ cors: true }, async (req, res) => {
+  const keys = getActiveKeys();
   res.status(200).send({
     activeGateway: activeGatewayParam.value(),
-    midtransEnv: activeEnv,
-    midtransClientKey: activeKeys.client_key,
+    midtransEnv: getActiveEnv(),
+    midtransClientKey: keys.client_key,
     paymentMethods: MASTER_PAYMENT_METHODS
   });
 });
