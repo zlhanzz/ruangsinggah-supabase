@@ -20,7 +20,8 @@ import {
     Plus, Edit, Eye, Check, MessageSquare, Search, Filter, MoreHorizontal, ArrowUpRight, ArrowDownRight, ArrowRight,
     Clock, LogOut, Bell, ChevronRight, TrendingUp, Menu, X, Landmark, CreditCard, Save,
     Briefcase, GraduationCap, Heart, MapPin, Trash2, FileText,
-    Bed, Lock, Send, ShieldCheck, Sparkles, CheckCircle2, AlertCircle, Phone, Building2, Receipt
+    Bed, Lock, Send, ShieldCheck, Sparkles, CheckCircle2, AlertCircle, Phone, Building2, Receipt,
+    Printer, Share2, Download, Calendar
 } from 'lucide-react';
 import MitraProfile from './MitraProfile';
 import ChatWindow from '../components/ChatWindow';
@@ -355,6 +356,11 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
     const [requestNotes, setRequestNotes] = useState('');
     const [requestTargetPrice, setRequestTargetPrice] = useState('');
     const [isSubmittingRequest, setIsSubmittingRequest] = useState(false);
+
+    // --- LAPORAN KEUANGAN BULANAN PER PROPERTI STATE ---
+    const [selectedKostForFinance, setSelectedKostForFinance] = useState<Kost | null>(null);
+    const [financeMonth, setFinanceMonth] = useState<number>(() => new Date().getMonth());
+    const [financeYear, setFinanceYear] = useState<number>(() => new Date().getFullYear());
 
     // --- PANDUAN MULAI CEPAT (QUICK START GUIDE) STATE ---
     const [hasViewedListing, setHasViewedListing] = useState<boolean>(() => {
@@ -1196,7 +1202,7 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
 
                             {/* ── ALUR PEMILIK KOST (TIMELINE) & PANDUAN MULAI CEPAT ── */}
                             {(() => {
-                                const isKmManaged = properties.some(p => p.isManaged);
+                                const isKmManaged = properties.some((p: any) => p.isManaged || p.is_managed);
                                 const step1Done = Boolean(isVerified);
                                 const step2Done = step1Done && properties.length > 0;
                                 const step3Done = step2Done && (hasViewedListing || isKmManaged || stats.totalViews > 0);
@@ -1204,8 +1210,14 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
 
                                 const completedStepsCount = [step1Done, step2Done, step3Done, step4Done].filter(Boolean).length;
                                 const progressPercent = Math.round((completedStepsCount / 4) * 100);
+                                const allStepsDone = completedStepsCount === 4;
 
-                                if (isGuideDismissed || tourCompleted) {
+                                // Jika seluruh 4 langkah sudah selesai (100%), atau tourCompleted, sembunyikan total dari dashboard
+                                if (allStepsDone || tourCompleted) {
+                                    return null;
+                                }
+
+                                if (isGuideDismissed) {
                                     return (
                                         <div className="bg-gradient-to-r from-orange-50/80 via-amber-50/50 to-orange-50/30 border border-orange-200/80 rounded-3xl p-4 lg:p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-sm hover:border-orange-300 transition-all">
                                             <div className="flex items-center gap-3.5">
@@ -1898,52 +1910,76 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
 
                                                 {/* Action Buttons */}
                                                 {isKm ? (
-                                                    <div className="grid grid-cols-2 gap-2 mt-4">
+                                                    <div className="space-y-2 mt-4">
+                                                        <div className="grid grid-cols-2 gap-2">
+                                                            <button
+                                                                onClick={() => {
+                                                                    setSelectedKmForRooms(p);
+                                                                    setShowKmRoomTracker(true);
+                                                                }}
+                                                                className="h-11 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-black text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 shadow-md shadow-orange-500/20 active:scale-95 cursor-pointer"
+                                                            >
+                                                                <Eye size={14} /> Pantau Kamar
+                                                            </button>
+                                                            <button
+                                                                onClick={() => {
+                                                                    setSelectedKmForRequest(p);
+                                                                    setShowKmRequestModal(true);
+                                                                }}
+                                                                className="h-11 rounded-xl bg-gray-900 hover:bg-black text-white font-black text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 shadow-md active:scale-95 cursor-pointer"
+                                                            >
+                                                                <Send size={13} /> Request Aksi
+                                                            </button>
+                                                        </div>
                                                         <button
                                                             onClick={() => {
-                                                                setSelectedKmForRooms(p);
-                                                                setShowKmRoomTracker(true);
+                                                                setSelectedKostForFinance(p);
+                                                                setFinanceMonth(new Date().getMonth());
+                                                                setFinanceYear(new Date().getFullYear());
                                                             }}
-                                                            className="h-11 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-black text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 shadow-md shadow-orange-500/20 active:scale-95 cursor-pointer"
+                                                            className="w-full h-11 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 font-black text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 shadow-2xs active:scale-95 cursor-pointer"
                                                         >
-                                                            <Eye size={14} /> Pantau Kamar
-                                                        </button>
-                                                        <button
-                                                            onClick={() => {
-                                                                setSelectedKmForRequest(p);
-                                                                setShowKmRequestModal(true);
-                                                            }}
-                                                            className="h-11 rounded-xl bg-gray-900 hover:bg-black text-white font-black text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 shadow-md active:scale-95 cursor-pointer"
-                                                        >
-                                                            <Send size={13} /> Request Aksi
+                                                            <FileText size={14} /> Laporan Keuangan Kost
                                                         </button>
                                                     </div>
                                                 ) : (
-                                                    <div className="flex gap-2 mt-4">
-                                                        <button
-                                                            onClick={() => setPreviewingKost(p)}
-                                                            className="flex-1 h-11 rounded-xl bg-gray-50 text-gray-700 font-bold text-xs hover:bg-gray-100 transition-colors border border-gray-100 flex items-center justify-center gap-1 cursor-pointer"
-                                                        >
-                                                            <Eye size={14} /> Preview
-                                                        </button>
+                                                    <div className="space-y-2 mt-4">
+                                                        <div className="flex gap-2">
+                                                            <button
+                                                                onClick={() => setPreviewingKost(p)}
+                                                                className="flex-1 h-11 rounded-xl bg-gray-50 text-gray-700 font-bold text-xs hover:bg-gray-100 transition-colors border border-gray-100 flex items-center justify-center gap-1 cursor-pointer"
+                                                            >
+                                                                <Eye size={14} /> Preview
+                                                            </button>
+                                                            <button
+                                                                onClick={() => {
+                                                                    if (checkVerification()) {
+                                                                        setEditingKost(p);
+                                                                        setShowKostForm(true);
+                                                                    }
+                                                                }}
+                                                                className="w-11 h-11 rounded-xl bg-gray-900 text-white flex items-center justify-center hover:bg-orange-500 transition-colors shadow-md cursor-pointer"
+                                                                title="Edit Kost"
+                                                            >
+                                                                <Edit size={16} />
+                                                            </button>
+                                                            <button
+                                                                onClick={() => handleDeleteKost(p.id)}
+                                                                className="w-11 h-11 rounded-xl bg-rose-50 border border-rose-100 text-rose-600 flex items-center justify-center hover:bg-rose-500 hover:text-white transition-colors shadow-sm cursor-pointer"
+                                                                title="Hapus Kost"
+                                                            >
+                                                                <Trash2 size={16} />
+                                                            </button>
+                                                        </div>
                                                         <button
                                                             onClick={() => {
-                                                                if (checkVerification()) {
-                                                                    setEditingKost(p);
-                                                                    setShowKostForm(true);
-                                                                }
+                                                                setSelectedKostForFinance(p);
+                                                                setFinanceMonth(new Date().getMonth());
+                                                                setFinanceYear(new Date().getFullYear());
                                                             }}
-                                                            className="w-11 h-11 rounded-xl bg-gray-900 text-white flex items-center justify-center hover:bg-orange-500 transition-colors shadow-md"
-                                                            title="Edit Kost"
+                                                            className="w-full h-10 rounded-xl bg-slate-50 hover:bg-emerald-50 text-slate-700 hover:text-emerald-800 border border-slate-200 hover:border-emerald-200 font-black text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 shadow-2xs active:scale-95 cursor-pointer"
                                                         >
-                                                            <Edit size={16} />
-                                                        </button>
-                                                        <button
-                                                            onClick={() => handleDeleteKost(p.id)}
-                                                            className="w-11 h-11 rounded-xl bg-rose-50 border border-rose-100 text-rose-600 flex items-center justify-center hover:bg-rose-500 hover:text-white transition-colors shadow-sm"
-                                                            title="Hapus Kost"
-                                                        >
-                                                            <Trash2 size={16} />
+                                                            <FileText size={14} /> Laporan Keuangan Kost
                                                         </button>
                                                     </div>
                                                 )}
@@ -3410,6 +3446,313 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                     </div>
                 </div>
             )}
+
+            {/* ── MODAL LAPORAN KEUANGAN BULANAN PER PROPERTI (KOST SAYA) ── */}
+            {selectedKostForFinance && (() => {
+                const MONTH_NAMES = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
+                
+                // 1. Filter transaksi sewa masuk untuk properti ini pada bulan & tahun terpilih
+                const propBookings = bookings.filter((b: any) => {
+                    const isSameProp = b.product_id === selectedKostForFinance.id || b.property_id === selectedKostForFinance.id || b.title?.toLowerCase().includes(selectedKostForFinance.title?.toLowerCase());
+                    if (!isSameProp) return false;
+                    const d = new Date(b.created_at || b.date);
+                    return d.getMonth() === financeMonth && d.getFullYear() === financeYear;
+                });
+
+                // Filter penghuni aktif untuk properti ini
+                const activePropResidents = residentStatus.filter((r: any) => 
+                    r.property_id === selectedKostForFinance.id || r.propertyTitle?.toLowerCase() === selectedKostForFinance.title?.toLowerCase()
+                );
+
+                // Hitung total kamar & okupansi
+                const totalRooms = selectedKostForFinance.roomTypes?.length || 0;
+                const filledRooms = activePropResidents.length;
+                const occRate = totalRooms > 0 ? Math.round((filledRooms / totalRooms) * 100) : 0;
+
+                // Hitung rincian pemasukan
+                let totalSewaBaru = 0;
+                let totalPerpanjangan = 0;
+                let totalEkstraPenghuni = 0;
+                let totalFasilitas = 0;
+                let totalDenda = 0;
+
+                propBookings.forEach((b: any) => {
+                    const bMeta = typeof b.metadata === 'string' ? JSON.parse(b.metadata) : (b.metadata || {});
+                    const amt = Number(b.amount || 0);
+                    const pType = (b.product_type || '').toLowerCase();
+
+                    if (pType === 'kost_booking' || pType === 'rent' || pType === 'kost') {
+                        totalSewaBaru += amt;
+                    } else if (pType === 'perpanjangan_sewa' || pType === 'extension') {
+                        totalPerpanjangan += amt;
+                    } else if (pType === 'extra_occupant' || pType === 'extra_guest') {
+                        totalEkstraPenghuni += amt;
+                    } else if (pType === 'facility' || pType === 'additional_fee') {
+                        totalFasilitas += amt;
+                    } else if (pType === 'late_fee' || pType === 'penalty') {
+                        totalDenda += amt;
+                    } else {
+                        // Breakdown dari metadata jika transaksi gabungan
+                        if (bMeta.extra_occupants_fee) totalEkstraPenghuni += Number(bMeta.extra_occupants_fee);
+                        if (bMeta.facility_fees || bMeta.additional_fee_price) totalFasilitas += Number(bMeta.facility_fees || bMeta.additional_fee_price || 0);
+                        if (bMeta.penalty_fee || bMeta.late_fee) totalDenda += Number(bMeta.penalty_fee || bMeta.late_fee || 0);
+                        totalSewaBaru += amt;
+                    }
+                });
+
+                const totalGrossRevenue = propBookings.reduce((sum: number, b: any) => sum + Number(b.amount || 0), 0);
+                const totalNetReceived = totalGrossRevenue; // 100% diterima mitra tanpa potongan fisik
+
+                const handleShareWhatsApp = () => {
+                    const message = `*LAPORAN KEUANGAN BULANAN - RUANGSINGGAH*\n` +
+                        `----------------------------------------\n` +
+                        `*Properti:* ${selectedKostForFinance.title}\n` +
+                        `*Periode:* ${MONTH_NAMES[financeMonth]} ${financeYear}\n` +
+                        `*Tingkat Okupansi:* ${filledRooms}/${totalRooms} Kamar (${occRate}%)\n\n` +
+                        `*RINCIAN PEMASUKAN:*\n` +
+                        `• Sewa Penghuni Baru: ${FORMAT_CURRENCY(totalSewaBaru)}\n` +
+                        `• Perpanjangan Sewa: ${FORMAT_CURRENCY(totalPerpanjangan)}\n` +
+                        `• Biaya Ekstra Penghuni: ${FORMAT_CURRENCY(totalEkstraPenghuni)}\n` +
+                        `• Biaya Fasilitas Tambahan: ${FORMAT_CURRENCY(totalFasilitas)}\n` +
+                        `• Denda / Kompensasi: ${FORMAT_CURRENCY(totalDenda)}\n` +
+                        `----------------------------------------\n` +
+                        `*TOTAL PENDAPATAN BERSIH:* ${FORMAT_CURRENCY(totalNetReceived)}\n` +
+                        `*Biaya Operasional/Potongan:* Rp 0 (100% Utuh Diterima)\n\n` +
+                        `_Manajemen KostManager - PT Ruang Singgah Nusantara_`;
+                    
+                    const waUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(message)}`;
+                    window.open(waUrl, '_blank');
+                };
+
+                return (
+                    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+                        <div 
+                            className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm animate-in fade-in duration-300"
+                            onClick={() => setSelectedKostForFinance(null)}
+                        />
+                        <div className="bg-white w-full max-w-2xl rounded-[2.5rem] shadow-2xl relative z-10 overflow-hidden animate-in zoom-in-95 flex flex-col max-h-[92vh] border border-gray-100">
+                            {/* Modal Header */}
+                            <div className="bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 p-6 text-white relative shrink-0">
+                                <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/20 rounded-full blur-3xl -mr-16 -mt-16 pointer-events-none" />
+                                <div className="flex items-center justify-between relative z-10">
+                                    <div className="flex items-center gap-3.5">
+                                        <div className="w-12 h-12 rounded-2xl bg-white/10 flex items-center justify-center border border-white/20 backdrop-blur-md text-emerald-400">
+                                            <Receipt size={22} />
+                                        </div>
+                                        <div>
+                                            <div className="flex items-center gap-2">
+                                                <h3 className="text-lg font-black uppercase tracking-tight text-white">Laporan Keuangan Kost</h3>
+                                                {selectedKostForFinance.isManaged && (
+                                                    <span className="px-2 py-0.5 rounded bg-emerald-500/30 text-emerald-300 border border-emerald-400/30 text-[9px] font-black uppercase">
+                                                        KostManager
+                                                    </span>
+                                                )}
+                                            </div>
+                                            <p className="text-[11px] font-bold text-white/60 tracking-wider truncate max-w-sm">{selectedKostForFinance.title}</p>
+                                        </div>
+                                    </div>
+                                    <button 
+                                        onClick={() => setSelectedKostForFinance(null)} 
+                                        className="w-9 h-9 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white/80 transition-colors"
+                                    >
+                                        <X size={18} />
+                                    </button>
+                                </div>
+                            </div>
+
+                            {/* Modal Body */}
+                            <div className="p-6 overflow-y-auto space-y-6 flex-1 text-left">
+                                {/* Month & Year Filter Bar */}
+                                <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                                    <div className="flex items-center gap-2">
+                                        <Calendar size={16} className="text-gray-500" />
+                                        <span className="text-xs font-black uppercase text-gray-700 tracking-wider">Periode Laporan:</span>
+                                    </div>
+                                    <div className="flex items-center gap-2 w-full sm:w-auto">
+                                        <select
+                                            value={financeMonth}
+                                            onChange={e => setFinanceMonth(Number(e.target.value))}
+                                            className="flex-1 sm:flex-none h-10 bg-white border border-gray-200 rounded-xl px-3 text-xs font-black text-gray-900 focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 outline-none cursor-pointer"
+                                        >
+                                            {MONTH_NAMES.map((m, idx) => (
+                                                <option key={m} value={idx}>{m}</option>
+                                            ))}
+                                        </select>
+                                        <select
+                                            value={financeYear}
+                                            onChange={e => setFinanceYear(Number(e.target.value))}
+                                            className="h-10 bg-white border border-gray-200 rounded-xl px-3 text-xs font-black text-gray-900 focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 outline-none cursor-pointer"
+                                        >
+                                            {[2024, 2025, 2026, 2027].map(y => (
+                                                <option key={y} value={y}>{y}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                </div>
+
+                                {/* Key Financial Stats Summary Cards */}
+                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                    <div className="bg-emerald-50/70 border border-emerald-200 rounded-2xl p-4">
+                                        <p className="text-[10px] font-black text-emerald-800 uppercase tracking-widest">Total Pemasukan</p>
+                                        <p className="text-xl font-black text-emerald-700 mt-1">{FORMAT_CURRENCY(totalNetReceived)}</p>
+                                        <p className="text-[9px] font-bold text-emerald-600 mt-0.5">100% Bersih Diterima Mitra</p>
+                                    </div>
+                                    <div className="bg-blue-50/70 border border-blue-200 rounded-2xl p-4">
+                                        <p className="text-[10px] font-black text-blue-800 uppercase tracking-widest">Tingkat Okupansi</p>
+                                        <p className="text-xl font-black text-blue-700 mt-1">{filledRooms} / {totalRooms} <span className="text-xs font-bold">Kamar</span></p>
+                                        <p className="text-[9px] font-bold text-blue-600 mt-0.5">{occRate}% Kamar Terisi</p>
+                                    </div>
+                                    <div className="bg-purple-50/70 border border-purple-200 rounded-2xl p-4">
+                                        <p className="text-[10px] font-black text-purple-800 uppercase tracking-widest">Total Transaksi</p>
+                                        <p className="text-xl font-black text-purple-700 mt-1">{propBookings.length} <span className="text-xs font-bold">Transaksi</span></p>
+                                        <p className="text-[9px] font-bold text-purple-600 mt-0.5">Lunas pada periode ini</p>
+                                    </div>
+                                </div>
+
+                                {/* Breakdown Categories */}
+                                <div className="space-y-3">
+                                    <h4 className="text-xs font-black text-gray-900 uppercase tracking-wider flex items-center gap-1.5">
+                                        <TrendingUp size={14} className="text-emerald-600" />
+                                        Rincian Pos Penerimaan Sewa
+                                    </h4>
+                                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 text-xs">
+                                        <div className="p-3 bg-gray-50 rounded-xl border border-gray-100">
+                                            <p className="text-[9px] font-bold text-gray-400 uppercase">Sewa Baru</p>
+                                            <p className="font-black text-gray-900 mt-0.5">{FORMAT_CURRENCY(totalSewaBaru)}</p>
+                                        </div>
+                                        <div className="p-3 bg-gray-50 rounded-xl border border-gray-100">
+                                            <p className="text-[9px] font-bold text-gray-400 uppercase">Perpanjangan</p>
+                                            <p className="font-black text-gray-900 mt-0.5">{FORMAT_CURRENCY(totalPerpanjangan)}</p>
+                                        </div>
+                                        <div className="p-3 bg-gray-50 rounded-xl border border-gray-100">
+                                            <p className="text-[9px] font-bold text-gray-400 uppercase">Ekstra Penghuni</p>
+                                            <p className="font-black text-gray-900 mt-0.5">{FORMAT_CURRENCY(totalEkstraPenghuni)}</p>
+                                        </div>
+                                        <div className="p-3 bg-gray-50 rounded-xl border border-gray-100">
+                                            <p className="text-[9px] font-bold text-gray-400 uppercase">Fasilitas Tambahan</p>
+                                            <p className="font-black text-gray-900 mt-0.5">{FORMAT_CURRENCY(totalFasilitas)}</p>
+                                        </div>
+                                        <div className="p-3 bg-gray-50 rounded-xl border border-gray-100">
+                                            <p className="text-[9px] font-bold text-gray-400 uppercase">Denda / Pinalti</p>
+                                            <p className="font-black text-gray-900 mt-0.5">{FORMAT_CURRENCY(totalDenda)}</p>
+                                        </div>
+                                        <div className="p-3 bg-emerald-50/60 rounded-xl border border-emerald-100">
+                                            <p className="text-[9px] font-bold text-emerald-700 uppercase">Potongan Operasional</p>
+                                            <p className="font-black text-emerald-700 mt-0.5">Rp 0 (Bebas Biaya)</p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Itemized Transactions Table */}
+                                <div className="space-y-3">
+                                    <div className="flex items-center justify-between">
+                                        <h4 className="text-xs font-black text-gray-900 uppercase tracking-wider">
+                                            Daftar Transaksi Masuk ({MONTH_NAMES[financeMonth]} {financeYear})
+                                        </h4>
+                                        <span className="text-[10px] font-bold text-gray-400">{propBookings.length} data tercatat</span>
+                                    </div>
+                                    
+                                    {propBookings.length === 0 ? (
+                                        <div className="p-8 text-center bg-gray-50/70 rounded-2xl border border-dashed border-gray-200">
+                                            <FileText size={28} className="mx-auto text-gray-300 mb-2" />
+                                            <p className="text-xs font-black text-gray-700">Belum Ada Transaksi Masuk</p>
+                                            <p className="text-[10px] font-medium text-gray-400 mt-1">
+                                                Tidak ada pembayaran sewa atau tagihan yang tercatat pada periode {MONTH_NAMES[financeMonth]} {financeYear}.
+                                            </p>
+                                        </div>
+                                    ) : (
+                                        <div className="overflow-x-auto rounded-2xl border border-gray-200">
+                                            <table className="w-full text-left text-xs">
+                                                <thead className="bg-gray-50 border-b border-gray-200 text-[10px] font-black uppercase tracking-wider text-gray-500">
+                                                    <tr>
+                                                        <th className="p-3">Penghuni / Kamar</th>
+                                                        <th className="p-3">Jenis Transaksi</th>
+                                                        <th className="p-3">Tanggal Lunas</th>
+                                                        <th className="p-3 text-right">Nominal</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody className="divide-y divide-gray-100">
+                                                    {propBookings.map((tx: any) => {
+                                                        const txMeta = typeof tx.metadata === 'string' ? JSON.parse(tx.metadata) : (tx.metadata || {});
+                                                        const txTypeLabel = tx.product_type === 'perpanjangan_sewa' ? 'Perpanjangan Sewa'
+                                                            : tx.product_type === 'kost_booking' ? 'Sewa Penghuni Baru'
+                                                            : tx.product_type === 'extra_occupant' ? 'Ekstra Penghuni'
+                                                            : tx.product_type === 'facility' ? 'Fasilitas Tambahan'
+                                                            : 'Sewa Kamar';
+                                                        
+                                                        const roomLabel = txMeta.room_number || txMeta.roomNumber || txMeta.room_type || 'Kamar';
+                                                        const tenantName = tx.user?.name || txMeta.tenant_name || txMeta.user_name || 'Penghuni';
+                                                        const txDate = new Date(tx.created_at || tx.date);
+
+                                                        return (
+                                                            <tr key={tx.id} className="hover:bg-slate-50/80 transition-colors">
+                                                                <td className="p-3">
+                                                                    <p className="font-black text-gray-900">{tenantName}</p>
+                                                                    <p className="text-[10px] font-bold text-orange-600 uppercase tracking-tight">{roomLabel}</p>
+                                                                </td>
+                                                                <td className="p-3">
+                                                                    <span className="px-2 py-0.5 rounded-full text-[9px] font-black uppercase bg-emerald-100 text-emerald-800">
+                                                                        {txTypeLabel}
+                                                                    </span>
+                                                                </td>
+                                                                <td className="p-3 text-gray-500 font-medium">
+                                                                    {txDate.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}
+                                                                </td>
+                                                                <td className="p-3 text-right font-black text-gray-900">
+                                                                    {FORMAT_CURRENCY(tx.amount)}
+                                                                </td>
+                                                            </tr>
+                                                        );
+                                                    })}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Security & Service Scope Notice */}
+                                <div className="p-4 bg-slate-50 border border-slate-200/80 rounded-2xl space-y-1.5 text-xs text-gray-600">
+                                    <div className="flex items-center gap-2 font-black text-gray-900 text-xs">
+                                        <ShieldCheck size={16} className="text-emerald-600" />
+                                        <span>Ketentuan Layanan Finansial KostManager</span>
+                                    </div>
+                                    <p className="text-[11px] leading-relaxed">
+                                        Seluruh penerimaan uang sewa diteruskan 100% ke rekening pemilik kost tanpa pemotongan biaya operasional fisik properti. Dana siap ditarik secara mandiri melalui menu <strong>Dompet</strong>.
+                                    </p>
+                                </div>
+                            </div>
+
+                            {/* Modal Footer Actions */}
+                            <div className="p-6 bg-gray-50 border-t border-gray-100 flex flex-col sm:flex-row items-center justify-between gap-3 shrink-0">
+                                <button
+                                    type="button"
+                                    onClick={() => window.print()}
+                                    className="w-full sm:w-auto px-5 py-3 bg-white border border-gray-200 hover:bg-gray-100 text-gray-700 rounded-2xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 shadow-xs active:scale-95 transition-all cursor-pointer"
+                                >
+                                    <Printer size={15} /> Cetak / Unduh PDF
+                                </button>
+                                <div className="flex items-center gap-2 w-full sm:w-auto">
+                                    <button
+                                        type="button"
+                                        onClick={handleShareWhatsApp}
+                                        className="flex-1 sm:flex-none px-5 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 shadow-md shadow-emerald-600/20 active:scale-95 transition-all cursor-pointer"
+                                    >
+                                        <Share2 size={15} /> Kirim ke WhatsApp
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setSelectedKostForFinance(null)}
+                                        className="px-6 py-3 bg-gray-900 hover:bg-black text-white rounded-2xl text-xs font-black uppercase tracking-wider shadow-md active:scale-95 transition-all cursor-pointer"
+                                    >
+                                        Tutup
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                );
+            })()}
+
             {/* ── POP-UP IKLAN GRAFIS PROMO MITRA (KOSTMANAGER) ── */}
             {showPromoPopup && !isKostManager && promoPopupSetting && promoPopupSetting.is_active && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-md animate-in fade-in duration-200">

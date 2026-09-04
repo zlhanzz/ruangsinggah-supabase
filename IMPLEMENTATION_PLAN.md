@@ -1,26 +1,24 @@
-# Implementation Plan - Penonaktifan Pop-up Banner Promo Upgrade KostManager untuk Mitra yang Sudah Berlangganan / Berstatus KostManager
+# Implementation Plan - Laporan Keuangan Bulanan Per Properti di Menu Kost Saya & Penyembunyian Alur Pemasaran 100% Selesai
 
-Dokumen ini merinci analisis masalah, dampak perubahan, langkah eksekusi, dan rencana verifikasi untuk mencegah kemunculan pop-up banner promo *"Gak Punya Waktu Kelola Kost? Upgrade ke KostManager!"* pada akun Mitra yang sudah aktif sebagai KostManager atau telah berlangganan layanan KostManager.
+Dokumen ini merinci rencana integrasi sistem laporan keuangan properti di tab **Kost Saya** (`/dashboard-mitra/properties`) dan penyembunyian otomatis kartu panduan *"Alur Pemasaran Kost Mitra Baru"* ketika seluruh 4 tahapan telah diselesaikan (100%).
 
 ---
 
 ## 1. Analisis Masalah & Kebutuhan
 
-### Masalah:
-- Saat ini di [MitraDashboard.tsx](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/MitraDashboard.tsx), pop-up banner promo KostManager (`showPromoPopup`) muncul saat membuka halaman Kelola Properti (`/dashboard-mitra/properties`) hanya dengan memeriksa:
-  1. Status verifikasi identitas (`isVerified === true`).
-  2. Tab aktif (`tab === 'properties'`).
-  3. Cooldown waktu 24 jam di `localStorage`.
-- Sistem **belum memeriksa status langganan atau kepemilikan KostManager mitra (`isKostManager`)**. Akibatnya, mitra yang propertinya sudah dikelola oleh KostManager atau yang akunnya sudah memiliki status `subscription_status: 'kostmanager'` tetap melihat tawaran pop-up upgrade tersebut. Hal ini membingungkan dan tidak efisien bagi mitra yang sudah berlangganan.
+### Kebutuhan 1: Laporan Keuangan Bulanan Per Properti di "Kost Saya"
+- Mitra pemilik kost membutuhkan akses laporan keuangan yang **terkonteks per properti** untuk memantau arus kas masuk dan rincian transaksi per nomor kamar secara transparan.
+- Layanan KostManager berfokus pada manajemen inventaris, pencatatan penghuni, penagihan sewa otomatis, pemasaran, dan pelaporan keuangan (tanpa potongan biaya operasional fisik).
+- Pos penerimaan yang harus diakumulasikan secara rinci meliputi:
+  1. **Sewa Pokok Penghuni Baru** (*New Booking*)
+  2. **Perpanjangan Sewa** (*Rent Extension*)
+  3. **Biaya Tambahan Penghuni** (*Extra Occupants / Orang Ke-2*)
+  4. **Biaya Fasilitas Tambahan** (*Add-on Facilities / Parkir / Listrik / Alat Elektronik*)
+  5. **Denda Keterlambatan / Kompensasi Pembatalan** (*Late Fees / Penalty*)
+  6. **Catatan Deposit / Uang Jaminan Aktif** (*Security Deposit Reference*)
 
-### Solusi & Kebutuhan:
-1. Menambahkan state dan pemeriksaan komprehensif `isKostManager` di [MitraDashboard.tsx](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/MitraDashboard.tsx):
-   - **Tabel `mitra`**: Cek apakah `subscription_status === 'kostmanager'`.
-   - **User Object**: Cek apakah `user?.subscription_status === 'kostmanager'` atau `(user as any)?.is_managed === true`.
-   - **Daftar Properti Mitra (`properties`)**: Cek apakah ada properti yang dikelola KostManager (`p.is_managed === true || p.isManaged === true || p.managed_by === 'kostmanager' || p.kost_manager_status === 'ACTIVE' || p.kostManager?.status === 'ACTIVE'`).
-   - **Pengajuan KostManager (`kmRequests`)**: Cek apakah mitra memiliki pengajuan KostManager aktif/disetujui (`status in ['COMPLETED', 'APPROVED', 'IN_PROGRESS', 'SURVEY_SCHEDULED', 'ACTIVE']`).
-2. **Kondisi Guarding Ketat**:
-   - Jika `isKostManager` bernilai `true`, sistem **dilarang memicu `setShowPromoPopup(true)`** baik pada inisialisasi `useEffect`, navigasi tab `handleMenuChange('properties')`, maupun pada rendering JSX modal popup.
+### Kebutuhan 2: Penyembunyian Alur Pemasaran 4/4 Langkah Selesai (100%)
+- Jika mitra telah menyelesaikan seluruh 4 tahapan (Verifikasi KTP, Upload Properti, Listing Tayang, dan Kesiapan Penerimaan Sewa), kartu dan banner alur pemasaran pemula **otomatis tidak ditampilkan lagi** di Beranda Dashboard (`return null`).
 
 ---
 
@@ -28,40 +26,49 @@ Dokumen ini merinci analisis masalah, dampak perubahan, langkah eksekusi, dan re
 
 | File | Bagian yang Dimodifikasi |
 |---|---|
-| `functions/public/pages/MitraDashboard.tsx` | 1. Menambahkan query `subscription_status` dari tabel `mitra` pada `loadData`.<br>2. Membuat memoized flag `isKostManager`.<br>3. Mencegah trigger popup di `useEffect` dan `handleMenuChange` jika `isKostManager === true`.<br>4. Menambahkan guard `!isKostManager` pada render JSX popup banner. |
-| `functions/PROGRESS.md` | Pencatatan riwayat progres 326 (Fase 2). |
-| `WALKTHROUGH.md` | Dokumentasi verifikasi dan pengujian fitur (Fase 2). |
+| `functions/public/pages/MitraDashboard.tsx` | 1. **Penyembunyian Alur Pemasaran**: Evaluasi `allStepsDone = completedStepsCount === 4` $\rightarrow$ `return null`.<br>2. **State & Modal Laporan Keuangan**: Menambahkan state `selectedKostForFinance` dan `selectedFinanceMonth`/`Year`.<br>3. **Tombol di Kartu Properti**: Menambahkan tombol aksi `"📄 Laporan Keuangan"` pada setiap kartu properti di tab `properties` (*Kost Saya*).<br>4. **Modal Laporan Keuangan Bulanan**: Menyajikan header filter bulan/tahun, ringkasan okupansi, tabel rincian transaksi per kamar (sewa baru, perpanjangan, fasilitas, ekstra orang), akumulasi total omset bersih (100% diterima mitra), tombol *Cetak/Unduh PDF Laporan*, dan tombol *Bagikan Ringkasan ke WhatsApp*. |
+| `functions/PROGRESS.md` | Pencatatan riwayat progres 327 (Fase 2). |
+| `WALKTHROUGH.md` | Dokumentasi verifikasi dan panduan pengujian (Fase 2). |
 
 ---
 
 ## 3. Langkah-Langkah Eksekusi (Fase 2 - Setelah di-ACC)
 
-1. **Pengambilan Data & State `mitraSubscriptionStatus`**:
-   - Memasukkan query `supabase.from('mitra').select('subscription_status').eq('user_id', uid).maybeSingle()` ke dalam `Promise.all` pada fungsi `loadData`.
-   - Menyimpan hasil ke state `mitraSubscriptionStatus`.
-2. **Definisi Memoized Flag `isKostManager`**:
-   - Mengevaluasi:
-     - `user?.subscription_status === 'kostmanager'`
-     - `mitraSubscriptionStatus === 'kostmanager'`
-     - `properties.some(p => p.is_managed || p.isManaged || p.managed_by === 'kostmanager' || p.kost_manager_status === 'ACTIVE' || p.kostManager?.status === 'ACTIVE')`
-     - `kmRequests.some(r => ['COMPLETED', 'APPROVED', 'IN_PROGRESS', 'SURVEY_SCHEDULED', 'ACTIVE'].includes((r.status || '').toUpperCase()))`
-3. **Penyisipan Guard pada Event Trigger Promo Popup**:
-   - Pada `useEffect` inisialisasi popup: Batalkan kemunculan jika `isKostManager` bernilai `true`.
-   - Pada `handleMenuChange`: Jangan buka promo jika `isKostManager` bernilai `true`.
-   - Pada JSX popup di akhir file: Tambahkan kondisi `!isKostManager`.
-4. **Kompilasi & Build Testing**:
-   - Menjalankan `cmd /c npm run build` untuk memastikan 0 error kompilasi.
-5. **Dokumentasi & Git Push**:
-   - Mencatat Progres 326 di `functions/PROGRESS.md` dan memperbarui `WALKTHROUGH.md`.
-   - Melakukan commit dan push ke remote branch `bukan-productions`.
+1. **Penyembunyian Alur Pemasaran 100% Selesai**:
+   - Menghitung `const allStepsDone = completedStepsCount === 4;`.
+   - Mengubah kondisi: jika `allStepsDone || tourCompleted`, kembalikan `null`.
+   - Sinkronisasi otomatis `localStorage.setItem('mitra_tour_completed_${uid}', 'true')`.
+
+2. **Penambahan State Laporan Keuangan Properti**:
+   - `const [selectedKostForFinance, setSelectedKostForFinance] = useState<Kost | null>(null);`
+   - `const [financeMonth, setFinanceMonth] = useState<number>(new Date().getMonth());`
+   - `const [financeYear, setFinanceYear] = useState<number>(new Date().getFullYear());`
+
+3. **Penempatan Tombol Aksi di Kartu Properti ("Kost Saya")**:
+   - Menambahkan tombol `"📄 Laporan Keuangan"` pada bagian aksi kartu properti.
+
+4. **Pembuatan Modal Laporan Keuangan Properti**:
+   - **Header & Filter**: Filter periode bulan & tahun.
+   - **Kartu Metrik Cepat**: Total Omset Bulan Terpilih, Okupansi Kamar, dan Total Transaksi.
+   - **Tabel Rincian Transaksi**: Nomor Kamar, Nama Penghuni, Tipe Transaksi (Booking Baru / Perpanjangan / Fasilitas / Ekstra Orang), Tanggal Lunas, dan Nominal.
+   - **Ringkasan Arus Kas Masuk**: Rincian sewa pokok, biaya ekstra, biaya admin Rp 0, dan total saldo bersih 100% diterima mitra.
+   - **Aksi Cetak / PDF & WA**: Tombol `window.print()` / unduh dokumen formal berkop resmi dan tombol salin/buka ringkasan ke WhatsApp.
+
+5. **Uji Kompilasi & Build**:
+   - Jalankan `cmd /c npm run build` untuk memverifikasi 0 error kompilasi.
+
+6. **Pencatatan Riwayat & Git Push**:
+   - Mencatat Progres 327 di `functions/PROGRESS.md` dan memperbarui `WALKTHROUGH.md`.
+   - Melakukan git commit dan push ke remote branch `bukan-productions`.
 
 ---
 
 ## 4. Rencana Verifikasi
 
-1. **Uji Kompilasi**:
-   - Jalankan `cmd /c npm run build` untuk memverifikasi tidak ada error TypeScript maupun sintaks JSX.
-2. **Uji Skenario Akun Mitra Reguler (Bukan KostManager)**:
-   - Akun mitra yang terverifikasi dan belum memiliki properti KostManager tetap dapat melihat promo banner saat membuka tab Kelola Properti (sesuai aturan jeda waktu 24 jam).
-3. **Uji Skenario Akun Mitra KostManager (Sudah Berlangganan / Dikelola)**:
-   - Akun mitra yang memiliki status `subscription_status === 'kostmanager'` atau memiliki minimal satu properti yang berstatus `is_managed = true` **tidak akan pernah lagi melihat** pop-up promo upgrade KostManager.
+1. **Uji Kompilasi**: Memastikan kompilasi Vite dan TypeScript 100% bersih tanpa error.
+2. **Uji Alur Pemasaran**: Memastikan akun mitra yang sudah menyelesaikan 4 tahapan tidak lagi melihat kartu/banner alur pemasaran di dashboard.
+3. **Uji Modal Laporan Keuangan di "Kost Saya"**:
+   - Buka menu *Kost Saya* $\rightarrow$ klik tombol *"Laporan Keuangan"* pada salah satu kost.
+   - Periksa pergantian filter bulan & tahun.
+   - Periksa kalkulasi otomatis sewa baru, perpanjangan, biaya fasilitas, dan ekstra orang per kamar.
+   - Uji tombol cetak/unduh laporan dan tombol ringkasan WhatsApp.

@@ -2,6 +2,32 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 327. Integrasi Laporan Keuangan Bulanan Per Properti di Menu Kost Saya & Penyembunyian Alur Pemasaran 100% Selesai (`MitraDashboard.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  1. Mitra membutuhkan akses laporan keuangan bulanan yang terkonteks per properti di menu **"Kost Saya"** (`/dashboard-mitra/properties`) untuk memantau arus kas masuk dan rincian transaksi per nomor kamar.
+  2. Cakupan layanan KostManager: pencatatan kamar, pencatatan penghuni, penagihan sewa otomatis, pemasaran, dan laporan keuangan (bebas potongan biaya operasional fisik / Rp 0 potongan).
+  3. Kartu dan banner alur pemasaran pemula (*"Alur Pemasaran Kost Mitra Baru"*) tidak boleh muncul lagi di dashboard jika seluruh 4 tahapan sudah diselesaikan (100%).
+- **Implementasi Solusi**:
+  1. **Penyembunyian Alur Pemasaran 4/4 Langkah Selesai (100%)**:
+     - Memeriksa kelengkapan 4 langkah (`step1Done`, `step2Done`, `step3Done`, `step4Done`).
+     - Jika `allStepsDone` (4/4 langkah 100%) atau `tourCompleted`, komponen kartu panduan langsung mengembalikan `null` sehingga dashboard tampil bersih.
+  2. **Tombol Aksi Laporan Keuangan di Setiap Kartu Properti**:
+     - Menambahkan tombol `"📄 Laporan Keuangan Kost"` pada kartu properti kelolaan KostManager maupun properti reguler di tab *"Kost Saya"*.
+  3. **Modal Laporan Keuangan Bulanan Komprehensif (`selectedKostForFinance`)**:
+     - Filter periode bulan (Januari - Desember) dan tahun (2024 - 2027) yang reaktif.
+     - Kartu indikator performa: Total Pemasukan Bersih, Tingkat Okupansi Kamar (`X/Y Kamar Terisi`), dan Total Transaksi Lunas.
+     - Rincian pos penerimaan sewa: Sewa Pokok Baru, Perpanjangan Sewa, Biaya Ekstra Penghuni, Biaya Fasilitas Tambahan, Denda/Kompensasi Keterlambatan, serta keterangan Potongan Operasional Rp 0 (100% Utuh Diterima Mitra).
+     - Tabel daftar transaksi masuk terperinci: Nama Penghuni, Nomor/Tipe Kamar, Jenis Transaksi, Tanggal Lunas, dan Nominal.
+     - Tombol aksi *"Cetak / Unduh PDF"* (`window.print()`) dan tombol *"Kirim ke WhatsApp"* (`handleShareWhatsApp`) berformat teks resmi yang rapi.
+     - Seluruh ikon menggunakan pure SVG dari `lucide-react` (`Printer`, `Share2`, `Receipt`, `TrendingUp`, `Calendar`, `ShieldCheck`, `FileText`, dll.) untuk menjamin 0ms delay dan bebas FOUT.
+- **File Tersentuh**:
+  - `functions/public/pages/MitraDashboard.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi build Vite `npm run build` lulus 100% (✓ 2509 modules transformed, built in 40.65s, 0 error).
+  - Kompilasi backend `functions` `tsc` lulus 100% (0 error).
+
 ### 326. Penonaktifan Pop-up Banner Promo Upgrade KostManager untuk Mitra Berstatus / Berlangganan KostManager (`MitraDashboard.tsx`) (September 2026)
 - **Permintaan & Masalah**:
   - Pop-up banner promo Upgrade KostManager (*"Gak Punya Waktu Kelola Kost? Upgrade ke KostManager!"*) sebelumnya selalu muncul saat mitra membuka tab Kelola Properti (`/dashboard-mitra/properties`) tanpa memeriksa apakah mitra tersebut sudah berstatus atau berlangganan KostManager.
