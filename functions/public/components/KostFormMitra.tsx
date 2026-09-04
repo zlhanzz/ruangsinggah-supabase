@@ -1266,7 +1266,6 @@ const ALL_ROOM_FACILITY_PRESETS = [
     { label: 'Balkon', icon: '🏙️', isPerabot: false },
     { label: 'Kulkas Mini', icon: '🧊', isPerabot: true },
     { label: 'Kamar Mandi Dalam', icon: '🚿', isPerabot: false },
-    { label: 'Kamar Mandi Luar', icon: '🚪', isPerabot: false },
     { label: 'Dapur Dalam', icon: '🍳', isPerabot: false }
 ];
 
@@ -1366,7 +1365,7 @@ const HierarchicalPublicFacilityInput: React.FC<{
 
     return (
         <div className="flex flex-col gap-3">
-            {/* Grid 2 Kolom Bersih & Ringkas Ala Dashboard Agen */}
+            {/* Grid 2 Kolom Bersih & Ringkas Bebas Teks Terpotong */}
             <div className="grid grid-cols-2 gap-2 sm:gap-2.5">
                 {ALL_PUBLIC_FACILITIES.map(item => {
                     const isChecked = checkIsActive(item);
@@ -1374,7 +1373,7 @@ const HierarchicalPublicFacilityInput: React.FC<{
                     return (
                         <React.Fragment key={item.label}>
                             {/* Checkbox Card Ringkas */}
-                            <label className={`flex items-center gap-2.5 p-2.5 sm:p-3 border rounded-xl cursor-pointer transition-all ${
+                            <label className={`flex items-center gap-2 sm:gap-2.5 p-2 sm:p-2.5 min-h-[46px] border rounded-xl cursor-pointer transition-all ${
                                 isChecked 
                                     ? 'border-orange-500 bg-orange-50/60 text-orange-950 font-bold shadow-xs ring-1 ring-orange-400/40' 
                                     : 'border-gray-200 bg-[#fbfbfc] text-gray-700 hover:border-orange-300 hover:bg-orange-50/20'
@@ -1386,7 +1385,7 @@ const HierarchicalPublicFacilityInput: React.FC<{
                                     className="rounded text-orange-500 focus:ring-orange-500 border-gray-300 w-4 h-4 cursor-pointer accent-orange-500 shrink-0"
                                 />
                                 <span className="text-base shrink-0">{item.icon}</span>
-                                <span className="text-xs font-bold truncate">{item.label}</span>
+                                <span className="text-xs font-bold leading-snug break-words flex-1">{item.label}</span>
                             </label>
 
                             {/* Sub-Panel Inline Col-span-2 dengan Aksen Garis Kiri Ala Dashboard Agen */}
@@ -1411,7 +1410,7 @@ const HierarchicalPublicFacilityInput: React.FC<{
                                                         onChange={() => toggleSubOption(sub, item.label)}
                                                         className="rounded border-gray-300 text-orange-500 focus:ring-orange-500 w-4 h-4 cursor-pointer accent-orange-500 shrink-0"
                                                     />
-                                                    <span className="text-xs text-gray-800 font-bold">{sub}</span>
+                                                    <span className="text-xs text-gray-800 font-bold leading-snug break-words flex-1">{sub}</span>
                                                 </label>
                                             );
                                         })}
@@ -1425,7 +1424,7 @@ const HierarchicalPublicFacilityInput: React.FC<{
                                             onChange={e => setSubCustomInputs({ ...subCustomInputs, [item.id || item.label]: e.target.value })} 
                                             onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addSubCustom(item.id || item.label, item.label); } }}
                                             placeholder={`Tambah kelengkapan ${item.label.toLowerCase()}...`} 
-                                            className="flex-grow h-8 px-2.5 border border-orange-200 rounded-lg text-xs bg-white outline-none text-gray-800 placeholder-gray-400 focus:border-orange-500"
+                                            className="flex-grow min-w-0 h-8 px-2.5 border border-orange-200 rounded-lg text-xs bg-white outline-none text-gray-800 placeholder-gray-400 focus:border-orange-500"
                                         />
                                         <button 
                                             type="button"
@@ -1468,7 +1467,7 @@ const HierarchicalPublicFacilityInput: React.FC<{
                     onChange={e => setCustomInput(e.target.value)} 
                     onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addCustomFacility(); } }}
                     placeholder="Tambah fasilitas umum lainnya (misal: Kolam Renang, Rooftop, Gym)..." 
-                    className="flex-grow h-9 px-3 border border-gray-200 rounded-xl text-xs bg-white outline-none text-gray-800 placeholder-gray-400 focus:border-orange-500 focus:ring-1 focus:ring-orange-200 transition-all"
+                    className="flex-grow min-w-0 h-9 px-3 border border-gray-200 rounded-xl text-xs bg-white outline-none text-gray-800 placeholder-gray-400 focus:border-orange-500 focus:ring-1 focus:ring-orange-200 transition-all"
                 />
                 <button 
                     type="button"

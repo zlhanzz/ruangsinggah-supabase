@@ -1,98 +1,118 @@
-# WALKTHROUGH - Modernisasi Alur & UI/UX Penambahan Tipe Kamar Dashboard Mitra
+# WALKTHROUGH - Sistem Kendali Biaya Operasional Platform KostManager & Transparansi Laporan Keuangan
 
-Dokumen ini merangkum penyelesaian implementasi perombakan alur dan desain UI/UX penambahan tipe kamar pada formulir tambah/edit properti di Dashboard Mitra ([KostFormMitra.tsx](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/components/KostFormMitra.tsx)).
-
----
-
-## 1. Masalah yang Diselesaikan
-
-Sebelum perbaikan:
-1. **Immediate Form Open (Membuka Form Paksa)**: Saat mitra berpindah dari Langkah 2 (Lokasi) ke Langkah 3 (Tipe Kamar), sistem secara agresif langsung membuka formulir pengisian kamar default ("Standard 3x4m"), sehingga mitra tidak memiliki kontrol apakah ingin melihat ikhtisar terlebih dahulu atau memulai menambah kamar secara sadar.
-2. **Mini-Stepper Sempit di Perangkat Bergerak (Mobile)**: Stepper 3 tahap pengisian kamar berhimpitan dan kurang nyaman di layar sentuh smartphone.
-3. **Ketiadaan Kalkulasi Luas Ruangan**: Pilihan dimensi ukuran kamar ("3x4 m", "3x3 m") belum menampilkan estimasi luas area (misal: "± 12 m²") yang merupakan standar informasi hospitality modern.
-4. **Visual Kartu Kamar Kurang Informatif**: Daftar tipe kamar yang tersimpan membutuhkan tata letak kartu yang lebih profesional, badge ketersediaan kamar yang tegas, dan tombol aksi (Edit & Hapus) yang ramah sentuhan.
+Dokumen ini merangkum penyelesaian implementasi sistem kendali biaya operasional platform RuangSinggah.id (default 5%) khusus untuk properti **KostManager**, simulator interaktif dan audit trail di Dashboard Admin, serta transparansi penuh pada Laporan Keuangan di Dashboard Mitra.
 
 ---
 
-## 2. Perubahan Logika & UI/UX yang Diimplementasikan
+## 1. Ringkasan Kebutuhan & Solusi
 
-### A. Kontrol Tampilan Bertahap & Layar Ikhtisar Awal (*Empty State Onboarding*)
-- **Penyesuaian State**: Logika pembuka form diubah menjadi:
+1. **Kendali Penuh Biaya Platform di Dashboard Admin**:
+   - Menetapkan biaya operasional platform (default 5%) untuk menunjang layanan pencatatan kamar, pencatatan penghuni, penagihan sewa otomatis, pemasaran, dan pelaporan keuangan properti **KostManager**.
+   - Admin memiliki kendali penuh untuk menaikkan/menurunkan persentase, mengaktifkan/menonaktifkan pemotongan, mengatur cakupan transaksi (sewa baru, perpanjangan sewa, biaya ekstra penghuni, fasilitas), dan melihat audit trail perubahan tarif.
+2. **Kalkulator Simulasi Interaktif**:
+   - Admin dapat mensimulasikan nilai bruto transaksi sewa secara langsung di Admin Dashboard untuk melihat potongan platform dan penerimaan bersih mitra.
+3. **Transparansi Finansial di Dashboard Mitra**:
+   - Modal Laporan Keuangan Properti Bulanan pada menu *Kost Saya* (`MitraDashboard.tsx`) secara dinamis menghitung potongan operasional KostManager secara transparan.
+   - Properti mitra reguler tetap 0% potongan (100% pendapatan sewa utuh diterima mitra).
+   - Uang deposit jaminan 100% dikecualikan dari pemotongan (0% potongan).
+   - Format berbagi laporan ke WhatsApp otomatis mencantumkan rincian potongan operasional dan nilai net diterima.
+
+---
+
+## 2. Rincian Perubahan Kode
+
+### A. Tipe Data & Skema Konfigurasi ([types.ts](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/types.ts))
+- Mendefinisikan antarmuka `KostManagerFeeSettings`:
   ```ts
-  const isFormOpen = editingRoomIndex !== null;
+  export interface KostManagerFeeSettings {
+    percentage: number; // default: 5
+    is_active: boolean; // default: true
+    applies_to_new_booking: boolean;
+    applies_to_extension: boolean;
+    applies_to_extra_occupant: boolean;
+    applies_to_facilities: boolean;
+    deposit_excluded: boolean; // fixed true
+    notes?: string;
+    updated_at: string;
+    updated_by: string;
+  }
   ```
-  Formulir tidak akan terbuka secara otomatis saat pertama kali masuk ke Langkah 3.
-- **Empty State Profesional**: Jika belum ada tipe kamar (`roomList.length === 0`), ditampilkan layar ikhtisar berdesain ramah dengan:
-  - Ilustrasi dan judul sambutan edukatif.
-  - Tiga kartu ringkasan keunggulan fitur (*Multi-Tipe Kamar*, *Tarif Fleksibel*, *Kapasitas Tamu*).
-  - Tombol aksi primer **"+ Tambah Tipe Kamar Pertama"** dengan animasi micro-interaction halus.
+- Mendefinisikan antarmuka `KostManagerFeeLogEntry` untuk mencatat riwayat perubahan tarif platform (*audit trail*).
 
-### B. Sub-Wizard 3 Tahap Responsif Mobile
-- **Stepper Adaptif**: Navigasi 3 tahap (`1. Profil & Ukuran`, `2. Kapasitas & Unit`, `3. Periode & Harga`) yang tetap rapi dan proporsional di berbagai resolusi layar.
-- **Tombol Batal / Tutup**: Tersedia tombol pembatalan draft di pojok kanan atas sub-wizard untuk kembali ke layar ikhtisar/daftar kamar kapan saja tanpa merusak data listing properti.
+### B. Service Layer & Persistensi Supabase ([adminService.ts](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/adminService.ts))
+- Menyediakan nilai default `DEFAULT_KOSTMANAGER_FEE_SETTINGS`.
+- Fungsi `getKostManagerFeeSettings()`: mengambil pengaturan tarif dari tabel `app_settings` (key: `'kostmanager_fee_settings'`) dengan mekanisme in-memory cache.
+- Fungsi `getKostManagerFeeLogs()`: mengambil daftar log audit perubahan tarif dari tabel `app_settings` (key: `'kostmanager_fee_logs'`).
+- Fungsi `saveKostManagerFeeSettings()`: menyimpan perubahan pengaturan ke `app_settings` sekaligus mencatat rekaman log baru dengan timestamp, email admin, persentase lama & baru, dan alasan perubahan.
 
-### C. Helper Otomatis Luas Kamar (`calculateRoomArea`)
-- Ditambahkan fungsi helper kalkulasi luas ruangan:
-  ```ts
-  const calculateRoomArea = (sizeStr: string): string => { ... }
-  ```
-  Otomatis menghitung luas dari string dimensi (contoh: "3x4 m" $\rightarrow$ "± 12 m²").
-- Ditampilkan dinamis pada chip preset ukuran kamar maupun saat pengguna mengetik ukuran kustom.
+### C. Panel Kendali & Simulator di Admin Portal ([KostManagerPortal.tsx](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/components/admin/KostManagerPortal.tsx))
+- Ditempatkan pada tab **"Paket & Tarif"** (`activeTab === 'packages'`).
+- **Fitur Utama**:
+  1. **Saklar Status Operasional**: Toggle Aktif/Nonaktif pemotongan platform.
+  2. **Input Persentase & Quick Preset Chips**: Tombol preset instan `0% (Gratis Promo)`, `3%`, `5% (Rekomendasi Standar)`, `7.5%`, dan `10%`.
+  3. **Checklist Cakupan Transaksi**: Centang transaksi yang dikenakan potongan (Sewa Baru, Perpanjangan, Ekstra Penghuni, Fasilitas) disertai banner penegasan bahwa Uang Deposit Jaminan selalu 0% potongan.
+  4. **Kalkulator Simulasi Real-Time**: Input nominal sewa kotor $\rightarrow$ langsung menghitung potongan platform dan pendapatan bersih mitra secara instan.
+  5. **Tabel Audit Trail**: Menampilkan histori perubahan tarif, admin pembuat perubahan, dan catatan alasan.
 
-### D. Redesain Kartu Ringkasan Tipe Kamar Tersimpan
-- **Struktur Kartu Modern**:
-  - Nomor urut tipe kamar (#1, #2, dst.) dan nama tipe kamar.
-  - Badge ketersediaan unit yang tegas (`✓ X Unit Tersedia` atau `✕ Unit Penuh`).
-  - Info spesifikasi (dimensi, luas m², kapasitas maksimal penghuni, biaya tambahan penghuni ekstra).
-  - Penonjolan tarif sewa pokok bulanan dengan font tebal dan kontras warna yang nyaman dibaca.
-  - Tombol aksi **Edit** dan **Hapus** dengan touch target ergonomis.
-- **Tombol Tambah Tambahan**: Desain modern dashed card **"+ Tambah Tipe Kamar Lainnya"** di bawah daftar kamar tersimpan.
+### D. Transparansi Laporan Keuangan Mitra ([MitraDashboard.tsx](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/MitraDashboard.tsx))
+- Mengambil konfigurasi `kmFeeSettings` secara otomatis saat dashboard dimuat.
+- Pada Modal Laporan Keuangan Properti Bulanan (`selectedKostForFinance`):
+  - Jika properti berstatus **KostManager** dan fee aktif:
+    - Menghitung `totalOperationalCut = grossRevenue * (feePercentage / 100)`.
+    - Menghitung `totalNetReceived = totalGrossIncome - totalOperationalCut`.
+    - Menampilkan **Kartu Rincian Potongan Operasional Platform KostManager (X%)** secara elegan.
+    - Mengarahkan kartu performa utama ke **Total Bersih Diterima Pemilik Kost** (hijau emerald).
+  - Jika properti berstatus reguler: potongan tetap Rp 0 (100% diterima mitra).
+  - Menyesuaikan klausul transparansi operasional dan template teks ekspor WhatsApp.
 
-### E. Kepatuhan Standar Bebas FOUT
-- Seluruh icon menggunakan pure vector SVG dari package `lucide-react` (`Bed`, `Layers`, `DollarSign`, `Users`, `Pencil`, `Trash2`, `Plus`, `Sparkles`, `Check`, `X`, `ChevronRight`, `ChevronLeft`).
+### E. Standar Ikon Pure SVG Bebas FOUT
+- Seluruh icon menggunakan komponen vector SVG dari package `lucide-react` (`Percent`, `Calculator`, `History`, `Save`, `ShieldCheck`, `FileText`, `Layers`, `Zap`).
 
 ---
 
-## 3. Berkas yang Dimodifikasi
+## 3. Berkas yang Disentuh
 
-1. **[KostFormMitra.tsx](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/components/KostFormMitra.tsx)**:
-   - Penyesuaian state kontrol form buka/tutup kamar.
-   - Pembuatan layar ikhtisar/empty state awal penambahan kamar.
-   - Peningkatan UI sub-wizard 3 tahap dan kalkulator luas m².
-   - Redesain kartu daftar kamar tersimpan dan dashed button "+ Tambah Tipe Kamar Lainnya".
-2. **[PROGRESS.md](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/PROGRESS.md)**:
-   - Pencatatan riwayat progres fitur nomor 332.
-3. **[WALKTHROUGH.md](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/WALKTHROUGH.md)**:
-   - Dokumentasi lengkap hasil pengujian dan perubahan.
+1. **[types.ts](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/types.ts)**: Penambahan antarmuka `KostManagerFeeSettings` & `KostManagerFeeLogEntry`.
+2. **[adminService.ts](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/adminService.ts)**: Penambahan service query, mutation, caching, dan audit logging pada Supabase `app_settings`.
+3. **[KostManagerPortal.tsx](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/components/admin/KostManagerPortal.tsx)**: Pembuatan section pengaturan biaya platform, simulator kalkulasi, dan tabel audit log.
+4. **[MitraDashboard.tsx](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/MitraDashboard.tsx)**: Integrasi kalkulasi dinamis potongan platform, kartu transparansi, dan pembaruan format bagikan WhatsApp.
+5. **[functions/PROGRESS.md](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/PROGRESS.md)**: Dokumentasi progres entri nomor 333.
+6. **[WALKTHROUGH.md](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/WALKTHROUGH.md)**: Panduan walkthrough dan hasil pengujian.
 
 ---
 
 ## 4. Hasil Verifikasi & Uji Kompilasi
 
-1. **Kompilasi Frontend Vite (`functions/public`)**:
+1. **Build Frontend Vite (`functions/public`)**:
    ```bash
    cmd /c npm run build
    ```
-   **Hasil**: **LULUS (Exit Code 0)**. Seluruh 2510 modul tertransformasi dan bundle production terkompilasi sempurna tanpa error TypeScript/JSX.
-2. **Kompilasi Backend Functions (`functions`)**:
+   **Hasil**: **LULUS (Exit Code 0)**. Sebanyak 2510 modul tertransformasi dan bundle production berhasil disalin ke `./dist` & `../../public` dalam waktu 30.40 detik tanpa error.
+2. **Build Backend Functions (`functions`)**:
    ```bash
    cmd /c npm run build (tsc)
    ```
-   **Hasil**: **LULUS (Exit Code 0)**.
+   **Hasil**: **LULUS (Exit Code 0)**. 0 error kompilasi TypeScript.
 
 ---
 
 ## 5. Panduan Pengujian bagi Pengguna
 
-1. Buka halaman **Dashboard Mitra** dan klik tombol **"Tambah Kost"** atau edit kost yang sudah ada.
-2. Lengkapi Langkah 1 (Informasi Umum) dan Langkah 2 (Alamat & Lokasi), lalu klik **"Lanjut ke Tipe Kamar"**.
-3. **Verifikasi Langkah 3**:
-   - Pastikan formulir input kamar **TIDAK langsung terbuka otomatis**.
-   - Jika properti belum memiliki kamar, Anda akan melihat layar ikhtisar bersih dengan 3 kartu keunggulan dan tombol primer **"+ Tambah Tipe Kamar Pertama"**.
-4. Klik **"+ Tambah Tipe Kamar Pertama"**:
-   - Perhatikan sub-wizard 3 tahap muncul dengan tombol "Batal" di kanan atas.
-   - Pada Tahap 1, pilih ukuran dimensi kamar (misal: "3x4 m") dan perhatikan badge luas area otomatis muncul ("± 12 m²").
-   - Lanjutkan ke Tahap 2 dan Tahap 3, lalu klik "Simpan Kamar".
-5. Amati kartu ringkasan kamar yang telah tersimpan:
-   - Informasi dimensi kamar, luas m², badge unit tersedia, dan harga bulanan tampil rapi dan profesional.
-   - Coba tombol "Edit" dan tombol "+ Tambah Tipe Kamar Lainnya".
+### A. Pengujian Kendali Tarif di Dashboard Admin
+1. Buka halaman **Admin Portal KostManager** (`/dashboard-admin/km_portal`).
+2. Masuk ke tab **"Paket & Tarif"**.
+3. Di bagian teratas, Anda akan melihat panel **"Pengaturan Biaya Layanan Platform KostManager"**:
+   - Coba klik chip preset persentase (misal: `3%`, `5%`, `7.5%`, atau `0%`).
+   - Coba ubah nilai pada **Kalkulator Simulasi Pendapatan** (misal masukkan `Rp 2.000.000`) dan perhatikan perubahan angka potongan platform dan net pemilik secara real-time.
+   - Masukkan alasan perubahan pada kolom catatan, lalu klik **"Simpan Pengaturan Biaya"**.
+   - Perhatikan notifikasi sukses dan amati pembaruan entri pada **Riwayat Perubahan Tarif Platform**.
+
+### B. Pengujian Transparansi di Dashboard Mitra
+1. Buka **Dashboard Mitra** (`/dashboard-mitra/properties`).
+2. Pada salah satu properti berstatus **KostManager**, klik tombol **"📄 Laporan Keuangan Kost"**.
+3. Amati tampilan modal:
+   - Terdapat kartu rincian **"Potongan Operasional Platform KostManager (5%)"**.
+   - Kartu statistik utama menampilkan **"Total Bersih Diterima Pemilik Kost"**.
+   - Klik tombol **"Kirim ke WhatsApp"** dan perhatikan bahwa draf pesan WhatsApp telah memuat rincian bruto, potongan platform, dan total net diterima.
+4. Buka modal laporan keuangan pada properti berstatus reguler:
+   - Pastikan potongan operasional tetap Rp 0 (100% diterima penuh).

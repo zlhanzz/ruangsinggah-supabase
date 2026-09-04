@@ -1,116 +1,95 @@
-# IMPLEMENTATION PLAN - Evaluasi & Modernisasi UI/UX Penambahan Tipe Kamar Dashboard Mitra
+# IMPLEMENTATION PLAN - Perbaikan Tampilan Teks Fasilitas & Eliminasi Kamar Mandi Luar Redundan pada Fasilitas Kamar
 
-Dokumen ini adalah rencana kerja Fase 1 untuk mengevaluasi dan merombak tampilan UI/UX penambahan tipe kamar pada formulir tambah/edit properti di Dashboard Mitra ([KostFormMitra.tsx](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/components/KostFormMitra.tsx)), agar lebih responsif di berbagai ukuran layar, berstandar industri modern, serta menerapkan flow entri baru di mana formulir input tidak langsung terbuka otomatis melainkan diawali oleh layar ikhtisar/tombol tambah.
+Dokumen ini adalah rencana kerja Fase 1 untuk menyelesaikan dua permasalahan pada Langkah 4 (Fasilitas) di formulir pendaftaran/edit kost mitra ([KostFormMitra.tsx](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/components/KostFormMitra.tsx)):
+1. Memperbaiki teks label fasilitas yang terpotong (*truncated*) pada kartu pilihan fasilitas.
+2. Mengeliminasi opsi input *Kamar Mandi Luar* yang redundan pada daftar fasilitas kamar tidur (karena kamar mandi luar secara alami tergolong sebagai **Fasilitas Umum / Gedung** di bawah item `WC Umum`).
 
 ---
 
 ## 1. Analisis Masalah & Kebutuhan Pengguna
 
-### A. Masalah Alur Entri (*Immediate Form Open*)
-- **Kondisi Saat Ini**:
-  Pada kode [KostFormMitra.tsx](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/components/KostFormMitra.tsx) baris 4505 terdapat logika:
-  ```ts
-  const isFormOpen = editingRoomIndex !== null || roomList.length === 0;
-  ```
-  Hal ini menyebabkan ketika mitra berpindah dari Langkah 2 (Lokasi) menuju Langkah 3 (Tipe Kamar), sistem **secara agresif langsung membuka formulir sub-wizard** pengisian dengan nilai default kamar ("Standard 3x4m") meskipun mitra belum pernah menekan tombol tambah kamar.
-- **Kebutuhan Pengguna**:
-  Ketika baru pertama kali masuk ke Langkah 3, sistem tidak boleh langsung memaksa membuka menu input kamar. Mitra harus melihat layar ikhtisar terlebih dahulu dan secara sadar menekan tombol **"+ Tambah Tipe Kamar"** baru kemudian formulir input muncul.
+### A. Masalah 1: Teks Nama Fasilitas Terpotong (*Truncation Issue*)
+- **Penyebab**:
+  Pada komponen `HierarchicalPublicFacilityInput`, `HierarchicalRoomFacilityInput`, dan checklist cakupan biaya tambahan, elemen teks label dibungkus dengan kelas Tailwind `truncate`.
+  Di layar mobile (lebar 360px - 430px), grid 2-kolom memberikan lebar kartu yang terbatas (~140px - 160px). Setelah dikurangi padding kartu, checkbox, dan icon emoji, sisa ruang hanya ~80px - 100px.
+  Hal ini menyebabkan nama-nama fasilitas panjang (seperti *"Kamar Mandi Dalam"*, *"Security 24 Jam"*, *"Cleaning Service"*, *"Kulkas Bersama"*, *"Wastafel Cuci Piring"*, *"Dispenser Air"*, dll.) terpotong menjadi *"Kamar Mandi..."*, *"Security 24..."*.
+- **Solusi**:
+  - Hapus kelas `truncate` dari span label dan ganti dengan penataan multi-line responsif: `text-xs font-bold leading-snug break-words flex-1`.
+  - Berikan `min-h-[44px]` dan penyesuaian padding (`p-2 sm:p-2.5`) pada kontainer kartu label agar teks 2-baris tersusun rapi, simetris, dan tetap memenuhi standar *touch target* mobile minimal 44x44px.
+  - Tambahkan `min-w-0` pada field input kustom fasilitas agar tidak mendorong tombol `+ Tambah` keluar dari kontainer pada layar sempit.
 
-### B. Masalah Keterbatasan UI/UX & Responsivitas
-1. **Mini-Stepper Sempit di Mobile**:
-   Tab navigasi 3 tahap (`1. Profil & Ukuran`, `2. Kapasitas & Unit`, `3. Periode & Harga`) pada layar smartphone terlihat padat dan teksnya saling berhimpitan atau terpotong.
-2. **Preset & Input Nama Kamar**:
-   Pilihan preset dan opsi nama kustom perlu transisi visual yang lebih halus dan intuitif.
-3. **Keterbacaan Dimensi Kamar**:
-   Pemilihan ukuran kamar (`3x3 m`, `3x4 m`, dll.) belum memberikan kalkulasi luas ruangan (misal: "± 12 m²") yang menjadi standar industri (seperti di Airbnb, Mamikos, Booking.com).
-4. **Kontrol Kapasitas & Ketersediaan Unit**:
-   Tombol stepper counter (+/-) dan kapasitas penghuni perlu target sentuh (*touch target*) minimal 44x44px yang nyaman di perangkat seluler dengan visual ikon `lucide-react` yang elegan.
-5. **Kerapian Kartu Ringkasan Kamar Tersimpan**:
-   Kartu kamar yang sudah dibuat membutuhkan visual card modern dengan badge status ketersediaan yang tegas, label harga utama yang menonjol, dan tombol aksi (Edit & Hapus) yang ergonomis.
+---
+
+### B. Masalah 2: Redundansi Opsi "Kamar Mandi Luar" pada Fasilitas Kamar
+- **Penyebab**:
+  - Fasilitas kamar tidur mewakili sarana yang berada **di dalam ruangan privat kamar** (seperti Kasur, Lemari, AC, TV, Meja, Kursi, Balkon, Kamar Mandi Dalam, Dapur Dalam).
+  - Opsi *"Kamar Mandi Luar"* sebelumnya disertakan di `ALL_ROOM_FACILITY_PRESETS`. Padahal, jika kamar mandi berada di luar kamar, fasilitas tersebut adalah fasilitas bersama yang sudah dikelola secara terpusat pada **Fasilitas Gedung / Umum** (item `WC Umum / Luar`).
+  - Adanya *"Kamar Mandi Luar"* di fasilitas kamar menimbulkan kebingungan pengguna (apakah harus centang di fasilitas kamar, di fasilitas umum, atau dua-duanya).
+- **Solusi**:
+  1. Hapus preset `{ label: 'Kamar Mandi Luar', icon: '🚪', isPerabot: false }` dari `ALL_ROOM_FACILITY_PRESETS`.
+  2. Pertahankan saklar **"Kamar Mandi Dalam"** (dengan sub-panel kelengkapan WC: Kloset Duduk, Kloset Jongkok, Shower, Water Heater, Wastafel, Bak Mandi, Ember & Gayung).
+  3. **Logika Otomatisasi Status Kamar Mandi**:
+     - Jika **"Kamar Mandi Dalam"** dicentang $\rightarrow$ kamar berstatus *Kamar Mandi Dalam*, data `bathroomFacilities: ['Kamar Mandi Dalam', ...kelengkapan]` dan `bathroomType: 'Kamar Mandi Dalam'`.
+     - Jika **"Kamar Mandi Dalam"** TIDAK dicentang $\rightarrow$ kamar otomatis berstatus *Kamar Mandi Luar*, data `bathroomFacilities: ['Kamar Mandi Luar']` dan `bathroomType: 'Kamar Mandi Luar'`.
+  4. Perbarui fungsi `validateCurrentStep(3)`: Hapus pesan validasi yang mewajibkan memilih opsi kamar mandi luar secara manual. Jika kamar mandi dalam tidak dicentang, sistem langsung mengenali tipe kamar tersebut menggunakan fasilitas WC Umum/Luar tanpa menampilkan error.
 
 ---
 
 ## 2. Dampak Perubahan
 
-File yang disentuh:
+File yang akan dimodifikasi:
 - **[KostFormMitra.tsx](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/components/KostFormMitra.tsx)**:
-  1. Penyesuaian state kontrol form terbuka/tertutup (`editingRoomIndex !== null`).
-  2. Implementasi **Layar Ikhtisar Awal / Empty State** yang memuat ilustrasi, ringkasan panduan, dan tombol aksi primer `+ Tambah Tipe Kamar Pertama`.
-  3. Redesain **Mini-Stepper 3 Tahap** yang adaptif di layar smartphone maupun desktop.
-  4. Peningkatan komponen input di setiap tahap:
-     - **Tahap 1**: Radio chip preset nama + transisi input nama kustom, quick chip ukuran kamar + indikator kalkulasi luas (m²).
-     - **Tahap 2**: Tombol pill kapasitas dengan ikon person, stepper ketersediaan kamar yang ramah sentuhan, dan switch pertanyaan biaya penghuni ekstra yang bersih.
-     - **Tahap 3**: Pilihan multi-periode dengan indikator tarif Bulanan sebagai tarif utama, input format Rupiah otomatis (`Rp X.XXX.XXX`), dan field biaya penghuni ekstra terpadu.
-  5. Redesain **Kartu Ringkasan Tipe Kamar** tersimpan agar setara standar aplikasi perhotelan & kost modern.
-  6. Penyediaan tombol **"Batal"** yang selalu aman diklik untuk kembali ke layar ikhtisar/daftar kamar tanpa menghilangkan data lain.
+  1. Membersihkan preset `ALL_ROOM_FACILITY_PRESETS` dari entri `Kamar Mandi Luar`.
+  2. Memperbarui handler `handleToggleFacility` dan state default kamar mandi di `HierarchicalRoomFacilityInput`.
+  3. Menghapus kelas `truncate` dan menerapkan `break-words leading-snug flex-1` serta `min-h-[44px]` pada seluruh kartu opsi fasilitas (Fasilitas Umum, Fasilitas Kamar, dan Cakupan Biaya Tambahan).
+  4. Mengoptimalkan flex layout dan input kustom dengan `min-w-0`.
+  5. Menyesuaikan logika validator `validateCurrentStep(3)` untuk skema kamar mandi yang lebih ringkas dan otomatis.
 
 > [!NOTE]
-> Seluruh skema struktur data `RoomType`, alur validasi `validateCurrentStep(2)`, dan binding database Supabase tetap dipertahankan 100% tanpa perubahan struktur tabel.
+> Kompatibilitas data ke database Supabase dan halaman detail listing tetap 100% terjaga karena format data `bathroomFacilities` dan `roomFacilities` tetap konsisten.
 
 ---
 
-## 3. Langkah-Langkah Eksekusi Rinci
+## 3. Langkah-Langkah Eksekusi
 
-### Langkah 1: Penyesuaian Logika Tampilan & State Buka/Tutup
-- Ubah penentu `isFormOpen`:
-  ```ts
-  const isFormOpen = editingRoomIndex !== null;
-  ```
-- Buat fungsi `startAddNewRoomFirstTime()` atau optimalkan `startAddRoom()` yang mengatur `editingRoomIndex(-1)` dan menginisialisasi draft kamar bersih.
-- Fungsi `cancelRoomDraft()` memastikan `editingRoomIndex` kembali ke `null`, menutup form dan kembali ke tampilan ikhtisar/daftar kamar.
+### Langkah 1: Modifikasi Definisi Preset & Handler di `KostFormMitra.tsx`
+- Hapus `Kamar Mandi Luar` dari `ALL_ROOM_FACILITY_PRESETS`.
+- Sesuaikan toggle `Kamar Mandi Dalam`:
+  - Saat aktif: Tambahkan `'Kamar Mandi Dalam'` ke `roomFacilities` dan `bathroomFacilities`.
+  - Saat nonaktif: Hapus `'Kamar Mandi Dalam'`, set `bathroomFacilities` menjadi `['Kamar Mandi Luar']` secara default, dan bersihkan sub-pilihan WC dalam.
 
-### Langkah 2: Pembuatan Komponen Layar Ikhtisar Awal (Empty State)
-- Jika `roomList.length === 0` dan `!isFormOpen`:
-  - Tampilkan card sambutan modern dengan ikon `Bed` / `Layers`.
-  - Judul: "Atur Tipe Kamar & Tarif Sewa".
-  - Penjelasan singkat manfaat pendaftaran tipe kamar.
-  - Poin keunggulan ringkas (misal: *Bisa buat beragam tipe*, *Fleksibilitas sewa bulanan/harian*, *Fasilitas detail diatur di langkah berikutnya*).
-  - Tombol aksi primer: **"+ Tambah Tipe Kamar Pertama"** yang mencolok dengan efek hover modern.
+### Langkah 2: Perbaikan Styling Teks Bebas Potong (*Anti-Truncate*)
+- Pada `HierarchicalPublicFacilityInput`:
+  - Ganti `truncate` dengan `text-xs font-bold leading-snug break-words flex-1`.
+  - Tambahkan `min-h-[44px] items-center` pada kontainer label kartu.
+  - Tambahkan `min-w-0` pada input kustom fasilitas umum.
+- Pada `HierarchicalRoomFacilityInput`:
+  - Ganti `truncate` dengan `text-xs font-bold leading-snug break-words flex-1`.
+  - Tambahkan `min-h-[44px] items-center` pada kontainer label kamar.
+  - Tambahkan `min-w-0` pada input kustom fasilitas kamar dan kelengkapan WC.
+- Pada bagian *Cakupan Biaya Tambahan Fasilitas*:
+  - Ganti `truncate` dengan `text-xs font-bold leading-snug break-words flex-1`.
 
-### Langkah 3: Modernisasi Sub-Wizard Form (3 Tahap)
-- **Header Sub-Wizard**:
-  - Stepper adaptif dengan visual active bar / pill steps yang rapi di layar mobile (tidak membuat teks terpotong).
-  - Tombol "Batal" / "Tutup" yang jelas di sudut kanan atas.
-- **Tahap 1 (Profil & Ukuran)**:
-  - Preset nama tipe kamar yang responsif + animasi pembuka input kustom.
-  - Dimensi kamar: Chip preset + input teks dengan helper perhitungan luas otomatis (contoh: "3x4 m" $\rightarrow$ "± 12 m²").
-- **Tahap 2 (Kapasitas & Ketersediaan)**:
-  - Pilihan kapasitas penghuni (1, 2, 3 Orang) dengan ikon `User` / `Users`.
-  - Stepper unit kamar yang nyaman untuk tap jari di smartphone.
-  - Kartu opsi biaya sewa tambahan penghuni ekstra yang jelas.
-- **Tahap 3 (Periode Sewa & Harga)**:
-  - Chip toggle periode sewa (Bulanan sebagai tarif utama).
-  - Input nominal sewa dengan currency formatting otomatis.
-  - Input biaya tambahan penghuni (jika diaktifkan) dalam kartu aksen yang rapi.
-  - Tombol navigasi "Kembali" dan "Simpan Tipe Kamar" yang kontras dan responsif.
-
-### Langkah 4: Modernisasi Kartu Tipe Kamar Tersimpan (Summary View)
-- Jika `roomList.length > 0` dan `!isFormOpen`:
-  - Tampilkan kartu-kartu tipe kamar dengan desain berkelas:
-    - Chip status ketersediaan kamar (`X Kamar Tersedia` atau `Kamar Penuh`).
-    - Chip dimensi dan kapasitas penghuni.
-    - Nominal tarif bulanan yang besar dan jelas.
-    - Tombol aksi `Edit` dan `Hapus` dengan touch target yang ramah pengguna.
-  - Tombol `+ Tambah Tipe Kamar Lainnya` dengan style modern dashed card yang interaktif.
-  - Banner pemandu informatif bahwa fasilitas kasur/lemari/AC dan foto kamar akan diatur di Langkah 4 & 5.
+### Langkah 3: Penyesuaian Validator Formulir
+- Di fungsi `validateCurrentStep(currentStep = 3)`:
+  - Validasi kamar mandi disederhanakan: Jika `hasInsideBath` aktif, wajib pilih minimal 1 kelengkapan WC. Jika tidak aktif, kamar secara otomatis valid sebagai pengguna WC Luar/Umum.
 
 ---
 
 ## 4. Rencana Verifikasi
 
-1. **Uji Validasi Form & Flow Baru**:
-   - Memastikan saat masuk ke Langkah 3 pertama kali, form input TIDAK langsung terbuka; layar menampilkan ikhtisar dan tombol "+ Tambah Tipe Kamar Pertama".
-   - Menekan "+ Tambah Tipe Kamar Pertama" membuka form input 3 tahap secara mulus.
-   - Menekan tombol "Batal" menutup form dan kembali ke layar ikhtisar tanpa error.
-   - Mengisi dan menyimpan tipe kamar membuat kartu tipe kamar muncul di daftar.
-   - Menekan "+ Tambah Tipe Kamar Lainnya" membuka form untuk tipe kamar berikutnya.
-   - Menekan "Edit" pada kartu kamar mengisi data lama ke form dengan benar.
-   - Menghapus kamar berhasil dengan konfirmasi yang aman.
-2. **Uji Validasi Ketat Langkah Wizard**:
-   - Memastikan jika belum ada kamar terdaftar sama sekali, menekan tombol "Lanjut" utama di footer tetap dicegah oleh validator ("Wajib mendaftarkan minimal satu tipe kamar sebelum melanjutkan").
-   - Memastikan jika form sedang terbuka dan belum disimpan, tombol "Lanjut" mengingatkan user untuk menyimpan atau membatalkan draft kamar.
-3. **Uji Responsivitas Tampilan**:
-   - Memastikan stepper dan form tidak overflow atau berantakan pada resolusi mobile (360px - 414px) maupun desktop.
-4. **Uji Kompilasi Kode**:
-   - Menjalankan `cmd /c npm run build` pada folder `functions/public` untuk memastikan 0 error kompilasi TypeScript / Vite.
-   - Menjalankan `cmd /c npm run build` pada folder `functions` untuk memastikan build backend tetap lulus 100%.
+1. **Uji Kompilasi Build Frontend**:
+   ```bash
+   cmd /c npm run build
+   ```
+   Memastikan 0 error TypeScript, JSX, dan bundling Vite pada `functions/public`.
+2. **Uji Kompilasi Backend Functions**:
+   ```bash
+   cmd /c npm run build
+   ```
+   Memastikan 0 error `tsc` pada `functions`.
+3. **Verifikasi Visual UI & Logika di Browser**:
+   - Membuka Langkah 4 (Fasilitas) pada formulir mitra.
+   - Memastikan tidak ada teks fasilitas yang terpotong `...` di layar mobile maupun desktop.
+   - Memastikan pada daftar Fasilitas Kamar hanya ada opsi **Kamar Mandi Dalam** (dan tidak ada lagi opsi redundan *Kamar Mandi Luar*).
+   - Memastikan saat *Kamar Mandi Dalam* dicentang, sub-panel kelengkapan WC terbuka, dan saat tidak dicentang, kamar otomatis tersimpan sebagai kamar dengan kamar mandi luar tanpa error validasi.

@@ -2,6 +2,50 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 333. Sistem Kendali Biaya Operasional / Platform Fee KostManager (Default 5%), Simulasi Interaktif di Portal Admin, Audit Log Perubahan Tarif, dan Transparansi Laporan Keuangan di Dashboard Mitra (`KostManagerPortal.tsx`, `MitraDashboard.tsx`, `adminService.ts`, `types.ts`) (September 2026)
+- **Permintaan & Masalah**:
+  1. Penetapan skema biaya operasional platform RuangSinggah dalam menjalankan layanan bisnisnya, dirancang sebesar 5% untuk setiap transaksi (baik perpanjangan sewa maupun penyewaan baru), khusus untuk properti **KostManager**.
+  2. Pengguna meminta agar persentase biaya ini memiliki kendali penuh di Dashboard Admin agar dapat dinaikkan atau diturunkan sewaktu-waktu sesuai strategi bisnis platform.
+  3. Laporan keuangan pada Dashboard Mitra harus menampilkan transparansi pemotongan biaya operasional platform ini dengan jelas, jujur, dan terstruktur tanpa memotong dana deposit jaminan (uang jaminan 0% potongan).
+  4. Properti mitra reguler/biasa tetap 0% potongan (100% pendapatan sewa diterima penuh oleh mitra).
+- **Implementasi Solusi**:
+  1. **Standardisasi Type Data & Skema Pengaturan (`types.ts`)**:
+     - Menambahkan antarmuka `KostManagerFeeSettings` (`percentage`, `is_active`, `applies_to_new_booking`, `applies_to_extension`, `applies_to_extra_occupant`, `applies_to_facilities`, `deposit_excluded`, `notes`, `updated_at`, `updated_by`).
+     - Menambahkan antarmuka `KostManagerFeeLogEntry` untuk mencatat audit trail setiap kali admin mengubah tarif atau status pemotongan.
+  2. **Service Layer & Penyimpanan Persisten Supabase (`adminService.ts`)**:
+     - `DEFAULT_KOSTMANAGER_FEE_SETTINGS`: Konfigurasi default 5% potongan aktif, mencakup sewa baru, perpanjangan, biaya ekstra, biaya fasilitas, dan tegas mengecualikan deposit jaminan (`deposit_excluded: true`).
+     - `getKostManagerFeeSettings()`: Membaca pengaturan biaya platform dari tabel `app_settings` (key: `'kostmanager_fee_settings'`) dengan caching lokal.
+     - `getKostManagerFeeLogs()`: Mengambil riwayat log audit perubahan tarif platform dari tabel `app_settings` (key: `'kostmanager_fee_logs'`).
+     - `saveKostManagerFeeSettings()`: Menyimpan pembaruan konfigurasi tarif dan mencatat log audit (waktu, persentase lama $\rightarrow$ baru, status, admin updater, dan catatan alasan).
+  3. **Antarmuka Kendali Penuh & Simulator di Portal Admin (`KostManagerPortal.tsx`)**:
+     - Membangun **Section 1: Pengaturan Biaya Layanan Platform KostManager** pada tab "Paket & Tarif" (`activeTab === 'packages'`).
+     - Toggle Status Operasional: Saklar Aktif / Nonaktifkan pemotongan biaya platform KostManager.
+     - Input Persentase Tarif & Quick Chips Preset: Opsi cepat `0% (Gratis Promo)`, `3%`, `5% (Rekomendasi Standar)`, `7.5%`, dan `10%`.
+     - Checklist Cakupan Transaksi: Centang berlaku untuk Sewa Baru, Perpanjangan Sewa, Tambahan Orang, dan Biaya Fasilitas, disertai penegasan bahwa Uang Deposit Jaminan selalu 0% potongan.
+     - Simulator Interaktif Pendapatan: Kalkulator real-time untuk mensimulasikan nilai bruto transaksi sewa $\rightarrow$ kalkulasi potongan platform RuangSinggah $\rightarrow$ pendapatan bersih yang diterima mitra pemilik.
+     - Catatan Alasan Perubahan & Tombol Simpan Konfigurasi dengan konfirmasi modal.
+     - Tabel Audit Trail: Menampilkan riwayat perubahan tarif terakhir secara kronologis.
+  4. **Transparansi Penuh Laporan Keuangan di Dashboard Mitra (`MitraDashboard.tsx`)**:
+     - Membaca konfigurasi `kmFeeSettings` dari service secara dinamis.
+     - Pada modal Laporan Keuangan Properti Bulanan (`selectedKostForFinance`):
+       - Jika properti berstatus **KostManager** dan skema fee aktif: sistem secara otomatis mengkalkulasi potongan platform (`totalOperationalCut`) dari total transaksi pendapatan sewa bruto (tidak termasuk deposit).
+       - Menghadirkan **Kartu Rincian Potongan Operasional KostManager**: Menampilkan Total Transaksi Bruto, Potongan Operasional Platform (X%), dan Total Bersih Diterima Pemilik Kost.
+       - Kartu Statistik utama menampilkan "Net Diterima Pemilik" dengan warna hijau emerald tegas.
+       - Menyesuaikan box disclaimer *Ketentuan Finansial & Operasional* yang menjelaskan bahwa biaya operasional 5% dialokasikan untuk layanan pencatatan kamar, penghuni, penagihan otomatis, pemasaran, dan pelaporan keuangan.
+       - Template ekspor / bagikan laporan via WhatsApp otomatis menyertakan rincian potongan operasional dan total net diterima.
+  5. **Standar Ikon SVG Ter-bundle & Bebas FOUT**:
+     - Menggunakan pure vector SVG dari `lucide-react` (`Percent`, `Calculator`, `History`, `Save`, `ShieldCheck`, `FileText`, `Layers`, `Zap`).
+- **File Tersentuh**:
+  - `functions/public/types.ts`
+  - `functions/public/adminService.ts`
+  - `functions/public/components/admin/KostManagerPortal.tsx`
+  - `functions/public/pages/MitraDashboard.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi build frontend Vite `cmd /c npm run build` di `functions/public/` lulus 100% (✓ 2510 modules transformed, built in 43.40s, 0 error).
+  - Kompilasi backend `functions` `tsc` lulus 100% (0 error).
+
 ### 332. Modernisasi Alur & UI/UX Penambahan Tipe Kamar Dashboard Mitra: Onboarding Ikhtisar, Sub-Wizard 3 Tahap Ramah Mobile & Kalkulasi Luas Ruang Otomatis (`KostFormMitra.tsx`) (September 2026)
 - **Permintaan & Masalah**:
   1. Sebelumnya, ketika mitra berpindah ke Langkah 3 (Tipe Kamar & Tarif), sistem secara agresif langsung membuka form entri default kamar ("Standard 3x4m"), memaksa pengguna langsung mengisi form tanpa ada layar ikhtisar awal.
