@@ -2,7 +2,7 @@
 
 ## Fitur Selesai (Completed Features)
 
-### 334. Perbaikan Integrasi Edge Function Deteksi Banner Kontak (`detect-contact-banner`), Pengetatan Presisi Sensor (Ultra-Tight Fit), & Auto-Watermark di Dashboard Mitra (`adminService.ts`, `detect-contact-banner/index.ts`, `KostFormMitra.tsx`) (September 2026)
+### 334. Perbaikan Integrasi Edge Function Deteksi Banner Kontak (`detect-contact-banner`), Pengetatan Presisi Sensor (Ultra-Tight Fit via Canvas Pixel Analysis), & Auto-Watermark di Dashboard Mitra (`adminService.ts`, `detect-contact-banner/index.ts`, `KostFormMitra.tsx`) (September 2026)
 - **Permintaan & Masalah**:
   1. Fitur otomatis sensor foto (blur area spanduk dan penempelan watermark kapsul `ruangsinggah.id`) sebelumnya tidak berfungsi karena ketidakcocokan nama Edge Function (`'detect-banner'` vs `'detect-contact-banner'`), parameter payload (`image` vs `base64Image`), dan parsing response bersarang.
   2. Setelah deteksi aktif, area sensor tampak terlalu besar dan tinggi (*over-extended*), memanjang vertikal dari spanduk hingga ke jeruji gerbang/atap karena AI vision menangkap struktur bangunan vertikal di belakang spanduk dan clustering gap yang terlalu longgar.
@@ -19,8 +19,11 @@
      - Menambahkan aturan ketat *Ultra-Tight Bounding Box*: melarang keras memasukkan struktur gerbang, jeruji pagar kayu/besi vertikal, dinding, kanopi atap, tiang, atau lantai ke dalam kotak sensor.
      - Memastikan `ymin`, `ymax`, `xmin`, `xmax` menempel pas hanya pada 4 sudut tepi lembaran kain/kertas spanduk.
      - Mengatur cascade model aktif Gemini (`gemini-2.0-flash`, `gemini-1.5-flash`, `gemini-2.5-flash`, `gemini-1.5-pro`, `gemini-3.7-flash`).
-  4. **Optimasi Algoritma Clustering & Sensor Fit Presisi (`adminService.ts`)**:
-     - Memperkecil toleransi gap clustering menjadi *direct intersection* (`Math.max(3, img * 0.008)`) agar kotak tidak membengkak menjangkau area non-spanduk.
+  4. **Pemangkas Pintar Analisis Pixel Canvas (`refineBannerBoundsWithPixelAnalysis` di `adminService.ts`)**:
+     - Memindai baris-baris pixel canvas (`getImageData`) secara cerdas dari atas dan bawah bounding box untuk mendeteksi batas fisik spanduk berdasarkan kecerahan, saturasi warna kuning/putih, dan variansi teks.
+     - Memotong area non-spanduk (bilah kayu gerbang gelap, kanopi seng, dinding polos) yang memiliki banner likeness rendah (< 0.18), sehingga kotak sensor menyusut tepat melingkupi kain spanduk.
+     - Menerapkan pembatas rasio aspek (`h <= w * 1.35`) untuk mencegah kotak memanjang vertikal secara berlebihan.
+  5. **Rendering Mosaik Murni & Watermark Kapsul Elegan (`adminService.ts`)**:
      - Merender pixelate mikro yang rapat, lapisan gelap frosted glassmorphism rapi, dan watermark kapsul `ruangsinggah.id` yang proporsional di tengah spanduk.
 - **File Tersentuh**:
   - `functions/public/adminService.ts`
@@ -28,7 +31,7 @@
   - `functions/PROGRESS.md`
   - `WALKTHROUGH.md`
 - **Verifikasi**:
-  - Kompilasi build frontend Vite `cmd /c npm run build` di `functions/public/` lulus 100% (✓ 2510 modules transformed, built in 30.09s, 0 error).
+  - Kompilasi build frontend Vite `cmd /c npm run build` di `functions/public/` lulus 100% (✓ 2510 modules transformed, built in 30.74s, 0 error).
   - Kompilasi backend `functions` `tsc` lulus 100% (0 error).
 
 ### 333. Sistem Kendali Biaya Operasional / Platform Fee KostManager (Default 5%), Simulasi Interaktif di Portal Admin, Audit Log Perubahan Tarif, dan Transparansi Laporan Keuangan di Dashboard Mitra (`KostManagerPortal.tsx`, `MitraDashboard.tsx`, `adminService.ts`, `types.ts`) (September 2026)

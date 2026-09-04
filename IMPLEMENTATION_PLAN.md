@@ -1,50 +1,64 @@
-# IMPLEMENTATION PLAN - Pengetatan Presisi Sensor & Watermark Spanduk (Ultra-Tight Bounding Box Fit)
+# IMPLEMENTATION PLAN - Client-Side Smart Banner Trimming & Presisi Sensor Spanduk (Auto-Trim to Banner Color/Edge)
 
 ## 1. Analisis Masalah & Kebutuhan
 
-Berdasarkan hasil pengujian pada foto contoh pengguna:
-- **Gejala Masalah**: Area sensor (blur dan lapisan gelap) tampak terlalu tinggi dan besar (*over-extended*), memanjang vertikal dari area spanduk di bawah hingga ke tiang kanopi/atap seng di atas.
+Berdasarkan pengujian pengguna pada foto:
+- **Gejala Masalah**: Kotak sensor masih berbentuk pilar vertikal yang tinggi dan *offside* hingga ke atap/jeruji gerbang, meskipun watermark kapsul berada di posisi spanduk.
 - **Akar Penyebab**:
-  1. **Prompt AI Vision Gemini** pada Edge Function belum memuat instruksi anti-struktur yang cukup tegas. Gemini mengidentifikasi bilah pagar/pintu gerbang kayu vertikal di belakang spanduk sebagai bagian dari objek spanduk, sehingga koordinat `ymin` tertarik ke atas mendekati atap.
-  2. **Algoritma Clustering di Client-side (`adminService.ts`)** menggunakan toleransi jarak (`gapY = 3.5%`) yang dapat menggabungkan kotak deteksi teks terpisah di area vertikal menjadi satu blok raksasa.
-  3. **Belum Ada Validasi Proporsi Bounding Box**: Belum ada batasan pemotongan/penyesuaian proporsi jika model mendeteksi area non-spanduk.
+  1. **AI Menganggap Gerbang Kayu Vertikal Sebagai Frame Spanduk**: Pada foto asli, spanduk kuning/putih terpasang di atas pintu gerbang berbilah kayu vertikal gelap. AI Vision sering kali mengidentifikasi pilar gerbang tersebut sebagai batas atas spanduk, sehingga koordinat `ymin` dimulai dari atas gerbang (mendekati atap).
+  2. **Ketergantungan pada Edge Function Cloud**: Edge Function berjalan di Supabase Cloud. Jika client-side hanya menerima koordinat mentah dari AI tanpa verifikasi pixel, kotak sensor akan selalu mengikuti bounding box mentah tersebut.
+  3. **Ketiadaan Pemangkas Otomatis (Auto-Trimming)**: Frontend belum memiliki algoritma deteksi batas warna/kontras untuk memotong area gelap/atap non-spanduk di dalam bounding box.
 
 ---
 
-## 2. Dampak Perubahan (Files to Modify)
+## 2. Solusi Teknis Front-End (Smart Banner Boundary Trimming)
 
-1. [supabase/functions/detect-contact-banner/index.ts](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/supabase/functions/detect-contact-banner/index.ts):
-   - Memperketat prompt AI Vision Gemini dengan aturan **Ultra-Tight Fit**:
-     - Tegas melarang memasukkan pagar, jeruji gerbang, kanopi, atap seng, atau tiang bangunan ke dalam koordinat bounding box.
-     - `ymin` dan `ymax` wajib menempel presisi hanya pada tepi atas dan tepi bawah kain/kertas spanduk.
-     - Memberikan instruksi rasio aspek (spanduk umumnya persegi/horizontal, bukan kolom vertikal menjulang).
-2. [functions/public/adminService.ts](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/adminService.ts):
-   - Menyempurnakan fungsi `applyBlurToBoundingBoxes`:
-     - Memperbaiki algoritma clustering agar hanya menggabungkan kotak yang benar-benar beririsan (*intersection over union / direct overlap*) tanpa pembengkakan gap berlebih.
-     - Memastikan padding sensor minimal dan proporsional sehingga blur benar-benar menempel pas (*fit*) pada spanduk.
-     - Penyesuaian ukuran font dan padding watermark kapsul `ruangsinggah.id` agar serasi dengan ukuran spanduk riil.
+Alih-alih hanya mengandalkan koordinat mentah AI, front-end di [adminService.ts](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/adminService.ts) akan dilengkapi dengan **algoritma pemangkas pintar berbasis analisis pixel canvas (`trimToActualBannerBounds`)**:
+
+1. **Analisis Pixel di Area Bounding Box AI**:
+   - Spanduk sewa/kontak memiliki ciri visual: warna cerah/kontras (kuning, putih, merah, oranye, dll.) dan kerapatan tepi teks tinggi (*high luminance/color variance*).
+   - Gerbang kayu gelap, kanopi, atau dinding semen di atas spanduk memiliki karakteristik warna gelap/monoton.
+2. **Pemangkasan Batas Atas & Bawah (Vertical Trimming)**:
+   - Sistem memindai baris pixel (*row-by-row*) dari atas ke bawah di dalam kotak AI.
+   - Baris-baris atas yang hanya berisi gerbang gelap/atap seng akan otomatis dipotong, dan `y` dimulai tepat pada baris pertama di mana kain spanduk berwarna/berteks muncul.
+   - Batas bawah `y + h` juga dipotong tepat di tepi bawah kain spanduk.
+3. **Pembatasan Rasio Aspek (Anti-Pillar Clamp)**:
+   - Spanduk umumnya berbentuk horizontal atau bujursangkar (lebar $\ge$ tinggi).
+   - Jika rasio tinggi terhadap lebar melebihi batas wajar (`h > w * 1.25`), sistem secara cerdas membatasi tinggi kotak sensor agar berpusat pada area berdensitas teks/kontras tertinggi (lokasi spanduk sebenarnya).
+4. **Watermark Kapsul Presisi**:
+   - Menempatkan watermark `ruangsinggah.id` pas di tengah spanduk yang sudah dipangkas rapi.
 
 ---
 
-## 3. Langkah-Langkah Eksekusi (Incremental Execution)
+## 3. Dampak Perubahan (Files to Modify)
 
-1. **Langkah 1: Penyempurnaan Prompt Ultra-Tight AI Vision ([detect-contact-banner/index.ts](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/supabase/functions/detect-contact-banner/index.ts))**:
-   - Tambahkan instruksi pembeda yang jelas antara "kain/kertas spanduk kontak" vs "struktur bangunan/pagar vertikal".
-   - Terapkan parameter batas koordinat ketat hanya pada teks kontak dan banner fisik.
+1. [functions/public/adminService.ts](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/adminService.ts):
+   - Menambahkan fungsi helper `refineBannerBoundsWithPixelAnalysis(ctx, rawBox)` untuk memangkas area non-spanduk berdasarkan variasi warna dan kecerahan pixel canvas.
+   - Memperbarui `applyBlurToBoundingBoxes` agar menerapkan pemangkasan presisi sebelum memburamkan dan merender watermark.
 
-2. **Langkah 2: Optimasi Algoritma Clustering & Sensor Fit ([adminService.ts](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/adminService.ts))**:
-   - Ganti gap expansion dengan *direct intersection / minimal margin* (hanya 4–8px margin untuk menutupi teks tepi).
-   - Pastikan watermark `ruangsinggah.id` menyesuaikan skala otomatis sesuai lebar dan tinggi kotak spanduk.
+---
+
+## 4. Langkah-Langkah Eksekusi (Incremental Execution)
+
+1. **Langkah 1: Implementasi Algoritma `refineBannerBoundsWithPixelAnalysis` ([adminService.ts](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/adminService.ts))**:
+   - Ekstrak data pixel (`getImageData`) pada koordinat kotak deteksi AI.
+   - Hitung profil intensitas warna & variasi tepi horizontal per baris.
+   - Tentukan `cropYmin` dan `cropYmax` tepat di area kain spanduk.
+   - Tentukan `cropXmin` dan `cropXmax` tepat di tepi kiri & kanan spanduk.
+
+2. **Langkah 2: Integrasi ke `applyBlurToBoundingBoxes` ([adminService.ts](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/adminService.ts))**:
+   - Terapkan pemangkasan pixel pada setiap kotak deteksi.
+   - Render efek pixelate mikro dan frosted glass tepat pada area spanduk yang telah dipangkas.
 
 3. **Langkah 3: Uji Kompilasi & Build**:
-   - Jalankan `cmd /c npm run build` di `functions/public/` untuk memastikan 0 error kompilasi.
+   - Jalankan `cmd /c npm run build` di `functions/public/` dan pastikan 0 error kompilasi.
 
 ---
 
-## 4. Rencana Verifikasi (Verification Plan)
+## 5. Rencana Verifikasi (Verification Plan)
 
 1. **Uji Kompilasi**:
    - Jalankan `cmd /c npm run build` dan pastikan build selesai 100% tanpa error.
 2. **Verifikasi Visual**:
-   - Saat foto bangunan depan yang memuat spanduk kecil diunggah, kotak blur hanya melingkupi kain spanduk tanpa merembet ke atap seng atau jeruji pagar di atasnya.
-   - Watermark `ruangsinggah.id` berada tepat di tengah area spanduk dengan ukuran yang proporsional.
+   - Unggah foto bangunan depan dengan spanduk kecil di gerbang.
+   - Kotak sensor otomatis terpangkas (*trimmed*) hanya menutupi kain spanduk kuning/putih, dan atap/gerbang di atasnya tetap terlihat bersih tanpa blur.

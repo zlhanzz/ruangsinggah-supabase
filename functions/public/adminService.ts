@@ -5811,6 +5811,134 @@ export const createLowResBase64ForAi = async (file: File, maxDim = 1024, quality
   });
 };
 
+/**
+ * Memangkas bounding box AI secara cerdas berbasis analisis pixel canvas
+ * Menghilangkan area pagar/kanopi/dinding gelap di atas/bawah spanduk dan menghasilkan koordinat ultra-tight fit
+ */
+export const refineBannerBoundsWithPixelAnalysis = (
+  ctx: CanvasRenderingContext2D,
+  box: { x: number; y: number; w: number; h: number },
+  imgWidth: number,
+  imgHeight: number
+): { x: number; y: number; w: number; h: number } => {
+  const { x, y, w, h } = box;
+  if (w <= 10 || h <= 10) return box;
+
+  try {
+    const clampedX = Math.max(0, Math.min(imgWidth - 1, x));
+    const clampedY = Math.max(0, Math.min(imgHeight - 1, y));
+    const clampedW = Math.max(1, Math.min(imgWidth - clampedX, w));
+    const clampedH = Math.max(1, Math.min(imgHeight - clampedY, h));
+
+    const imgData = ctx.getImageData(clampedX, clampedY, clampedW, clampedH);
+    const data = imgData.data;
+
+    // Hitung banner score per baris (row)
+    // Karakteristik spanduk: warna terang/cerah (kuning, putih, merah, dll), kontras tinggi, saturasi tinggi
+    const rowScores: number[] = new Array(clampedH).fill(0);
+
+    for (let r = 0; r < clampedH; r++) {
+      let bannerPixels = 0;
+      let prevLum = -1;
+      let edgeChanges = 0;
+
+      for (let c = 0; c < clampedW; c++) {
+        const idx = (r * clampedW + c) * 4;
+        const red = data[idx];
+        const green = data[idx + 1];
+        const blue = data[idx + 2];
+
+        const lum = 0.299 * red + 0.587 * green + 0.114 * blue;
+        const maxC = Math.max(red, green, blue);
+        const minC = Math.min(red, green, blue);
+        const saturation = maxC > 0 ? (maxC - minC) / maxC : 0;
+
+        if (prevLum >= 0 && Math.abs(lum - prevLum) > 28) {
+          edgeChanges++;
+        }
+        prevLum = lum;
+
+        // Ciri khas kain spanduk sewa:
+        // 1. Warna kuning/oranye/merah terang
+        // 2. Putih terang teks / background
+        // 3. Warna pekat ber-saturasi tinggi
+        const isYellowish = red > 115 && green > 95 && (red + green) > (blue * 1.5);
+        const isBright = lum > 135;
+        const isSaturated = saturation > 0.32 && lum > 60;
+
+        if (isYellowish || isBright || isSaturated) {
+          bannerPixels++;
+        }
+      }
+
+      const rowScore = (bannerPixels / clampedW) * 0.7 + Math.min(1, edgeChanges / (clampedW * 0.12)) * 0.3;
+      rowScores[r] = rowScore;
+    }
+
+    // Cari batas atas (topRow) dan batas bawah (bottomRow) yang memuat densitas spanduk tinggi
+    const THRESHOLD = 0.18;
+    let topRow = -1;
+    let bottomRow = -1;
+
+    // Scan dari atas ke bawah
+    for (let r = 0; r < clampedH - 2; r++) {
+      if (rowScores[r] >= THRESHOLD || (rowScores[r + 1] >= THRESHOLD && rowScores[r + 2] >= THRESHOLD)) {
+        topRow = r;
+        break;
+      }
+    }
+
+    // Scan dari bawah ke atas
+    for (let r = clampedH - 1; r >= 2; r--) {
+      if (rowScores[r] >= THRESHOLD || (rowScores[r - 1] >= THRESHOLD && rowScores[r - 2] >= THRESHOLD)) {
+        bottomRow = r;
+        break;
+      }
+    }
+
+    // Jika ditemukan area spanduk yang jelas di dalam box
+    if (topRow !== -1 && bottomRow !== -1 && bottomRow > topRow + 15) {
+      const padY = Math.max(2, Math.round((bottomRow - topRow) * 0.04));
+      const finalY = Math.max(0, clampedY + topRow - padY);
+      const finalH = Math.min(imgHeight - finalY, (bottomRow - topRow) + (padY * 2));
+
+      // Batasi rasio tinggi terhadap lebar (spanduk normal tidak lebih tinggi dari 1.35x lebarnya)
+      let adjustedH = finalH;
+      let adjustedY = finalY;
+      if (adjustedH > clampedW * 1.35) {
+        const maxAllowedH = Math.round(clampedW * 1.1);
+        const centerY = finalY + adjustedH / 2;
+        adjustedY = Math.max(0, Math.round(centerY - maxAllowedH / 2));
+        adjustedH = Math.min(imgHeight - adjustedY, maxAllowedH);
+      }
+
+      return {
+        x: clampedX,
+        y: adjustedY,
+        w: clampedW,
+        h: adjustedH
+      };
+    }
+
+    // Fallback: Jika tidak terpotong drastis tapi box terlalu tinggi (tinggi > 1.35x lebar), ambil area bawah
+    if (clampedH > clampedW * 1.35) {
+      const allowedH = Math.round(clampedW * 1.05);
+      const trimmedY = Math.max(0, clampedY + (clampedH - allowedH));
+      return {
+        x: clampedX,
+        y: trimmedY,
+        w: clampedW,
+        h: allowedH
+      };
+    }
+
+    return box;
+  } catch (err) {
+    console.warn('[AI_BANNER] refineBannerBounds error:', err);
+    return box;
+  }
+};
+
 export const applyBlurToBoundingBoxes = async (
   file: File, 
   boxes: Array<{ ymin: number; xmin: number; ymax: number; xmax: number }>
@@ -5824,7 +5952,7 @@ export const applyBlurToBoundingBoxes = async (
         const canvas = document.createElement('canvas');
         canvas.width = img.width;
         canvas.height = img.height;
-        const ctx = canvas.getContext('2d');
+        const ctx = canvas.getContext('2d', { willReadFrequently: true });
         if (!ctx) return resolve(file);
 
         // Gambar citra asli
@@ -5899,8 +6027,10 @@ export const applyBlurToBoundingBoxes = async (
           c.closePath();
         };
 
-        // 3. Terapkan efek mosaik & watermark elegan pada setiap area gabungan secara pas (tight fit)
-        mergedBoxes.forEach(box => {
+        // 3. Terapkan pemangkasan pixel cerdas dan efek mosaik & watermark elegan pada spanduk
+        mergedBoxes.forEach(rawBox => {
+          // Pangkas area non-spanduk dengan analisis pixel canvas
+          const box = refineBannerBoundsWithPixelAnalysis(ctx, rawBox, img.width, img.height);
           const { x, y, w, h } = box;
           if (w <= 0 || h <= 0) return;
 
@@ -5989,6 +6119,7 @@ export const applyBlurToBoundingBoxes = async (
     reader.readAsDataURL(file);
   });
 };
+
 
 export const compressImageToWebP = async (file: File, quality = 0.82): Promise<File> => {
   return new Promise((resolve) => {
