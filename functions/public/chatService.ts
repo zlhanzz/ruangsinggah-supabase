@@ -341,65 +341,97 @@ export async function sendMessage(
         user_id, 
         owner_id, 
         property_id,
-        property:property_id (title)
+        property:property_id (id, title, city, address, managed_by, is_managed, metadata, owner_id)
       `)
       .eq('id', sessionId)
       .single();
 
     if (session && senderType === 'user') {
-      // RLS RESILIENT NAME LOOKUP: 
-      // 1. Try optName (frontend injection)
-      // 2. Try direct lookup from users table (bypasses join restrictions)
+      // RLS RESILIENT NAME & CONTACT LOOKUP:
       let senderName = optName;
-      if (!senderName) {
-        const { data: senderProfile } = await supabase
-          .from('users')
-          .select('name')
-          .eq('id', senderId)
-          .maybeSingle();
-        senderName = senderProfile?.name;
+      let senderEmail = '';
+      let senderPhone = '';
+
+      const { data: senderProfile } = await supabase
+        .from('users')
+        .select('name, full_name, email, phone, phone_number')
+        .eq('id', senderId)
+        .maybeSingle();
+
+      if (senderProfile) {
+        senderName = senderName || senderProfile.name || senderProfile.full_name;
+        senderEmail = senderProfile.email || '';
+        senderPhone = senderProfile.phone || senderProfile.phone_number || '';
       }
 
-      // User -> Owner: Notify Mitra via WhatsApp
-      await notifyMitra({
-        ownerId: session.owner_id,
-        propertyId: (session as any).property_id,
-        type: 'chat',
-        details: {
-          propertyTitle: (session as any).property?.title || 'Kost Anda',
-          senderName: senderName || 'Calon Penghuni',
-          messageSnippet: content.length > 50 ? content.substring(0, 50) + '...' : content,
-          sessionId: sessionId
+      // Deteksi kelolaan properti KostManager
+      let propTitle = (session as any).property?.title;
+      let propCity = (session as any).property?.city;
+      let propAddress = (session as any).property?.address;
+      let propManagedBy = (session as any).property?.managed_by;
+      let propIsManaged = (session as any).property?.is_managed;
+      let propMeta = (session as any).property?.metadata;
+
+      if (!propTitle && (session as any).property_id) {
+        const { data: propData } = await supabase
+          .from('properties')
+          .select('id, title, city, address, managed_by, is_managed, metadata, owner_id')
+          .eq('id', (session as any).property_id)
+          .maybeSingle();
+        if (propData) {
+          propTitle = propData.title;
+          propCity = propData.city;
+          propAddress = propData.address;
+          propManagedBy = propData.managed_by;
+          propIsManaged = propData.is_managed;
+          propMeta = propData.metadata;
         }
-      });
+      }
 
-      // User -> Admin (KostManager / CS): Kirim Notifikasi Email Otomatis ke Admin
-      if (session.owner_id === SYSTEM_ADMIN_ID || !(session as any).owner_id) {
-        let propTitle = (session as any).property?.title;
-        let propCity = (session as any).property?.city;
-        let propAddress = (session as any).property?.address;
+      const isKostManager = 
+        session.owner_id === SYSTEM_ADMIN_ID || 
+        !(session as any).owner_id || 
+        propManagedBy === 'kostmanager' || 
+        propIsManaged === true || 
+        propMeta?.managed_by === 'kostmanager' || 
+        propMeta?.is_managed_kost === true || 
+        propMeta?.isKostManager === true;
 
-        if (!propTitle && (session as any).property_id) {
-          const { data: propData } = await supabase
-            .from('properties')
-            .select('title, city, address')
-            .eq('id', (session as any).property_id)
-            .maybeSingle();
-          if (propData) {
-            propTitle = propData.title;
-            propCity = propData.city;
-            propAddress = propData.address;
-          }
-        }
-
+      if (isKostManager) {
+        // User -> KostManager (Admin): Kirim Notifikasi Email Otomatis ke Seluruh Admin
         notifyAdminNewChatMessage({
           customerName: senderName || 'Calon Penghuni',
-          propertyTitle: propTitle || 'Kost Terkelola KostManager',
+          customerEmail: senderEmail,
+          customerPhone: senderPhone,
+          propertyTitle: propTitle || 'Kost Kelolaan KostManager',
           propertyAddress: propAddress,
           propertyCity: propCity,
           messageSnippet: content,
-          sessionId: sessionId
+          sessionId: sessionId,
+          propertyId: (session as any).property_id
         }).catch(emailErr => console.warn('Gagal memicu notifikasi email admin:', emailErr));
+
+        // In-App Notification untuk Admin
+        sendNotification(
+          SYSTEM_ADMIN_ID,
+          `💬 Pesan KostManager: ${propTitle || 'Properti'}`,
+          `${senderName || 'Calon Penghuni'}: ${content.length > 60 ? content.substring(0, 60) + '...' : content}`,
+          'info',
+          { sessionId, link: '/dashboard-admin/km_chats' }
+        ).catch(err => console.error("Failed to create admin in-app notification:", err));
+      } else {
+        // User -> Mitra Reguler: Notify Mitra via WhatsApp
+        await notifyMitra({
+          ownerId: session.owner_id,
+          propertyId: (session as any).property_id,
+          type: 'chat',
+          details: {
+            propertyTitle: propTitle || 'Kost Anda',
+            senderName: senderName || 'Calon Penghuni',
+            messageSnippet: content.length > 50 ? content.substring(0, 50) + '...' : content,
+            sessionId: sessionId
+          }
+        }).catch(err => console.warn('Gagal memicu notifikasi mitra WhatsApp:', err));
       }
     } else if (session && senderType === 'owner') {
       // Owner -> User: Site notification only for now

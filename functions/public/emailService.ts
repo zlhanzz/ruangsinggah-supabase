@@ -114,19 +114,26 @@ export async function sendEmailVerificationOtp(email: string, otp: string): Prom
 
 export async function notifyAdminNewChatMessage(details: {
   customerName: string;
+  customerEmail?: string;
+  customerPhone?: string;
   propertyTitle: string;
   propertyAddress?: string;
   propertyCity?: string;
   messageSnippet: string;
   sessionId: string;
+  propertyId?: string;
 }) {
-  return notifyAdminTransaction(`Pesan Chat Baru dari ${details.customerName} (${details.propertyTitle})`, {
-    "Nama Calon Penyewa": details.customerName,
-    "Properti Kost": details.propertyTitle,
-    "Lokasi": `${details.propertyAddress ? details.propertyAddress + ', ' : ''}${details.propertyCity || ''}`.trim() || 'Properti Terkelola',
-    "Isi Pesan": details.messageSnippet,
-    "Aksi Cepat": "Buka menu Pesan & Chat Customer di Portal KostManager untuk membalas",
-    "Link Portal Chat": "https://ruangsinggah.id/dashboard-admin/km_chats"
+  return notifyAdminTransaction(`💬 Pesan Masuk KostManager: ${details.propertyTitle}`, {
+    "Tipe Notifikasi": "Inquiry Chat Calon Penghuni (KostManager)",
+    "Nama Properti": details.propertyTitle,
+    "Lokasi Properti": `${details.propertyAddress ? details.propertyAddress + ', ' : ''}${details.propertyCity || ''}`.trim() || 'Properti KostManager',
+    "Nama Calon Penghuni": details.customerName || 'Pengguna',
+    "Email Pengirim": details.customerEmail || '-',
+    "No. WhatsApp Pengirim": details.customerPhone || '-',
+    "Isi Pesan Masuk": details.messageSnippet,
+    "Waktu Pesan": new Date().toLocaleString('id-ID'),
+    "Tindakan Admin": "Pesan ini masuk untuk properti kelolaan KostManager. Segera tanggapi pesan calon penyewa melalui Portal KostManager.",
+    "Link Portal Chat": `https://ruangsinggah.id/dashboard-admin/km_chats?session=${details.sessionId}`
   });
 }
 

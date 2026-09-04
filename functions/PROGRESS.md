@@ -2,6 +2,36 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 329. Notifikasi Email Otomatis ke Admin untuk Pesan Masuk Properti KostManager (`emailService.ts`, `chatService.ts`, `KostDetail.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  - Ketika ada pesan chat yang masuk ke properti yang dikelola secara **KostManager**, sistem harus mengirimkan notifikasi ke Administrator RuangSinggah dalam bentuk email secara otomatis.
+  - Memastikan tim operasional KostManager dapat memberikan respon cepat (*fast response*) kepada calon penghuni tanpa harus terus-menerus membuka layar antarmuka chat.
+- **Implementasi Solusi**:
+  1. **Peningkatan Format & Payload Email Admin (`emailService.ts`)**:
+     - Memperbarui fungsi `notifyAdminNewChatMessage` agar menyusun payload email yang sangat detail dan terstruktur via FormSubmit:
+       - Nama Properti Kost & Lokasi (Kota/Alamat).
+       - Identitas Pengirim (Nama Lengkap, Email Akun, dan Nomor WhatsApp aktif).
+       - Cuplikan/Isi Pesan Masuk Calon Penghuni.
+       - Cap Waktu Pesan (`id-ID`).
+       - Tautan Cepat Langsung ke Sesi Chat di Portal KostManager (`https://ruangsinggah.id/dashboard-admin/km_chats?session={sessionId}`).
+  2. **Deteksi Properti KostManager & Pemicu Notifikasi Non-Blocking (`chatService.ts`)**:
+     - Pada fungsi `sendMessage`:
+       - Melakukan query RLS-resilient untuk mengekstrak identitas pengirim (nama, email, no. telepon) dari tabel `users`.
+       - Memeriksa status properti KostManager secara menyeluruh (`session.owner_id === SYSTEM_ADMIN_ID`, `managed_by === 'kostmanager'`, `is_managed === true`, atau properti metadata).
+       - Jika properti berstatus KostManager dan pengirim adalah calon penyewa (`senderType === 'user'`), sistem memicu pengiriman email `notifyAdminNewChatMessage` ke seluruh admin terdaftar secara asinkron (*non-blocking*), sekaligus mengirimkan notifikasi internal *in-app*.
+       - Jika properti reguler (kelolaan mitra mandiri), sistem tetap mengarahkan notifikasi ke mitra via WhatsApp bridge (`notifyMitra`).
+  3. **Penyelarasan Routing Inisialisasi Chat (`KostDetail.tsx`)**:
+     - Memperluas filter `isKostManagerManaged` di `handleOpenChat` agar mencakup pemeriksaan `managed_by === 'kostmanager'`, menjamin sesi chat langsung tertuju ke Administrator KostManager (`SYSTEM_ADMIN_ID`).
+- **File Tersentuh**:
+  - `functions/public/emailService.ts`
+  - `functions/public/chatService.ts`
+  - `functions/public/pages/KostDetail.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Uji kompilasi build Vite `cmd /c npm run build` di `functions/public/` lulus 100% (✓ 2510 modules transformed, built in 38.77s, 0 error).
+  - Uji kompilasi `tsc` di `functions/` lulus 100% (0 error).
+
 ### 328. Sistem Kendali Biaya Operasional Platform KostManager (Default 5%) & Transparansi Laporan Keuangan Mitra (`types.ts`, `adminService.ts`, `KostManagerPortal.tsx`, `MitraDashboard.tsx`) (September 2026)
 - **Permintaan & Masalah**:
   1. Menetapkan biaya operasional platform RuangSinggah.id untuk menjalankan bisnis manajemen kost, dirancang default **5% per transaksi** (penyewaan baru maupun perpanjangan sewa) khusus untuk properti kelolaan **KostManager**.

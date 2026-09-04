@@ -1,73 +1,55 @@
-# WALKTHROUGH: Sistem Kendali Biaya Operasional Platform KostManager & Transparansi Laporan Keuangan
+# WALKTHROUGH: Notifikasi Email Otomatis ke Admin untuk Pesan Masuk KostManager
 
 ## 1. Ringkasan Eksekusi
-Telah berhasil diimplementasikan sistem pengelolaan dan pemotongan biaya operasional platform **KostManager** secara dinamis (default 5% per transaksi sewa baru dan perpanjangan) dengan kendali penuh bagi Administrator melalui Admin Dashboard, serta transparansi finansial penuh bagi Mitra di Laporan Keuangan Properti.
+Telah berhasil diimplementasikan fitur **Notifikasi Email Otomatis ke Administrator** setiap kali ada calon penyewa / penghuni mengirim pesan chat ke properti yang dikelola secara **KostManager**.
 
 ---
 
 ## 2. Rincian Perubahan Kode
 
-### A. Tipe Data & Skema Pengaturan (`types.ts`)
-- **[types.ts](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/types.ts)**:
-  - Mendefinisikan interface `KostManagerFeeSettings` dengan properti:
-    - `enabled`: status toggle aktif/nonaktif biaya platform.
-    - `fee_percentage`: persentase potongan sewa (default: 5%).
-    - `applies_to`: array cakupan transaksi (`'new_booking' | 'extension' | 'extra_occupant' | 'facilities'`).
-    - `deposit_fee_percentage`: fixed 0% (uang jaminan/deposit 100% utuh, tidak dipotong).
-    - `last_updated_at`, `last_updated_by`, `notes`.
-  - Mendefinisikan interface `KostManagerFeeLogEntry` untuk pencatatan riwayat audit log.
+### A. Format Notifikasi Email Admin (`emailService.ts`)
+- **[emailService.ts](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/emailService.ts)**:
+  - Memperbarui fungsi `notifyAdminNewChatMessage` untuk menyusun format email profesional ke seluruh email administrator terdaftar via FormSubmit.
+  - **Data dalam Email**:
+    - Subjek: `💬 Pesan Masuk KostManager: [Nama Properti]`
+    - Nama Properti Kost & Lokasi (Kota/Alamat).
+    - Nama Calon Penghuni / Pengirim.
+    - Email & No. WhatsApp aktif pengirim.
+    - Cuplikan/Isi Pesan Masuk.
+    - Cap Waktu Pesan Masuk.
+    - Petunjuk & Tindakan Admin.
+    - Tautan Cepat Langsung ke Sesi Chat di Portal KostManager (`https://ruangsinggah.id/dashboard-admin/km_chats?session={sessionId}`).
 
-### B. Service CRUD & Audit Logging Supabase (`adminService.ts`)
-- **[adminService.ts](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/adminService.ts)**:
-  - Menyediakan konstanta `DEFAULT_KOSTMANAGER_FEE_SETTINGS`.
-  - Fungsi `getKostManagerFeeSettings()`: mengambil konfigurasi dari tabel `app_settings` (key: `'kostmanager_fee_settings'`).
-  - Fungsi `saveKostManagerFeeSettings()`: memperbarui konfigurasi dan secara otomatis menambahkan catatan riwayat ke tabel `app_settings` (key: `'kostmanager_fee_logs'`).
-  - Fungsi `getKostManagerFeeLogs()`: mengambil daftar riwayat perubahan persentase dan admin pengubah.
+### B. Deteksi Properti KostManager & Pengiriman Asinkron (`chatService.ts`)
+- **[chatService.ts](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/chatService.ts)**:
+  - Pada fungsi `sendMessage`:
+    - Mengambil data profil pengirim (nama, email, nomor HP) dari tabel `users` dengan mekanisme fallback yang aman.
+    - Melakukan deteksi menyeluruh apakah properti berstatus KostManager (`session.owner_id === SYSTEM_ADMIN_ID`, `managed_by === 'kostmanager'`, `is_managed === true`, atau di dalam properti metadata).
+    - Memicu pengiriman email `notifyAdminNewChatMessage` ke admin secara asinkron (*non-blocking*) sehingga tidak menghambat kecepatan respons chat pengguna (0ms lag).
+    - Mengirimkan notifikasi internal *in-app* ke akun Admin (`SYSTEM_ADMIN_ID`).
+    - Untuk properti non-KostManager (mitra mandiri), notifikasi tetap diteruskan ke WhatsApp pemilik kost (`notifyMitra`).
 
-### C. Panel Pengaturan & Simulator Real-Time di Admin Dashboard (`KostManagerPortal.tsx`)
-- **[KostManagerPortal.tsx](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/components/admin/KostManagerPortal.tsx)**:
-  - Menambahkan panel **"Pengaturan Biaya Layanan Platform KostManager"** pada tab *"Paket & Biaya"*.
-  - **Fitur Kontrol**:
-    - Switch toggle aktif/nonaktif biaya layanan platform.
-    - Input persentase dengan tombol preset instan (`0% Gratis`, `3%`, `5% Rekomendasi`, `7.5%`, `10%`).
-    - Checklist pilihan cakupan transaksi yang dikenakan potongan.
-    - Kartu proteksi deposit: aturan baku 0% potongan untuk dana deposit/jaminan.
-    - **Kalkulator Simulasi Interaktif**: simulasi pendapatan kotor, potongan platform, dan pendapatan bersih mitra secara real-time.
-    - Input catatan perubahan dan tombol simpan dengan konfirmasi dialog.
-    - Tabel riwayat perubahan (*Audit Logs*) yang menampilkan waktu, admin pengubah, persentase lama $\rightarrow$ baru, dan catatan.
-  - Seluruh ikon menggunakan pure SVG `lucide-react` (`Percent`, `Calculator`, `History`, `Save`, `ShieldCheck`, dll.) bebas FOUT.
-
-### D. Integrasi & Transparansi Finansial di Mitra Dashboard (`MitraDashboard.tsx`)
-- **[MitraDashboard.tsx](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/MitraDashboard.tsx)**:
-  - Mengambil pengaturan tarif `kmFeeSettings` saat inisialisasi dashboard.
-  - Pada modal Laporan Keuangan Bulanan Properti (`selectedKostForFinance`):
-    - Jika properti dikelola oleh **KostManager**: otomatis menghitung potongan operasional platform sesuai tarif aktif (default 5%) dari total sewa/transaksi, menampilkan kartu rincian potongan platform, dan mengalkulasi pendapatan bersih yang ditransfer ke mitra.
-    - Jika properti **Reguler**: potongan platform tetap Rp 0 (100% utuh diterima mitra).
-    - Menyesuaikan klausul transparansi operasional pada catatan keuangan.
-    - Memperbarui format pesan template WhatsApp agar mencantumkan rincian potongan platform dan total transfer bersih secara rinci.
+### C. Penyelarasan Inisialisasi Sesi Chat (`KostDetail.tsx`)
+- **[KostDetail.tsx](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/KostDetail.tsx)**:
+  - Memperluas validasi `isKostManagerManaged` pada fungsi `handleOpenChat` agar mendeteksi `managed_by === 'kostmanager'`, sehingga sesi chat yang dibuka calon penyewa langsung diarahkan ke Admin KostManager (`SYSTEM_ADMIN_ID`).
 
 ---
 
 ## 3. Hasil Pengujian & Kompilasi
-- **Build Frontend (`functions/public`)**: `npm run build` lulus 100% (✓ 2509 modules transformed, built in 45.37s, 0 error).
-- **Build Backend (`functions`)**: `tsc` lulus 100% (0 error).
+- **Build Frontend (`functions/public`)**: `npm run build` lulus 100% (✓ 2510 modules transformed, built in 38.77s, **0 error**).
+- **Build Backend (`functions`)**: `tsc` lulus 100% (**0 error**).
 
 ---
 
 ## 4. Panduan Verifikasi Pengujian oleh User
 
-### A. Pengujian Kendali Admin
-1. Buka halaman **Admin Dashboard $\rightarrow$ Portal KostManager** (`/admin` tab KostManager).
-2. Klik tab **"Paket & Biaya"**.
-3. Periksa section **"Pengaturan Biaya Layanan Platform KostManager"**:
-   - Coba ubah persentase menggunakan chip preset (misal `5%` atau `7.5%`).
-   - Coba kalkulator simulasi (masukkan nominal sewa misal `1.500.000` dan amati hasil hitung potongan & penerimaan bersih).
-   - Klik tombol **"Simpan Pengaturan Biaya"** dan amati konfirmasi serta pembaruan riwayat audit log.
-
-### B. Pengujian Laporan Keuangan Mitra
-1. Masuk ke **Dashboard Mitra** (`/dashboard-mitra/properties`).
-2. Pada kartu properti yang berstatus **KostManager**, klik tombol **"📄 Laporan Keuangan Kost"**.
-3. Periksa pada bagian **Rincian Penerimaan**:
-   - Terdapat baris **"Potongan Biaya Operasional Platform (5%)"** yang terpotong secara transparan dari total pemasukan kotor.
-   - Total Pemasukan Bersih menampilkan nominal setelah potongan platform.
-4. Klik tombol **"Kirim ke WhatsApp"** atau **"Cetak / Unduh PDF"** untuk memverifikasi kesesuaian data yang tercetak/terkirim.
+1. **Simulasi Pengiriman Pesan**:
+   - Buka salah satu halaman detail kost yang berstatus **KostManager** (misal: `/kost/:id`).
+   - Klik tombol **"Tanya Pemilik / Chat"**.
+   - Kirim pesan pertanyaan (misal: *"Halo admin, apakah kamar tipe A masih tersedia untuk bulan depan?"*).
+2. **Pemeriksaan Notifikasi Email**:
+   - Periksa kotak masuk email Administrator (atau email pengelola).
+   - Email notifikasi akan masuk dengan subjek `💬 Pesan Masuk KostManager: [Nama Kost]`, lengkap dengan nama pengirim, no. kontak/email, cuplikan isi pesan, dan link cepat menuju Portal KostManager.
+3. **Pemeriksaan Portal Chat Admin**:
+   - Masuk ke Admin Dashboard $\rightarrow$ Portal KostManager $\rightarrow$ tab **"Pesan & Chat"** (`/dashboard-admin/km_chats`).
+   - Pesan baru akan muncul pada daftar percakapan aktif dan siap dibalas oleh tim KostManager.

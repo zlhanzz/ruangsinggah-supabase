@@ -952,7 +952,13 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
     try {
       setIsSubmittingChat(true);
       // Jika properti dikelola KostManager, arahkan chat ke KostManager Admin (SYSTEM_ADMIN_ID)
-      const isKostManagerManaged = (kost as any).is_managed || (kost as any).isKostManager;
+      const isKostManagerManaged = 
+        (kost as any).is_managed === true || 
+        (kost as any).isKostManager === true || 
+        (kost as any).managed_by === 'kostmanager' || 
+        (kost as any).metadata?.managed_by === 'kostmanager' || 
+        (kost as any).metadata?.is_managed_kost === true || 
+        (kost as any).metadata?.isKostManager === true;
       const targetOwnerId = isKostManagerManaged ? SYSTEM_ADMIN_ID : (kost.ownerUid || SYSTEM_ADMIN_ID);
       
       const session = await getOrCreateChatSession(

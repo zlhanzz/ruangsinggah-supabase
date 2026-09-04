@@ -1,107 +1,59 @@
-# IMPLEMENTATION PLAN: Implementasi Master Data Landmark GPS & Micro Scan Fasilitas Harian pada Pendataan KostManager di Dashboard Agen
+# IMPLEMENTATION PLAN: Notifikasi Email ke Admin untuk Pesan Masuk Properti KostManager
 
-## 1. Analisis Masalah & Kebutuhan (Problem & Requirements Analysis)
-
-### A. Latar Belakang & Masalah Saat Ini
-1. **Standar Komprehensif di Dashboard Mitra (`KostFormMitra.tsx`)**:
-   - Memadukan 2 lapisan deteksi lokasi cerdas:
-     - **Lapisan 1 (Master Data Terkurasi Nasional - 0ms & Bebas Kuota)**: Mengambil data titik anchor utama (350+ kampus resmi, rumah sakit rujukan, mall besar, kawasan industri, dan pusat bisnis CBD) via `findNearbyCuratedLandmarks(centerLat, centerLng, 7.0)`.
-     - **Lapisan 2 (Micro Scanning Google Places API)**: Memindai fasilitas harian terdekat yang sangat dibutuhkan anak kost:
-       - 🛒 **Minimarket** (Indomaret, Alfamart, Alfamidi, Circle K, dll. - rankBy distance, radius $\le 2.5\text{ KM}$, tepat 1 terdekat).
-       - 🧺 **Laundry Kiloan** (Laundry, cuci setrika - radius $\le 2.5\text{ KM}$, tepat 1 terdekat).
-       - 🕌 **Tempat Ibadah** (Masjid / Musholla & Gereja terdekat - radius $\le 2.5 - 3.5\text{ KM}$, tepat 1 terdekat).
-       - ⛽ **SPBU / Pom Bensin** (Pertamina, Shell, SPBU - radius $\le 4.0\text{ KM}$).
-     - **Multi-layer Sanitization**: Filter ketat (`isGarbageFacility`, `isInvalidCampus`, `isValidMicroFacility`) guna menolak entitas non-fasilitas publik (seperti jasa servis printer, fotocopy, bengkel, konter pulsa, salon, dll.).
-     - **Badge Estimasi Rute Realistis**: Waktu tempuh 🚶 Jalan Kaki, 🏍️ Sepeda Motor, dan 🚗 Mobil.
-2. **Kondisi Dashboard Agen (`AgentDashboard.tsx`)**:
-   - Pada modal pendataan KostManager (`isEditingKostManager` Step 1), agen sebelumnya masih mengandalkan pengetikan manual atau geocoder pencarian satu per satu, tanpa auto-sync master data dan tanpa pemindaian mikro otomatis.
-3. **Tujuan Pengembangan**:
-   - Menerapkan **arsitektur dan prinsip yang sama persis** ke dalam `AgentDashboard.tsx` agar proses survei dan pendataan KostManager oleh Agen berjalan super cepat, otomatis, akurat, dan lengkap dengan fasilitas mikro harian.
+## 1. Analisis Kebutuhan & Konteks Alur
+- **Kebutuhan**:
+  Ketika ada pesan chat masuk dari calon penghuni / penyewa ke properti yang berstatus dikelola secara **KostManager**, sistem harus mengirimkan notifikasi email secara otomatis ke Administrator RuangSinggah.
+- **Tujuan**:
+  Memastikan tim KostManager dapat merespons pertanyaan calon penyewa secara cepat (*fast response*) melalui Portal KostManager tanpa harus terus-menerus membuka layar chat, sehingga tingkat konversi sewa kamar meningkat.
+- **Kondisi & Logika Bisnis**:
+  1. **Identifikasi Properti KostManager**:
+     - Memeriksa apakah properti tujuan terdaftar sebagai KostManager (`managed_by === 'kostmanager'`, `is_managed === true`, atau `session.owner_id === SYSTEM_ADMIN_ID`).
+  2. **Pengirim Pesan**:
+     - Notifikasi email hanya dipicu saat pengirim adalah penyewa/calon penghuni (`senderType === 'user'`).
+     - Balasan dari Admin/CS (`senderType === 'owner'`) tidak memicu notifikasi email ke admin.
+  3. **Penerima & Format Email**:
+     - Email dikirim ke seluruh Administrator terdaftar (dengan fallback `sulhan77777@gmail.com`) via FormSubmit.
+     - Memuat informasi lengkap: Nama Properti, Lokasi/Kota, Nama Calon Penghuni, Email & No. HP pengirim, Cuplikan Pesan, Waktu Pesan, serta tautan langsung ke sesi chat di Portal KostManager Admin.
 
 ---
 
-## 2. Dampak Perubahan (Impact Analysis)
-
-### File yang Disentuh:
-1. **`functions/public/pages/AgentDashboard.tsx`**:
-   - Impor helper & dataset dari `../constants/curatedLandmarks` (`findNearbyCuratedLandmarks`, `calculateHaversineDistance`).
-   - Impor ikon murni dari `lucide-react` (`Sparkles`, `GraduationCap`, `Building2`, `Trash2`, `Plus`, `Loader2`, `Search`, `LinkIcon`, `ExternalLink`, dll.).
-   - Tambahkan fungsi sanitasi:
-     - `isInvalidCampus(name)`
-     - `isGarbageFacility(name)`
-     - `isValidMicroFacility(category, place)`
-   - Tambahkan state `isScanningLandmarks` dan abort controller ref `landmarkScanAbortRef`.
-   - Implementasikan fungsi `detectNearbyLandmarks(centerLat, centerLng)` yang menggabungkan Master Data Terkurasi (0ms) + Micro Scan (Minimarket, Laundry, Masjid/Musholla, Gereja, SPBU).
-   - Pasang pemicu auto-scan saat:
-     - Form dibuka pertama kali (`openKostManagerListing`).
-     - Agen menekan tombol *"Gunakan Lokasi Saya Saat Ini"*.
-     - Koordinat dikunci dari pop-up peta fullscreen (*"Kunci & Gunakan Lokasi Ini"*).
-     - Link / koordinat Google Maps dikonversi.
-     - Koordinat GPS diubah melalui reverse geocoding.
-   - Perbarui tampilan JSX bagian **"Fasilitas & Landmark Terdekat"** pada Step 1 form KostManager dengan kartu berdesain modern, badge rute waktu tempuh, tombol hapus/edit, tombol *"✨ Pindai Ulang Landmark (Master Data & Mikro)"*, serta form tambah manual.
-2. **`functions/PROGRESS.md`**:
-   - Pencatatan riwayat progres 329 setelah selesai.
-3. **`WALKTHROUGH.md`**:
-   - Panduan pengujian fitur bagi pengguna.
+## 2. Dampak Perubahan File
+Daftar file yang akan disentuh pada Fase 2:
+1. **`functions/public/emailService.ts`**:
+   - Memperkaya fungsi `notifyAdminNewChatMessage` dengan data pengirim (email, no. telepon, alamat kost, dan tautan langsung ke sesi chat).
+2. **`functions/public/chatService.ts`**:
+   - Memperketat deteksi properti KostManager saat pesan dikirim (`sendMessage`).
+   - Mengambil data profil pengirim (nama, email, no. telepon) dari tabel `users` untuk menyusun payload email yang informatif.
+   - Memicu pengiriman email `notifyAdminNewChatMessage` secara asinkron (non-blocking) agar proses kirim pesan di chat tetap instan (0ms delay).
+3. **`functions/public/pages/KostDetail.tsx`**:
+   - Memastikan deteksi kelolaan KostManager (`managed_by === 'kostmanager'`) saat inisialisasi sesi chat mengarahkan `targetOwnerId` ke `SYSTEM_ADMIN_ID`.
+4. **`functions/PROGRESS.md`**:
+   - Pencatatan riwayat progres fitur selesai (nomor 329).
+5. **`WALKTHROUGH.md`**:
+   - Dokumentasi rincian perubahan dan panduan verifikasi pengujian.
 
 ---
 
-## 3. Langkah-Langkah Eksekusi (Execution Steps)
-
-### Langkah 1: Impor Master Data & Fungsi Sanitasi
-- Mengimpor `findNearbyCuratedLandmarks` dan `calculateHaversineDistance` di `AgentDashboard.tsx`.
-- Menerapkan fungsi helper sanitasi `isInvalidCampus`, `isGarbageFacility`, dan `isValidMicroFacility`.
-
-### Langkah 2: Pembuatan Fungsi Deteksi Terpadu (`detectNearbyLandmarks`)
-- **Tahap 1 (0ms Instan)**: Jalankan `findNearbyCuratedLandmarks(centerLat, centerLng, 7.0)` untuk kampus, mall, RS, dan kawasan bisnis. Langsung perbarui `kmListingForm.campuses` seketika.
-- **Tahap 2 (Google Places Micro Scan)**:
-  - Memindai Minimarket terdekat (Indomaret/Alfamart) dalam radius 2.5 KM.
-  - Memindai Laundry kiloan terdekat dalam radius 2.5 KM.
-  - Memindai Masjid / Musholla & Gereja terdekat dalam radius 2.5 - 3.5 KM.
-  - Memindai SPBU terdekat dalam radius 4.0 KM.
-  - Memindai Kampus Fallback (hanya jika master data kampus kosong).
-- **Tahap 3 (Penggabungan & Sanitasi)**:
-  - Bersihkan seluruh hasil dengan filter `isGarbageFacility`.
-  - Hitung durasi waktu tempuh realistis (🚶 Jalan Kaki, 🏍️ Motor, 🚗 Mobil).
-  - Simpan daftar gabungan ke `kmListingForm.campuses`.
-
-### Langkah 3: Integrasi Event Pemicu GPS
-- Pasang `detectNearbyLandmarks` pada:
-  - `openKostManagerListing` (saat membuka form pendataan).
-  - `reverseGeocodeAndApply` (saat klik "Gunakan Lokasi Saya Saat Ini").
-  - `handleConfirmModalLocation` (saat simpan dari pop-up peta).
-  - Konversi link / koordinat Maps.
-
-### Langkah 4: Redesain Antarmuka Section Landmark di Step 1 Modal KostManager
-- Ganti daftar teks sederhana dengan kartu interaktif:
-  - Header dengan icon kategori (🎓 Kampus, 🏥 RS, 🛍️ Mall, 🏢 Bisnis, 🛒 Minimarket, 🧺 Laundry, 🕌/⛪ Ibadah, ⛽ SPBU).
-  - Input nama yang dapat disesuaikan.
-  - Baris rute waktu tempuh: `🚶 X Mnt` • `🏍️ Y Mnt` • `🚗 Z Mnt` serta jarak `± N KM`.
-  - Tombol hapus individual.
-  - Tombol *"✨ Pindai Ulang Landmark (Master Data & Mikro)"* dengan indikator progress scanning.
-  - Form penambahan manual via pencarian autocomplete Google Places & konversi tautan GMaps.
-
-### Langkah 5: Kompilasi, Verifikasi Build, & Dokumentasi
-- Jalankan kompilasi frontend Vite `cmd /c npm run build` di `functions/public`.
-- Jalankan kompilasi TypeScript `cmd /c npm run build` di `functions`.
-- Catat entri riwayat pada `functions/PROGRESS.md` dan terbitkan `WALKTHROUGH.md`.
-- Lakukan commit dan push ke branch `bukan-productions`.
+## 3. Langkah-Langkah Eksekusi (Fase 2 Setelah di-ACC)
+1. **Langkah 1: Update `emailService.ts`**:
+   - Memperbarui `notifyAdminNewChatMessage` agar menyusun payload email yang lebih informatif dan terstruktur.
+2. **Langkah 2: Update `chatService.ts`**:
+   - Mengoptimalkan logika pengecekan status KostManager pada `sendMessage`.
+   - Mengintegrasikan pengambilan identitas pengirim (nama, email, no_hp) dan memanggil `notifyAdminNewChatMessage`.
+3. **Langkah 3: Sinkronisasi di `KostDetail.tsx`**:
+   - Menyelaraskan filter `isKostManagerManaged` agar mencakup `managed_by === 'kostmanager'`.
+4. **Langkah 4: Kompilasi & Pengujian Build**:
+   - Menjalankan `cmd /c npm run build` pada `functions/public` untuk memastikan 0 error kompilasi.
+5. **Langkah 5: Pencatatan Progres & Walkthrough**:
+   - Menambahkan catatan ke `functions/PROGRESS.md` dan menerbitkan `WALKTHROUGH.md`.
+6. **Langkah 6: Git Commit & Push**:
+   - Melakukan commit dan push ke branch `bukan-productions`.
 
 ---
 
-## 4. Rencana Verifikasi (Verification Plan)
-
-### A. Uji Kompilasi
-- Memastikan `npm run build` berhasil 100% (0 error).
-- Memastikan 0 font ligature Google CDN (100% pure bundled SVG `lucide-react`).
-
-### B. Uji Fungsionalitas di Dashboard Agen
-1. Buka **Dashboard Agen** (`/dashboard-agen`).
-2. Masuk ke salah satu tugas KostManager (klik *"📷 Mulai Pendataan"* / *"⚡ Isi Listing & Kamar"*).
-3. Pada **Step 1 (Informasi Properti)**:
-   - Amati koordinat GPS: Master data kampus/anchor utama terdeteksi seketika (0ms), diikuti pemindaian mikro (Minimarket, Laundry, Tempat Ibadah, SPBU).
-   - Periksa kartu landmark: Menampilkan nama, kategori, jarak KM, dan rincian waktu tempuh rute (🚶 Jalan Kaki, 🏍️ Motor, 🚗 Mobil).
-   - Klik tombol **"✨ Pindai Ulang Landmark"**: Memastikan proses scan mikro dan master data terpanggil ulang dengan mulus.
-   - Coba tombol **"+ Tambah Landmark Baru"**: Tambah landmark manual via pencarian atau link Google Maps.
-   - Coba tombol **"Hapus"** pada salah satu fasilitas.
-4. Lanjutkan pengisian hingga Step 2 & 3 lalu klik Simpan: Memastikan data landmark (`campuses`) tersimpan dengan presisi ke Supabase database.
+## 4. Rencana Verifikasi
+1. **Uji Kompilasi**:
+   - Menjalankan `npm run build` di `functions/public` dan `tsc` di `functions`.
+2. **Uji Simulasi Alur Chat**:
+   - Mensimulasikan pengiriman pesan dari halaman detail properti KostManager (`senderType: 'user'`).
+   - Memastikan `notifyAdminNewChatMessage` terpanggil dengan parameter yang tepat dan log pengiriman FormSubmit berhasil.
