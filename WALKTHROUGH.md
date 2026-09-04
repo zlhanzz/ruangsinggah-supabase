@@ -1,57 +1,68 @@
-# Walkthrough - Progres 318: Aktivasi Sistem Pelacakan Kunjungan (Views), CTR, dan Tren Kunjungan Riil di Dashboard Mitra
+# WALKTHROUGH - Progres 319: Pengendalian & Pembatasan Frekuensi Popup Promo KostManager di Dashboard Mitra
 
-## Ringkasan Perubahan
-Mengaktifkan dan menghubungkan seluruh sistem analitik performa kost di Dashboard Mitra secara riil:
-1. **Kunjungan (Views)**: Otomatis bertambah saat halaman detail kost dibuka oleh pengunjung/calon penyewa, lengkap dengan mekanisme *anti-spam session*.
-2. **CTR (Click-Through Rate)**: Terhitung dinamis berdasarkan perbandingan interaksi calon penyewa (booking + chat inquiry) terhadap total views.
-3. **Tren Kunjungan 7 Hari Terakhir**: Grafik kurva `AreaChart` kini memetakan data kunjungan harian (`daily_views`) yang nyata per hari (Min, Sen, Sel, Rab, Kam, Jum, Sab).
+## 📋 Ringkasan Perubahan
+Memperbaiki mekanisme kemunculan modal popup promosi KostManager (*"Gak Punya Waktu Kelola Kost? Upgrade ke KostManager!"*) di Dashboard Mitra (`MitraDashboard.tsx`) agar tidak lagi muncul secara agresif/mengganggu, tidak muncul saat mitra masih dalam tahap verifikasi identitas, dan hanya muncul sesekali (maksimal 1x per 24 jam) saat mitra berada di Flow 2 (Kelola Properti / Upload Kost).
 
 ---
 
-## Detail Perubahan File & Arsitektur
+## 🛠️ Detail Perubahan Kode
 
-### 1. `functions/public/userService.ts`
-- **Pembaruan `incrementPropertyView(propertyId, viewerUid)`**:
-  - Menggunakan `sessionStorage` (`viewed_kost_${propertyId}`) agar pengguna yang merefresh halaman berulang-ulang dalam satu sesi browser tidak melipatgandakan jumlah kunjungan secara tidak wajar.
-  - Memeriksa `owner_uid` properti agar kunjungan pemilik kost sendiri tidak ikut dihitung (*owner view exclusion*).
-  - Menyimpan akumulasi counter `views` dan mencatat riwayat per tanggal ke `metadata.daily_views[YYYY-MM-DD]`.
-  - Melakukan *auto-pruning* otomatis untuk log harian yang lebih dari 60 hari agar ukuran metadata tetap efisien.
-
-### 2. `functions/public/pages/KostDetail.tsx`
-- Mengirimkan `user?.uid` pada fungsi pelacakan saat detail kost dimuat oleh pengunjung.
-
-### 3. `functions/public/pages/MitraDashboard.tsx`
-- **Kalkulasi Total Kunjungan**:
-  ```tsx
-  const totalViews = propsData.reduce((a, p) => a + (p.views || 0), 0);
+### 1. `functions/public/pages/MitraDashboard.tsx`
+- **Pengecekan Status Verifikasi Lebih Dini**:
+  Memindahkan deklarasi status verifikasi mitra ke level atas komponen:
+  ```typescript
+  const isVerified = user?.verification_status === 'verified';
   ```
-- **Kalkulasi CTR Real-time**:
-  ```tsx
-  const totalInteractions = bookingsData.length + nonKmChatSessions.length;
-  const computedCtr = totalViews > 0 
-      ? parseFloat(((totalInteractions / totalViews) * 100).toFixed(1)) 
-      : 0;
+- **Fungsi Penutup Terpusat dengan Penyimpanan Timestamp**:
+  Menambahkan `handleClosePromoPopup` untuk menutup popup sekaligus mencatat timestamp penutupan ke `localStorage` dengan key `km_promo_popup_last_shown_${uid || 'guest'}`:
+  ```typescript
+  const handleClosePromoPopup = useCallback(() => {
+      setShowPromoPopup(false);
+      try {
+          const storageKey = `km_promo_popup_last_shown_${uid || 'guest'}`;
+          localStorage.setItem(storageKey, String(Date.now()));
+      } catch { }
+  }, [uid]);
   ```
-- **Grafik Tren Kunjungan 7 Hari Terakhir**:
-  - Mengambil data kunjungan per tanggal (`dateKey`) dari `metadata.daily_views` seluruh properti milik mitra selama 7 hari terakhir.
-  - Menampilkan tooltip interaktif *"{X} Views (Kunjungan)"* pada kurva biru `AreaChart`.
+- **Filter Evaluasi & Cooldown 24 Jam**:
+  Menyempurnakan `useEffect` pemicu pop-up dengan 3 gerbang validasi:
+  1. *Abaikan jika setting popup tidak aktif di database:* `if (!setting?.is_active) return;`
+  2. *Abaikan jika mitra belum lolos verifikasi:* `if (!isVerified) return;`
+  3. *Abaikan jika bukan di Flow 2 (Kelola Properti):* `if (tab !== 'properties') return;`
+  4. *Evaluasi Cooldown 24 Jam:* Jika selisih waktu `now - lastShown < 24 jam`, popup tidak akan ditampilkan.
+- **Konsistensi Seluruh Tombol Aksi & Penutup**:
+  - Tombol Close melayang `[X]` sudut kanan atas $\rightarrow$ memanggil `handleClosePromoPopup`.
+  - Tombol `[Nanti Saja]` $\rightarrow$ memanggil `handleClosePromoPopup`.
+  - Tombol `[Pelajari Sekarang]` $\rightarrow$ memanggil `handleClosePromoPopup` sebelum redirect.
+  - Tombol keyboard `Escape` $\rightarrow$ memanggil `handleClosePromoPopup`.
 
 ---
 
-## Hasil Pengujian & Kompilasi
-
-1. **Kompilasi Root Build (`npm run build`)**:
-   - **Lulus 100% (✓ 2509 modules transformed, built in 46.22s, 0 error)**.
-   - Seluruh direktori (`public/`, `dist/`, dan `functions/public/dist/`) ter-update dengan asset terbaru.
+## 🧪 Hasil Pengujian & Kompilasi
+Kompilasi TypeScript dan bundling Vite dijalankan:
+```bash
+npm run build
+```
+**Hasil**:
+- `vite v6.4.1 building for production...`
+- `✓ 2509 modules transformed.`
+- Output sinkron ke `public/` dan `functions/public/dist/`.
+- **Status: 0 Error, 100% Lulus**.
 
 ---
 
-## Panduan Pengujian
-
-1. **Uji Kunjungan Riil**:
-   - Buka halaman Beranda / Cari Kost $\rightarrow$ Buka salah satu properti milik Mitra dari browser/mode Incognito atau akun lain.
-   - Buka Dashboard Mitra (`/dashboard-mitra`).
-   - **Hasil**:
-     - Stat **KUNJUNGAN** bertambah.
-     - Stat **CTR** menampilkan persentase rasio interaksi yang proporsional.
-     - Grafik **Tren Kunjungan 7 Hari Terakhir** menampilkan titik kurva naik pada hari kunjungan terkait.
+## 🧭 Panduan Verifikasi Pengguna
+1. **Skenario 1 (Mitra Belum Terverifikasi / Dalam Proses Verifikasi)**:
+   - Login sebagai mitra yang `verification_status !== 'verified'`.
+   - Buka Beranda Mitra atau klik tab Verifikasi Identitas.
+   - **Hasil**: Popup KostManager **TIDAK AKAN PERNAH MUNCUL**, proses verifikasi mitra nyaman dan bebas distraksi.
+2. **Skenario 2 (Mitra Terverifikasi Membuka Beranda / Tab Lain)**:
+   - Login sebagai mitra yang sudah `verified`.
+   - Navigasi di tab Ringkasan/Beranda, Transaksi, Survey, atau Akun.
+   - **Hasil**: Popup **TIDAK MUNCUL**.
+3. **Skenario 3 (Mitra Terverifikasi Masuk ke Flow 2 / Kelola Kost)**:
+   - Klik tab **Kelola Kost** (`tab=properties`).
+   - **Hasil**: Popup muncul 1 kali sebagai rekomendasi fitur KostManager.
+   - Klik tombol `[X]` atau `[Nanti Saja]`.
+   - Coba berpindah-pindah tab dan kembali klik Kelola Kost.
+   - **Hasil**: Popup **TIDAK AKAN MUNCUL KEMBALI** karena tersimpan cooldown 24 jam di `localStorage`.

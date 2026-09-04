@@ -169,26 +169,53 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
         lastSaved?: string;
     } | null>(null);
 
-    // Load promo popup setting on mount and trigger if properties tab is open
+    const isVerified = user?.verification_status === 'verified';
+
+    const handleClosePromoPopup = useCallback(() => {
+        setShowPromoPopup(false);
+        try {
+            const storageKey = `km_promo_popup_last_shown_${uid || 'guest'}`;
+            localStorage.setItem(storageKey, String(Date.now()));
+        } catch { }
+    }, [uid]);
+
+    // Load promo popup setting on mount dan HANYA trigger jika mitra sudah terverifikasi dan masuk ke flow 2 (Kelola Kost)
     useEffect(() => {
         getMitraPromoPopupSetting().then(setting => {
             setPromoPopupSetting(setting);
-            if (setting?.is_active && (tab === 'properties' || !tab)) {
-                setShowPromoPopup(true);
-            }
+            if (!setting?.is_active) return;
+
+            // 1. Syarat Utama: JANGAN tampilkan jika masih dalam tahap verifikasi identitas (belum lolos verified)
+            if (!isVerified) return;
+
+            // 2. Hanya izinkan ketika mitra sudah masuk ke Flow 2 (Kelola Properti / Upload Kost)
+            if (tab !== 'properties') return;
+
+            // 3. Batasi frekuensi kemunculan (cukup sesekali, maksimal 1x per 24 jam)
+            try {
+                const storageKey = `km_promo_popup_last_shown_${uid || 'guest'}`;
+                const lastShown = localStorage.getItem(storageKey);
+                const now = Date.now();
+                const COOLDOWN_MS = 24 * 60 * 60 * 1000; // 24 Jam
+
+                if (!lastShown || (now - Number(lastShown)) > COOLDOWN_MS) {
+                    setShowPromoPopup(true);
+                    localStorage.setItem(storageKey, String(now));
+                }
+            } catch { }
         });
-    }, [tab]);
+    }, [tab, isVerified, uid]);
 
     // Handle Escape key for popup
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
             if (e.key === 'Escape') {
-                setShowPromoPopup(false);
+                handleClosePromoPopup();
             }
         };
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
-    }, []);
+    }, [handleClosePromoPopup]);
 
     const checkDraft = useCallback(() => {
         try {
@@ -374,8 +401,6 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
             setIsSavingBank(false);
         }
     };
-
-    const isVerified = user?.verification_status === 'verified';
 
     const checkVerification = () => {
         if (!isVerified) {
@@ -730,7 +755,7 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
     };
 
     const handlePromoNavigate = (url?: string) => {
-        setShowPromoPopup(false);
+        handleClosePromoPopup();
         if (url && url.startsWith('http')) {
             window.open(url, '_blank');
             return;
@@ -2885,7 +2910,7 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                         {/* Tombol Close Melayang di Sudut Kanan Atas */}
                         <button
                             type="button"
-                            onClick={() => setShowPromoPopup(false)}
+                            onClick={handleClosePromoPopup}
                             className="absolute -top-3 -right-3 z-30 w-9 h-9 rounded-full bg-gray-900 text-white border-2 border-white/80 shadow-xl flex items-center justify-center hover:bg-black hover:scale-105 active:scale-95 transition-all cursor-pointer"
                             title="Tutup Iklan (Esc)"
                         >
@@ -2963,7 +2988,7 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                                         </button>
                                         <button
                                             type="button"
-                                            onClick={() => setShowPromoPopup(false)}
+                                            onClick={handleClosePromoPopup}
                                             className="px-4 py-3 bg-black/20 hover:bg-black/30 text-white rounded-xl font-bold text-xs transition-colors cursor-pointer"
                                         >
                                             Nanti Saja

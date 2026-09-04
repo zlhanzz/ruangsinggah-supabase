@@ -2,6 +2,25 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 319. Pengendalian & Pembatasan Frekuensi Popup Promo KostManager di Dashboard Mitra (`MitraDashboard.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  - Pop-up promosi KostManager (*"Gak Punya Waktu Kelola Kost? Upgrade ke KostManager!"*) muncul secara agresif dan terus-menerus setiap kali mitra membuka Beranda atau mengklik tab Kelola Kost.
+  - Pop-up tersebut sangat mengganggu mitra yang baru mendaftar dan masih berada dalam tahap verifikasi identitas (belum berstatus `verified`).
+- **Implementasi Solusi**:
+  1. **Blokir Tampilan untuk Mitra Belum Terverifikasi (`MitraDashboard.tsx`)**:
+     - Mengondisikan pemanggilan pop-up agar langsung diabaikan (`if (!isVerified) return;`) jika status verifikasi mitra belum `verified`.
+  2. **Penguncian Khusus Flow 2 (Kelola Kost / Upload Properti)**:
+     - Pop-up hanya diizinkan untuk dievaluasi saat mitra membuka tab properti (`tab === 'properties'`). Tidak akan muncul pada tab Beranda, Transaksi, Profil, atau Verifikasi.
+  3. **Pembatasan Frekuensi Cooldown 24 Jam via `localStorage`**:
+     - Menyimpan timestamp kemunculan terakhir pada storage key `km_promo_popup_last_shown_{uid}` dengan jeda interval minimum 24 jam (`24 * 60 * 60 * 1000`).
+     - Menyinkronkan seluruh aksi penutupan pop-up (tombol `[X]`, `[Nanti Saja]`, tombol `[Pelajari Sekarang]`, serta penekanan tombol `Esc`) ke fungsi `handleClosePromoPopup` sehingga status penutupan langsung tercatat dan tidak muncul kembali dalam 24 jam.
+- **File Tersentuh**:
+  - `functions/public/pages/MitraDashboard.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi build lulus 100% (✓ 2509 modules transformed, built in 1m 4s, 0 error).
+
 ### 318. Aktivasi Sistem Pelacakan Kunjungan (Views), CTR, dan Grafik Tren Kunjungan Riil di Dashboard Mitra (`userService.ts`, `KostDetail.tsx`, `MitraDashboard.tsx`) (September 2026)
 - **Permintaan & Masalah**:
   - Pemilik kost (Mitra) menanyakan apakah data Kunjungan, CTR, dan Tren Kunjungan di Dashboard Mitra dapat difungsikan secara nyata karena sebelumnya selalu bernilai 0 dan grafik datar. Hal ini terjadi karena belum ada pencatatan view saat pengunjung membuka kost, serta kalkulasi grafik sebelumnya mengambil nominal rupiah pesanan.

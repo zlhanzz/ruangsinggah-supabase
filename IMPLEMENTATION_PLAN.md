@@ -1,16 +1,13 @@
-# Rencana Implementasi: Mengaktifkan Sistem Kunjungan (Views), CTR, dan Tren Kunjungan Riil di Dashboard Mitra
+# Rencana Implementasi: Pengendalian & Pembatasan Frekuensi Popup KostManager di Dashboard Mitra
 
 ## 1. Analisis Masalah & Kebutuhan
-- **Pertanyaan & Kebutuhan Pengguna**:
-  > *"pada dashboard mitra, bisa nggak sih data seperti kunjungan, ctr, dan trend kunjungan berfungsi?"*
-- **Kondisi Saat Ini**:
-  1. **Kunjungan (Views)**: Kartu stat membaca `propsData.reduce((a, p) => a + (p.views || 0), 0)`. Namun saat ini belum ada mekanisme pelacakan (*view tracker*) yang mencatat kunjungan ketika calon penyewa membuka halaman detail kost di `KostDetail.tsx`, sehingga angkanya selalu 0.
-  2. **CTR (Click-Through Rate)**: Bergantung pada total views kost. Karena views masih 0, CTR selalu 0%.
-  3. **Tren Kunjungan (7 Hari Terakhir)**: Logika pembuatan data grafik 7 hari pada `MitraDashboard.tsx` (baris 504–515) saat ini salah mengambil nominal rupiah `dayRevenue` dari transaksi booking (bukan data kunjungan views harian), dan jika tidak ada transaksi harian, grafiknya menjadi datar di 0.
-- **Tujuan Pengembangan**:
-  - Mengaktifkan pelacakan kunjungan riil (*real-time view tracking*) setiap kali halaman detail kost dibuka oleh pengunjung.
-  - Menghitung CTR secara dinamis berdasarkan perbandingan jumlah aksi/interaksi calon penyewa (booking + chat inquiry) terhadap total kunjungan.
-  - Memfungsikan grafik **Tren Kunjungan 7 Hari Terakhir** agar memetakan data kunjungan harian yang nyata secara presisi.
+- **Masalah dari Keluhan Pengguna**:
+  1. **Tampil di Tahap yang Salah**: Pop-up promosi program KostManager saat ini muncul bahkan saat mitra masih dalam tahap awal (verifikasi identitas). Hal ini membingungkan dan mengganggu fokus mitra yang sedang memverifikasi akunnya.
+  2. **Muncul Berulang Setiap Saat**: Setiap kali mitra mengklik menu "Beranda" atau "Kelola Kost", pop-up promosi tersebut selalu muncul kembali tanpa henti karena `useEffect` memicunya tanpa pengecekan riwayat penutupan (*dismiss history*).
+- **Kebutuhan Pengguna**:
+  - Pop-up promosi KostManager **HANYA boleh tampil ketika mitra sudah lolos verifikasi identitas (`isVerified === true`) dan masuk ke Flow 2 (upload/kelola properti kost)**.
+  - Jika mitra masih dalam tahap verifikasi identitas (`!isVerified`), pop-up **DILARANG MUNCUL**.
+  - Pop-up **CUKUP MUNCUL SESEKALI** (dibatasi maksimal 1x per 24 jam atau 1x per sesi) dan **TIDAK BOLEH muncul terus-menerus setiap kali klik menu atau ganti tab**.
 
 ---
 
@@ -18,34 +15,53 @@
 
 | File | Tindakan & Penjelasan Perubahan |
 | :--- | :--- |
-| `functions/public/userService.ts` | Membuat fungsi `trackPropertyView(propertyId, currentUserId)` untuk menambah counter `views` dan mencatat riwayat kunjungan harian per tanggal (`metadata.daily_views`). |
-| `functions/public/pages/KostDetail.tsx` | Memanggil `trackPropertyView` saat halaman detail kost dimuat oleh pengunjung (dengan pencegahan spam refresh via `sessionStorage`). |
-| `functions/public/pages/MitraDashboard.tsx` | 1. Memperbaiki sumber data grafik **Tren Kunjungan** agar membaca data kunjungan harian 7 hari terakhir (`daily_views`).<br>2. Mengaktifkan kalkulasi **Kunjungan** dan **CTR** dinamis secara real-time. |
+| `functions/public/pages/MitraDashboard.tsx` | 1. Menambahkan validasi syarat verifikasi (`isVerified`) sebelum pop-up diizinkan muncul.<br>2. Menerapkan kontrol frekuensi kemunculan via `localStorage` (timestamp interval 24 jam / sesi) pada `useEffect` inisialisasi pop-up.<br>3. Menyimpan status dismiss saat tombol 'X', 'Nanti Saja', 'Esc', atau 'Pelajari Sekarang' ditekan agar tidak muncul kembali berulang kali saat bernavigasi. |
 
 ---
 
 ## 3. Langkah-Langkah Eksekusi
 
-### Langkah 1: Buat Fungsi Pelacakan Kunjungan di `userService.ts`
-- Implementasikan `trackPropertyView(propertyId: string, viewerUid?: string)`:
-  - Cek `sessionStorage` (`viewed_kost_${propertyId}`) untuk mencegah double count saat refresh berulang dalam 1 sesi.
-  - Ambil data properti saat ini, lakukan increment pada `views = (views || 0) + 1`.
-  - Catat distribusi tanggal harian pada `metadata.daily_views[YYYY-MM-DD] = (count || 0) + 1`.
-  - Simpan perubahan ke tabel `properties` di Supabase.
+### Langkah 1: Tambahkan Pemeriksaan Syarat & Frekuensi di `MitraDashboard.tsx`
+- Perbarui `useEffect` pemicu pop-up promosi:
+  ```tsx
+  useEffect(() => {
+      getMitraPromoPopupSetting().then(setting => {
+          setPromoPopupSetting(setting);
+          if (!setting?.is_active) return;
 
-### Langkah 2: Integrasikan Pelacakan Kunjungan di `KostDetail.tsx`
-- Pada `useEffect` inisialisasi detail kost:
-  - Jika properti berhasil dimuat dan pengunjung bukan pemilik kost tersebut (`user?.uid !== kost.ownerUid`), panggil `trackPropertyView(kost.id, user?.uid)`.
+          // Syarat 1: Jangan tampilkan jika masih tahap verifikasi identitas
+          if (!isVerified) return;
 
-### Langkah 3: Sinkronisasi dan Perbaiki Visualisasi di `MitraDashboard.tsx`
-- **Total Kunjungan**: Akumulasi `views` dari semua kost milik mitra.
-- **CTR**: Formula $\text{CTR} = \frac{\text{Total Interaksi (Bookings + Chat Inquiries)}}{\max(1, \text{Total Kunjungan})} \times 100\%$.
-- **Tren Kunjungan 7 Hari**:
-  - Iterasi 7 hari ke belakang (misal: Min, Sen, Sel, Rab, Kam, Jum, Sab).
-  - Ambil total kunjungan dari semua properti mitra pada masing-masing tanggal dari `metadata.daily_views`.
-  - Tampilkan tren kurva naik-turun yang nyata dan informatif di `AreaChart`.
+          // Syarat 2: Hanya izinkan jika masuk ke Flow 2 (Kelola Properti / Upload Kost)
+          if (tab !== 'properties') return;
 
-### Langkah 4: Build & Validasi
+          // Syarat 3: Cek frekuensi kemunculan (cukup sesekali, max 1x per 24 jam)
+          const storageKey = `km_promo_popup_last_shown_${uid || 'guest'}`;
+          const lastShown = localStorage.getItem(storageKey);
+          const now = Date.now();
+          const COOLDOWN_MS = 24 * 60 * 60 * 1000; // 24 Jam
+
+          if (!lastShown || (now - Number(lastShown)) > COOLDOWN_MS) {
+              setShowPromoPopup(true);
+              localStorage.setItem(storageKey, String(now));
+          }
+      });
+  }, [tab, isVerified, uid]);
+  ```
+
+### Langkah 2: Buat Handler Penutupan yang Konsisten
+- Buat fungsi penutup pop-up:
+  ```tsx
+  const handleClosePromoPopup = () => {
+      setShowPromoPopup(false);
+      if (uid) {
+          localStorage.setItem(`km_promo_popup_last_shown_${uid}`, String(Date.now()));
+      }
+  };
+  ```
+- Terapkan ke tombol `[X]`, tombol `[Nanti Saja]`, event tombol `Esc`, dan navigasi `handlePromoNavigate`.
+
+### Langkah 3: Build & Validasi
 - Jalankan `cmd /c npm run build` untuk memverifikasi 0 error kompilasi dan sinkronisasi ke folder `dist` dan `public`.
 - Commit ke `bukan-productions`, merge ke `main`, dan push ke GitHub `origin main`.
 
@@ -53,10 +69,10 @@
 
 ## 4. Rencana Verifikasi
 
-1. **Uji Pelacakan Kunjungan**:
-   - Buka halaman katalog $\rightarrow$ Buka salah satu halaman Detail Kost sebagai pencari kost / pengunjung umum.
-   - Buka Dashboard Mitra $\rightarrow$ Angka **Kunjungan** bertambah secara akurat.
-2. **Uji Kalkulasi CTR**:
-   - Pastikan persentase CTR terhitung proporsional terhadap interaksi sewa & kunjungan.
-3. **Uji Grafik Tren Kunjungan**:
-   - Grafik 7 Hari Terakhir memvisualisasikan jumlah view pada hari terkait dengan tooltip jumlah kunjungan yang akurat.
+1. **Uji Tahap Verifikasi Identitas (Belum Verified)**:
+   - Login dengan akun mitra baru yang belum terverifikasi $\rightarrow$ Buka Beranda/Kelola Kost $\rightarrow$ **Hasil**: Pop-up KostManager **TIDAK MUNCUL sama sekali**.
+2. **Uji Flow 2 (Sudah Verified & Buka Kelola Kost)**:
+   - Login dengan akun mitra yang sudah terverifikasi $\rightarrow$ Buka tab Kelola Kost $\rightarrow$ **Hasil**: Pop-up muncul 1 kali.
+3. **Uji Anti-Spam Navigasi**:
+   - Tutup pop-up $\rightarrow$ Klik menu Beranda $\rightarrow$ Klik menu Kelola Kost $\rightarrow$ Klik menu Chat $\rightarrow$ Kembali ke Beranda.
+   - **Hasil**: Pop-up **TIDAK MUNCUL LAGI**, alur navigasi berjalan tenang dan lancar.
