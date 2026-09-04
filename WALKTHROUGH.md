@@ -1,47 +1,49 @@
-# Walkthrough - Perbaikan Deteksi Banner Kontak, Pengetatan Presisi Sensor (Ultra-Tight Fit), & Watermark Otomatis
+# Walkthrough - Notifikasi Email & In-App Admin untuk Listing Properti dalam Tahap Peninjauan (Review)
 
-Dokumen ini merangkum perbaikan pada alur deteksi nomor kontak/banner spanduk pada foto kost di Dashboard Mitra, penyelarasan integrasi Edge Function `detect-contact-banner`, serta pengetatan kotak sensor (*ultra-tight fit*) menggunakan pemangkas pixel canvas (*Client-Side Pixel Analysis Auto-Trimming*) agar tidak menutupi gerbang, atap, atau dinding di sekitar spanduk.
+Dokumen ini merangkum penyelesaian implementasi sistem notifikasi otomatis ke Administrator RuangSinggah ketika seorang mitra mendaftarkan kost baru atau memperbarui data listing yang masuk ke dalam **Tahap Peninjauan Admin (Review)**.
 
 ---
 
 ## 1. Ringkasan Perubahan
 
-### A. Penyelarasan Integrasi Edge Function (`functions/public/adminService.ts`)
-- **Penyelarasan Nama Function**: Memperbarui pemanggilan Supabase Functions dari `'detect-banner'` menjadi `'detect-contact-banner'`.
-- **Dukungan Payload Universal**: Mengirimkan `{ base64Image, image: base64Image, mimeType }` sehingga kompatibel penuh dengan semua versi implementasi backend/edge function.
-- **Ekstraksi Tangguh Response Bersarang**: Menguraikan `rawData = data?.data || data || {}`, membaca flag deteksi (`has_contact` / `hasContact`), serta bounding boxes (`boxes` / `detected_texts`).
-- **Resilience & Timeout Guard**: Ditambahkan timeout guard 18 detik dan retry otomatis 1x dalam 800ms jika terjadi cold-start pada serverless edge function.
+### A. Service Notifikasi Admin (`functions/public/emailService.ts`)
+- **Penambahan Fungsi `notifyAdminPropertyReview`**:
+  - Mengirimkan email notifikasi ke seluruh administrator terdaftar di database `users` (`role === 'admin' || is_admin === true`) dengan fallback ke email admin utama `sulhan77777@gmail.com`.
+  - Format subjek email adaptif:
+    - Pendaftaran Baru: `🏠 Pengajuan Listing Kost Baru Menunggu Peninjauan: [Nama Kost]`
+    - Pengajuan Ulang: `🔄 Pengajuan Ulang Listing Kost: [Nama Kost]`
+  - Payload email komprehensif mencakup:
+    - **Nama & ID Properti**: Identitas listing yang diajukan.
+    - **Tipe Kost & Lokasi**: Tipe (Putra/Putri/Campur), Alamat Lengkap, Kota/Area.
+    - **Harga Sewa Mulai**: Diformat rapi (misal: `Rp 1.000.000 / bulan`).
+    - **Kamar**: Jumlah tipe kamar dan estimasi total unit kamar siap huni.
+    - **Kontak Mitra**: Nama Lengkap Mitra, Alamat Email Akun, dan Nomor WhatsApp aktif.
+    - **Foto Cover**: URL foto bangunan depan / fasad yang sudah terunggah di Supabase Storage.
+    - **Status**: `Sedang Ditinjau (Draft / Pending Verification)`.
+    - **Tautan Admin**: Tautan langsung ke Pusat Moderasi Dashboard Admin (`https://ruangsinggah.id/dashboard`).
+  - **Notifikasi In-App**: Menyisipkan notifikasi ke tabel `notifications` untuk setiap akun admin secara paralel.
 
-### B. Pemangkas Pintar Presisi Banner (`functions/public/adminService.ts` - `refineBannerBoundsWithPixelAnalysis`)
-- **Analisis Pixel Canvas Real-Time**:
-  - Membaca baris-baris pixel canvas (`ctx.getImageData`) di dalam area bounding box deteksi.
-  - Menghitung skor *banner-likeness* per baris (berdasarkan kecerahan, saturasi warna khas spanduk kuning/merah/putih, dan variansi tepi teks).
-  - Memangkas baris atas dan bawah yang memiliki nilai rendah (< 0.18) seperti bilah kayu gelap pintu gerbang, bayangan, atau kanopi atap seng.
-- **Pembatas Rasio Aspek (Aspect Ratio Clamp)**:
-  - Menerapkan batasan tinggi kotak spanduk horizontal agar tidak melebihi $1.35 \times \text{lebar}$ (karena spanduk nomor HP umumnya berbentuk persegi panjang horizontal atau bujur sangkar).
-
-### C. Rendering Efek Sensor & Watermark Kapsul Elegan (`functions/public/adminService.ts` - `applyBlurToBoundingBoxes`)
-- **Mosaik Mikro Rapat**: Mengaburkan nomor kontak dan teks spanduk tanpa merusak estetika visual foto properti.
-- **Lapisan Gelap Frosted Glassmorphism**: Memberikan kontras yang elegan dan bersih (`rgba(15, 23, 42, 0.82)`).
-- **Watermark Kapsul Proporsional `ruangsinggah.id`**:
-  - Watermark berbentuk kapsul pill modern (`ruangsinggah` putih, `.id` oranye) yang ukurannya secara dinamis menyesuaikan dimensi kotak spanduk yang dipangkas.
-
-### D. Pengetatan Prompt AI Vision (`supabase/functions/detect-contact-banner/index.ts`)
-- **Instruksi Ultra-Tight Bounding Box**: Memberikan instruksi ketat pada Gemini Vision agar bounding box `[ymin, xmin, ymax, xmax]` hanya menempel pas pada 4 sudut lembaran fisik spanduk/kain/kertas dan dilarang keras meluas ke gerbang, jeruji, tiang, atap, atau dinding.
-- **Cascade Model Gemini Aktif**: `gemini-2.0-flash`, `gemini-1.5-flash`, `gemini-2.5-flash`, `gemini-1.5-pro`, `gemini-3.7-flash`.
+### B. Integrasi Formulir Pengajuan Mitra (`functions/public/components/KostFormMitra.tsx`)
+- **Pendaftaran Listing Baru**:
+  - Menangkap ID properti baru dari `addPropertyWithMedia`.
+  - Memicu `notifyAdminPropertyReview` secara asinkron (*non-blocking*) dengan `isResubmission: false`.
+- **Pengajuan Ulang Perubahan Draft/Revisi**:
+  - Ketika mitra mengedit kost yang statusnya belum `published` (`!isCurrentlyPublished`), sistem memicu `notifyAdminPropertyReview` dengan `isResubmission: true`.
+- **Pengalaman Pengguna Tetap Responsif**:
+  - Pemicuan dilakukan di latar belakang (`catch` error logging), sehingga dialog alert sukses dan navigasi pengguna tidak terhambat oleh proses pengiriman email.
 
 ---
 
 ## 2. Hasil Pengujian & Kompilasi
 
-### A. Uji Kompilasi Frontend (`functions/public/`)
+### A. Kompilasi Frontend (`functions/public/`)
 ```bash
 cmd /c npm run build
 ```
 - **Hasil**: ✅ **Lulus 100% (0 error)**
-- **Output**: `✓ 2510 modules transformed. built in 30.74s`
+- **Output**: `✓ 2510 modules transformed. built in 29.18s`
 
-### B. Uji Kompilasi Backend (`functions/`)
+### B. Kompilasi Backend (`functions/`)
 ```bash
 cmd /c npm run build
 ```
@@ -49,11 +51,12 @@ cmd /c npm run build
 
 ---
 
-## 3. Panduan Pengujian untuk Pengguna (User Testing)
+## 3. Panduan Verifikasi Pengguna (User Testing)
 
-1. Buka halaman **Dashboard Mitra** $\rightarrow$ **Kelola Kost / Tambah Kost Baru** (`/dashboard-mitra/properties`).
-2. Masuk ke **Langkah 2: Media & Foto Kost** (atau upload foto utama / foto area depan gerbang).
-3. Upload foto kost yang memiliki spanduk kontak nomor telepon (misal: spanduk kuning di gerbang/pagar).
-4. **Hasil yang Diharapkan**:
-   - Status notifikasi upload menampilkan info: *"🛡️ Foto mengandung nomor kontak/banner. Sistem otomatis menyamarkannya dengan watermark ruangsinggah.id"*.
-   - Kotak sensor (blur & kapsul watermark `ruangsinggah.id`) **hanya menutupi lembaran spanduk kuning secara pas (*ultra-tight fit*)**, dan tidak lagi menjulang tinggi menutupi jeruji kayu gerbang atau atap seng kanopi.
+1. Buka **Dashboard Mitra** $\rightarrow$ **Kelola Kost / Tambah Kost Baru** (`/dashboard-mitra/properties`).
+2. Masukkan data kost (Info Dasar, Lokasi, Kamar, Fasilitas, dan Foto).
+3. Klik tombol **"Publikasikan Kost"** di Langkah terakhir.
+4. **Hasil yang Terjadi**:
+   - Muncul alert konfirmasi: *"Pendaftaran kost berhasil diajukan! Listing baru Anda saat ini dalam tahap peninjauan (review) oleh tim RuangSinggah dan akan otomatis tayang setelah disetujui."*
+   - Di kartu Dashboard Mitra, kost berstatus: **"SEDANG DITINJAU"** dan **"TAHAP PENINJAUAN ADMIN (ESTIMASI 1×24 JAM)"**.
+   - Sistem di latar belakang secara otomatis mengirimkan email notifikasi pengajuan review lengkap beserta rincian kamar, harga, kontak WhatsApp mitra, dan foto cover ke email administrator agar dapat langsung diverifikasi di Dashboard Admin.

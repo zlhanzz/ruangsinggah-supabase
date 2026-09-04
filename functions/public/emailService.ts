@@ -190,4 +190,81 @@ export async function notifyAdminPropertyReport(details: {
   });
 }
 
+export interface PropertyReviewNotificationDetails {
+  propertyId: string;
+  propertyName: string;
+  propertyCity?: string;
+  propertyAddress?: string;
+  propertyPrice?: number;
+  propertyType?: string;
+  ownerName?: string;
+  ownerEmail?: string;
+  ownerPhone?: string;
+  totalRoomTypes?: number;
+  totalUnits?: number;
+  coverPhotoUrl?: string;
+  isResubmission?: boolean;
+}
+
+export async function notifyAdminPropertyReview(details: PropertyReviewNotificationDetails) {
+  const isResub = details.isResubmission === true;
+  const subjectPrefix = isResub ? '🔄 Pengajuan Ulang Listing Kost' : '🏠 Pengajuan Listing Kost Baru Menunggu Peninjauan';
+  const priceFormatted = details.propertyPrice 
+    ? `Rp ${Number(details.propertyPrice).toLocaleString('id-ID')} / bulan`
+    : 'Belum ditentukan';
+
+  // 1. Kirim notifikasi email via FormSubmit ke seluruh admin
+  const emailPromise = notifyAdminTransaction(`${subjectPrefix}: ${details.propertyName}`, {
+    "Tipe Notifikasi": isResub ? "Pengajuan Ulang Listing (Tahap Peninjauan Admin)" : "Pendaftaran Listing Baru (Tahap Peninjauan Admin)",
+    "Nama Properti": details.propertyName,
+    "ID Properti": details.propertyId,
+    "Tipe Kost": details.propertyType || 'Campur',
+    "Harga Mulai": priceFormatted,
+    "Alamat Properti": details.propertyAddress || '-',
+    "Kota / Area": details.propertyCity || '-',
+    "Jumlah Tipe Kamar": details.totalRoomTypes ? `${details.totalRoomTypes} Tipe` : '-',
+    "Estimasi Unit Kamar": details.totalUnits ? `${details.totalUnits} Kamar Tersedia` : '-',
+    "Nama Pemilik / Mitra": details.ownerName || 'Mitra RuangSinggah',
+    "Email Pemilik": details.ownerEmail || '-',
+    "No. WhatsApp Pemilik": details.ownerPhone || '-',
+    "Foto Cover Bangunan": details.coverPhotoUrl || 'Tidak ada foto cover',
+    "Status Saat Ini": "Sedang Ditinjau (Draft / Pending Verification)",
+    "Petunjuk Tindakan Admin": "Silakan buka Pusat Moderasi Listing di Dashboard Admin untuk memeriksa keakuratan data, fasilitas, harga, dan foto kost, kemudian setujui (Publikasikan) atau minta revisi jika diperlukan.",
+    "Link Pusat Moderasi Admin": "https://ruangsinggah.id/dashboard"
+  });
+
+  // 2. Kirim notifikasi in-app ke setiap admin di tabel notifications (non-blocking)
+  const inAppPromise = (async () => {
+    try {
+      const { data: adminUsers } = await supabase
+        .from('users')
+        .select('id, role, is_admin')
+        .or('role.eq.admin,is_admin.eq.true');
+
+      if (adminUsers && adminUsers.length > 0) {
+        const notifInserts = adminUsers.map(adm => ({
+          user_id: adm.id,
+          title: `${isResub ? '🔄 Pembaruan Listing' : '🏠 Listing Baru'}: ${details.propertyName}`,
+          message: `Mitra ${details.ownerName || 'Pemilik Kost'} mengajukan listing kost untuk ditinjau dan diverifikasi oleh admin sebelum dipublikasikan.`,
+          type: 'submission',
+          metadata: {
+            property_id: details.propertyId,
+            property_name: details.propertyName,
+            is_resubmission: isResub
+          },
+          link: '/dashboard',
+          is_read: false
+        }));
+
+        await supabase.from('notifications').insert(notifInserts);
+      }
+    } catch (notifErr) {
+      console.warn('Gagal menyimpan notifikasi in-app admin review listing:', notifErr);
+    }
+  })();
+
+  return Promise.allSettled([emailPromise, inAppPromise]);
+}
+
+
 

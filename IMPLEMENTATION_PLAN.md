@@ -1,64 +1,126 @@
-# IMPLEMENTATION PLAN - Client-Side Smart Banner Trimming & Presisi Sensor Spanduk (Auto-Trim to Banner Color/Edge)
+# Rencana Implementasi: Notifikasi Email ke Admin untuk Listing yang Diajukan Mitra dalam Tahap Peninjauan
+
+Dokumen ini adalah **Implementation Plan (Fase 1)** untuk menambahkan sistem notifikasi email otomatis ke tim Administrator RuangSinggah ketika seorang mitra mendaftarkan kost baru atau mengajukan ulang perubahan listing yang masuk ke dalam **Tahap Peninjauan Admin (Review)**.
+
+---
 
 ## 1. Analisis Masalah & Kebutuhan
 
-Berdasarkan pengujian pengguna pada foto:
-- **Gejala Masalah**: Kotak sensor masih berbentuk pilar vertikal yang tinggi dan *offside* hingga ke atap/jeruji gerbang, meskipun watermark kapsul berada di posisi spanduk.
-- **Akar Penyebab**:
-  1. **AI Menganggap Gerbang Kayu Vertikal Sebagai Frame Spanduk**: Pada foto asli, spanduk kuning/putih terpasang di atas pintu gerbang berbilah kayu vertikal gelap. AI Vision sering kali mengidentifikasi pilar gerbang tersebut sebagai batas atas spanduk, sehingga koordinat `ymin` dimulai dari atas gerbang (mendekati atap).
-  2. **Ketergantungan pada Edge Function Cloud**: Edge Function berjalan di Supabase Cloud. Jika client-side hanya menerima koordinat mentah dari AI tanpa verifikasi pixel, kotak sensor akan selalu mengikuti bounding box mentah tersebut.
-  3. **Ketiadaan Pemangkas Otomatis (Auto-Trimming)**: Frontend belum memiliki algoritma deteksi batas warna/kontras untuk memotong area gelap/atap non-spanduk di dalam bounding box.
+### A. Konteks Masalah
+- Ketika mitra mendaftarkan kost baru melalui formulir kelola properti (`KostFormMitra.tsx`), status awal properti disimpan sebagai `draft` dengan status peninjauan `is_verified: false`.
+- Di antarmuka Dashboard Mitra, kartu listing menampilkan lencana **"SEDANG DITINJAU"** dan kartu panduan bertuliskan:
+  > **TAHAP PENINJAUAN ADMIN (ESTIMASI 1×24 JAM)**  
+  > *Listing Anda telah berhasil diajukan dan sedang diverifikasi oleh tim RuangSinggah. Listing akan otomatis tayang di pencarian publik setelah disetujui.*
+- Hal yang sama terjadi ketika mitra mengedit listing kost yang belum pernah dipublikasikan atau yang sebelumnya diminta revisi oleh admin.
+- Saat ini, **belum ada notifikasi email yang terkirim ke administrator** ketika peristiwa pengajuan ini terjadi. Admin harus secara manual membuka tab Pusat Moderasi Properti di Dashboard Admin untuk mengecek apakah ada listing baru yang masuk, sehingga berpotensi memperlambat waktu verifikasi (*turnaround time* > 24 jam).
+
+### B. Kebutuhan Solusi
+1. **Sistem Notifikasi Email Otomatis ke Admin**:
+   - Mengirimkan email resmi ke seluruh email admin (ditarik dinamis dari tabel `users` dengan fallback ke admin utama `sulhan77777@gmail.com`) melalui FormSubmit AJAX.
+2. **Payload Notifikasi Komprehensif & Kaya Konteks**:
+   - Judul & Subjek: `🏠 Pengajuan Listing Kost Baru Menunggu Peninjauan: [Nama Kost]` (atau `Pengajuan Ulang Listing Kost` jika resubmission).
+   - Data Properti: Nama Kost, Tipe (Putra/Putri/Campur), Alamat Lengkap, Kota/Area, Kisaran Harga Sewa Mulai (Rp/bulan), Jumlah Tipe Kamar & Unit Kamar Tersedia.
+   - Data Mitra / Pemilik: Nama Lengkap, Alamat Email Akun, Nomor WhatsApp Aktif.
+   - Media: URL Foto Cover Bangunan Depan / Fasad (sudah tersimpan di Supabase Storage).
+   - Tindakan Admin: Panduan dan tautan langsung ke Pusat Moderasi Dashboard Admin (`https://ruangsinggah.id/dashboard`).
+3. **Pemicu Non-Blocking & Tangguh**:
+   - Pengiriman email tidak boleh memblokir atau memperlambat alur submit pengguna di antarmuka (dieksekusi secara asinkron dengan *error handling* aman).
+   - Notifikasi in-app pelengkap ke tabel `notifications` untuk seluruh akun admin agar muncul di lonceng notifikasi Dashboard Admin.
 
 ---
 
-## 2. Solusi Teknis Front-End (Smart Banner Boundary Trimming)
+## 2. Dampak Perubahan (Files Touched)
 
-Alih-alih hanya mengandalkan koordinat mentah AI, front-end di [adminService.ts](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/adminService.ts) akan dilengkapi dengan **algoritma pemangkas pintar berbasis analisis pixel canvas (`trimToActualBannerBounds`)**:
-
-1. **Analisis Pixel di Area Bounding Box AI**:
-   - Spanduk sewa/kontak memiliki ciri visual: warna cerah/kontras (kuning, putih, merah, oranye, dll.) dan kerapatan tepi teks tinggi (*high luminance/color variance*).
-   - Gerbang kayu gelap, kanopi, atau dinding semen di atas spanduk memiliki karakteristik warna gelap/monoton.
-2. **Pemangkasan Batas Atas & Bawah (Vertical Trimming)**:
-   - Sistem memindai baris pixel (*row-by-row*) dari atas ke bawah di dalam kotak AI.
-   - Baris-baris atas yang hanya berisi gerbang gelap/atap seng akan otomatis dipotong, dan `y` dimulai tepat pada baris pertama di mana kain spanduk berwarna/berteks muncul.
-   - Batas bawah `y + h` juga dipotong tepat di tepi bawah kain spanduk.
-3. **Pembatasan Rasio Aspek (Anti-Pillar Clamp)**:
-   - Spanduk umumnya berbentuk horizontal atau bujursangkar (lebar $\ge$ tinggi).
-   - Jika rasio tinggi terhadap lebar melebihi batas wajar (`h > w * 1.25`), sistem secara cerdas membatasi tinggi kotak sensor agar berpusat pada area berdensitas teks/kontras tertinggi (lokasi spanduk sebenarnya).
-4. **Watermark Kapsul Presisi**:
-   - Menempatkan watermark `ruangsinggah.id` pas di tengah spanduk yang sudah dipangkas rapi.
+1. **`functions/public/emailService.ts`**:
+   - Menambahkan fungsi baru `notifyAdminPropertyReview(details: ...)` untuk menyusun payload email resmi yang profesional, menarik daftar admin aktif, dan mengirimkan email via FormSubmit AJAX.
+2. **`functions/public/components/KostFormMitra.tsx`**:
+   - Mengimpor fungsi `notifyAdminPropertyReview`.
+   - Pada handler `handleSubmit`:
+     - Menangkap ID properti baru dari `addPropertyWithMedia`.
+     - Mengirimkan notifikasi email admin saat pendaftaran kost baru berhasil.
+     - Mengirimkan notifikasi email admin saat pembaruan draft/revisi berhasil diajukan ulang (`!isCurrentlyPublished`).
+3. **`functions/PROGRESS.md`**:
+   - Mencatat penambahan fitur notifikasi email admin untuk review listing kost pada entri baru **#335**.
+4. **`WALKTHROUGH.md`**:
+   - Menerbitkan panduan pengujian dan ringkasan implementasi setelah eksekusi Fase 2 selesai.
 
 ---
 
-## 3. Dampak Perubahan (Files to Modify)
+## 3. Langkah-Langkah Eksekusi (Fase 2 - Setelah di-ACC)
 
-1. [functions/public/adminService.ts](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/adminService.ts):
-   - Menambahkan fungsi helper `refineBannerBoundsWithPixelAnalysis(ctx, rawBox)` untuk memangkas area non-spanduk berdasarkan variasi warna dan kecerahan pixel canvas.
-   - Memperbarui `applyBlurToBoundingBoxes` agar menerapkan pemangkasan presisi sebelum memburamkan dan merender watermark.
+### Tahap 1: Pembuatan Service Notifikasi Email Admin (`emailService.ts`)
+- Mendefinisikan antarmuka parameter `PropertyReviewNotificationPayload`:
+  - `propertyId: string`
+  - `propertyName: string`
+  - `propertyCity?: string`
+  - `propertyAddress?: string`
+  - `propertyPrice?: number`
+  - `propertyType?: string`
+  - `ownerName?: string`
+  - `ownerEmail?: string`
+  - `ownerPhone?: string`
+  - `totalRoomTypes?: number`
+  - `totalUnits?: number`
+  - `coverPhotoUrl?: string`
+  - `isResubmission?: boolean`
+- Mengimplementasikan fungsi `notifyAdminPropertyReview` yang memanfaatkan `notifyAdminTransaction` dengan format pesan terstruktur dan subjek email yang jelas.
+- Memicu pembuatan entri notifikasi in-app ke tabel `notifications` untuk setiap admin ID.
+
+### Tahap 2: Integrasi Pemicu di Formulir Pengajuan Mitra (`KostFormMitra.tsx`)
+- Pada blok `handleSubmit`:
+  - Pendaftaran Baru (`addPropertyWithMedia`):
+    ```typescript
+    const newPropertyId = await addPropertyWithMedia(...);
+    // Non-blocking call
+    notifyAdminPropertyReview({
+      propertyId: newPropertyId,
+      propertyName: form.title || 'Kost Tanpa Nama',
+      propertyCity: form.city || '',
+      propertyAddress: form.address || '',
+      propertyPrice: finalPrice,
+      propertyType: form.type || 'Campur',
+      ownerName: user?.displayName || user?.name || form.omnichannelContactName || 'Mitra RuangSinggah',
+      ownerEmail: user?.email || '',
+      ownerPhone: user?.phone || form.omnichannelContactPhone || '',
+      totalRoomTypes: (form.roomTypes || []).length,
+      totalUnits: (form.roomTypes || []).reduce((acc, r) => acc + (r.availableRoomCount ?? 1), 0),
+      coverPhotoUrl: allImagesList[0]?.url || allImagesList[0]?.original || '',
+      isResubmission: false
+    }).catch(err => console.warn('Gagal memicu email review admin:', err));
+    ```
+  - Pengajuan Ulang Draft/Revisi (`updatePropertyWithMedia` dengan `!isCurrentlyPublished`):
+    ```typescript
+    notifyAdminPropertyReview({
+      propertyId: editingKost.id,
+      propertyName: form.title || editingKost.title,
+      // ...
+      isResubmission: true
+    }).catch(err => console.warn('Gagal memicu email review admin:', err));
+    ```
+
+### Tahap 3: Uji Kompilasi & Build
+- Menjalankan `cmd /c npm run build` di `functions/public/` untuk memastikan 0 error kompilasi dan bundler Vite berhasil membangun bundle production.
+- Menjalankan `cmd /c npm run build` di `functions/` untuk memastikan backend `tsc` 0 error.
+
+### Tahap 4: Pencatatan Progres & Deployment
+- Mencatat riwayat ke `functions/PROGRESS.md` (entri #335).
+- Membuat dokumen `WALKTHROUGH.md`.
+- Melakukan commit dan push git ke branch non-production `bukan-productions`.
 
 ---
 
-## 4. Langkah-Langkah Eksekusi (Incremental Execution)
-
-1. **Langkah 1: Implementasi Algoritma `refineBannerBoundsWithPixelAnalysis` ([adminService.ts](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/adminService.ts))**:
-   - Ekstrak data pixel (`getImageData`) pada koordinat kotak deteksi AI.
-   - Hitung profil intensitas warna & variasi tepi horizontal per baris.
-   - Tentukan `cropYmin` dan `cropYmax` tepat di area kain spanduk.
-   - Tentukan `cropXmin` dan `cropXmax` tepat di tepi kiri & kanan spanduk.
-
-2. **Langkah 2: Integrasi ke `applyBlurToBoundingBoxes` ([adminService.ts](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/adminService.ts))**:
-   - Terapkan pemangkasan pixel pada setiap kotak deteksi.
-   - Render efek pixelate mikro dan frosted glass tepat pada area spanduk yang telah dipangkas.
-
-3. **Langkah 3: Uji Kompilasi & Build**:
-   - Jalankan `cmd /c npm run build` di `functions/public/` dan pastikan 0 error kompilasi.
-
----
-
-## 5. Rencana Verifikasi (Verification Plan)
+## 4. Rencana Verifikasi
 
 1. **Uji Kompilasi**:
-   - Jalankan `cmd /c npm run build` dan pastikan build selesai 100% tanpa error.
-2. **Verifikasi Visual**:
-   - Unggah foto bangunan depan dengan spanduk kecil di gerbang.
-   - Kotak sensor otomatis terpangkas (*trimmed*) hanya menutupi kain spanduk kuning/putih, dan atap/gerbang di atasnya tetap terlihat bersih tanpa blur.
+   - `npm run build` di `functions/public/` lulus tanpa peringatan/error TypeScript (`0 error`).
+   - `tsc` di `functions/` lulus tanpa error.
+2. **Uji Simulasi Alur**:
+   - Memastikan saat mitra menekan tombol **"Publikasikan Kost"**, fungsi `notifyAdminPropertyReview` dipanggil dengan data properti, nomor WhatsApp pemilik, dan tautan foto cover.
+   - Memastikan proses penyimpanan form tidak terganggu/terhambat meskipun jaringan pengiriman email lambat (non-blocking).
+   - Memverifikasi log konsol browser menampilkan keberhasilan pengiriman notifikasi via FormSubmit ke email admin.
+
+---
+
+> [!IMPORTANT]
+> **Menunggu Persetujuan (Approval) User**:  
+> Sesuai protokol siklus kerja 2-fase, kami tidak akan memodifikasi kode sampai dokumen perencanaan ini disetujui (ACC / Proceed) oleh Anda.

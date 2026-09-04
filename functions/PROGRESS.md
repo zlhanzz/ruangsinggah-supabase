@@ -2,6 +2,36 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 335. Notifikasi Email & In-App Otomatis ke Admin untuk Listing Properti Baru & Draft yang Diajukan Mitra dalam Tahap Peninjauan / Review (`emailService.ts`, `KostFormMitra.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  - Ketika mitra mendaftarkan properti kost baru atau mengajukan ulang perubahan listing yang masih draft/butuh revisi, listing masuk ke status **Tahap Peninjauan Admin (Estimasi 1×24 Jam)**.
+  - Sebelumnya, belum ada notifikasi otomatis yang dikirimkan ke email administrator ketika peristiwa pengajuan ini terjadi, sehingga admin harus memeriksa secara manual dan berpotensi memperlambat proses verifikasi (*turnaround time*).
+- **Implementasi Solusi**:
+  1. **Pembuatan Service Notifikasi Email & In-App Admin (`emailService.ts`)**:
+     - Menambahkan interface `PropertyReviewNotificationDetails` dan fungsi `notifyAdminPropertyReview`.
+     - Menyusun format payload email resmi yang profesional:
+       - Subjek dinamis: `🏠 Pengajuan Listing Kost Baru Menunggu Peninjauan: [Nama Kost]` atau `🔄 Pengajuan Ulang Listing Kost: [Nama Kost]`.
+       - Rincian Properti: Nama Properti, ID Properti, Tipe Kost (Putra/Putri/Campur), Kisaran Harga Sewa Mulai (Rp/bulan), Alamat Lengkap, Kota/Area, Jumlah Tipe Kamar, Estimasi Unit Kamar Siap Huni.
+       - Rincian Pemilik: Nama Lengkap Mitra/Pemilik, Alamat Email, Nomor WhatsApp aktif.
+       - Media Foto: URL Foto Cover Bangunan Depan / Fasad (Supabase Storage).
+       - Status: `Sedang Ditinjau (Draft / Pending Verification)`.
+       - Panduan Admin & Tautan Langsung: Mengarahkan admin ke Pusat Moderasi Dashboard Admin (`https://ruangsinggah.id/dashboard`).
+     - Menarik daftar seluruh email administrator secara dinamis dari tabel `users` (dengan fallback ke `sulhan77777@gmail.com`) dan mengirimkan via FormSubmit AJAX.
+     - Menyisipkan rekaman notifikasi in-app ke tabel `notifications` untuk setiap akun admin secara paralel (*non-blocking*).
+  2. **Integrasi Pemicu pada Formulir Mitra (`KostFormMitra.tsx`)**:
+     - Mengimpor `notifyAdminPropertyReview` dari `../emailService`.
+     - Menangkap ID properti baru dari kembalian `addPropertyWithMedia` dan memicu `notifyAdminPropertyReview` secara asinkron (*non-blocking*) dengan payload lengkap saat pendaftaran kost baru berhasil.
+     - Memicu `notifyAdminPropertyReview` dengan flag `isResubmission: true` saat mitra memperbarui draft/revisi properti yang belum dipublikasikan (`!isCurrentlyPublished`).
+     - Alur form di UI tetap lancar, cepat, dan responsif tanpa hambatan jaringan.
+- **File Tersentuh**:
+  - `functions/public/emailService.ts`
+  - `functions/public/components/KostFormMitra.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi build frontend Vite `cmd /c npm run build` di `functions/public/` lulus 100% (✓ 2510 modules transformed, built in 29.18s, 0 error).
+  - Kompilasi backend `functions` `tsc` lulus 100% (0 error).
+
 ### 334. Perbaikan Integrasi Edge Function Deteksi Banner Kontak (`detect-contact-banner`), Pengetatan Presisi Sensor (Ultra-Tight Fit via Canvas Pixel Analysis), & Auto-Watermark di Dashboard Mitra (`adminService.ts`, `detect-contact-banner/index.ts`, `KostFormMitra.tsx`) (September 2026)
 - **Permintaan & Masalah**:
   1. Fitur otomatis sensor foto (blur area spanduk dan penempelan watermark kapsul `ruangsinggah.id`) sebelumnya tidak berfungsi karena ketidakcocokan nama Edge Function (`'detect-banner'` vs `'detect-contact-banner'`), parameter payload (`image` vs `base64Image`), dan parsing response bersarang.

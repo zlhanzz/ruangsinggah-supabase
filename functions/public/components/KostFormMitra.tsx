@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { Kost, RoomType, PricingPeriod } from '../types';
 import { addPropertyWithMedia, updatePropertyWithMedia, detectPhotoContactBanner, uploadDraftPhotoToStorage, deleteDraftPhotosFromStorage } from '../adminService';
+import { notifyAdminPropertyReview } from '../emailService';
 import { findNearbyCuratedLandmarks } from '../constants/curatedLandmarks';
 import {
     X, ChevronRight, ChevronLeft, Camera, Video, MapPin, Home, Wifi,
@@ -4271,15 +4272,54 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                 if (isCurrentlyPublished) {
                     alert('Perubahan berhasil disimpan! Data kost Anda telah langsung diperbarui pada listing publik.');
                 } else {
+                    // Notifikasi email & in-app otomatis ke admin bahwa draft / revisi diajukan kembali
+                    notifyAdminPropertyReview({
+                        propertyId: editingKost.id,
+                        propertyName: form.title || editingKost.title || 'Kost Mitra',
+                        propertyCity: `${form.city || editingKost.city || ''}${form.area || editingKost.area ? ' (' + (form.area || editingKost.area) + ')' : ''}`.trim() || undefined,
+                        propertyAddress: form.address || editingKost.address || undefined,
+                        propertyPrice: finalPrice,
+                        propertyType: form.type || editingKost.type || 'Campur',
+                        ownerName: user?.displayName || user?.name || form.omnichannelContactName || 'Mitra RuangSinggah',
+                        ownerEmail: user?.email || undefined,
+                        ownerPhone: user?.phone || form.omnichannelContactPhone || undefined,
+                        totalRoomTypes: (form.roomTypes || []).length,
+                        totalUnits: (form.roomTypes || []).reduce((sum: number, r: any) => sum + (Number(r.availableRoomCount ?? 1)), 0),
+                        coverPhotoUrl: allImagesList[0]?.url || allImagesList[0]?.original || undefined,
+                        isResubmission: true
+                    }).catch(notifErr => {
+                        console.warn('[NOTIF_ADMIN_REVIEW] Gagal mengirim notifikasi admin:', notifErr);
+                    });
+
                     alert('Perubahan draft berhasil disimpan! Menunggu peninjauan oleh tim admin RuangSinggah.');
                 }
             } else {
-                await addPropertyWithMedia({ ...data, status: 'draft', isVerified: false }, pendingUploadPayload, []);
+                const newPropertyId = await addPropertyWithMedia({ ...data, status: 'draft', isVerified: false }, pendingUploadPayload, []);
                 // Clear draft after successful creation
                 try {
                     localStorage.removeItem(storageKey);
                     window.dispatchEvent(new Event('kost_draft_updated'));
                 } catch {}
+
+                // Notifikasi email & in-app otomatis ke admin agar segera diverifikasi
+                notifyAdminPropertyReview({
+                    propertyId: newPropertyId,
+                    propertyName: form.title || 'Kost Baru Mitra',
+                    propertyCity: `${form.city || ''}${form.area ? ' (' + form.area + ')' : ''}`.trim() || undefined,
+                    propertyAddress: form.address || undefined,
+                    propertyPrice: finalPrice,
+                    propertyType: form.type || 'Campur',
+                    ownerName: user?.displayName || user?.name || form.omnichannelContactName || 'Mitra RuangSinggah',
+                    ownerEmail: user?.email || undefined,
+                    ownerPhone: user?.phone || form.omnichannelContactPhone || undefined,
+                    totalRoomTypes: (form.roomTypes || []).length,
+                    totalUnits: (form.roomTypes || []).reduce((sum: number, r: any) => sum + (Number(r.availableRoomCount ?? 1)), 0),
+                    coverPhotoUrl: allImagesList[0]?.url || allImagesList[0]?.original || undefined,
+                    isResubmission: false
+                }).catch(notifErr => {
+                    console.warn('[NOTIF_ADMIN_REVIEW] Gagal mengirim notifikasi admin:', notifErr);
+                });
+
                 alert('Pendaftaran kost berhasil diajukan! Listing baru Anda saat ini dalam tahap peninjauan (review) oleh tim RuangSinggah dan akan otomatis tayang setelah disetujui.');
             }
             onSuccess();
