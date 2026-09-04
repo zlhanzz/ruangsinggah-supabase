@@ -79,9 +79,13 @@ import {
     ClipboardList,
     UserCheck,
     UserX,
-    Wrench
+    Wrench,
+    Percent,
+    Calculator,
+    History,
+    Save
 } from 'lucide-react';
-import { KostManagerPackage } from '../../types';
+import { KostManagerPackage, KostManagerFeeSettings, KostManagerFeeLogEntry } from '../../types';
 import { 
     getResidentStatus, 
     getManualInvoices, 
@@ -92,7 +96,11 @@ import {
     updatePropertyWithMedia,
     getKostManagerPackages,
     saveKostManagerPackage,
-    deleteKostManagerPackage
+    deleteKostManagerPackage,
+    getKostManagerFeeSettings,
+    saveKostManagerFeeSettings,
+    getKostManagerFeeLogs,
+    DEFAULT_KOSTMANAGER_FEE_SETTINGS
 } from '../../adminService';
 import { 
     getKostManagerChatSessions, 
@@ -1160,6 +1168,13 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
     });
     const [savingPkg, setSavingPkg] = useState(false);
 
+    // --- KOSTMANAGER PLATFORM FEE SETTINGS STATE ---
+    const [feeSettings, setFeeSettings] = useState<KostManagerFeeSettings>(DEFAULT_KOSTMANAGER_FEE_SETTINGS);
+    const [feeLogs, setFeeLogs] = useState<KostManagerFeeLogEntry[]>([]);
+    const [savingFeeSettings, setSavingFeeSettings] = useState(false);
+    const [simulatedRent, setSimulatedRent] = useState<number>(1500000);
+    const [feeNotes, setFeeNotes] = useState('');
+
     // --- UI/MODAL STATE ---
     const [isAddBillOpen, setIsAddBillOpen] = useState<boolean>(false);
     const [submittingBill, setSubmittingBill] = useState<boolean>(false);
@@ -1471,9 +1486,15 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
     const loadAllData = async (showSpinner: boolean = true) => {
         if (showSpinner) setLoading(true);
         try {
-            // Load packages first so it doesn't get blocked by early returns
-            const pkgs = await getKostManagerPackages();
+            // Load packages & fee settings first so it doesn't get blocked
+            const [pkgs, feeSet, logs] = await Promise.all([
+                getKostManagerPackages(),
+                getKostManagerFeeSettings(),
+                getKostManagerFeeLogs()
+            ]);
             setPackages(pkgs);
+            setFeeSettings(feeSet);
+            setFeeLogs(logs);
 
             // 1. Ambil data dari tabel khusus mitra_kostmanager (Primary Reference Table)
             const { data: dedicatedKmProps, error: kmErr } = await supabase
@@ -2436,6 +2457,24 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
             alert('Gagal mengosongkan kamar: ' + err.message);
         } finally {
             setVacateConfirmModal(prev => ({ ...prev, submitting: false }));
+        }
+    };
+
+    // Handler: Simpan Pengaturan Biaya Layanan KostManager (Platform Operational Fee)
+    const handleSaveFeeSettings = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setSavingFeeSettings(true);
+        try {
+            const saved = await saveKostManagerFeeSettings(feeSettings, feeNotes);
+            setFeeSettings(saved);
+            const logs = await getKostManagerFeeLogs();
+            setFeeLogs(logs);
+            setFeeNotes('');
+            alert(`🎉 Pengaturan Biaya Layanan KostManager berhasil disimpan!\n\nPersentase: ${saved.fee_percentage}%\nStatus: ${saved.is_active ? 'Aktif' : 'Nonaktif'}`);
+        } catch (err: any) {
+            alert(`Gagal menyimpan biaya layanan: ${err.message}`);
+        } finally {
+            setSavingFeeSettings(false);
         }
     };
 
@@ -5538,11 +5577,275 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
                     )}
 
                     {/* =========================================== */}
-                    {/* TAB: PACKAGES                               */}
+                    {/* TAB: PACKAGES & PLATFORM FEE SETTINGS       */}
                     {/* =========================================== */}
                     {activeTab === 'packages' && (
-                        <div className="space-y-4 animate-in fade-in duration-300">
-                            {/* Actions bar */}
+                        <div className="space-y-8 animate-in fade-in duration-300">
+                            {/* SECTION 1: PENGATURAN BIAYA LAYANAN PLATFORM KOSTMANAGER (FULL ADMIN CONTROL) */}
+                            <div className="bg-white rounded-3xl border border-gray-100 p-6 lg:p-8 shadow-sm space-y-6">
+                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-gray-100">
+                                    <div className="flex items-center gap-3.5">
+                                        <div className="w-12 h-12 rounded-2xl bg-orange-500 text-white flex items-center justify-center font-black shadow-md shadow-orange-500/20 shrink-0">
+                                            <Percent size={24} />
+                                        </div>
+                                        <div>
+                                            <div className="flex items-center gap-2.5">
+                                                <h3 className="text-lg font-black text-gray-900 uppercase tracking-tight">
+                                                    Biaya Layanan Platform KostManager
+                                                </h3>
+                                                <span className={`px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider ${
+                                                    feeSettings.is_active 
+                                                        ? 'bg-emerald-100 text-emerald-800 border border-emerald-200' 
+                                                        : 'bg-gray-100 text-gray-600 border border-gray-200'
+                                                }`}>
+                                                    {feeSettings.is_active ? '● Potongan Aktif' : '○ Potongan Nonaktif'}
+                                                </span>
+                                            </div>
+                                            <p className="text-xs text-gray-500 mt-0.5">
+                                                Kendali penuh persentase bagi hasil transaksi sewa properti KostManager (otomatis dipotong dari total sewa kotor).
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-xs font-black text-gray-600 uppercase tracking-wider">Status Potongan:</span>
+                                        <button
+                                            type="button"
+                                            onClick={() => setFeeSettings(prev => ({ ...prev, is_active: !prev.is_active }))}
+                                            className={`relative inline-flex h-7 w-14 items-center rounded-full transition-colors cursor-pointer ${
+                                                feeSettings.is_active ? 'bg-orange-500' : 'bg-gray-200'
+                                            }`}
+                                        >
+                                            <span
+                                                className={`inline-block h-5 w-5 transform rounded-full bg-white transition-transform shadow-md ${
+                                                    feeSettings.is_active ? 'translate-x-8' : 'translate-x-1'
+                                                }`}
+                                            />
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <form onSubmit={handleSaveFeeSettings} className="space-y-6">
+                                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                                        {/* Kolom Kiri: Input Persentase & Quick Chips */}
+                                        <div className="space-y-4">
+                                            <div>
+                                                <label className="text-xs font-black text-gray-700 uppercase tracking-wider block mb-2">
+                                                    Persentase Potongan Platform (%) <span className="text-rose-500">*</span>
+                                                </label>
+                                                <div className="flex items-center gap-3">
+                                                    <div className="relative flex-1">
+                                                        <input
+                                                            type="number"
+                                                            step="0.1"
+                                                            min="0"
+                                                            max="100"
+                                                            required
+                                                            value={feeSettings.fee_percentage}
+                                                            onChange={e => setFeeSettings(prev => ({ ...prev, fee_percentage: Number(e.target.value) }))}
+                                                            className="w-full h-12 border-2 border-orange-200 focus:border-orange-500 rounded-2xl px-4 text-lg font-black text-gray-900 outline-none bg-orange-50/30 transition-all pr-10"
+                                                        />
+                                                        <span className="absolute right-4 top-1/2 -translate-y-1/2 text-base font-black text-orange-600">%</span>
+                                                    </div>
+                                                </div>
+                                                <p className="text-[11px] text-gray-400 font-medium mt-1.5">
+                                                    Setiap pembayaran transaksi sewa KostManager akan dipotong sebesar persentase ini untuk operasional platform.
+                                                </p>
+                                            </div>
+
+                                            {/* Preset Chips */}
+                                            <div>
+                                                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Pilihan Cepat (Presets):</p>
+                                                <div className="flex flex-wrap items-center gap-2">
+                                                    {[
+                                                        { label: '0% (Gratis)', val: 0 },
+                                                        { label: '3%', val: 3 },
+                                                        { label: '5% (Rekomendasi)', val: 5 },
+                                                        { label: '7.5%', val: 7.5 },
+                                                        { label: '10%', val: 10 }
+                                                    ].map(chip => (
+                                                        <button
+                                                            key={chip.val}
+                                                            type="button"
+                                                            onClick={() => setFeeSettings(prev => ({ ...prev, fee_percentage: chip.val }))}
+                                                            className={`px-3 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer border ${
+                                                                feeSettings.fee_percentage === chip.val
+                                                                    ? 'bg-orange-500 text-white border-orange-500 shadow-sm'
+                                                                    : 'bg-gray-50 hover:bg-gray-100 text-gray-700 border-gray-200'
+                                                            }`}
+                                                        >
+                                                            {chip.label}
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            </div>
+
+                                            {/* Cakupan Transaksi yang Dikenakan Potongan */}
+                                            <div className="pt-2 space-y-2.5">
+                                                <label className="text-xs font-black text-gray-700 uppercase tracking-wider block">
+                                                    Cakupan Pos Transaksi:
+                                                </label>
+                                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                                                    <label className="flex items-center gap-2.5 p-3 rounded-xl border border-gray-200 bg-gray-50/50 cursor-pointer hover:bg-gray-50">
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={feeSettings.applied_to.new_booking}
+                                                            onChange={e => setFeeSettings(prev => ({ ...prev, applied_to: { ...prev.applied_to, new_booking: e.target.checked } }))}
+                                                            className="w-4 h-4 text-orange-500 rounded border-gray-300 focus:ring-orange-500"
+                                                        />
+                                                        <span className="font-bold text-gray-800">Sewa Baru (New Booking)</span>
+                                                    </label>
+                                                    <label className="flex items-center gap-2.5 p-3 rounded-xl border border-gray-200 bg-gray-50/50 cursor-pointer hover:bg-gray-50">
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={feeSettings.applied_to.extension}
+                                                            onChange={e => setFeeSettings(prev => ({ ...prev, applied_to: { ...prev.applied_to, extension: e.target.checked } }))}
+                                                            className="w-4 h-4 text-orange-500 rounded border-gray-300 focus:ring-orange-500"
+                                                        />
+                                                        <span className="font-bold text-gray-800">Perpanjangan Sewa</span>
+                                                    </label>
+                                                    <label className="flex items-center gap-2.5 p-3 rounded-xl border border-gray-200 bg-gray-50/50 cursor-pointer hover:bg-gray-50">
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={feeSettings.applied_to.extra_occupant}
+                                                            onChange={e => setFeeSettings(prev => ({ ...prev, applied_to: { ...prev.applied_to, extra_occupant: e.target.checked } }))}
+                                                            className="w-4 h-4 text-orange-500 rounded border-gray-300 focus:ring-orange-500"
+                                                        />
+                                                        <span className="font-bold text-gray-800">Ekstra Penghuni</span>
+                                                    </label>
+                                                    <label className="flex items-center gap-2.5 p-3 rounded-xl border border-gray-200 bg-gray-50/50 cursor-pointer hover:bg-gray-50">
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={feeSettings.applied_to.facility}
+                                                            onChange={e => setFeeSettings(prev => ({ ...prev, applied_to: { ...prev.applied_to, facility: e.target.checked } }))}
+                                                            className="w-4 h-4 text-orange-500 rounded border-gray-300 focus:ring-orange-500"
+                                                        />
+                                                        <span className="font-bold text-gray-800">Fasilitas Tambahan</span>
+                                                    </label>
+                                                </div>
+                                                <p className="text-[10px] text-emerald-700 font-bold bg-emerald-50 p-2 rounded-xl border border-emerald-200">
+                                                    🛡️ Catatan: Uang Jaminan / Deposit sewa selalu 0% (tidak pernah dipotong platform) karena merupakan dana titipan pengembalian.
+                                                </p>
+                                            </div>
+                                        </div>
+
+                                        {/* Kolom Kanan: Kalkulator Simulasi Interaktif */}
+                                        <div className="bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 p-6 rounded-3xl text-white flex flex-col justify-between shadow-lg">
+                                            <div className="space-y-4">
+                                                <div className="flex items-center justify-between pb-3 border-b border-white/10">
+                                                    <div className="flex items-center gap-2">
+                                                        <Calculator size={18} className="text-orange-400" />
+                                                        <h4 className="text-xs font-black uppercase tracking-wider text-white">
+                                                            Simulasi Pembagian Hasil Real-Time
+                                                        </h4>
+                                                    </div>
+                                                    <span className="text-[10px] font-bold text-white/50">Simulasi Otomatis</span>
+                                                </div>
+
+                                                <div>
+                                                    <label className="text-[10px] font-bold text-white/60 uppercase tracking-wider block mb-1">
+                                                        Masukkan Contoh Nominal Sewa (Rp):
+                                                    </label>
+                                                    <input
+                                                        type="number"
+                                                        step="50000"
+                                                        min="0"
+                                                        value={simulatedRent}
+                                                        onChange={e => setSimulatedRent(Number(e.target.value))}
+                                                        className="w-full h-11 bg-white/10 border border-white/20 rounded-xl px-3.5 text-sm font-black text-white focus:outline-none focus:border-orange-400"
+                                                    />
+                                                </div>
+
+                                                {(() => {
+                                                    const rate = feeSettings.is_active ? feeSettings.fee_percentage : 0;
+                                                    const platformCut = Math.round(simulatedRent * (rate / 100));
+                                                    const partnerNet = simulatedRent - platformCut;
+                                                    return (
+                                                        <div className="space-y-2.5 pt-2 text-xs">
+                                                            <div className="flex justify-between items-center text-white/80">
+                                                                <span>Total Sewa Kotor (Gross):</span>
+                                                                <span className="font-bold">{FORMAT_CURRENCY(simulatedRent)}</span>
+                                                            </div>
+                                                            <div className="flex justify-between items-center text-orange-300">
+                                                                <span>Potongan Platform RuangSinggah ({rate}%):</span>
+                                                                <span className="font-black">- {FORMAT_CURRENCY(platformCut)}</span>
+                                                            </div>
+                                                            <div className="pt-2 border-t border-white/15 flex justify-between items-center">
+                                                                <span className="text-emerald-400 font-bold">Diterima Bersih Mitra ({100 - rate}%):</span>
+                                                                <span className="text-lg font-black text-emerald-400">{FORMAT_CURRENCY(partnerNet)}</span>
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })()}
+                                            </div>
+
+                                            <div className="pt-4 mt-4 border-t border-white/10 flex items-center justify-between text-[10px] text-white/40">
+                                                <span>* Nilai bersih akan diteruskan langsung ke saldo dompet mitra</span>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Action footer */}
+                                    <div className="pt-4 border-t border-gray-100 flex flex-col sm:flex-row items-center justify-between gap-4">
+                                        <div className="flex-1 w-full sm:w-auto">
+                                            <input
+                                                type="text"
+                                                placeholder="Catatan / alasan perubahan tarif (opsional, tercatat di log)..."
+                                                value={feeNotes}
+                                                onChange={e => setFeeNotes(e.target.value)}
+                                                className="w-full h-11 border border-gray-200 rounded-xl px-3.5 text-xs font-medium text-gray-700 focus:outline-none focus:border-orange-400"
+                                            />
+                                        </div>
+                                        <button
+                                            type="submit"
+                                            disabled={savingFeeSettings}
+                                            className="w-full sm:w-auto px-6 py-3 rounded-xl bg-orange-500 hover:bg-orange-600 text-white text-xs font-black uppercase tracking-wider shadow-md shadow-orange-500/20 active:scale-95 transition-all flex items-center justify-center gap-2 cursor-pointer shrink-0"
+                                        >
+                                            <Save size={15} />
+                                            {savingFeeSettings ? 'Menyimpan Pengaturan...' : '💾 Simpan Pengaturan Biaya Platform'}
+                                        </button>
+                                    </div>
+                                </form>
+
+                                {/* Riwayat Log Perubahan Tarif */}
+                                {feeLogs.length > 0 && (
+                                    <div className="pt-4 border-t border-gray-100 space-y-2">
+                                        <div className="flex items-center gap-2 text-xs font-black text-gray-700 uppercase tracking-wider">
+                                            <History size={14} className="text-gray-400" />
+                                            <span>Riwayat Perubahan Terakhir ({feeLogs.length} Entri):</span>
+                                        </div>
+                                        <div className="overflow-x-auto rounded-2xl border border-gray-100 max-h-40 overflow-y-auto">
+                                            <table className="w-full text-left text-[11px]">
+                                                <thead className="bg-gray-50 text-[10px] font-black uppercase text-gray-500 sticky top-0">
+                                                    <tr>
+                                                        <th className="p-2.5">Waktu</th>
+                                                        <th className="p-2.5">Admin</th>
+                                                        <th className="p-2.5">Tarif</th>
+                                                        <th className="p-2.5">Status</th>
+                                                        <th className="p-2.5">Keterangan</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody className="divide-y divide-gray-100">
+                                                    {feeLogs.slice(0, 10).map((log, idx) => (
+                                                        <tr key={idx} className="hover:bg-gray-50">
+                                                            <td className="p-2.5 text-gray-500">{new Date(log.timestamp).toLocaleString('id-ID')}</td>
+                                                            <td className="p-2.5 font-bold text-gray-900">{log.admin_email}</td>
+                                                            <td className="p-2.5 font-black text-orange-600">{log.fee_percentage}%</td>
+                                                            <td className="p-2.5">
+                                                                <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase ${log.is_active ? 'bg-emerald-100 text-emerald-800' : 'bg-gray-100 text-gray-600'}`}>
+                                                                    {log.is_active ? 'Aktif' : 'Nonaktif'}
+                                                                </span>
+                                                            </td>
+                                                            <td className="p-2.5 text-gray-600">{log.notes || '-'}</td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* SECTION 2: DAFTAR PAKET LANGGANAN KOSTMANAGER */}
                             <div className="flex justify-between items-center bg-white p-5 rounded-3xl border border-gray-100 shadow-sm">
                                 <h3 className="text-xs font-black text-gray-500 uppercase tracking-widest">Daftar Paket Langganan KostManager</h3>
                                 <button

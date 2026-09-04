@@ -2,10 +2,10 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { supabase } from '../supabase';
 import KostFormMitra from '../components/KostFormMitra';
-import { Kost, Page, MitraPromoPopupSetting } from '../types';
+import { Kost, Page, MitraPromoPopupSetting, KostManagerFeeSettings } from '../types';
 import { FORMAT_CURRENCY, INDONESIAN_BANKS } from '../constants';
 import { getOwnerProperties, getOwnerBookings, updateBookingStatus } from '../userService';
-import { getResidentStatus, getMitraPromoPopupSetting } from '../adminService';
+import { getResidentStatus, getMitraPromoPopupSetting, getKostManagerFeeSettings, DEFAULT_KOSTMANAGER_FEE_SETTINGS } from '../adminService';
 import { getMyChatSessions, ChatSession, getOrCreateChatSession, markMessagesAsRead } from '../chatService';
 import { getCurrentDate, setMockDate, getMockDateStr, parseDateSafely } from '../utils/timeUtils';
 import { createKostSlug } from '../utils/slugUtils';
@@ -241,6 +241,14 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
 
         getMitraPromoPopupSetting().then(setting => {
             setPromoPopupSetting(setting);
+        }).catch(err => console.warn('Could not load promo popup setting:', err));
+
+        getKostManagerFeeSettings().then(feeSet => {
+            setKmFeeSettings(feeSet);
+        }).catch(err => console.warn('Could not load KM fee setting:', err));
+
+        getMitraPromoPopupSetting().then(setting => {
+            setPromoPopupSetting(setting);
             if (!setting?.is_active) return;
 
             // 1. Syarat Utama: JANGAN tampilkan jika masih dalam tahap verifikasi identitas (belum lolos verified)
@@ -361,6 +369,7 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
     const [selectedKostForFinance, setSelectedKostForFinance] = useState<Kost | null>(null);
     const [financeMonth, setFinanceMonth] = useState<number>(() => new Date().getMonth());
     const [financeYear, setFinanceYear] = useState<number>(() => new Date().getFullYear());
+    const [kmFeeSettings, setKmFeeSettings] = useState<KostManagerFeeSettings>(DEFAULT_KOSTMANAGER_FEE_SETTINGS);
 
     // --- PANDUAN MULAI CEPAT (QUICK START GUIDE) STATE ---
     const [hasViewedListing, setHasViewedListing] = useState<boolean>(() => {
@@ -3501,12 +3510,23 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                 });
 
                 const totalGrossRevenue = propBookings.reduce((sum: number, b: any) => sum + Number(b.amount || 0), 0);
-                const totalNetReceived = totalGrossRevenue; // 100% diterima mitra tanpa potongan fisik
+                
+                // Kalkulasi potongan biaya operasional platform KostManager dinamis (Default 5%)
+                const isKmProp = Boolean(
+                    selectedKostForFinance.isManaged || 
+                    (selectedKostForFinance as any).is_managed || 
+                    (selectedKostForFinance as any).managed_by === 'kostmanager' ||
+                    (selectedKostForFinance as any).kost_manager_status === 'ACTIVE' ||
+                    (selectedKostForFinance as any).kostManager?.status === 'ACTIVE'
+                );
+                const effectiveFeeRate = isKmProp && kmFeeSettings.is_active ? kmFeeSettings.fee_percentage : 0;
+                const totalOperationalCut = Math.round(totalGrossRevenue * (effectiveFeeRate / 100));
+                const totalNetReceived = totalGrossRevenue - totalOperationalCut;
 
                 const handleShareWhatsApp = () => {
                     const message = `*LAPORAN KEUANGAN BULANAN - RUANGSINGGAH*\n` +
                         `----------------------------------------\n` +
-                        `*Properti:* ${selectedKostForFinance.title}\n` +
+                        `*Properti:* ${selectedKostForFinance.title}${isKmProp ? ' (⚡ KostManager)' : ''}\n` +
                         `*Periode:* ${MONTH_NAMES[financeMonth]} ${financeYear}\n` +
                         `*Tingkat Okupansi:* ${filledRooms}/${totalRooms} Kamar (${occRate}%)\n\n` +
                         `*RINCIAN PEMASUKAN:*\n` +
@@ -3516,9 +3536,12 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                         `• Biaya Fasilitas Tambahan: ${FORMAT_CURRENCY(totalFasilitas)}\n` +
                         `• Denda / Kompensasi: ${FORMAT_CURRENCY(totalDenda)}\n` +
                         `----------------------------------------\n` +
-                        `*TOTAL PENDAPATAN BERSIH:* ${FORMAT_CURRENCY(totalNetReceived)}\n` +
-                        `*Biaya Operasional/Potongan:* Rp 0 (100% Utuh Diterima)\n\n` +
-                        `_Manajemen KostManager - PT Ruang Singgah Nusantara_`;
+                        `*TOTAL PEMASUKAN KOTOR:* ${FORMAT_CURRENCY(totalGrossRevenue)}\n` +
+                        (isKmProp && effectiveFeeRate > 0 
+                            ? `*Biaya Layanan KostManager (${effectiveFeeRate}%):* - ${FORMAT_CURRENCY(totalOperationalCut)}\n`
+                            : `*Biaya Operasional/Potongan:* Rp 0 (100% Utuh Diterima)\n`) +
+                        `*TOTAL PENDAPATAN BERSIH MITRA:* ${FORMAT_CURRENCY(totalNetReceived)}\n\n` +
+                        `_Manajemen ${isKmProp ? 'KostManager' : 'Mitra'} - PT Ruang Singgah Nusantara_`;
                     
                     const waUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(message)}`;
                     window.open(waUrl, '_blank');
@@ -3593,9 +3616,11 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                                 {/* Key Financial Stats Summary Cards */}
                                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                                     <div className="bg-emerald-50/70 border border-emerald-200 rounded-2xl p-4">
-                                        <p className="text-[10px] font-black text-emerald-800 uppercase tracking-widest">Total Pemasukan</p>
+                                        <p className="text-[10px] font-black text-emerald-800 uppercase tracking-widest">Total Pemasukan Bersih</p>
                                         <p className="text-xl font-black text-emerald-700 mt-1">{FORMAT_CURRENCY(totalNetReceived)}</p>
-                                        <p className="text-[9px] font-bold text-emerald-600 mt-0.5">100% Bersih Diterima Mitra</p>
+                                        <p className="text-[9px] font-bold text-emerald-600 mt-0.5">
+                                            {isKmProp && effectiveFeeRate > 0 ? `${100 - effectiveFeeRate}% Bersih Diterima Mitra` : '100% Bersih Diterima Mitra'}
+                                        </p>
                                     </div>
                                     <div className="bg-blue-50/70 border border-blue-200 rounded-2xl p-4">
                                         <p className="text-[10px] font-black text-blue-800 uppercase tracking-widest">Tingkat Okupansi</p>
@@ -3636,9 +3661,13 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                                             <p className="text-[9px] font-bold text-gray-400 uppercase">Denda / Pinalti</p>
                                             <p className="font-black text-gray-900 mt-0.5">{FORMAT_CURRENCY(totalDenda)}</p>
                                         </div>
-                                        <div className="p-3 bg-emerald-50/60 rounded-xl border border-emerald-100">
-                                            <p className="text-[9px] font-bold text-emerald-700 uppercase">Potongan Operasional</p>
-                                            <p className="font-black text-emerald-700 mt-0.5">Rp 0 (Bebas Biaya)</p>
+                                        <div className={`p-3 rounded-xl border ${isKmProp && effectiveFeeRate > 0 ? 'bg-orange-50/70 border-orange-200' : 'bg-emerald-50/60 border-emerald-100'}`}>
+                                            <p className={`text-[9px] font-bold uppercase ${isKmProp && effectiveFeeRate > 0 ? 'text-orange-700' : 'text-emerald-700'}`}>
+                                                Biaya Layanan {isKmProp ? `KostManager (${effectiveFeeRate}%)` : 'Platform'}
+                                            </p>
+                                            <p className={`font-black mt-0.5 ${isKmProp && effectiveFeeRate > 0 ? 'text-orange-800' : 'text-emerald-700'}`}>
+                                                {isKmProp && effectiveFeeRate > 0 ? `- ${FORMAT_CURRENCY(totalOperationalCut)}` : 'Rp 0 (Bebas Biaya)'}
+                                            </p>
                                         </div>
                                     </div>
                                 </div>
@@ -3714,10 +3743,18 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                                 <div className="p-4 bg-slate-50 border border-slate-200/80 rounded-2xl space-y-1.5 text-xs text-gray-600">
                                     <div className="flex items-center gap-2 font-black text-gray-900 text-xs">
                                         <ShieldCheck size={16} className="text-emerald-600" />
-                                        <span>Ketentuan Layanan Finansial KostManager</span>
+                                        <span>Ketentuan Layanan Finansial {isKmProp ? 'KostManager' : 'Kemitraan'}</span>
                                     </div>
                                     <p className="text-[11px] leading-relaxed">
-                                        Seluruh penerimaan uang sewa diteruskan 100% ke rekening pemilik kost tanpa pemotongan biaya operasional fisik properti. Dana siap ditarik secara mandiri melalui menu <strong>Dompet</strong>.
+                                        {isKmProp ? (
+                                            <>
+                                                Properti ini dikelola penuh oleh tim KostManager dengan biaya layanan platform sebesar <strong>{effectiveFeeRate}%</strong> per transaksi lunas (mencakup pemasaran, penagihan otomatis, dan sistem kelola penghuni). Seluruh saldo bersih <strong>({100 - effectiveFeeRate}%)</strong> siap ditarik secara mandiri melalui menu <strong>Dompet</strong>.
+                                            </>
+                                        ) : (
+                                            <>
+                                                Seluruh penerimaan uang sewa diteruskan 100% ke rekening pemilik kost tanpa pemotongan biaya operasional platform. Dana siap ditarik secara mandiri melalui menu <strong>Dompet</strong>.
+                                            </>
+                                        )}
                                     </p>
                                 </div>
                             </div>

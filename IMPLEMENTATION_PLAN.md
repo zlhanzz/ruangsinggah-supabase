@@ -1,24 +1,28 @@
-# Implementation Plan - Laporan Keuangan Bulanan Per Properti di Menu Kost Saya & Penyembunyian Alur Pemasaran 100% Selesai
+# Implementation Plan - Sistem Kendali Biaya Operasional Platform KostManager (5%) di Dashboard Admin & Dashboard Mitra
 
-Dokumen ini merinci rencana integrasi sistem laporan keuangan properti di tab **Kost Saya** (`/dashboard-mitra/properties`) dan penyembunyian otomatis kartu panduan *"Alur Pemasaran Kost Mitra Baru"* ketika seluruh 4 tahapan telah diselesaikan (100%).
+Dokumen ini merinci rencana implementasi penetapan biaya operasional platform (default 5%) khusus untuk transaksi properti **KostManager** (sewa baru dan perpanjangan sewa) dengan kendali penuh (*Full Control*) di Dashboard Admin, serta transparansi pembagian hasil di Dashboard Mitra dan Laporan Keuangan.
 
 ---
 
 ## 1. Analisis Masalah & Kebutuhan
 
-### Kebutuhan 1: Laporan Keuangan Bulanan Per Properti di "Kost Saya"
-- Mitra pemilik kost membutuhkan akses laporan keuangan yang **terkonteks per properti** untuk memantau arus kas masuk dan rincian transaksi per nomor kamar secara transparan.
-- Layanan KostManager berfokus pada manajemen inventaris, pencatatan penghuni, penagihan sewa otomatis, pemasaran, dan pelaporan keuangan (tanpa potongan biaya operasional fisik).
-- Pos penerimaan yang harus diakumulasikan secara rinci meliputi:
-  1. **Sewa Pokok Penghuni Baru** (*New Booking*)
-  2. **Perpanjangan Sewa** (*Rent Extension*)
-  3. **Biaya Tambahan Penghuni** (*Extra Occupants / Orang Ke-2*)
-  4. **Biaya Fasilitas Tambahan** (*Add-on Facilities / Parkir / Listrik / Alat Elektronik*)
-  5. **Denda Keterlambatan / Kompensasi Pembatalan** (*Late Fees / Penalty*)
-  6. **Catatan Deposit / Uang Jaminan Aktif** (*Security Deposit Reference*)
+### Kebutuhan 1: Kendali Penuh Biaya Platform di Dashboard Admin
+- Super Admin membutuhkan panel konfigurasi dinamis untuk mengatur persentase biaya layanan platform KostManager (default **5%**) yang disimpan di tabel `app_settings` Supabase (`key: 'kostmanager_fee_settings'`).
+- Parameter kendali admin meliputi:
+  1. **Persentase Potongan Platform (`fee_percentage`)**: Input dinamis (misal: 5%, dapat disesuaikan naik/turun menjadi 3%, 7.5%, 10%, dll.).
+  2. **Status Potongan (`is_active`)**: Saklar On/Off untuk mengaktifkan atau menonaktifkan potongan.
+  3. **Cakupan Transaksi (`applied_to`)**: Checklist pos yang dikenakan potongan (Sewa Baru, Perpanjangan Sewa, Ekstra Penghuni, Fasilitas Tambahan). *Catatan: Deposit jaminan tetap 0%*.
+  4. **Kalkulator Simulasi Interaktif**: Alat simulasi langsung di admin untuk menghitung bagi hasil (misal sewa Rp 1.500.000 $\rightarrow$ Potongan 5% = Rp 75.000, Bersih Diterima Mitra = Rp 1.425.000).
+  5. **Riwayat Log Perubahan Tarif**: Pencatatan riwayat perubahan persentase biaya oleh admin.
 
-### Kebutuhan 2: Penyembunyian Alur Pemasaran 4/4 Langkah Selesai (100%)
-- Jika mitra telah menyelesaikan seluruh 4 tahapan (Verifikasi KTP, Upload Properti, Listing Tayang, dan Kesiapan Penerimaan Sewa), kartu dan banner alur pemasaran pemula **otomatis tidak ditampilkan lagi** di Beranda Dashboard (`return null`).
+### Kebutuhan 2: Transparansi Finansial di Sisi Mitra (Dashboard & Laporan Keuangan)
+- **Laporan Keuangan Bulanan Properti KostManager**:
+  - Menampilkan **Total Pemasukan Kotor (*Gross Rent*)**.
+  - Menampilkan **Biaya Layanan KostManager (5%)** sebagai potongan operasional resmi secara transparan.
+  - Menampilkan **Total Pendapatan Bersih Mitra (95%)** yang siap ditarik/diteruskan ke dompet mitra.
+  - Pesan ringkasan WhatsApp memuat rincian transparansi Gross, Biaya Layanan 5%, dan Net Diterima.
+- **Properti Reguler (Non-KostManager)**:
+  - Tetap 0% potongan operasional (*100% Utuh Diterima Mitra*).
 
 ---
 
@@ -26,49 +30,67 @@ Dokumen ini merinci rencana integrasi sistem laporan keuangan properti di tab **
 
 | File | Bagian yang Dimodifikasi |
 |---|---|
-| `functions/public/pages/MitraDashboard.tsx` | 1. **Penyembunyian Alur Pemasaran**: Evaluasi `allStepsDone = completedStepsCount === 4` $\rightarrow$ `return null`.<br>2. **State & Modal Laporan Keuangan**: Menambahkan state `selectedKostForFinance` dan `selectedFinanceMonth`/`Year`.<br>3. **Tombol di Kartu Properti**: Menambahkan tombol aksi `"📄 Laporan Keuangan"` pada setiap kartu properti di tab `properties` (*Kost Saya*).<br>4. **Modal Laporan Keuangan Bulanan**: Menyajikan header filter bulan/tahun, ringkasan okupansi, tabel rincian transaksi per kamar (sewa baru, perpanjangan, fasilitas, ekstra orang), akumulasi total omset bersih (100% diterima mitra), tombol *Cetak/Unduh PDF Laporan*, dan tombol *Bagikan Ringkasan ke WhatsApp*. |
-| `functions/PROGRESS.md` | Pencatatan riwayat progres 327 (Fase 2). |
-| `WALKTHROUGH.md` | Dokumentasi verifikasi dan panduan pengujian (Fase 2). |
+| `functions/public/types.ts` | Penambahan tipe data `KostManagerFeeSettings` dan `KostManagerFeeLogEntry`. |
+| `functions/public/adminService.ts` | Penambahan fungsi `getKostManagerFeeSettings()`, `saveKostManagerFeeSettings()`, dan `getKostManagerFeeLogs()`. |
+| `functions/public/components/admin/KostManagerPortal.tsx` | Penambahan panel **Pengaturan Biaya Layanan Platform KostManager** (input persentase, switch status, checklist cakupan, kalkulator simulasi, dan log perubahan). |
+| `functions/public/pages/MitraDashboard.tsx` | Penyesuaian kalkulasi pada modal Laporan Keuangan Bulanan (`selectedKostForFinance`) dan ringkasan WhatsApp untuk properti KostManager dengan potongan dinamis dari `app_settings` (default 5%). |
+| `functions/PROGRESS.md` | Pencatatan riwayat progres 328 (Fase 2). |
+| `WALKTHROUGH.md` | Dokumentasi panduan pengujian dan walkthrough fitur (Fase 2). |
 
 ---
 
 ## 3. Langkah-Langkah Eksekusi (Fase 2 - Setelah di-ACC)
 
-1. **Penyembunyian Alur Pemasaran 100% Selesai**:
-   - Menghitung `const allStepsDone = completedStepsCount === 4;`.
-   - Mengubah kondisi: jika `allStepsDone || tourCompleted`, kembalikan `null`.
-   - Sinkronisasi otomatis `localStorage.setItem('mitra_tour_completed_${uid}', 'true')`.
+### Tahap 1: Tipe Data & Layanan Database (`types.ts` & `adminService.ts`)
+1. Mendefinisikan interface:
+   ```typescript
+   export interface KostManagerFeeSettings {
+     fee_percentage: number; // default: 5
+     is_active: boolean;    // default: true
+     applied_to: {
+       new_booking: boolean;
+       extension: boolean;
+       extra_occupant: boolean;
+       facility: boolean;
+     };
+     updated_at?: string;
+     updated_by?: string;
+   }
+   ```
+2. Mengimplementasikan `getKostManagerFeeSettings()`, `saveKostManagerFeeSettings()`, dan pencatatan log ke `app_settings`.
 
-2. **Penambahan State Laporan Keuangan Properti**:
-   - `const [selectedKostForFinance, setSelectedKostForFinance] = useState<Kost | null>(null);`
-   - `const [financeMonth, setFinanceMonth] = useState<number>(new Date().getMonth());`
-   - `const [financeYear, setFinanceYear] = useState<number>(new Date().getFullYear());`
+### Tahap 2: Panel Kendali Admin di `KostManagerPortal.tsx`
+1. Membuat kartu antarmuka elegan *"Pengaturan Biaya Layanan KostManager (Platform Fee)"*.
+2. Menyediakan input persentase (%) dengan tombol preset cepat (0%, 3%, 5%, 7.5%, 10%).
+3. Menyediakan simulasi kalkulasi real-time agar admin dapat langsung melihat pembagian hasil sebelum menyimpan.
+4. Menyediakan tombol simpan dengan toast notifikasi sukses.
 
-3. **Penempatan Tombol Aksi di Kartu Properti ("Kost Saya")**:
-   - Menambahkan tombol `"📄 Laporan Keuangan"` pada bagian aksi kartu properti.
+### Tahap 3: Integrasi Transparansi di Dashboard Mitra (`MitraDashboard.tsx`)
+1. Mengambil konfigurasi `getKostManagerFeeSettings()` saat inisialisasi data mitra.
+2. Pada modal Laporan Keuangan Bulanan:
+   - Jika properti berstatus KostManager (`selectedKostForFinance.isManaged`):
+     - `feeRate = kmFeeSettings.is_active ? kmFeeSettings.fee_percentage : 0;`
+     - `totalPlatformFee = Math.round(totalGrossRevenue * (feeRate / 100));`
+     - `totalNetReceived = totalGrossRevenue - totalPlatformFee;`
+     - Tampilkan badge `"Biaya Layanan KostManager (5%): - Rp XX.XXX"`.
+   - Jika properti reguler: Potongan tetap Rp 0 (100% diterima mitra).
+3. Pembaruan format teks ringkasan WhatsApp agar mencantumkan rincian Gross, Biaya Layanan KostManager, dan Total Bersih Mitra.
 
-4. **Pembuatan Modal Laporan Keuangan Properti**:
-   - **Header & Filter**: Filter periode bulan & tahun.
-   - **Kartu Metrik Cepat**: Total Omset Bulan Terpilih, Okupansi Kamar, dan Total Transaksi.
-   - **Tabel Rincian Transaksi**: Nomor Kamar, Nama Penghuni, Tipe Transaksi (Booking Baru / Perpanjangan / Fasilitas / Ekstra Orang), Tanggal Lunas, dan Nominal.
-   - **Ringkasan Arus Kas Masuk**: Rincian sewa pokok, biaya ekstra, biaya admin Rp 0, dan total saldo bersih 100% diterima mitra.
-   - **Aksi Cetak / PDF & WA**: Tombol `window.print()` / unduh dokumen formal berkop resmi dan tombol salin/buka ringkasan ke WhatsApp.
-
-5. **Uji Kompilasi & Build**:
-   - Jalankan `cmd /c npm run build` untuk memverifikasi 0 error kompilasi.
-
-6. **Pencatatan Riwayat & Git Push**:
-   - Mencatat Progres 327 di `functions/PROGRESS.md` dan memperbarui `WALKTHROUGH.md`.
-   - Melakukan git commit dan push ke remote branch `bukan-productions`.
+### Tahap 4: Uji Kompilasi, Pencatatan & Git Push
+1. Menjalankan `cmd /c npm run build` (Vite) dan `tsc` (Functions) untuk memastikan 0 error.
+2. Mencatat progres ke `functions/PROGRESS.md` dan memperbarui `WALKTHROUGH.md`.
+3. Melakukan commit dan push ke remote branch `bukan-productions`.
 
 ---
 
 ## 4. Rencana Verifikasi
 
 1. **Uji Kompilasi**: Memastikan kompilasi Vite dan TypeScript 100% bersih tanpa error.
-2. **Uji Alur Pemasaran**: Memastikan akun mitra yang sudah menyelesaikan 4 tahapan tidak lagi melihat kartu/banner alur pemasaran di dashboard.
-3. **Uji Modal Laporan Keuangan di "Kost Saya"**:
-   - Buka menu *Kost Saya* $\rightarrow$ klik tombol *"Laporan Keuangan"* pada salah satu kost.
-   - Periksa pergantian filter bulan & tahun.
-   - Periksa kalkulasi otomatis sewa baru, perpanjangan, biaya fasilitas, dan ekstra orang per kamar.
-   - Uji tombol cetak/unduh laporan dan tombol ringkasan WhatsApp.
+2. **Uji Konfigurasi Admin**:
+   - Buka Dashboard Admin $\rightarrow$ Portal KostManager $\rightarrow$ Pengaturan Biaya Layanan.
+   - Ubah persentase dari 5% ke angka lain (misal 7.5%) dan simpan.
+   - Pastikan data tersimpan di Supabase `app_settings` dan nilai baru termuat saat halaman direfresh.
+3. **Uji Laporan Keuangan di Dashboard Mitra**:
+   - Buka menu *Kost Saya* $\rightarrow$ Laporan Keuangan pada kost berstatus KostManager.
+   - Pastikan potongan biaya operasional 5% dihitung otomatis dan mengurangi total pendapatan kotor menjadi pendapatan bersih secara transparan.
+   - Buka kost reguler non-KostManager dan pastikan potongan tetap Rp 0 (100% utuh).

@@ -1,5 +1,5 @@
 import { supabase } from './supabase';
-import { Kost, DatabaseProduct, ImageUrlObject, VideoUrlObject, SurveyRequest, Banner, KostManagerPackage, MitraPromoPopupSetting } from './types';
+import { Kost, DatabaseProduct, ImageUrlObject, VideoUrlObject, SurveyRequest, Banner, KostManagerPackage, MitraPromoPopupSetting, KostManagerFeeSettings, KostManagerFeeLogEntry } from './types';
 import { notifyAdminStatusUpdate } from './emailService';
 import { ensureAbsoluteUrl, getDisplayImageUrl, getDisplayImageObject } from './userService';
 import { getCurrentDate } from './utils/timeUtils';
@@ -5652,3 +5652,117 @@ export const detectPhotoContactBanner = async (
     };
   }
 };
+
+// ── KOSTMANAGER PLATFORM OPERATIONAL FEE SETTINGS ─────────────────────────────
+export const DEFAULT_KOSTMANAGER_FEE_SETTINGS: KostManagerFeeSettings = {
+  fee_percentage: 5,
+  is_active: true,
+  applied_to: {
+    new_booking: true,
+    extension: true,
+    extra_occupant: true,
+    facility: true,
+    late_fee: false
+  }
+};
+
+export async function getKostManagerFeeSettings(): Promise<KostManagerFeeSettings> {
+  try {
+    const { data, error } = await supabase
+      .from('app_settings')
+      .select('value')
+      .eq('key', 'kostmanager_fee_settings')
+      .maybeSingle();
+
+    if (error || !data || !data.value) {
+      return DEFAULT_KOSTMANAGER_FEE_SETTINGS;
+    }
+
+    return {
+      fee_percentage: typeof data.value.fee_percentage === 'number' ? data.value.fee_percentage : DEFAULT_KOSTMANAGER_FEE_SETTINGS.fee_percentage,
+      is_active: data.value.is_active !== undefined ? Boolean(data.value.is_active) : DEFAULT_KOSTMANAGER_FEE_SETTINGS.is_active,
+      applied_to: {
+        new_booking: data.value.applied_to?.new_booking !== undefined ? Boolean(data.value.applied_to.new_booking) : true,
+        extension: data.value.applied_to?.extension !== undefined ? Boolean(data.value.applied_to.extension) : true,
+        extra_occupant: data.value.applied_to?.extra_occupant !== undefined ? Boolean(data.value.applied_to.extra_occupant) : true,
+        facility: data.value.applied_to?.facility !== undefined ? Boolean(data.value.applied_to.facility) : true,
+        late_fee: data.value.applied_to?.late_fee !== undefined ? Boolean(data.value.applied_to.late_fee) : false,
+      },
+      updated_at: data.value.updated_at,
+      updated_by: data.value.updated_by
+    };
+  } catch (err) {
+    console.error('getKostManagerFeeSettings error:', err);
+    return DEFAULT_KOSTMANAGER_FEE_SETTINGS;
+  }
+}
+
+export async function getKostManagerFeeLogs(): Promise<KostManagerFeeLogEntry[]> {
+  try {
+    const { data, error } = await supabase
+      .from('app_settings')
+      .select('value')
+      .eq('key', 'kostmanager_fee_logs')
+      .maybeSingle();
+
+    if (error || !data || !data.value) return [];
+    return Array.isArray(data.value?.logs) ? data.value.logs : [];
+  } catch (err) {
+    console.error('getKostManagerFeeLogs error:', err);
+    return [];
+  }
+}
+
+export async function saveKostManagerFeeSettings(
+  settings: KostManagerFeeSettings,
+  notes?: string
+): Promise<KostManagerFeeSettings> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('Unauthorized');
+
+  const isAdmin = await checkIfUserIsAdmin(user.id);
+  if (!isAdmin) throw new Error('Akses ditolak: Hanya admin yang dapat mengubah pengaturan biaya platform.');
+
+  const adminEmail = user.email || 'Admin';
+  const payload: KostManagerFeeSettings = {
+    ...settings,
+    fee_percentage: Math.max(0, Math.min(100, Number(settings.fee_percentage) || 0)),
+    updated_at: new Date().toISOString(),
+    updated_by: adminEmail
+  };
+
+  const { error } = await supabase
+    .from('app_settings')
+    .upsert({
+      key: 'kostmanager_fee_settings',
+      value: payload,
+      updated_at: new Date().toISOString()
+    }, { onConflict: 'key' });
+
+  if (error) throw new Error(`Gagal menyimpan pengaturan biaya KostManager: ${error.message}`);
+
+  // Simpan log perubahan
+  try {
+    const currentLogs = await getKostManagerFeeLogs();
+    const newLog: KostManagerFeeLogEntry = {
+      timestamp: new Date().toISOString(),
+      admin_email: adminEmail,
+      fee_percentage: payload.fee_percentage,
+      is_active: payload.is_active,
+      notes: notes || `Perubahan potongan KostManager ke ${payload.fee_percentage}% (${payload.is_active ? 'Aktif' : 'Nonaktif'})`
+    };
+    const updatedLogs = [newLog, ...currentLogs].slice(0, 50);
+    await supabase
+      .from('app_settings')
+      .upsert({
+        key: 'kostmanager_fee_logs',
+        value: { logs: updatedLogs },
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'key' });
+  } catch (logErr) {
+    console.warn('Failed to save fee change log:', logErr);
+  }
+
+  return payload;
+}
+

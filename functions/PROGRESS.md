@@ -2,6 +2,44 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 328. Sistem Kendali Biaya Operasional Platform KostManager (Default 5%) & Transparansi Laporan Keuangan Mitra (`types.ts`, `adminService.ts`, `KostManagerPortal.tsx`, `MitraDashboard.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  1. Menetapkan biaya operasional platform RuangSinggah.id untuk menjalankan bisnis manajemen kost, dirancang default **5% per transaksi** (penyewaan baru maupun perpanjangan sewa) khusus untuk properti kelolaan **KostManager**.
+  2. Memberikan **kendali penuh di Dashboard Admin** (`KostManagerPortal.tsx` tab *"Paket & Biaya"*) agar pengelola dapat mengatur naik/turun persentase potongan platform, mengaktifkan/menonaktifkan potongan, memilih cakupan transaksi, dan mencatat riwayat perubahan (*audit logs*).
+  3. Menyajikan **transparansi finansial penuh di Dashboard Mitra** (`MitraDashboard.tsx`), di mana properti KostManager secara dinamis menghitung potongan platform dan pendapatan bersih mitra, sedangkan properti reguler tetap 0% (100% utuh). Uang jaminan / deposit tidak dikenakan potongan (0%).
+- **Implementasi Solusi**:
+  1. **Definisi Tipe Data & Skema Pengaturan (`types.ts`)**:
+     - `KostManagerFeeSettings`: `enabled` (boolean), `fee_percentage` (number, default 5), `applies_to` (`new_booking`, `extension`, `extra_occupant`, `facilities`), `deposit_fee_percentage` (number, fixed 0), `last_updated_at`, `last_updated_by`, `notes`.
+     - `KostManagerFeeLogEntry`: struktur audit log riwayat perubahan persentase dan waktu simpan.
+  2. **Service CRUD & Audit Log Supabase (`adminService.ts`)**:
+     - `getKostManagerFeeSettings()`: mengambil pengaturan dari tabel `app_settings` (key: `'kostmanager_fee_settings'`) dengan fallback ke `DEFAULT_KOSTMANAGER_FEE_SETTINGS`.
+     - `saveKostManagerFeeSettings(settings, adminEmail, notes)`: memperbarui pengaturan dan mencatat riwayat ke log `kostmanager_fee_logs` di Supabase `app_settings`.
+     - `getKostManagerFeeLogs()`: mengambil riwayat log perubahan tarif platform.
+  3. **Antarmuka Kendali Penuh di Admin Dashboard (`KostManagerPortal.tsx`)**:
+     - Menempatkan panel **"Pengaturan Biaya Layanan Platform KostManager"** pada tab *"Paket & Biaya"*.
+     - Toggle status aktif/nonaktif, input persentase kustom, dan chip preset cepat (`0% Gratis`, `3%`, `5% Rekomendasi`, `7.5%`, `10%`).
+     - Checklist cakupan transaksi (Sewa Baru, Perpanjangan, Ekstra Penghuni, Fasilitas) dan kartu informasi aturan deposit aman 0%.
+     - **Kalkulator Simulasi Real-Time**: memasukkan nominal sewa kamar (misal: Rp 1.500.000) dan langsung melihat simulasi penerimaan kotor, potongan platform, dan pendapatan bersih yang diterima mitra.
+     - Tabel riwayat perubahan tarif platform (*Audit Log*) dengan cap waktu dan email admin pengubah.
+  4. **Transparansi Finansial Real-Time di Dashboard Mitra (`MitraDashboard.tsx`)**:
+     - Mengambil pengaturan tarif `kmFeeSettings` secara otomatis dan ter-cache saat dashboard dimuat.
+     - Pada modal Laporan Keuangan Properti (`selectedKostForFinance`):
+       - Jika properti dikelola KostManager: menghitung potongan platform sesuai persentase aktif (misal 5%), menampilkan kartu rincian potongan operasional platform, persentase potongan, serta penerimaan bersih mitra (*Net Revenue*).
+       - Jika properti reguler: potongan tetap Rp 0 (100% diterima utuh).
+     - Menyesuaikan klausul transparansi operasional dan template teks berbagi WhatsApp agar mencantumkan rincian potongan platform dan total bersih transfer ke mitra secara akurat.
+     - Seluruh ikon menggunakan pure vector SVG dari `lucide-react` (`Percent`, `Calculator`, `History`, `Save`, `ShieldCheck`, dll.) bebas FOUT.
+- **File Tersentuh**:
+  - `functions/public/types.ts`
+  - `functions/public/adminService.ts`
+  - `functions/public/components/admin/KostManagerPortal.tsx`
+  - `functions/public/pages/MitraDashboard.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi build frontend Vite `npm run build` lulus 100% (0 error).
+  - Kompilasi backend `functions` `tsc` lulus 100% (0 error).
+
+
 ### 327. Integrasi Laporan Keuangan Bulanan Per Properti di Menu Kost Saya & Penyembunyian Alur Pemasaran 100% Selesai (`MitraDashboard.tsx`) (September 2026)
 - **Permintaan & Masalah**:
   1. Mitra membutuhkan akses laporan keuangan bulanan yang terkonteks per properti di menu **"Kost Saya"** (`/dashboard-mitra/properties`) untuk memantau arus kas masuk dan rincian transaksi per nomor kamar.

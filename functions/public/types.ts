@@ -329,3 +329,26 @@ export interface MitraPromoPopupSetting {
   link_url?: string;
   alt_text?: string;
 }
+
+export interface KostManagerFeeSettings {
+  fee_percentage: number;
+  is_active: boolean;
+  applied_to: {
+    new_booking: boolean;
+    extension: boolean;
+    extra_occupant: boolean;
+    facility: boolean;
+    late_fee?: boolean;
+  };
+  updated_at?: string;
+  updated_by?: string;
+}
+
+export interface KostManagerFeeLogEntry {
+  timestamp: string;
+  admin_email: string;
+  fee_percentage: number;
+  is_active: boolean;
+  notes?: string;
+}
+
