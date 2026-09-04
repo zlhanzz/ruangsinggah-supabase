@@ -1114,15 +1114,15 @@ const MitraProfile: React.FC<MitraProfileProps> = ({ uid, user: initialUser, onB
                                         Verifikasi Identitas (KTP)
                                     </h4>
                                     
-                                    {/* RLS Security Notice */}
+                                    {/* Security & Privacy Notice */}
                                     <div className="p-6 bg-blue-50 border border-blue-100 rounded-3xl flex items-start gap-5 animate-in fade-in duration-300 mb-6">
                                         <div className="w-12 h-12 rounded-full bg-blue-100 text-blue-500 flex items-center justify-center shrink-0">
                                             <ShieldCheck size={24} />
                                         </div>
                                         <div>
-                                            <h4 className="text-sm font-black text-blue-900 uppercase tracking-widest mb-1">Keamanan Data Terjamin RLS</h4>
+                                            <h4 className="text-sm font-black text-blue-900 uppercase tracking-widest mb-1">Privasi & Keamanan Data Terjamin</h4>
                                             <p className="text-xs font-bold text-blue-700/80 leading-relaxed">
-                                                Data identitas penting Anda dilindungi dengan tingkat keamanan tertinggi menggunakan sistem enkripsi <strong>Row Level Security (RLS)</strong> dari Supabase. Data tidak akan pernah dibocorkan kepada penyewa atau pihak ketiga.
+                                                Dokumen identitas Anda dienkripsi dan disimpan secara aman dalam sistem terproteksi. Data hanya digunakan untuk keperluan verifikasi kepemilikan kost dan tidak akan pernah dibagikan kepada penyewa atau pihak ketiga.
                                             </p>
                                         </div>
                                     </div>

@@ -1,51 +1,37 @@
-# WALKTHROUGH - Progres 321: Standarisasi Redaksi Notifikasi Pemindaian KTP Menjadi Bahasa Profesional Platform
+# WALKTHROUGH - Progres 322: Standarisasi Profesional Banner Keamanan Data KTP & Proteksi Informasi Arsitektur Backend
 
 ## 📋 Ringkasan Perubahan
-Memperbarui seluruh pesan notifikasi pemindaian KTP otomatis pada modul verifikasi identitas mitra (`MitraProfile.tsx`) dan agen (`AgentProfile.tsx`) agar bernada profesional, baku, elegan, dan bebas dari penyebutan nama vendor AI internal yang canggung.
+Telah dilakukan penyempurnaan redaksi banner jaminan keamanan data pada formulir verifikasi KTP untuk memastikan bahasa yang digunakan memenuhi standar platform proptech/fintech profesional serta tidak mengekspos detail arsitektur teknis backend (*information disclosure*).
 
 ---
 
 ## 🛠️ Detail Perubahan Kode
 
-### 1. `functions/public/pages/MitraProfile.tsx` & `functions/public/pages/AgentProfile.tsx`
-- **Pesan Sukses Pemindaian KTP**:
-  - *Sebelum*:
-    ```javascript
-    alert('Data KTP berhasil dipindai otomatis menggunakan AI Gemini Cerdas.');
-    ```
-  - *Sesudah*:
-    ```javascript
-    alert('Data KTP berhasil dipindai otomatis. Mohon periksa kembali kecocokan data Anda sebelum melanjutkan.');
-    ```
-- **Pesan Fallback / Belum Optimal**:
-  - *Sesudah*:
-    ```javascript
-    alert('Pemindaian otomatis belum optimal. Silakan periksa dan lengkapi data profil Anda secara manual.');
-    ```
-- **Pesan Batas Waktu / Jaringan**:
-  - *Sesudah*:
-    ```javascript
-    alert('Pemindaian otomatis memerlukan waktu lebih lama. Silakan lanjutkan pengisian data profil secara manual.');
-    ```
+### 1. `functions/public/pages/MitraProfile.tsx` (Baris 1117-1128)
+* **Sebelumnya**:
+  * Judul: `"Keamanan Data Terjamin RLS"`
+  * Deskripsi: `"Data identitas penting Anda dilindungi dengan tingkat keamanan tertinggi menggunakan sistem enkripsi Row Level Security (RLS) dari Supabase. Data tidak akan pernah dibocorkan kepada penyewa atau pihak ketiga."`
+* **Sesudah (Standar Profesional)**:
+  * Judul: `"Privasi & Keamanan Data Terjamin"`
+  * Deskripsi: `"Dokumen identitas Anda dienkripsi dan disimpan secara aman dalam sistem terproteksi. Data hanya digunakan untuk keperluan verifikasi kepemilikan kost dan tidak akan pernah dibagikan kepada penyewa atau pihak ketiga."`
+
+### 2. `functions/public/pages/AgentProfile.tsx` (Baris 1043-1054)
+* **Sebelumnya**:
+  * Judul: `"Keamanan Data Terjamin RLS"`
+  * Deskripsi: `"Data identitas penting Anda dilindungi dengan tingkat keamanan tertinggi menggunakan sistem enkripsi Row Level Security (RLS) dari Supabase. Data tidak akan pernah dibocorkan kepada penyewa atau pihak ketiga."`
+* **Sesudah (Standar Profesional)**:
+  * Judul: `"Privasi & Keamanan Data Terjamin"`
+  * Deskripsi: `"Dokumen identitas Anda dienkripsi dan disimpan secara aman dalam sistem terproteksi. Data hanya digunakan untuk keperluan verifikasi agen resmi dan tidak akan pernah dibagikan kepada penyewa atau pihak ketiga."`
 
 ---
 
 ## 🧪 Hasil Pengujian & Kompilasi
-Kompilasi TypeScript dan Vite build:
-```bash
-cmd /c npm run build
-```
-**Hasil**:
-- `vite v6.4.1 building for production...`
-- `✓ 2509 modules transformed.`
-- `✓ built in 41.39s`
-- Output tersinkronisasi ke `public/` dan `functions/public/dist/`.
-- **Status: 0 Error, 100% Lulus**.
+* **Build Project (`npm run build`)**: Lulus 100% tanpa error (`Exit Code: 0`, 2509 modules transformed, 43.12s).
+* **Integrasi UI & UX**: Ikon `ShieldCheck`, border biru lembut (`bg-blue-50 border-blue-100 rounded-3xl`), dan styling visual tetap terjaga utuh dengan tampilan teks yang lebih elegan, meyakinkan, dan profesional.
 
 ---
 
-## 🧭 Panduan Verifikasi Pengguna
-1. Buka halaman **Verifikasi Identitas Mitra** (`/dashboard-mitra` tab Profil) atau **Profil Agen**.
-2. Upload foto dokumen KTP.
-3. Saat data berhasil diekstraksi dan terisi otomatis ke formulir, notifikasi yang muncul berbunyi:
-   > *"Data KTP berhasil dipindai otomatis. Mohon periksa kembali kecocokan data Anda sebelum melanjutkan."*
+## 🔍 Panduan Verifikasi Pengguna
+1. Buka halaman **Dashboard Mitra** $\rightarrow$ Masuk ke menu / tab **Verifikasi Identitas (KTP)** (atau menu Profil Mitra / Profil Agen).
+2. Perhatikan banner informasi berikon perisai biru di atas dropzone unggah foto KTP.
+3. Pastikan teks judul menampilkan: **"Privasi & Keamanan Data Terjamin"** dan kalimat penjelasan rapi tanpa menyebutkan istilah teknis backend (*RLS / Supabase*).
