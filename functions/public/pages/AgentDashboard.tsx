@@ -25,8 +25,14 @@ import {
     Camera, Eye, Lock, Maximize2, LocateFixed, Pin, Link as LinkIcon,
     RefreshCw, Bed, Bath, Fan, Sparkles, ImagePlus, ChevronDown, ChevronRight, Check,
     Smartphone, MessageCircle, ExternalLink, ArrowLeft, UploadCloud, Edit, Mail, Heart,
-    Signal, Wifi, BatteryCharging, CheckSquare, Layers, Building2
+    Signal, Wifi, BatteryCharging, CheckSquare, Layers, Building2,
+    Loader2, GraduationCap, Store, ShoppingBag, Building, Fuel, Church
 } from 'lucide-react';
+import { 
+    findNearbyCuratedLandmarks, 
+    calculateHaversineDistance,
+    CuratedLandmarkResult 
+} from '../constants/curatedLandmarks';
 import { notifySurveyStatusUpdate } from '../notificationService';
 import { notifyAdminWithdrawalRequest } from '../emailService';
 import AgentProfile from './AgentProfile';
@@ -845,6 +851,671 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
     const [warningAccepted, setWarningAccepted] = useState(false);
     const hasAutoGeocodedRef = useRef<Record<string, boolean>>({});
 
+    const [isScanningLandmarks, setIsScanningLandmarks] = useState(false);
+    const landmarkScanAbortRef = useRef<number>(0);
+    const [isSearchingFacility, setIsSearchingFacility] = useState<Record<string, boolean>>({});
+
+    const isInvalidCampus = (name: string) => {
+        if (!name) return false;
+        const lower = name.toLowerCase();
+        const blacklist = [
+            'bimbel', 'bimbingan belajar', 'les ', 'kursus', 'training', 'kumon', 'gandhi',
+            'study club', 'daycare', 'kindergarten', 'paud', 'tk ', 'taman kanak',
+            'sd ', 'smp ', 'sma ', 'smk ', 'madrasah', 'driving school', 'kursus mengemudi',
+            'english', 'course', 'language', 'center', 'lpk ', 'balai latihan', 'rektorat', 'fakultas', 'dekanat',
+            'prodi', 'jurusan', 'pintu ', 'gate ', 'danau ', 'gedung ', 'hall ', 'auditorium',
+            'asrama', 'rusunawa', 'kantin', 'parkiran', 'full bright', 'hasanuddin university',
+            'makassar islamic university', 'indonesia muslim university'
+        ];
+        return blacklist.some(b => lower.includes(b));
+    };
+
+    // Helper sanitasi global multi-layer: menolak tempat usaha non-fasilitas publik kost (printer, servis, fotocopy, bengkel, konter, dll.)
+    const isGarbageFacility = (name: string) => {
+        if (!name) return false;
+        const lower = name.toLowerCase();
+        const garbageKeywords = [
+            'printer', 'service', 'servis', 'print',
+            'fotocopy', 'foto copy', 'percetakan', 'copy center',
+            'cuci motor', 'cuci mobil', 'car wash', 'steam',
+            'bengkel', 'tambal ban', 'sparepart', 'variasi motor', 'variasi mobil',
+            'counter pulsa', 'konter', 'cell', 'elektronik',
+            'salon', 'barber', 'barbershop', 'pijat', 'massage', 'spa'
+        ];
+        return garbageKeywords.some(b => lower.includes(b));
+    };
+
+    // Helper validasi sanitasi nama & kategori fasilitas mikro
+    const isValidMicroFacility = (category: 'minimarket' | 'laundry' | 'mosque' | 'church' | 'gas_station', place: any) => {
+        if (!place?.name) return false;
+        const name = place.name.toLowerCase();
+        const types: string[] = place.types || [];
+
+        if (category === 'laundry') {
+            const validKeywords = ['laundry', 'loundry', 'cuci', 'wash', 'kiloan', 'dry clean', 'setrika'];
+            const hasKeyword = validKeywords.some(k => name.includes(k));
+            if (!hasKeyword && !types.includes('laundry')) return false;
+
+            const blacklist = [
+                'printer', 'service', 'servis', 'fotocopy', 'foto copy', 'percetakan', 'print',
+                'cuci motor', 'cuci mobil', 'car wash', 'steam', 'bengkel', 'tambal ban',
+                'counter', 'pulsa', 'cell', 'helm', 'sepatu', 'elektronik'
+            ];
+            return !blacklist.some(b => name.includes(b));
+        }
+
+        if (category === 'minimarket') {
+            const validKeywords = [
+                'indomaret', 'alfamart', 'alfamidi', 'minimarket', 'supermarket', 'mart',
+                'circle k', 'family mart', 'familymart', 'lawson', 'toko kelontong', 'swalayan', 'toko'
+            ];
+            const hasKeyword = validKeywords.some(k => name.includes(k));
+            const hasType = types.some(t => ['convenience_store', 'supermarket', 'grocery_or_supermarket'].includes(t));
+            if (!hasKeyword && !hasType) return false;
+
+            const blacklist = ['service', 'printer', 'bengkel', 'laundry', 'fotocopy', 'salon', 'barber', 'apotek', 'counter', 'pulsa'];
+            return !blacklist.some(b => name.includes(b));
+        }
+
+        if (category === 'mosque') {
+            const validKeywords = ['masjid', 'musholla', 'mushola', 'mesjid', 'surau', 'islamic center'];
+            const hasKeyword = validKeywords.some(k => name.includes(k));
+            const hasType = types.includes('mosque');
+            if (!hasKeyword && !hasType) return false;
+
+            if (name.includes('travel') || name.includes('tour') || name.includes('yayasan')) return false;
+            return true;
+        }
+
+        if (category === 'church') {
+            const validKeywords = [
+                'gereja', 'church', 'katedral', 'paroki', 'kapel', 'chapel', 'gki', 'gbi',
+                'hkbp', 'gpdi', 'bethel', 'pantekosta', 'toraja', 'katolik', 'kristen', 'advent'
+            ];
+            const hasKeyword = validKeywords.some(k => name.includes(k));
+            const hasType = types.some(t => ['church', 'place_of_worship'].includes(t));
+            return hasKeyword || hasType;
+        }
+
+        if (category === 'gas_station') {
+            const validKeywords = ['spbu', 'pertamina', 'shell', 'bp ', 'pom bensin'];
+            const hasKeyword = validKeywords.some(k => name.includes(k));
+            const hasType = types.includes('gas_station');
+            if (!hasKeyword && !hasType) return false;
+
+            if (name.includes('pertamini') || name.includes('eceran')) return false;
+            return true;
+        }
+
+        return true;
+    };
+
+    const enrichLandmarksWithGoogleDistanceMatrix = (centerLat: number, centerLng: number, landmarksToEnrich: any[]) => {
+        const google = (window as any).google;
+        if (!google?.maps?.DistanceMatrixService || !centerLat || !centerLng) return;
+        if (!landmarksToEnrich || landmarksToEnrich.length === 0) return;
+
+        try {
+            const matrixService = new google.maps.DistanceMatrixService();
+            const origin = new google.maps.LatLng(centerLat, centerLng);
+
+            const validLandmarks = landmarksToEnrich.filter((c: any) => c.lat && c.lng);
+            if (validLandmarks.length === 0) return;
+
+            const destinations = validLandmarks.map((c: any) => new google.maps.LatLng(c.lat, c.lng));
+
+            const fetchMatrix = (mode: any): Promise<{ status: string; response: any }> => {
+                return new Promise((resolve) => {
+                    matrixService.getDistanceMatrix(
+                        {
+                            origins: [origin],
+                            destinations: destinations,
+                            travelMode: mode,
+                            unitSystem: google.maps.UnitSystem.METRIC,
+                        },
+                        (response: any, status: any) => {
+                            resolve({ status, response });
+                        }
+                    );
+                });
+            };
+
+            Promise.all([
+                fetchMatrix(google.maps.TravelMode.DRIVING),
+                fetchMatrix(google.maps.TravelMode.WALKING)
+            ]).then(([drivingRes, walkingRes]) => {
+                const drivingElements = (drivingRes.status === 'OK' && drivingRes.response?.rows?.[0]?.elements) ? drivingRes.response.rows[0].elements : [];
+                const walkingElements = (walkingRes.status === 'OK' && walkingRes.response?.rows?.[0]?.elements) ? walkingRes.response.rows[0].elements : [];
+
+                setKmListingForm((prev: any) => {
+                    const currentCampuses = [...(prev.campuses || [])];
+                    let hasChange = false;
+
+                    validLandmarks.forEach((vl: any, idx: number) => {
+                        const dEl = drivingElements[idx];
+                        const wEl = walkingElements[idx];
+
+                        const targetIdx = currentCampuses.findIndex((c: any) => c.name === vl.name || (c.lat === vl.lat && c.lng === vl.lng));
+                        if (targetIdx !== -1) {
+                            let updatedItem = { ...currentCampuses[targetIdx] };
+                            if (dEl && dEl.status === 'OK') {
+                                const distText = dEl.distance.text;
+                                const motoMin = Math.max(1, Math.round(dEl.duration.value / 60));
+                                const carMin = Math.max(1, Math.round(dEl.duration.value / 60) + 1);
+                                const distKm = dEl.distance.value / 1000;
+
+                                let walkStr = `${Math.max(1, Math.ceil((distKm / 4.2) * 60))} mnt`;
+                                if (wEl && wEl.status === 'OK') {
+                                    walkStr = wEl.duration.text;
+                                }
+
+                                updatedItem = {
+                                    ...updatedItem,
+                                    distance: distText,
+                                    duration: dEl.duration.text,
+                                    walkDuration: walkStr,
+                                    motoDuration: `${motoMin} mnt`,
+                                    carDuration: `${carMin} mnt`,
+                                    isLiveGoogleApi: true
+                                };
+                                currentCampuses[targetIdx] = updatedItem;
+                                hasChange = true;
+                            } else if (wEl && wEl.status === 'OK') {
+                                updatedItem = {
+                                    ...updatedItem,
+                                    distance: wEl.distance.text,
+                                    duration: wEl.duration.text,
+                                    walkDuration: wEl.duration.text,
+                                    motoDuration: `${Math.max(1, Math.ceil((wEl.distance.value / 1000 / 28) * 60) + 1)} mnt`,
+                                    carDuration: `${Math.max(2, Math.ceil((wEl.distance.value / 1000 / 18) * 60) + 2)} mnt`,
+                                    isLiveGoogleApi: true
+                                };
+                                currentCampuses[targetIdx] = updatedItem;
+                                hasChange = true;
+                            }
+                        }
+                    });
+
+                    if (hasChange) {
+                        return { ...prev, campuses: currentCampuses };
+                    }
+                    return prev;
+                });
+            }).catch(err => {
+                console.warn('[DistanceMatrixService Agent] Error:', err);
+            });
+        } catch (e) {
+            console.error('[DistanceMatrixService Agent] Init error:', e);
+        }
+    };
+
+    const detectNearbyLandmarks = (centerLat: number, centerLng: number) => {
+        if (!centerLat || !centerLng) return;
+
+        const scanId = Date.now();
+        landmarkScanAbortRef.current = scanId;
+
+        const getKm = (pLat: number, pLng: number) => {
+            return calculateHaversineDistance(centerLat, centerLng, pLat, pLng);
+        };
+
+        // 1. DAPATKAN MASTER DATA TERKURASI SECARA INSTAN (0ms, Bebas Kuota, 100% Presisi)
+        const curatedAnchors = findNearbyCuratedLandmarks(centerLat, centerLng, 7.0);
+        const curatedCampuses = curatedAnchors
+            .filter(a => a.category === 'campus')
+            .map(c => ({
+                name: c.name,
+                lat: c.lat,
+                lng: c.lng,
+                distance: c.distance,
+                kmVal: c.kmVal,
+                category: c.category,
+                transportMode: c.transportMode,
+                isLiveGoogleApi: true
+            }));
+
+        const curatedOthers = curatedAnchors
+            .filter(a => a.category !== 'campus')
+            .map(c => ({
+                name: c.name,
+                lat: c.lat,
+                lng: c.lng,
+                distance: c.distance,
+                kmVal: c.kmVal,
+                category: c.category,
+                transportMode: c.transportMode,
+                isLiveGoogleApi: true
+            }));
+
+        // LANGSUNG PERBARUI STATE FORM SECARA SINKRON (0ms) DENGAN MASTER DATA MURNI
+        const initialCombined = [...curatedCampuses, ...curatedOthers];
+        if (initialCombined.length > 0) {
+            setKmListingForm((prev: any) => ({
+                ...prev,
+                campuses: initialCombined.map(({ kmVal, ...item }: any) => item)
+            }));
+        }
+
+        // 2. CEK KETERSEDIAAN GOOGLE PLACES API UNTUK SCAN FASILITAS MIKRO (Minimarket, Laundry, Tempat Ibadah, SPBU)
+        const google = (window as any).google;
+        if (!google?.maps?.places?.PlacesService) {
+            setIsScanningLandmarks(false);
+            return;
+        }
+
+        setIsScanningLandmarks(true);
+
+        const tempDiv = document.createElement('div');
+        const service = new google.maps.places.PlacesService(tempDiv);
+        const centerLatLng = new google.maps.LatLng(centerLat, centerLng);
+
+        const performSearch = (request: any): Promise<any[]> => {
+            return new Promise((resolve) => {
+                try {
+                    service.nearbySearch(request, (results: any[], status: string) => {
+                        if (status === google.maps.places.PlacesServiceStatus.OK && results) {
+                            resolve(results);
+                        } else {
+                            resolve([]);
+                        }
+                    });
+                } catch {
+                    resolve([]);
+                }
+            });
+        };
+
+        // 3. Scan Kampus Fallback: HANYA JIKA TIDAK ADA SAMA SEKALI KAMPUS DI MASTER DATASET
+        const scanCampusesFallback = curatedCampuses.length > 0 
+            ? Promise.resolve([]) 
+            : performSearch({
+                location: centerLatLng,
+                radius: 7000,
+                type: 'university'
+            }).then(results => {
+                const validKeywords = ['universitas', 'institut', 'politeknik', 'stie', 'stikes', 'uin', 'iain', 'stmik', 'sekolah tinggi', 'akademi'];
+                return results
+                    .filter(p => {
+                        if (!p.name || !p.geometry?.location) return false;
+                        const lower = p.name.toLowerCase();
+                        const hasValidKeyword = validKeywords.some(k => lower.includes(k));
+                        return hasValidKeyword && !isInvalidCampus(p.name);
+                    })
+                    .map(p => {
+                        const pLat = p.geometry.location.lat();
+                        const pLng = p.geometry.location.lng();
+                        const km = getKm(pLat, pLng);
+                        const ratingsCount = p.user_ratings_total || 0;
+                        const rating = p.rating || 0;
+                        const popularityScore = Math.log10(ratingsCount + 1) * 35 + (rating * 3) - ((km / 7) * 8);
+                        return {
+                            name: p.name,
+                            lat: pLat,
+                            lng: pLng,
+                            distance: `± ${km} KM`,
+                            kmVal: km,
+                            popularityScore,
+                            category: 'campus',
+                            transportMode: km <= 1.0 ? 'walk' : 'motorcycle',
+                            isLiveGoogleApi: true
+                        };
+                    })
+                    .sort((a, b) => b.popularityScore - a.popularityScore)
+                    .slice(0, 3);
+            });
+
+        // 4. Scan Fasilitas Harian Mikro: Minimarket Terdekat (Urutan Jarak Fisik Sejati - Tepat 1 Terdekat)
+        const searchMini1 = performSearch({
+            location: centerLatLng,
+            rankBy: google.maps.places.RankBy.DISTANCE,
+            keyword: 'indomaret'
+        });
+        const searchMini2 = performSearch({
+            location: centerLatLng,
+            rankBy: google.maps.places.RankBy.DISTANCE,
+            keyword: 'alfamart'
+        });
+        const searchMini3 = performSearch({
+            location: centerLatLng,
+            rankBy: google.maps.places.RankBy.DISTANCE,
+            keyword: 'minimarket'
+        });
+
+        const scanMinimarket = Promise.all([searchMini1, searchMini2, searchMini3]).then(([r1, r2, r3]) => {
+            const combined = [...r1, ...r2, ...r3];
+            const seen = new Set<string>();
+            return combined
+                .filter(p => {
+                    if (!p.name || !p.geometry?.location) return false;
+                    if (!isValidMicroFacility('minimarket', p)) return false;
+                    const key = p.place_id || `${p.name}_${p.geometry.location.lat().toFixed(4)}_${p.geometry.location.lng().toFixed(4)}`;
+                    if (seen.has(key)) return false;
+                    seen.add(key);
+                    return true;
+                })
+                .map(p => {
+                    const pLat = p.geometry.location.lat();
+                    const pLng = p.geometry.location.lng();
+                    const km = getKm(pLat, pLng);
+                    return {
+                        name: p.name,
+                        lat: pLat,
+                        lng: pLng,
+                        distance: `± ${km} KM`,
+                        kmVal: km,
+                        category: 'minimarket',
+                        transportMode: km <= 1.0 ? 'walk' : 'motorcycle',
+                        isLiveGoogleApi: true
+                    };
+                })
+                .filter(p => p.kmVal <= 2.5)
+                .sort((a, b) => a.kmVal - b.kmVal)
+                .slice(0, 1);
+        });
+
+        // 5. Scan Fasilitas Harian Mikro: Laundry Kiloan Terdekat
+        const scanLaundry = performSearch({
+            location: centerLatLng,
+            rankBy: google.maps.places.RankBy.DISTANCE,
+            keyword: 'laundry'
+        }).then(results => {
+            return results
+                .filter(p => p.name && p.geometry?.location && isValidMicroFacility('laundry', p))
+                .map(p => {
+                    const pLat = p.geometry.location.lat();
+                    const pLng = p.geometry.location.lng();
+                    const km = getKm(pLat, pLng);
+                    return {
+                        name: p.name,
+                        lat: pLat,
+                        lng: pLng,
+                        distance: `± ${km} KM`,
+                        kmVal: km,
+                        category: 'laundry',
+                        transportMode: km <= 1.0 ? 'walk' : 'motorcycle',
+                        isLiveGoogleApi: true
+                    };
+                })
+                .filter(p => p.kmVal <= 2.5)
+                .sort((a, b) => a.kmVal - b.kmVal)
+                .slice(0, 1);
+        });
+
+        // 6. Scan Fasilitas Harian Mikro: Masjid / Musholla Terdekat
+        const searchMosque1 = performSearch({
+            location: centerLatLng,
+            rankBy: google.maps.places.RankBy.DISTANCE,
+            keyword: 'masjid'
+        });
+        const searchMosque2 = performSearch({
+            location: centerLatLng,
+            rankBy: google.maps.places.RankBy.DISTANCE,
+            type: 'mosque'
+        });
+
+        const scanMosque = Promise.all([searchMosque1, searchMosque2]).then(([r1, r2]) => {
+            const combined = [...r1, ...r2];
+            const seen = new Set<string>();
+            return combined
+                .filter(p => {
+                    if (!p.name || !p.geometry?.location) return false;
+                    if (!isValidMicroFacility('mosque', p)) return false;
+                    const key = p.place_id || `${p.name}_${p.geometry.location.lat().toFixed(4)}_${p.geometry.location.lng().toFixed(4)}`;
+                    if (seen.has(key)) return false;
+                    seen.add(key);
+                    return true;
+                })
+                .map(p => {
+                    const pLat = p.geometry.location.lat();
+                    const pLng = p.geometry.location.lng();
+                    const km = getKm(pLat, pLng);
+                    return {
+                        name: p.name,
+                        lat: pLat,
+                        lng: pLng,
+                        distance: `± ${km} KM`,
+                        kmVal: km,
+                        category: 'mosque',
+                        transportMode: km <= 1.0 ? 'walk' : 'motorcycle',
+                        isLiveGoogleApi: true
+                    };
+                })
+                .filter(p => p.kmVal <= 2.5)
+                .sort((a, b) => a.kmVal - b.kmVal)
+                .slice(0, 1);
+        });
+
+        // 7. Scan Fasilitas Harian Mikro: Gereja Terdekat
+        const searchChurch1 = performSearch({
+            location: centerLatLng,
+            rankBy: google.maps.places.RankBy.DISTANCE,
+            keyword: 'gereja'
+        });
+        const searchChurch2 = performSearch({
+            location: centerLatLng,
+            rankBy: google.maps.places.RankBy.DISTANCE,
+            type: 'church'
+        });
+
+        const scanChurch = Promise.all([searchChurch1, searchChurch2]).then(([r1, r2]) => {
+            const combined = [...r1, ...r2];
+            const seen = new Set<string>();
+            return combined
+                .filter(p => {
+                    if (!p.name || !p.geometry?.location) return false;
+                    if (!isValidMicroFacility('church', p)) return false;
+                    const key = p.place_id || `${p.name}_${p.geometry.location.lat().toFixed(4)}_${p.geometry.location.lng().toFixed(4)}`;
+                    if (seen.has(key)) return false;
+                    seen.add(key);
+                    return true;
+                })
+                .map(p => {
+                    const pLat = p.geometry.location.lat();
+                    const pLng = p.geometry.location.lng();
+                    const km = getKm(pLat, pLng);
+                    return {
+                        name: p.name,
+                        lat: pLat,
+                        lng: pLng,
+                        distance: `± ${km} KM`,
+                        kmVal: km,
+                        category: 'church',
+                        transportMode: km <= 1.0 ? 'walk' : 'motorcycle',
+                        isLiveGoogleApi: true
+                    };
+                })
+                .filter(p => p.kmVal <= 3.5)
+                .sort((a, b) => a.kmVal - b.kmVal)
+                .slice(0, 1);
+        });
+
+        // 8. Scan Fasilitas Vital: SPBU / Pom Bensin Terdekat
+        const searchSpbu1 = performSearch({
+            location: centerLatLng,
+            rankBy: google.maps.places.RankBy.DISTANCE,
+            type: 'gas_station'
+        });
+        const searchSpbu2 = performSearch({
+            location: centerLatLng,
+            rankBy: google.maps.places.RankBy.DISTANCE,
+            keyword: 'spbu'
+        });
+
+        const scanGasStation = Promise.all([searchSpbu1, searchSpbu2]).then(([r1, r2]) => {
+            const combined = [...r1, ...r2];
+            const seen = new Set<string>();
+            return combined
+                .filter(p => {
+                    if (!p.name || !p.geometry?.location) return false;
+                    if (!isValidMicroFacility('gas_station', p)) return false;
+                    const key = p.place_id || `${p.name}_${p.geometry.location.lat().toFixed(4)}_${p.geometry.location.lng().toFixed(4)}`;
+                    if (seen.has(key)) return false;
+                    seen.add(key);
+                    return true;
+                })
+                .map(p => {
+                    const pLat = p.geometry.location.lat();
+                    const pLng = p.geometry.location.lng();
+                    const km = getKm(pLat, pLng);
+                    return {
+                        name: p.name,
+                        lat: pLat,
+                        lng: pLng,
+                        distance: `± ${km} KM`,
+                        kmVal: km,
+                        category: 'gas_station',
+                        transportMode: 'motorcycle',
+                        isLiveGoogleApi: true
+                    };
+                })
+                .filter(p => p.kmVal <= 4.0)
+                .sort((a, b) => a.kmVal - b.kmVal)
+                .slice(0, 1);
+        });
+
+        Promise.all([
+            scanCampusesFallback,
+            scanMinimarket,
+            scanLaundry,
+            scanMosque,
+            scanChurch,
+            scanGasStation
+        ]).then(([fallbackCampuses, minimarketList, laundryList, mosqueList, churchList, gasStationList]) => {
+            if (landmarkScanAbortRef.current !== scanId) return;
+            setIsScanningLandmarks(false);
+
+            const finalCampuses = curatedCampuses.length > 0 
+                ? [...curatedCampuses] 
+                : [...fallbackCampuses];
+
+            const finalFacilities = [
+                ...curatedOthers,
+                ...minimarketList,
+                ...laundryList,
+                ...gasStationList,
+                ...mosqueList,
+                ...churchList
+            ];
+
+            const cleanFinalFacilities = finalFacilities.filter(fac => !isGarbageFacility(fac.name));
+            const combinedLandmarks = [...finalCampuses.filter(c => !isGarbageFacility(c.name))];
+            cleanFinalFacilities.forEach(fac => {
+                const exists = combinedLandmarks.some((c: any) => 
+                    c.name.toLowerCase() === fac.name.toLowerCase() ||
+                    (c.lat === fac.lat && c.lng === fac.lng)
+                );
+                if (!exists) {
+                    combinedLandmarks.push(fac);
+                }
+            });
+
+            const cleanCombinedLandmarks = combinedLandmarks.filter((c: any) => !isGarbageFacility(c.name));
+
+            if (cleanCombinedLandmarks.length > 0) {
+                setKmListingForm((prev: any) => ({
+                    ...prev,
+                    campuses: cleanCombinedLandmarks.map(({ kmVal, ...item }: any) => item)
+                }));
+
+                // Langsung hitung rute nyata Google Maps via DistanceMatrixService
+                enrichLandmarksWithGoogleDistanceMatrix(centerLat, centerLng, cleanCombinedLandmarks);
+            }
+        }).catch(() => {
+            if (landmarkScanAbortRef.current === scanId) {
+                setIsScanningLandmarks(false);
+            }
+        });
+    };
+
+    const searchFacilityCoordinates = (index: number, name: string) => {
+        if (!name) return;
+        const stateKey = `campuses-${index}`;
+        setIsSearchingFacility(prev => ({ ...prev, [stateKey]: true }));
+        const gw = (window as any).google;
+        if (!gw?.maps?.Geocoder) {
+            setIsSearchingFacility(prev => ({ ...prev, [stateKey]: false }));
+            alert('Google Maps belum siap.');
+            return;
+        }
+        const geocoder = new gw.maps.Geocoder();
+        const cityContext = kmListingForm.city ? `, ${kmListingForm.city}` : '';
+        const provinceContext = kmListingForm.province ? `, ${kmListingForm.province}` : '';
+        const queryAddress = `${name}${cityContext}${provinceContext}, Indonesia`;
+        
+        geocoder.geocode(
+            { address: queryAddress, componentRestrictions: { country: 'ID' } },
+            (results: any[], status: string) => {
+                if (status === 'OK' && results && results.length > 0) {
+                    const loc = results[0].geometry.location;
+                    const lat = loc.lat(), lng = loc.lng();
+                    const arr = [...(kmListingForm.campuses || [])];
+                    
+                    let distString = arr[index]?.distance;
+                    if (kmListingForm.location && kmListingForm.location.lat) {
+                        const km = calculateHaversineDistance(kmListingForm.location.lat, kmListingForm.location.lng, lat, lng);
+                        distString = `± ${km} KM`;
+                    }
+
+                    arr[index] = { ...arr[index], lat, lng, distance: distString };
+                    setKmListingForm((prev: any) => ({ ...prev, campuses: arr }));
+                    setIsSearchingFacility(prev => ({ ...prev, [stateKey]: false }));
+
+                    if (kmListingForm.location?.lat && kmListingForm.location?.lng) {
+                        enrichLandmarksWithGoogleDistanceMatrix(kmListingForm.location.lat, kmListingForm.location.lng, [arr[index]]);
+                    }
+                } else {
+                    geocoder.geocode(
+                        { address: name + ', Indonesia', componentRestrictions: { country: 'ID' } },
+                        (fallbackResults: any[], fallbackStatus: string) => {
+                            if (fallbackStatus === 'OK' && fallbackResults && fallbackResults.length > 0) {
+                                const loc = fallbackResults[0].geometry.location;
+                                const lat = loc.lat(), lng = loc.lng();
+                                const arr = [...(kmListingForm.campuses || [])];
+                                
+                                let distString = arr[index]?.distance;
+                                if (kmListingForm.location && kmListingForm.location.lat) {
+                                    const km = calculateHaversineDistance(kmListingForm.location.lat, kmListingForm.location.lng, lat, lng);
+                                    distString = `± ${km} KM`;
+                                }
+
+                                arr[index] = { ...arr[index], lat, lng, distance: distString };
+                                setKmListingForm((prev: any) => ({ ...prev, campuses: arr }));
+
+                                if (kmListingForm.location?.lat && kmListingForm.location?.lng) {
+                                    enrichLandmarksWithGoogleDistanceMatrix(kmListingForm.location.lat, kmListingForm.location.lng, [arr[index]]);
+                                }
+                            } else {
+                                alert('Lokasi tidak ditemukan di peta. Coba setel nama yang lebih spesifik.');
+                            }
+                            setIsSearchingFacility(prev => ({ ...prev, [stateKey]: false }));
+                        }
+                    );
+                }
+            }
+        );
+    };
+
+    // Auto-sync & auto-purge master landmarks saat step lokasi aktif jika campuses kosong atau memuat data sampah
+    useEffect(() => {
+        if (kmStep === 1 && isEditingKostManager && kmListingForm.location?.lat && kmListingForm.location?.lng) {
+            const currentCampuses = kmListingForm.campuses || [];
+            const hasGarbage = currentCampuses.some((c: any) => 
+                isInvalidCampus(c.name) || 
+                isGarbageFacility(c.name) ||
+                c.name.toLowerCase().includes('full bright')
+            );
+            if (hasGarbage) {
+                setKmListingForm((prev: any) => ({
+                    ...prev,
+                    campuses: (prev.campuses || []).filter((c: any) => !isGarbageFacility(c.name) && !isInvalidCampus(c.name))
+                }));
+            }
+            if (currentCampuses.length === 0) {
+                detectNearbyLandmarks(kmListingForm.location.lat, kmListingForm.location.lng);
+            }
+        }
+    }, [kmStep, isEditingKostManager, kmListingForm.location?.lat, kmListingForm.location?.lng]);
+
     // Step 1: Automatically sync public photo categories when facilities change
     useEffect(() => {
         if (isEditingKostManager) {
@@ -1041,6 +1712,11 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
         }));
         if (kmMarkerInstance.current) kmMarkerInstance.current.setPosition({ lat, lng });
         if (kmMapInstance.current) kmMapInstance.current.panTo({ lat, lng });
+
+        // Trigger deteksi master data & scan mikro instan
+        if (lat && lng) {
+            detectNearbyLandmarks(lat, lng);
+        }
 
         const gw = (window as any).google;
         if (gw?.maps?.Geocoder) {
@@ -6388,10 +7064,10 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                                                 </div>
                                             )}
 
-                                            <div className={`rounded-xl p-4 flex flex-col gap-3 relative transition-all ${
+                                            <div className={`rounded-2xl p-4 flex flex-col gap-3 relative transition-all ${
                                                 currentEvalData.hasRevision && currentEvalData.landmark
                                                     ? 'border-2 border-amber-400 ring-4 ring-amber-400/30 shadow-[0_0_25px_rgba(245,158,11,0.25)] bg-gradient-to-br from-amber-500/[0.04] via-[#f8f9ff] to-orange-500/[0.02] animate-pulse'
-                                                    : 'border border-[#e0c0af] bg-[#f8f9ff]'
+                                                    : 'border border-gray-200 bg-[#f8f9ff]'
                                             }`}>
                                                 {currentEvalData.hasRevision && currentEvalData.landmark && (
                                                     <div className="absolute -top-3 right-4 z-10 inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-gradient-to-r from-amber-500 to-orange-500 text-white font-black text-[10px] uppercase tracking-wider shadow-md shadow-amber-500/30 animate-bounce">
@@ -6399,85 +7075,204 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                                                         <span>⚠️ Perlu Revisi: Landmark / Kampus</span>
                                                     </div>
                                                 )}
-                                                <h4 className="font-bold text-xs text-[#0b1c30]">Fasilitas &amp; Landmark Terdekat</h4>
-                                                
-                                                {kmListingForm.campuses && kmListingForm.campuses.map((camp: any, cIdx: number) => (
-                                                    <div key={cIdx} className="flex justify-between items-center bg-white p-2 rounded-lg border border-gray-100 text-xs font-bold text-gray-700">
-                                                        <span>📍 {camp.name} ({camp.lat?.toFixed(4)}, {camp.lng?.toFixed(4)})</span>
-                                                        <button 
-                                                            type="button"
-                                                            onClick={() => {
-                                                                setKmListingForm({
-                                                                    ...kmListingForm,
-                                                                    campuses: kmListingForm.campuses.filter((_: any, idx: number) => idx !== cIdx)
-                                                                });
-                                                            }}
-                                                            className="text-red-500 hover:text-red-700 font-bold"
-                                                        >
-                                                            Hapus
-                                                        </button>
-                                                    </div>
-                                                ))}
+                                                <div className="flex items-center justify-between">
+                                                    <h4 className="font-black text-xs text-[#0b1c30] uppercase tracking-wider">Fasilitas &amp; Landmark Terdekat</h4>
+                                                    <span className="text-[10px] font-bold text-gray-400">
+                                                        {(kmListingForm.campuses || []).length} Terpilih
+                                                    </span>
+                                                </div>
 
-                                                <div className="pt-2 border-t border-gray-200/60">
-                                                    {!showAddLandmarkForm ? (
-                                                        <button
+                                                <div className="space-y-3">
+                                                    {isScanningLandmarks && (
+                                                        <div className="flex items-center gap-2.5 px-4 py-3 bg-amber-50 border border-amber-200/80 rounded-2xl text-amber-800 text-xs font-bold animate-pulse">
+                                                            <Loader2 size={16} className="text-amber-500 animate-spin shrink-0" />
+                                                            <span>Memindai kampus, rumah sakit, mall, minimarket, &amp; fasilitas harian terdekat dari Google Maps...</span>
+                                                        </div>
+                                                    )}
+
+                                                    {(kmListingForm.campuses || []).filter((c: any) => !isGarbageFacility(c.name)).map((c: any, i: number) => {
+                                                        const walk = c.walkDuration || (() => {
+                                                            const kmMatch = (c.distance || '').match(/[\d.]+/);
+                                                            return kmMatch ? `${Math.ceil((parseFloat(kmMatch[0]) / 4.2) * 60)} Mnt` : '5 Mnt';
+                                                        })();
+                                                        const moto = c.motoDuration || (() => {
+                                                            const kmMatch = (c.distance || '').match(/[\d.]+/);
+                                                            return kmMatch ? `${Math.ceil((parseFloat(kmMatch[0]) / 28) * 60) + 1} Mnt` : '2 Mnt';
+                                                        })();
+                                                        const car = c.carDuration || (() => {
+                                                            const kmMatch = (c.distance || '').match(/[\d.]+/);
+                                                            return kmMatch ? `${Math.ceil((parseFloat(kmMatch[0]) / 18) * 60) + 2} Mnt` : '4 Mnt';
+                                                        })();
+
+                                                        const getCategoryIcon = (cat?: string, name?: string) => {
+                                                            const n = (name || '').toLowerCase();
+                                                            const cStr = (cat || '').toLowerCase();
+                                                            if (cStr === 'campus' || n.includes('universitas') || n.includes('kampus') || n.includes('politeknik') || n.includes('institut') || n.includes('sekolah tinggi')) return '🎓';
+                                                            if (cStr === 'hospital' || n.includes('rs ') || n.includes('rumah sakit') || n.includes('rsud') || n.includes('rsup')) return '🏥';
+                                                            if (cStr === 'mall' || n.includes('mall') || n.includes('square') || n.includes('plaza')) return '🛍️';
+                                                            if (cStr === 'minimarket' || n.includes('indomaret') || n.includes('alfamart') || n.includes('alfamidi') || n.includes('circle k') || n.includes('mart')) return '🛒';
+                                                            if (cStr === 'laundry' || n.includes('laundry') || n.includes('cuci')) return '🧺';
+                                                            if (cStr === 'mosque' || n.includes('masjid') || n.includes('musholla') || n.includes('mushola')) return '🕌';
+                                                            if (cStr === 'church' || n.includes('gereja') || n.includes('katedral')) return '⛪';
+                                                            if (cStr === 'gas_station' || n.includes('spbu') || n.includes('pertamina') || n.includes('bensin')) return '⛽';
+                                                            if (cStr === 'office' || cStr === 'industrial' || n.includes('cbd') || n.includes('industri') || n.includes('perkantoran')) return '🏢';
+                                                            if (cStr === 'transport' || n.includes('bandara') || n.includes('terminal') || n.includes('pelabuhan') || n.includes('stasiun')) return '🚆';
+                                                            return '📍';
+                                                        };
+
+                                                        return (
+                                                            <div key={i} className="flex flex-col sm:flex-row gap-2 items-start sm:items-center bg-white p-3 rounded-2xl border border-gray-150 transition-all hover:border-orange-300 shadow-xs">
+                                                                <div className="flex-1 space-y-2 w-full">
+                                                                    <div className="flex gap-2 w-full">
+                                                                        <div className="relative flex-1">
+                                                                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm select-none">
+                                                                                {getCategoryIcon(c.category, c.name)}
+                                                                            </span>
+                                                                            <input 
+                                                                                placeholder="Nama kampus/landmark (Cth: UNHAS / RS Wahidin / Indomaret)" 
+                                                                                value={c.name}
+                                                                                onChange={e => { 
+                                                                                    const a = [...(kmListingForm.campuses || [])]; 
+                                                                                    const targetIdx = a.findIndex(item => item === c);
+                                                                                    if (targetIdx !== -1) {
+                                                                                        a[targetIdx] = { ...a[targetIdx], name: e.target.value };
+                                                                                        setKmListingForm((prev: any) => ({ ...prev, campuses: a }));
+                                                                                    }
+                                                                                }} 
+                                                                                className="w-full h-[38px] pl-9 pr-3 border border-gray-200 rounded-xl bg-gray-50/50 text-xs font-bold text-gray-800 outline-none focus:border-orange-500 focus:bg-white transition-all"
+                                                                            />
+                                                                        </div>
+                                                                        <button 
+                                                                            type="button" 
+                                                                            onClick={() => {
+                                                                                const targetIdx = (kmListingForm.campuses || []).findIndex((item: any) => item === c);
+                                                                                if (targetIdx !== -1) searchFacilityCoordinates(targetIdx, c.name);
+                                                                            }}
+                                                                            disabled={isSearchingFacility[`campuses-${i}`]}
+                                                                            className="bg-orange-500 text-white px-3.5 h-[38px] rounded-xl text-xs font-bold shrink-0 hover:bg-orange-600 disabled:opacity-50 transition-colors flex items-center justify-center gap-1 cursor-pointer"
+                                                                        >
+                                                                            {isSearchingFacility[`campuses-${i}`] ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Search className="w-3.5 h-3.5" />}
+                                                                            <span>{isSearchingFacility[`campuses-${i}`] ? 'Mencari...' : 'Cari'}</span>
+                                                                        </button>
+                                                                    </div>
+
+                                                                    <div className="flex flex-wrap items-center justify-between gap-2 bg-gray-50/80 px-3 py-1.5 rounded-xl border border-gray-100 w-full shadow-2xs">
+                                                                        <div className="flex items-center gap-1.5">
+                                                                            <span className="text-[10px] font-black text-gray-400 uppercase tracking-wider">Rute Terverifikasi:</span>
+                                                                            {c.isLiveGoogleApi && (
+                                                                                <span className="px-1.5 py-0.5 bg-emerald-50 text-emerald-600 text-[9px] font-black rounded-md border border-emerald-200/60 uppercase tracking-tight">
+                                                                                    Live Rute
+                                                                                </span>
+                                                                            )}
+                                                                        </div>
+                                                                        <div className="flex items-center gap-2.5 text-[11px] font-bold text-gray-700">
+                                                                            <span className="flex items-center gap-1" title="Jalan Kaki">🚶 {walk}</span>
+                                                                            <span className="text-gray-300">•</span>
+                                                                            <span className="flex items-center gap-1" title="Sepeda Motor">🏍️ {moto}</span>
+                                                                            <span className="text-gray-300">•</span>
+                                                                            <span className="flex items-center gap-1" title="Mobil">🚗 {car}</span>
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                                <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
+                                                                    <input 
+                                                                        placeholder="Jarak" 
+                                                                        value={c.distance || ''}
+                                                                        onChange={e => { 
+                                                                            const a = [...(kmListingForm.campuses || [])]; 
+                                                                            const targetIdx = a.findIndex((item: any) => item === c);
+                                                                            if (targetIdx !== -1) {
+                                                                                a[targetIdx] = { ...a[targetIdx], distance: e.target.value };
+                                                                                setKmListingForm((prev: any) => ({ ...prev, campuses: a }));
+                                                                            }
+                                                                        }} 
+                                                                        className="w-20 sm:w-24 h-[38px] px-2.5 border border-gray-200 rounded-xl bg-gray-50 text-xs font-bold text-center text-gray-700 outline-none focus:border-orange-500 focus:bg-white transition-all" 
+                                                                    />
+                                                                    <button 
+                                                                        type="button" 
+                                                                        onClick={() => setKmListingForm((prev: any) => ({ ...prev, campuses: (prev.campuses || []).filter((item: any) => item !== c) }))}
+                                                                        className="h-[38px] w-[38px] text-rose-500 hover:bg-rose-50 border border-rose-100 rounded-xl shrink-0 flex items-center justify-center transition-colors cursor-pointer"
+                                                                        title="Hapus Landmark Ini"
+                                                                    >
+                                                                        <Trash2 size={16}/>
+                                                                    </button>
+                                                                </div>
+                                                            </div>
+                                                        );
+                                                    })}
+
+                                                    <div className="flex flex-col sm:flex-row gap-2 pt-2">
+                                                        <button 
                                                             type="button"
                                                             onClick={() => {
                                                                 setShowAddLandmarkForm(true);
                                                                 setLandmarkLocation(kmListingForm.location || { lat: -5.147665, lng: 119.432731 });
                                                             }}
-                                                            className="w-full h-[40px] border border-dashed border-[#ff7a00] hover:bg-orange-50/50 text-[#ff7a00] font-bold text-xs uppercase tracking-wider rounded-lg flex items-center justify-center gap-1.5 transition-all active:scale-95"
+                                                            className="flex-1 h-10 border-2 border-dashed border-orange-200 bg-orange-50/30 hover:bg-orange-50 text-orange-600 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-98"
                                                         >
-                                                            <MapPin className="w-4 h-4 shrink-0" />
-                                                            + Tambah Landmark Baru
+                                                            <Plus size={15} /> + Tambah Landmark / Kampus Manual
                                                         </button>
-                                                     ) : (
-                                                         <div className="flex flex-col gap-3 bg-[#fdfdfd] p-3 rounded-lg border border-[#e0c0af]/50 mt-1">
-                                                             <div className="flex justify-between items-center mb-0.5">
-                                                                 <span className="text-[10px] font-bold text-[#584235] uppercase tracking-wider">Form Tambah Landmark</span>
-                                                                 <button
-                                                                     type="button"
-                                                                     onClick={() => {
-                                                                         setNewLandmarkName('');
-                                                                         setGoogleMapsUrlInput('');
-                                                                         setShowAddLandmarkForm(false);
-                                                                     }}
-                                                                     className="text-gray-450 hover:text-gray-650 text-xs font-bold"
-                                                                 >
-                                                                     Batal
-                                                                 </button>
-                                                             </div>
 
-                                                             {/* Choice Selection Tabs */}
-                                                             <div className="flex bg-gray-100 p-0.5 rounded-lg border border-gray-200">
-                                                                  <button
-                                                                      type="button"
-                                                                      onClick={() => setLandmarkInputMethod('search')}
-                                                                      className={`flex-1 py-2 text-[10px] font-extrabold uppercase tracking-widest rounded-lg transition-all flex items-center justify-center gap-1 ${landmarkInputMethod === 'search' ? 'bg-[#ff7a00] text-white shadow-md' : 'text-[#584235] hover:text-orange-600 hover:bg-gray-200/50'}`}
-                                                                  >
-                                                                      <Search className="w-3 h-3 shrink-0" />
-                                                                      Cari Nama Lokasi
-                                                                  </button>
-                                                                  <button
-                                                                      type="button"
-                                                                      onClick={() => setLandmarkInputMethod('gmaps')}
-                                                                      className={`flex-1 py-2 text-[10px] font-extrabold uppercase tracking-widest rounded-lg transition-all flex items-center justify-center gap-1 ${landmarkInputMethod === 'gmaps' ? 'bg-[#ff7a00] text-white shadow-md' : 'text-[#584235] hover:text-orange-600 hover:bg-gray-200/50'}`}
-                                                                  >
-                                                                      <LinkIcon className="w-3 h-3 shrink-0" />
-                                                                      Konversi Link GMaps
-                                                                  </button>
-                                                              </div>
+                                                        {kmListingForm.location?.lat && kmListingForm.location?.lng && (
+                                                            <button 
+                                                                type="button"
+                                                                onClick={() => detectNearbyLandmarks(kmListingForm.location.lat, kmListingForm.location.lng)}
+                                                                disabled={isScanningLandmarks}
+                                                                className="h-10 px-4 bg-orange-500 hover:bg-orange-600 active:scale-98 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 shrink-0 disabled:opacity-50 shadow-xs cursor-pointer"
+                                                            >
+                                                                <Sparkles size={14} className={isScanningLandmarks ? "animate-spin" : ""} />
+                                                                <span>{isScanningLandmarks ? 'Memindai...' : '✨ Pindai Ulang Landmark'}</span>
+                                                            </button>
+                                                        )}
+                                                    </div>
 
-                                                             {/* Conditional Input Methods */}
-                                                             {landmarkInputMethod === 'search' ? (
-                                                                 <div className="flex flex-col gap-1 w-full relative">
-                                                                     <div className="flex gap-2 w-full">
-                                                                         <input 
-                                                                             type="text"
-                                                                             placeholder="Nama Landmark (misal: Universitas Hasanuddin)"
-                                                                             value={newLandmarkName}
-                                                                             onChange={e => {
+                                                    {/* Form Tambah Landmark Manual (Modal / Dropdown) */}
+                                                    {showAddLandmarkForm && (
+                                                        <div className="flex flex-col gap-3 bg-[#fdfdfd] p-3 rounded-2xl border border-orange-200 shadow-sm mt-2">
+                                                            <div className="flex justify-between items-center mb-0.5">
+                                                                <span className="text-[10px] font-bold text-[#584235] uppercase tracking-wider">Form Tambah Landmark Manual</span>
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => {
+                                                                        setNewLandmarkName('');
+                                                                        setGoogleMapsUrlInput('');
+                                                                        setShowAddLandmarkForm(false);
+                                                                    }}
+                                                                    className="text-gray-450 hover:text-gray-650 text-xs font-bold"
+                                                                >
+                                                                    Batal
+                                                                </button>
+                                                            </div>
+
+                                                            {/* Choice Selection Tabs */}
+                                                            <div className="flex bg-gray-100 p-0.5 rounded-xl border border-gray-200">
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => setLandmarkInputMethod('search')}
+                                                                    className={`flex-1 py-2 text-[10px] font-extrabold uppercase tracking-widest rounded-lg transition-all flex items-center justify-center gap-1 ${landmarkInputMethod === 'search' ? 'bg-[#ff7a00] text-white shadow-md' : 'text-[#584235] hover:text-orange-600 hover:bg-gray-200/50'}`}
+                                                                >
+                                                                    <Search className="w-3 h-3 shrink-0" />
+                                                                    Cari Nama Lokasi
+                                                                </button>
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => setLandmarkInputMethod('gmaps')}
+                                                                    className={`flex-1 py-2 text-[10px] font-extrabold uppercase tracking-widest rounded-lg transition-all flex items-center justify-center gap-1 ${landmarkInputMethod === 'gmaps' ? 'bg-[#ff7a00] text-white shadow-md' : 'text-[#584235] hover:text-orange-600 hover:bg-gray-200/50'}`}
+                                                                >
+                                                                    <LinkIcon className="w-3 h-3 shrink-0" />
+                                                                    Konversi Link GMaps
+                                                                </button>
+                                                            </div>
+
+                                                            {/* Conditional Input Methods */}
+                                                            {landmarkInputMethod === 'search' ? (
+                                                                <div className="flex flex-col gap-1 w-full relative">
+                                                                    <div className="flex gap-2 w-full">
+                                                                        <input 
+                                                                            type="text"
+                                                                            placeholder="Nama Landmark (misal: Universitas Hasanuddin)"
+                                                                            value={newLandmarkName}
+                                                                            onChange={e => {
                                                                                 setNewLandmarkName(e.target.value);
                                                                                 const gw = (window as any).google;
                                                                                 if (gw?.maps?.places?.AutocompleteService) {
@@ -6486,151 +7281,151 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                                                                                         setLandmarkSuggestions(preds || []);
                                                                                     });
                                                                                 }
-                                                                             }}
-                                                                             className="flex-1 h-[36px] px-3 border border-[#e0c0af] rounded-lg text-xs bg-white font-bold outline-none text-[#584235]"
-                                                                         />
-                                                                         <button
-                                                                             type="button"
-                                                                             onClick={() => {
-                                                                                 if (!newLandmarkName.trim()) {
-                                                                                     alert('Ketik nama landmark / bangunan yang dicari terlebih dahulu');
-                                                                                     return;
-                                                                                 }
-                                                                                 const gw = (window as any).google;
-                                                                                 if (!gw?.maps?.Geocoder) {
-                                                                                     alert('Google Maps belum siap. Coba beberapa saat lagi.');
-                                                                                     return;
-                                                                                 }
-                                                                                 const geocoder = new gw.maps.Geocoder();
-                                                                                 geocoder.geocode(
-                                                                                     { address: newLandmarkName + ', Indonesia', componentRestrictions: { country: 'ID' } },
-                                                                                     (results: any[], status: string) => {
-                                                                                         if (status === 'OK' && results && results.length > 0) {
-                                                                                             const loc = results[0].geometry.location;
-                                                                                             setLandmarkLocation({ lat: loc.lat(), lng: loc.lng() });
-                                                                                             setLandmarkSuggestions([]);
-                                                                                             alert(`Lokasi ditemukan: ${results[0].formatted_address}`);
-                                                                                         } else {
-                                                                                             alert('Lokasi tidak ditemukan. Coba nama yang lebih spesifik atau gunakan tab "Konversi Link GMaps".');
-                                                                                         }
-                                                                                     }
-                                                                                 );
-                                                                             }}
-                                                                             className="bg-[#eff4ff] hover:bg-[#dce9ff] text-[#ff7a00] font-bold text-xs uppercase px-3 rounded-lg border border-[#e0c0af] transition-colors"
-                                                                         >
-                                                                             Cari
-                                                                         </button>
-                                                                     </div>
-                                                                     
-                                                                     {/* Floating Autocomplete Suggestions */}
-                                                                     {landmarkSuggestions.length > 0 && (
-                                                                         <div className="absolute top-[40px] left-0 right-0 bg-white border border-[#e0c0af] rounded-lg shadow-xl z-[9999] max-h-48 overflow-y-auto divide-y divide-gray-100">
-                                                                             {landmarkSuggestions.map((suggestion: any, idx: number) => (
-                                                                                 <div 
-                                                                                     key={suggestion.place_id || idx}
-                                                                                     onClick={() => {
-                                                                                         const gw = (window as any).google;
-                                                                                         if (!gw?.maps?.Geocoder) return;
-                                                                                         const geocoder = new gw.maps.Geocoder();
-                                                                                         geocoder.geocode(
-                                                                                             { placeId: suggestion.place_id },
-                                                                                             (results: any[], status: string) => {
-                                                                                                 if (status === 'OK' && results && results.length > 0) {
-                                                                                                     const loc = results[0].geometry.location;
-                                                                                                     setLandmarkLocation({ lat: loc.lat(), lng: loc.lng() });
-                                                                                                 }
-                                                                                             }
-                                                                                         );
-                                                                                         const shortName = suggestion.structured_formatting?.main_text || suggestion.description.split(',')[0];
-                                                                                         setNewLandmarkName(shortName);
-                                                                                         setLandmarkSuggestions([]);
-                                                                                     }}
-                                                                                     className="p-2.5 text-[10px] text-gray-700 font-medium hover:bg-orange-50 cursor-pointer transition-colors text-left truncate"
-                                                                                     title={suggestion.description}
-                                                                                 >
+                                                                            }}
+                                                                            className="flex-1 h-[38px] px-3 border border-gray-200 rounded-xl text-xs bg-white font-bold outline-none text-[#584235] focus:border-orange-500"
+                                                                        />
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() => {
+                                                                                if (!newLandmarkName.trim()) {
+                                                                                    alert('Ketik nama landmark / bangunan yang dicari terlebih dahulu');
+                                                                                    return;
+                                                                                }
+                                                                                const gw = (window as any).google;
+                                                                                if (!gw?.maps?.Geocoder) {
+                                                                                    alert('Google Maps belum siap. Coba beberapa saat lagi.');
+                                                                                    return;
+                                                                                }
+                                                                                const geocoder = new gw.maps.Geocoder();
+                                                                                geocoder.geocode(
+                                                                                    { address: newLandmarkName + ', Indonesia', componentRestrictions: { country: 'ID' } },
+                                                                                    (results: any[], status: string) => {
+                                                                                        if (status === 'OK' && results && results.length > 0) {
+                                                                                            const loc = results[0].geometry.location;
+                                                                                            setLandmarkLocation({ lat: loc.lat(), lng: loc.lng() });
+                                                                                            setLandmarkSuggestions([]);
+                                                                                            alert(`Lokasi ditemukan: ${results[0].formatted_address}`);
+                                                                                        } else {
+                                                                                            alert('Lokasi tidak ditemukan. Coba nama yang lebih spesifik atau gunakan tab "Konversi Link GMaps".');
+                                                                                        }
+                                                                                    }
+                                                                                );
+                                                                            }}
+                                                                            className="bg-orange-50 hover:bg-orange-100 text-orange-600 font-bold text-xs uppercase px-4 rounded-xl border border-orange-200 transition-colors"
+                                                                        >
+                                                                            Cari
+                                                                        </button>
+                                                                    </div>
+                                                                    
+                                                                    {/* Floating Autocomplete Suggestions */}
+                                                                    {landmarkSuggestions.length > 0 && (
+                                                                        <div className="absolute top-[42px] left-0 right-0 bg-white border border-gray-200 rounded-xl shadow-xl z-[9999] max-h-48 overflow-y-auto divide-y divide-gray-100">
+                                                                            {landmarkSuggestions.map((suggestion: any, idx: number) => (
+                                                                                <div 
+                                                                                    key={suggestion.place_id || idx}
+                                                                                    onClick={() => {
+                                                                                        const gw = (window as any).google;
+                                                                                        if (!gw?.maps?.Geocoder) return;
+                                                                                        const geocoder = new gw.maps.Geocoder();
+                                                                                        geocoder.geocode(
+                                                                                            { placeId: suggestion.place_id },
+                                                                                            (results: any[], status: string) => {
+                                                                                                if (status === 'OK' && results && results.length > 0) {
+                                                                                                    const loc = results[0].geometry.location;
+                                                                                                    setLandmarkLocation({ lat: loc.lat(), lng: loc.lng() });
+                                                                                                }
+                                                                                            }
+                                                                                        );
+                                                                                        const shortName = suggestion.structured_formatting?.main_text || suggestion.description.split(',')[0];
+                                                                                        setNewLandmarkName(shortName);
+                                                                                        setLandmarkSuggestions([]);
+                                                                                    }}
+                                                                                    className="p-2.5 text-[11px] text-gray-700 font-medium hover:bg-orange-50 cursor-pointer transition-colors text-left truncate"
+                                                                                    title={suggestion.description}
+                                                                                >
                                                                                     📍 {suggestion.description || suggestion.structured_formatting?.main_text}
-                                                                                 </div>
-                                                                             ))}
-                                                                         </div>
-                                                                     )}
-                                                                 </div>
-                                                             ) : (
-                                                                 <div className="flex flex-col gap-2 w-full">
-                                                                     {/* GMaps URL Input */}
-                                                                     <div className="flex flex-col gap-1">
-                                                                         <span className="text-[9px] font-bold text-[#584235] uppercase tracking-wider">Konversi Link Google Maps / Koordinat:</span>
-                                                                         <div className="flex gap-2">
-                                                                             <input 
-                                                                                 type="text"
-                                                                                 placeholder="Tempel link Google Maps / koordinat raw"
-                                                                                 value={googleMapsUrlInput}
-                                                                                 onChange={e => {
-                                                                                     setGoogleMapsUrlInput(e.target.value);
-                                                                                     const parsed = parseGoogleMapsUrl(e.target.value);
-                                                                                     if (parsed) {
-                                                                                         setLandmarkLocation(parsed);
-                                                                                         if (parsed.name) {
-                                                                                             setNewLandmarkName(parsed.name);
-                                                                                         }
-                                                                                     }
-                                                                                 }}
-                                                                                 className="flex-1 h-[36px] px-3 border border-[#e0c0af] rounded-lg text-xs bg-white outline-none"
-                                                                             />
-                                                                             <button
-                                                                                 type="button"
-                                                                                 onClick={async () => {
-                                                                                     const parsed = parseGoogleMapsUrl(googleMapsUrlInput);
-                                                                                     if (parsed) {
-                                                                                         setLandmarkLocation(parsed);
-                                                                                         if (parsed.name) {
-                                                                                             setNewLandmarkName(parsed.name);
-                                                                                         }
-                                                                                         alert('Berhasil mengonversi koordinat dari input!');
-                                                                                     } else if (googleMapsUrlInput.includes('maps.app.goo.gl') || googleMapsUrlInput.includes('goo.gl')) {
-                                                                                         alert('Mengonversi short link Google Maps... Silakan tunggu sebentar.');
-                                                                                         const shortParsed = await parseShortLinkCoordinates(googleMapsUrlInput);
-                                                                                         if (shortParsed) {
-                                                                                             setLandmarkLocation(shortParsed);
-                                                                                             if (shortParsed.name) {
-                                                                                                 setNewLandmarkName(shortParsed.name);
-                                                                                             }
-                                                                                             alert('Berhasil mengonversi koordinat dari short link maps!');
-                                                                                         } else {
-                                                                                             alert('Gagal mengonversi short link. Pastikan link maps valid dan aktif.');
-                                                                                         }
-                                                                                     } else {
-                                                                                         alert('Format tidak dikenali atau koordinat tidak ditemukan.');
-                                                                                     }
-                                                                                 }}
-                                                                                 className="bg-[#eff4ff] hover:bg-[#dce9ff] text-[#264191] font-bold text-xs uppercase px-3 rounded-lg border border-[#d3e4fe] transition-colors"
-                                                                             >
-                                                                                 Konversi
-                                                                             </button>
-                                                                         </div>
-                                                                     </div>
+                                                                                </div>
+                                                                            ))}
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                            ) : (
+                                                                <div className="flex flex-col gap-2 w-full">
+                                                                    {/* GMaps URL Input */}
+                                                                    <div className="flex flex-col gap-1">
+                                                                        <span className="text-[9px] font-bold text-[#584235] uppercase tracking-wider">Konversi Link Google Maps / Koordinat:</span>
+                                                                        <div className="flex gap-2">
+                                                                            <input 
+                                                                                type="text"
+                                                                                placeholder="Tempel link Google Maps / koordinat raw"
+                                                                                value={googleMapsUrlInput}
+                                                                                onChange={e => {
+                                                                                    setGoogleMapsUrlInput(e.target.value);
+                                                                                    const parsed = parseGoogleMapsUrl(e.target.value);
+                                                                                    if (parsed) {
+                                                                                        setLandmarkLocation(parsed);
+                                                                                        if (parsed.name) {
+                                                                                            setNewLandmarkName(parsed.name);
+                                                                                        }
+                                                                                    }
+                                                                                }}
+                                                                                className="flex-1 h-[38px] px-3 border border-gray-200 rounded-xl text-xs bg-white outline-none focus:border-orange-500"
+                                                                            />
+                                                                            <button
+                                                                                type="button"
+                                                                                onClick={async () => {
+                                                                                    const parsed = parseGoogleMapsUrl(googleMapsUrlInput);
+                                                                                    if (parsed) {
+                                                                                        setLandmarkLocation(parsed);
+                                                                                        if (parsed.name) {
+                                                                                            setNewLandmarkName(parsed.name);
+                                                                                        }
+                                                                                        alert('Berhasil mengonversi koordinat dari input!');
+                                                                                    } else if (googleMapsUrlInput.includes('maps.app.goo.gl') || googleMapsUrlInput.includes('goo.gl')) {
+                                                                                        alert('Mengonversi short link Google Maps... Silakan tunggu sebentar.');
+                                                                                        const shortParsed = await parseShortLinkCoordinates(googleMapsUrlInput);
+                                                                                        if (shortParsed) {
+                                                                                            setLandmarkLocation(shortParsed);
+                                                                                            if (shortParsed.name) {
+                                                                                                setNewLandmarkName(shortParsed.name);
+                                                                                            }
+                                                                                            alert('Berhasil mengonversi koordinat dari short link maps!');
+                                                                                        } else {
+                                                                                            alert('Gagal mengonversi short link. Pastikan link maps valid dan aktif.');
+                                                                                        }
+                                                                                    } else {
+                                                                                        alert('Format tidak dikenali atau koordinat tidak ditemukan.');
+                                                                                    }
+                                                                                }}
+                                                                                className="bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold text-xs uppercase px-4 rounded-xl border border-blue-200 transition-colors"
+                                                                            >
+                                                                                Konversi
+                                                                            </button>
+                                                                        </div>
+                                                                    </div>
 
-                                                                     {/* Extracted Landmark Name Review */}
-                                                                     <div className="flex flex-col gap-1">
-                                                                         <span className="text-[9px] font-bold text-[#584235] uppercase tracking-wider">Nama Landmark (Hasil Konversi / Edit):</span>
-                                                                         <input 
-                                                                             type="text"
-                                                                             placeholder="Nama bangunan hasil konversi"
-                                                                             value={newLandmarkName}
-                                                                             onChange={e => setNewLandmarkName(e.target.value)}
-                                                                             className="w-full h-[36px] px-3 border border-[#e0c0af] rounded-lg text-xs bg-white font-bold outline-none text-[#584235]"
-                                                                         />
-                                                                     </div>
-                                                                 </div>
-                                                             )}
+                                                                    {/* Extracted Landmark Name Review */}
+                                                                    <div className="flex flex-col gap-1">
+                                                                        <span className="text-[9px] font-bold text-[#584235] uppercase tracking-wider">Nama Landmark (Hasil Konversi / Edit):</span>
+                                                                        <input 
+                                                                            type="text"
+                                                                            placeholder="Nama bangunan hasil konversi"
+                                                                            value={newLandmarkName}
+                                                                            onChange={e => setNewLandmarkName(e.target.value)}
+                                                                            className="w-full h-[38px] px-3 border border-gray-200 rounded-xl text-xs bg-white font-bold outline-none text-[#584235] focus:border-orange-500"
+                                                                        />
+                                                                    </div>
+                                                                </div>
+                                                            )}
 
-                                                             {/* Map Preview and Location Coordinates */}
-                                                             <div className="flex flex-col gap-1 w-full mt-1">
-                                                                 <span className="text-[9px] font-bold text-[#584235] uppercase tracking-wider">Tentukan Lokasi Landmark di Peta:</span>
-                                                                 <div ref={kmLandmarkMapRef} className="w-full h-32 z-0 relative rounded-lg border border-[#e0c0af]" style={{ minHeight: '120px' }} />
-                                                                 <p className="text-[8px] text-gray-500 font-mono mt-1 bg-white px-2 py-0.5 rounded border border-gray-200 self-end shadow-sm">
-                                                                     Lat: {landmarkLocation.lat.toFixed(6)}, Lng: {landmarkLocation.lng.toFixed(6)}
-                                                                 </p>
-                                                             </div>
+                                                            {/* Map Preview and Location Coordinates */}
+                                                            <div className="flex flex-col gap-1 w-full mt-1">
+                                                                <span className="text-[9px] font-bold text-[#584235] uppercase tracking-wider">Tentukan Lokasi Landmark di Peta:</span>
+                                                                <div ref={kmLandmarkMapRef} className="w-full h-32 z-0 relative rounded-xl border border-gray-200" style={{ minHeight: '120px' }} />
+                                                                <p className="text-[9px] text-gray-500 font-mono mt-1 bg-gray-50 px-2 py-0.5 rounded border border-gray-200 self-end">
+                                                                    Lat: {landmarkLocation.lat.toFixed(6)}, Lng: {landmarkLocation.lng.toFixed(6)}
+                                                                </p>
+                                                            </div>
                                                             <div className="flex gap-2 mt-2">
                                                                 <button
                                                                     type="button"
@@ -6639,19 +7434,23 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                                                                             alert('Silakan isi nama landmark terlebih dahulu.');
                                                                             return;
                                                                         }
+                                                                        const newLm = { name: newLandmarkName.trim(), lat: landmarkLocation.lat, lng: landmarkLocation.lng };
                                                                         setKmListingForm({
                                                                             ...kmListingForm,
                                                                             campuses: [
                                                                                 ...(kmListingForm.campuses || []),
-                                                                                { name: newLandmarkName.trim(), lat: landmarkLocation.lat, lng: landmarkLocation.lng }
+                                                                                newLm
                                                                             ]
                                                                         });
+                                                                        if (kmListingForm.location?.lat && kmListingForm.location?.lng) {
+                                                                            enrichLandmarksWithGoogleDistanceMatrix(kmListingForm.location.lat, kmListingForm.location.lng, [newLm]);
+                                                                        }
                                                                         setNewLandmarkName('');
                                                                         setGoogleMapsUrlInput('');
                                                                         setShowAddLandmarkForm(false);
                                                                         alert('Landmark berhasil ditambahkan!');
                                                                     }}
-                                                                    className="flex-1 h-[40px] bg-[#ff7a00] hover:bg-orange-600 text-white font-bold text-xs uppercase tracking-wider rounded-lg flex items-center justify-center gap-1 transition-colors"
+                                                                    className="flex-1 h-[40px] bg-orange-500 hover:bg-orange-600 text-white font-bold text-xs uppercase tracking-wider rounded-xl flex items-center justify-center gap-1 transition-colors"
                                                                 >
                                                                     Simpan Landmark
                                                                 </button>
@@ -6662,7 +7461,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                                                                         setGoogleMapsUrlInput('');
                                                                         setShowAddLandmarkForm(false);
                                                                     }}
-                                                                    className="h-[40px] px-4 bg-slate-100 hover:bg-slate-200 text-gray-700 font-bold text-xs uppercase tracking-wider rounded-lg border border-gray-200 transition-colors"
+                                                                    className="h-[40px] px-4 bg-slate-100 hover:bg-slate-200 text-gray-700 font-bold text-xs uppercase tracking-wider rounded-xl border border-gray-200 transition-colors"
                                                                 >
                                                                     Batal
                                                                 </button>
