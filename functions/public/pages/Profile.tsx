@@ -266,8 +266,6 @@ const Profile: React.FC<ProfileProps> = ({ user, onLogout, onSaveSuccess, forceE
             name: formData.displayName,
             email: user.email,
             phone: formData.phone,
-            ktp_number: formData.ktp_number,
-            ktp_photo_url: formData.ktp_photo_url,
             userId: user.uid
           }).catch(err => console.warn('Failed to notify admin via email:', err));
         }

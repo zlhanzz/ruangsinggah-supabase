@@ -2,6 +2,27 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 323. Penghapusan Data Sensitif PII (NIK, Alamat KTP, dan Link Foto KTP) dari Email Notifikasi Admin (`emailService.ts`, `MitraProfile.tsx`, `AgentProfile.tsx`, `Profile.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  - Saat ada pengajuan verifikasi identitas baru, email notifikasi yang dikirimkan ke admin sebelumnya memuat data sensitif pengguna (PII): Nomor NIK KTP, Alamat Lengkap KTP, dan tautan langsung foto KTP (`ktp_photo_url`).
+  - Mengirimkan dokumen KTP dan NIK secara terbuka lewat email (*cleartext unencrypted email*) menimbulkan risiko kebocoran data (*data breach*) dan tidak sesuai dengan standar perlindungan privasi data pengguna.
+- **Implementasi Solusi**:
+  1. **Pembersihan Payload Notifikasi (`emailService.ts`)**:
+     - Menghapus field `"Nomor NIK KTP"`, `"Alamat Sesuai KTP"`, dan `"Tautan Foto KTP"` dari seluruh pengiriman email `notifyAdminIdentityVerification`.
+     - Mengubah fungsi email menjadi *alert signal* murni yang hanya memuat: Tipe Akun, Nama Lengkap, Email Akun, Nomor WhatsApp, ID Pengguna, dan Status Menunggu Peninjauan.
+     - Menambahkan petunjuk keamanan resmi agar admin memeriksa dan menyetujui dokumen KTP secara terautentikasi langsung di dalam **Dashboard Admin**.
+  2. **Pembersihan Modul Pengirim (`MitraProfile.tsx`, `AgentProfile.tsx`, `Profile.tsx`)**:
+     - Menghapus pengiriman argumen `ktp_number`, `ktp_address`, dan `ktp_photo_url` saat memanggil `notifyAdminIdentityVerification`.
+- **File Tersentuh**:
+  - `functions/public/emailService.ts`
+  - `functions/public/pages/MitraProfile.tsx`
+  - `functions/public/pages/AgentProfile.tsx`
+  - `functions/public/pages/Profile.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi build Vite `npm run build` lulus 100% (✓ 2509 modules transformed, built in 39.02s, 0 error).
+
 ### 322. Standarisasi Profesional Banner Keamanan Data KTP & Proteksi Informasi Arsitektur Backend (`MitraProfile.tsx`, `AgentProfile.tsx`) (September 2026)
 - **Permintaan & Masalah**:
   - Banner informasi keamanan pada formulir upload KTP verifikasi identitas mitra dan agen sebelumnya menampilkan:

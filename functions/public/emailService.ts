@@ -135,10 +135,10 @@ export async function notifyAdminIdentityVerification(details: {
   name: string;
   email?: string;
   phone?: string;
+  userId: string;
   ktp_number?: string;
   ktp_address?: string;
   ktp_photo_url?: string;
-  userId: string;
 }) {
   const roleLabel = details.role === 'mitra' 
     ? 'Calon Mitra / Pemilik Kost' 
@@ -151,12 +151,11 @@ export async function notifyAdminIdentityVerification(details: {
     "Nama Lengkap": details.name || 'Belum diisi',
     "Email Akun": details.email || 'Belum diisi',
     "Nomor WhatsApp": details.phone || 'Belum diisi',
-    "Nomor NIK KTP": details.ktp_number || 'Belum diisi',
-    "Alamat Sesuai KTP": details.ktp_address || 'Belum diisi',
-    "Tautan Foto KTP": details.ktp_photo_url || '-',
     "ID Pengguna": details.userId,
-    "Petunjuk Admin": "Silakan buka Dashboard Admin untuk memeriksa dan menyetujui verifikasi berkas identitas ini.",
-    "Link Dashboard Verifikasi": "https://ruangsinggah.id/dashboard"
+    "Status Berkas": "Menunggu Peninjauan Admin (Pending)",
+    "Keamanan Data": "Dokumen fisik KTP & NIK tersimpan aman terenkripsi di sistem database.",
+    "Petunjuk Admin": "Silakan login ke Dashboard Admin resmi RuangSinggah untuk memeriksa berkas identitas dan menyetujui pengajuan ini.",
+    "Link Dashboard Admin": "https://ruangsinggah.id/dashboard"
   });
 }
 

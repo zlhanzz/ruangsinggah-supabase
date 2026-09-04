@@ -639,9 +639,6 @@ const AgentProfile: React.FC<AgentProfileProps> = ({ uid, onEditModeChange }) =>
                     name: formData.display_name,
                     email: formData.email,
                     phone: formData.phone,
-                    ktp_number: formData.ktp_number,
-                    ktp_address: formData.ktp_address,
-                    ktp_photo_url: formData.ktp_photo_url,
                     userId: uid
                 }).catch(err => console.warn('Failed to notify admin via email:', err));
             }
