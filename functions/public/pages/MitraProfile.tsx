@@ -568,14 +568,14 @@ const MitraProfile: React.FC<MitraProfileProps> = ({ uid, user: initialUser, onB
                     occupation: aiData.occupation || prev.occupation,
                     relationship_status: aiData.relationship_status || prev.relationship_status
                 }));
-                alert('Data KTP berhasil dipindai otomatis menggunakan AI Gemini Cerdas.');
+                alert('Data KTP berhasil dipindai otomatis. Mohon periksa kembali kecocokan data Anda sebelum melanjutkan.');
             } else {
                 console.warn('AI Extraction response:', aiErr || aiRes);
-                alert('Pemindaian otomatis belum selesai atau memerlukan pembaruan fungsi. Silakan periksa atau lengkapi data profil secara manual.');
+                alert('Pemindaian otomatis belum optimal. Silakan periksa dan lengkapi data profil Anda secara manual.');
             }
         } catch (error: any) {
             console.error('OCR Error:', error);
-            alert('Pemindaian otomatis mengalami batas waktu. Anda dapat melanjutkan dengan mengisi data profil secara manual.');
+            alert('Pemindaian otomatis memerlukan waktu lebih lama. Silakan lanjutkan pengisian data profil secara manual.');
         } finally {
             setIsScanning(false);
         }

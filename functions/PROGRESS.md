@@ -2,6 +2,28 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 321. Standarisasi Redaksi Notifikasi Pemindaian KTP Menjadi Bahasa Profesional Platform (`MitraProfile.tsx`, `AgentProfile.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  - Teks notifikasi alert saat pemindaian KTP berhasil sebelumnya menampilkan:
+    `"Data KTP berhasil dipindai otomatis menggunakan AI Gemini Cerdas."`
+  - Teks tersebut terkesan kurang profesional, canggung (*unprofessional branding*), dan tidak sesuai dengan standar platform proptech/fintech resmi.
+- **Implementasi Solusi**:
+  1. **Penyempurnaan Redaksi Pesan Sukses (`MitraProfile.tsx`, `AgentProfile.tsx`)**:
+     - Mengubah teks menjadi:
+       `"Data KTP berhasil dipindai otomatis. Mohon periksa kembali kecocokan data Anda sebelum melanjutkan."`
+  2. **Penyempurnaan Pesan Fallback & Batas Waktu**:
+     - Notifikasi parsial / belum optimal:
+       `"Pemindaian otomatis belum optimal. Silakan periksa dan lengkapi data profil Anda secara manual."`
+     - Notifikasi batas waktu / jaringan:
+       `"Pemindaian otomatis memerlukan waktu lebih lama. Silakan lanjutkan pengisian data profil secara manual."`
+- **File Tersentuh**:
+  - `functions/public/pages/MitraProfile.tsx`
+  - `functions/public/pages/AgentProfile.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi build lulus 100% (✓ 2509 modules transformed, built in 41.39s, 0 error).
+
 ### 320. Pengaktifan & Penyempurnaan Roadmap Alur Step-by-Step Pemasaran Kost Mitra Baru (`MitraDashboard.tsx`) (September 2026)
 - **Permintaan & Masalah**:
   - Alur *step-by-step* untuk mitra baru tidak tampil / jarang muncul pada halaman Dashboard Mitra. Hal ini terjadi karena state `tourCompleted` tersimpan secara global pada `localStorage.getItem('mitraTourCompleted')` tanpa namespace user, sehingga ketika sekali saja di-close pada browser di masa lalu, setiap akun mitra baru yang login berikutnya secara otomatis kehilangan alur panduan tersebut.
