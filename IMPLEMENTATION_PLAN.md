@@ -1,59 +1,68 @@
-# IMPLEMENTATION PLAN: Notifikasi Email ke Admin untuk Pesan Masuk Properti KostManager
+# IMPLEMENTATION PLAN: Tombol Banned (Bekukan) & Hapus Permanen Properti KostManager
 
 ## 1. Analisis Kebutuhan & Konteks Alur
 - **Kebutuhan**:
-  Ketika ada pesan chat masuk dari calon penghuni / penyewa ke properti yang berstatus dikelola secara **KostManager**, sistem harus mengirimkan notifikasi email secara otomatis ke Administrator RuangSinggah.
+  1. **Tombol Action Banned / Bekukan**:
+     - Digunakan oleh Admin untuk membekukan properti kelolaan KostManager yang melakukan pelanggaran kesepakatan kerjasama (misal: menaikkan tarif sepihak, menghubungi penyewa di luar sistem, komplain fasilitas berulang, dll.).
+     - Menghilangkan listing dari publik (status properti menjadi `suspended` / `banned`), memperbarui status auto-pilot menjadi `🔴 Dibekukan (Pelanggaran)`, mencatat alasan pembekuan, serta mengirimkan notifikasi resmi kepada mitra pemilik kost.
+     - Menyediakan opsi **Pulihkan / Unban** jika permasalahan pelanggaran telah diselesaikan dengan mitra.
+  2. **Tombol Action Hapus Permanen**:
+     - Digunakan oleh Admin untuk menghapus data properti secara permanen dari server database dan storage jika properti sudah tidak beroperasi atau ditarik permanen.
+     - Dilengkapi dialog konfirmasi keamanan ganda (*Double Safety Confirmation*) agar mencegah penghapusan yang tidak disengaja.
+     - Menghapus record properti di database Supabase (`properties`), tabel relasi (`mitra_kostmanager`), serta membersihkan seluruh file foto/video dari Supabase Storage.
 - **Tujuan**:
-  Memastikan tim KostManager dapat merespons pertanyaan calon penyewa secara cepat (*fast response*) melalui Portal KostManager tanpa harus terus-menerus membuka layar chat, sehingga tingkat konversi sewa kamar meningkat.
-- **Kondisi & Logika Bisnis**:
-  1. **Identifikasi Properti KostManager**:
-     - Memeriksa apakah properti tujuan terdaftar sebagai KostManager (`managed_by === 'kostmanager'`, `is_managed === true`, atau `session.owner_id === SYSTEM_ADMIN_ID`).
-  2. **Pengirim Pesan**:
-     - Notifikasi email hanya dipicu saat pengirim adalah penyewa/calon penghuni (`senderType === 'user'`).
-     - Balasan dari Admin/CS (`senderType === 'owner'`) tidak memicu notifikasi email ke admin.
-  3. **Penerima & Format Email**:
-     - Email dikirim ke seluruh Administrator terdaftar (dengan fallback `sulhan77777@gmail.com`) via FormSubmit.
-     - Memuat informasi lengkap: Nama Properti, Lokasi/Kota, Nama Calon Penghuni, Email & No. HP pengirim, Cuplikan Pesan, Waktu Pesan, serta tautan langsung ke sesi chat di Portal KostManager Admin.
+  Memberikan kendali penuh dan penegakan tata tertib operasional (*compliance enforcement*) bagi pengelola platform KostManager RuangSinggah.id.
 
 ---
 
 ## 2. Dampak Perubahan File
 Daftar file yang akan disentuh pada Fase 2:
-1. **`functions/public/emailService.ts`**:
-   - Memperkaya fungsi `notifyAdminNewChatMessage` dengan data pengirim (email, no. telepon, alamat kost, dan tautan langsung ke sesi chat).
-2. **`functions/public/chatService.ts`**:
-   - Memperketat deteksi properti KostManager saat pesan dikirim (`sendMessage`).
-   - Mengambil data profil pengirim (nama, email, no. telepon) dari tabel `users` untuk menyusun payload email yang informatif.
-   - Memicu pengiriman email `notifyAdminNewChatMessage` secara asinkron (non-blocking) agar proses kirim pesan di chat tetap instan (0ms delay).
-3. **`functions/public/pages/KostDetail.tsx`**:
-   - Memastikan deteksi kelolaan KostManager (`managed_by === 'kostmanager'`) saat inisialisasi sesi chat mengarahkan `targetOwnerId` ke `SYSTEM_ADMIN_ID`.
-4. **`functions/PROGRESS.md`**:
-   - Pencatatan riwayat progres fitur selesai (nomor 329).
-5. **`WALKTHROUGH.md`**:
+1. **`functions/public/components/admin/KostManagerPortal.tsx`**:
+   - Menambahkan ikon vector murni dari `lucide-react` (`ShieldAlert`, `ShieldCheck`, `Trash2`, `Ban`, `AlertTriangle`).
+   - Memperbarui kolom **Status Auto-Pilot** pada tabel properti terkelola agar menampilkan status dinamis: `🟢 Aktif Terkelola` vs `🔴 Dibekukan (Pelanggaran)`.
+   - Menambahkan 2 tombol aksi baru pada kolom **Aksi Operasional**:
+     - Tombol **Banned / Pulihkan** (`ShieldAlert` / `ShieldCheck`).
+     - Tombol **Hapus Permanen** (`Trash2`).
+   - Menyediakan 2 modal interaktif berstandar UI modern:
+     - **Modal Banned Kost**: Pilihan alasan pelanggaran (preset + textarea kustom), peringatan dampak, dan tombol eksekusi pembekuan/pemulihan.
+     - **Modal Hapus Permanen**: Peringatan bahaya ganda, input ketik nama kost untuk verifikasi keamanan, dan tombol hapus permanen.
+   - Mengintegrasikan fungsi handler pembekuan (`freezeProperty` / `unfreezeProperty`), sinkronisasi status ke `mitra_kostmanager`, pengiriman notifikasi ke pemilik, dan eksekusi `deleteProperty`.
+2. **`functions/PROGRESS.md`**:
+   - Pencatatan riwayat progres fitur selesai (nomor 330).
+3. **`WALKTHROUGH.md`**:
    - Dokumentasi rincian perubahan dan panduan verifikasi pengujian.
 
 ---
 
 ## 3. Langkah-Langkah Eksekusi (Fase 2 Setelah di-ACC)
-1. **Langkah 1: Update `emailService.ts`**:
-   - Memperbarui `notifyAdminNewChatMessage` agar menyusun payload email yang lebih informatif dan terstruktur.
-2. **Langkah 2: Update `chatService.ts`**:
-   - Mengoptimalkan logika pengecekan status KostManager pada `sendMessage`.
-   - Mengintegrasikan pengambilan identitas pengirim (nama, email, no_hp) dan memanggil `notifyAdminNewChatMessage`.
-3. **Langkah 3: Sinkronisasi di `KostDetail.tsx`**:
-   - Menyelaraskan filter `isKostManagerManaged` agar mencakup `managed_by === 'kostmanager'`.
-4. **Langkah 4: Kompilasi & Pengujian Build**:
-   - Menjalankan `cmd /c npm run build` pada `functions/public` untuk memastikan 0 error kompilasi.
-5. **Langkah 5: Pencatatan Progres & Walkthrough**:
-   - Menambahkan catatan ke `functions/PROGRESS.md` dan menerbitkan `WALKTHROUGH.md`.
-6. **Langkah 6: Git Commit & Push**:
+1. **Langkah 1: Modifikasi `KostManagerPortal.tsx`**:
+   - Import fungsi `freezeProperty`, `unfreezeProperty`, `deleteProperty`, dan `updatePropertyStatus` dari `adminService.ts`.
+   - Definisikan state modal: `banningProp`, `unbanningProp`, `deletingProp`, `banReason`, `banCategory`, `confirmDeleteText`.
+   - Buat fungsi handler:
+     - `handleConfirmBanProperty`: mengubah status properti menjadi `suspended`, menyimpan alasan ke `metadata.suspend_reason`, menyinkronkan status ke tabel `mitra_kostmanager`, dan mengirim notifikasi ke mitra.
+     - `handleConfirmUnbanProperty`: memulihkan status properti kembali menjadi `published` dan mengirim notifikasi ke mitra.
+     - `handleConfirmDeleteProperty`: memanggil `deleteProperty`, membersihkan record `mitra_kostmanager`, dan memperbarui daftar properti secara instan.
+   - Tambahkan tombol aksi di baris tabel properti terkelola.
+   - Render Modal Banned dan Modal Hapus Permanen dengan desain premium Tailwind CSS dan ikon pure SVG.
+2. **Langkah 2: Uji Kompilasi Build**:
+   - Menjalankan `cmd /c npm run build` di `functions/public` untuk memastikan 0 error kompilasi.
+   - Menjalankan `cmd /c npm run build` di `functions` (tsc backend).
+3. **Langkah 3: Pencatatan Riwayat & Walkthrough**:
+   - Mencatat progres fitur nomor 330 di `functions/PROGRESS.md`.
+   - Membuat dokumen `WALKTHROUGH.md`.
+4. **Langkah 4: Git Commit & Push**:
    - Melakukan commit dan push ke branch `bukan-productions`.
 
 ---
 
 ## 4. Rencana Verifikasi
-1. **Uji Kompilasi**:
-   - Menjalankan `npm run build` di `functions/public` dan `tsc` di `functions`.
-2. **Uji Simulasi Alur Chat**:
-   - Mensimulasikan pengiriman pesan dari halaman detail properti KostManager (`senderType: 'user'`).
-   - Memastikan `notifyAdminNewChatMessage` terpanggil dengan parameter yang tepat dan log pengiriman FormSubmit berhasil.
+1. **Verifikasi Tampilan UI**:
+   - Memastikan tombol Banned dan Hapus Permanen muncul rapi pada tabel Properti Terkelola dengan tooltip yang jelas.
+   - Memastikan badge status auto-pilot berubah menjadi merah jika kost berstatus suspended/banned.
+2. **Verifikasi Aksi Banned**:
+   - Menguji alur pembekuan dengan memasukkan alasan pelanggaran.
+   - Memverifikasi status berubah di tabel dan tombol berubah menjadi opsi "Pulihkan".
+3. **Verifikasi Aksi Hapus Permanen**:
+   - Menguji modal konfirmasi keamanan ganda dan memastikan penghapusan berjalan tuntas tanpa crash.
+4. **Verifikasi Build**:
+   - Memastikan `npm run build` berhasil tanpa error TypeScript.

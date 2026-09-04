@@ -2,6 +2,30 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 330. Sistem Kendali Disiplin Properti KostManager: Bekukan (Ban), Pulihkan (Unban), & Hapus Permanen (`KostManagerPortal.tsx`, `adminService.ts`) (September 2026)
+- **Permintaan & Masalah**:
+  - Administrator KostManager memerlukan wewenang penuh untuk menertibkan listing properti yang melanggar kesepakatan kerjasama (misal: menaikkan tarif sepihak, menerima penyewa offline tanpa pencatatan, atau mengabaikan komplain penghuni).
+  - Diperlukan fitur pembekuan (*Ban/Freeze*) properti dari peredaran publik, pemulihan (*Unban*), dan opsi penghapusan permanen (*Delete*) dengan proteksi konfirmasi nama properti.
+- **Implementasi Solusi**:
+  1. **Tindakan Bekukan Properti (*Ban Listing*)**:
+     - Modal interaktif dengan pilihan kategori pelanggaran baku (Menaikkan tarif sepihak, Transaksi offline tanpa pencatatan, Menolak fasilitas yang dijanjikan, Komplain berat tidak ditindaklanjuti, Tunggakan biaya operasional, dll.) serta catatan detail.
+     - Memperbarui status properti menjadi `suspended` via `freezeProperty()`, menyembunyikan properti dari pencarian publik, dan mencatat alasan pembekuan pada metadata properti.
+  2. **Tindakan Pemulihan Properti (*Unban Listing*)**:
+     - Modal konfirmasi pemulihan yang mengembalikan status properti menjadi `published` via `unfreezeProperty()`. Listing otomatis kembali aktif dan muncul di pencarian publik.
+  3. **Tindakan Hapus Permanen (*Permanent Delete*)**:
+     - Modal verifikasi bertingkat dengan proteksi pengetikan nama properti secara persis untuk mencegah ketidaksengajaan.
+     - Menghapus rekaman database dari tabel `properties`, membersihkan relasi di `mitra_kostmanager`, dan menghapus seluruh aset media foto/video dari Supabase Storage via `deleteProperty()`.
+  4. **Standar Visual Bebas FOUT**:
+     - Seluruh ikon menggunakan pure vector SVG dari `lucide-react` (`Ban`, `ShieldAlert`, `CheckCircle2`, `Trash2`, `RotateCw`, `AlertTriangle`, `X`).
+- **File Tersentuh**:
+  - `functions/public/components/admin/KostManagerPortal.tsx`
+  - `functions/public/adminService.ts`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi build frontend Vite `npm run build` lulus 100% (✓ 2510 modules transformed, built in 30.09s, 0 error).
+  - Kompilasi backend `functions` `tsc` lulus 100% (0 error).
+
 ### 329. Notifikasi Email Otomatis ke Admin untuk Pesan Masuk Properti KostManager (`emailService.ts`, `chatService.ts`, `KostDetail.tsx`) (September 2026)
 - **Permintaan & Masalah**:
   - Ketika ada pesan chat yang masuk ke properti yang dikelola secara **KostManager**, sistem harus mengirimkan notifikasi ke Administrator RuangSinggah dalam bentuk email secara otomatis.

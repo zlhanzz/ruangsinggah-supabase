@@ -83,7 +83,8 @@ import {
     Percent,
     Calculator,
     History,
-    Save
+    Save,
+    Ban
 } from 'lucide-react';
 import { KostManagerPackage, KostManagerFeeSettings, KostManagerFeeLogEntry } from '../../types';
 import { 
@@ -100,7 +101,11 @@ import {
     getKostManagerFeeSettings,
     saveKostManagerFeeSettings,
     getKostManagerFeeLogs,
-    DEFAULT_KOSTMANAGER_FEE_SETTINGS
+    DEFAULT_KOSTMANAGER_FEE_SETTINGS,
+    freezeProperty,
+    unfreezeProperty,
+    deleteProperty,
+    updatePropertyStatus
 } from '../../adminService';
 import { 
     getKostManagerChatSessions, 
@@ -1300,6 +1305,19 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
         submitting: false
     });
 
+    // --- PROPERTY COMPLIANCE & LIFECYCLE (BANNED & PERMANENT DELETE) ---
+    const [propToBan, setPropToBan] = useState<ManagedProperty | null>(null);
+    const [banCategory, setBanCategory] = useState<string>('Menaikkan tarif sewa sepihak tanpa koordinasi');
+    const [banReason, setBanReason] = useState<string>('');
+    const [isSubmittingBan, setIsSubmittingBan] = useState<boolean>(false);
+
+    const [propToUnban, setPropToUnban] = useState<ManagedProperty | null>(null);
+    const [isSubmittingUnban, setIsSubmittingUnban] = useState<boolean>(false);
+
+    const [propToDelete, setPropToDelete] = useState<ManagedProperty | null>(null);
+    const [confirmDeleteInput, setConfirmDeleteInput] = useState<string>('');
+    const [isSubmittingDelete, setIsSubmittingDelete] = useState<boolean>(false);
+
     // --- CHAT STATE ---
     const [chatSessions, setChatSessions] = useState<ChatSession[]>([]);
     const [selectedChatSession, setSelectedChatSession] = useState<ChatSession | null>(null);
@@ -2475,6 +2493,166 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
             alert(`Gagal menyimpan biaya layanan: ${err.message}`);
         } finally {
             setSavingFeeSettings(false);
+        }
+    };
+
+    // --- HANDLERS: BANNED / BEKUKAN & HAPUS PERMANEN PROPERTI ---
+    const handleConfirmBan = async () => {
+        if (!propToBan) return;
+        const reasonText = (banCategory + (banReason.trim() ? `: ${banReason.trim()}` : '')).trim();
+        if (!reasonText) return alert('Pilih atau masukkan alasan pembekuan properti.');
+
+        setIsSubmittingBan(true);
+        try {
+            // 1. Update status di tabel properties
+            await updatePropertyStatus(propToBan.id, 'suspended', reasonText);
+
+            // 2. Sinkronkan status ke tabel mitra_kostmanager jika ada
+            try {
+                await supabase
+                    .from('mitra_kostmanager')
+                    .update({ 
+                        status: 'suspended', 
+                        updated_at: new Date().toISOString() 
+                    })
+                    .or(`property_id.eq.${propToBan.id},id.eq.${propToBan.id}`);
+            } catch (kmErr) {
+                console.warn('Sync suspend to mitra_kostmanager warning:', kmErr);
+            }
+
+            // 3. Kirim notifikasi sistem ke mitra pemilik properti
+            if (propToBan.owner_uid) {
+                sendNotification(
+                    propToBan.owner_uid,
+                    `⚠️ Properti ${propToBan.title} Dibekukan Sementara`,
+                    `Properti Anda dibekukan oleh tim manajemen KostManager karena: ${reasonText}. Hubungi admin RuangSinggah untuk penyelesaian & klarifikasi.`,
+                    'warning',
+                    { propertyId: propToBan.id, link: '/my-kost' }
+                ).catch(e => console.warn('Gagal kirim notifikasi suspend ke mitra:', e));
+            }
+
+            // 4. Update data lokal
+            setProperties(prev => prev.map(p => {
+                if (p.id === propToBan.id) {
+                    const currMeta = typeof p.metadata === 'string' ? JSON.parse(p.metadata) : (p.metadata || {});
+                    return {
+                        ...p,
+                        status: 'suspended',
+                        metadata: {
+                            ...currMeta,
+                            suspend_reason: reasonText,
+                            is_banned: true,
+                            banned_at: new Date().toISOString()
+                        }
+                    };
+                }
+                return p;
+            }));
+
+            alert(`⛔ Properti "${propToBan.title}" berhasil DIBEKUKAN / BANNED karena pelanggaran kesepakatan.`);
+            setPropToBan(null);
+            setBanReason('');
+            loadAllData(false);
+        } catch (err: any) {
+            console.error('Error banning property:', err);
+            alert('Gagal membekukan properti: ' + err.message);
+        } finally {
+            setIsSubmittingBan(false);
+        }
+    };
+
+    const handleConfirmUnban = async () => {
+        if (!propToUnban) return;
+        setIsSubmittingUnban(true);
+        try {
+            // 1. Pulihkan status di tabel properties
+            await unfreezeProperty(propToUnban.id);
+
+            // 2. Sinkronkan status ke tabel mitra_kostmanager jika ada
+            try {
+                await supabase
+                    .from('mitra_kostmanager')
+                    .update({ 
+                        status: 'published', 
+                        updated_at: new Date().toISOString() 
+                    })
+                    .or(`property_id.eq.${propToUnban.id},id.eq.${propToUnban.id}`);
+            } catch (kmErr) {
+                console.warn('Sync unfreeze to mitra_kostmanager warning:', kmErr);
+            }
+
+            // 3. Kirim notifikasi sistem ke mitra
+            if (propToUnban.owner_uid) {
+                sendNotification(
+                    propToUnban.owner_uid,
+                    `✅ Properti ${propToUnban.title} Telah Dipulihkan`,
+                    `Status properti Anda telah diaktifkan kembali oleh manajemen KostManager dan kini dapat menerima pemesanan kamar seperti biasa.`,
+                    'success',
+                    { propertyId: propToUnban.id, link: '/my-kost' }
+                ).catch(e => console.warn('Gagal kirim notifikasi unban ke mitra:', e));
+            }
+
+            // 4. Update data lokal
+            setProperties(prev => prev.map(p => {
+                if (p.id === propToUnban.id) {
+                    const currMeta = typeof p.metadata === 'string' ? JSON.parse(p.metadata) : (p.metadata || {});
+                    return {
+                        ...p,
+                        status: 'published',
+                        metadata: {
+                            ...currMeta,
+                            suspend_reason: '',
+                            is_banned: false
+                        }
+                    };
+                }
+                return p;
+            }));
+
+            alert(`🎉 Properti "${propToUnban.title}" berhasil DIPULIHKAN kembali aktif!`);
+            setPropToUnban(null);
+            loadAllData(false);
+        } catch (err: any) {
+            console.error('Error unbanning property:', err);
+            alert('Gagal memulihkan properti: ' + err.message);
+        } finally {
+            setIsSubmittingUnban(false);
+        }
+    };
+
+    const handleConfirmDelete = async () => {
+        if (!propToDelete) return;
+        if (confirmDeleteInput.trim().toLowerCase() !== (propToDelete.title || '').trim().toLowerCase()) {
+            return alert(`Nama properti yang diketik tidak cocok. Ketik tepat "${propToDelete.title}" untuk mengonfirmasi.`);
+        }
+
+        setIsSubmittingDelete(true);
+        try {
+            // 1. Hapus dari tabel properties & storage media
+            await deleteProperty(propToDelete.id);
+
+            // 2. Hapus dari tabel mitra_kostmanager jika ada
+            try {
+                await supabase
+                    .from('mitra_kostmanager')
+                    .delete()
+                    .or(`property_id.eq.${propToDelete.id},id.eq.${propToDelete.id}`);
+            } catch (kmErr) {
+                console.warn('Delete from mitra_kostmanager warning:', kmErr);
+            }
+
+            // 3. Hapus dari state lokal
+            setProperties(prev => prev.filter(p => p.id !== propToDelete.id));
+
+            alert(`🗑️ Properti "${propToDelete.title}" berhasil DIHAPUS SECARA PERMANEN dari sistem.`);
+            setPropToDelete(null);
+            setConfirmDeleteInput('');
+            loadAllData(false);
+        } catch (err: any) {
+            console.error('Error deleting property:', err);
+            alert('Gagal menghapus properti permanen: ' + err.message);
+        } finally {
+            setIsSubmittingDelete(false);
         }
     };
 
@@ -3925,12 +4103,22 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
                                                                     </span>
                                                                 </td>
 
-                                                                {/* 5. Status Auto-Pilot */}
+                                                                {/* 5. Status Auto-Pilot / Kepatuhan */}
                                                                 <td className="px-6 py-4">
-                                                                    <span className="text-[9px] px-2.5 py-1 rounded-full font-black uppercase tracking-wider bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-2xs inline-flex items-center gap-1.5">
-                                                                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                                                                        <span>Aktif Terkelola</span>
-                                                                    </span>
+                                                                    {p.status === 'suspended' || (p.metadata as any)?.is_banned ? (
+                                                                        <span 
+                                                                            className="text-[9px] px-2.5 py-1 rounded-full font-black uppercase tracking-wider bg-rose-50 text-rose-700 border border-rose-200 shadow-2xs inline-flex items-center gap-1.5"
+                                                                            title={(p.metadata as any)?.suspend_reason || 'Properti dibekukan sementara karena pelanggaran kesepakatan'}
+                                                                        >
+                                                                            <span className="w-1.5 h-1.5 rounded-full bg-rose-500"></span>
+                                                                            <span>Dibekukan (Banned)</span>
+                                                                        </span>
+                                                                    ) : (
+                                                                        <span className="text-[9px] px-2.5 py-1 rounded-full font-black uppercase tracking-wider bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-2xs inline-flex items-center gap-1.5">
+                                                                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                                                                            <span>Aktif Terkelola</span>
+                                                                        </span>
+                                                                    )}
                                                                 </td>
 
                                                                 {/* 6. Aksi Operasional */}
@@ -3997,7 +4185,7 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
                                                                             <Megaphone size={13} />
                                                                         </button>
 
-                                                                        {/* Tombol 5: Edit Data Properti */}
+                                                                        {/* Tombol 6: Edit Data Properti */}
                                                                         <button
                                                                             type="button"
                                                                             onClick={() => handleEditProperty(p)}
@@ -4005,6 +4193,44 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
                                                                             title="Edit Data & Tarif Properti"
                                                                         >
                                                                             <FileText size={13} />
+                                                                        </button>
+
+                                                                        {/* Tombol 7: Bekukan (Ban) atau Pulihkan (Unban) Properti */}
+                                                                        {p.status === 'suspended' || (p.metadata as any)?.is_banned ? (
+                                                                            <button
+                                                                                type="button"
+                                                                                onClick={() => setPropToUnban(p)}
+                                                                                className="p-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 transition-all cursor-pointer shadow-2xs"
+                                                                                title="Pulihkan Properti (Unban / Aktifkan Kembali)"
+                                                                            >
+                                                                                <CheckCircle2 size={13} />
+                                                                            </button>
+                                                                        ) : (
+                                                                            <button
+                                                                                type="button"
+                                                                                onClick={() => {
+                                                                                    setPropToBan(p);
+                                                                                    setBanCategory('Menaikkan tarif sewa sepihak tanpa koordinasi');
+                                                                                    setBanReason('');
+                                                                                }}
+                                                                                className="p-2 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200/80 transition-all cursor-pointer shadow-2xs"
+                                                                                title="Bekukan Properti (Ban Karena Pelanggaran Kesepakatan)"
+                                                                            >
+                                                                                <ShieldAlert size={13} />
+                                                                            </button>
+                                                                        )}
+
+                                                                        {/* Tombol 8: Hapus Properti Permanen */}
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() => {
+                                                                                setPropToDelete(p);
+                                                                                setConfirmDeleteInput('');
+                                                                            }}
+                                                                            className="p-2 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200/80 transition-all cursor-pointer shadow-2xs"
+                                                                            title="Hapus Properti Permanen dari Sistem"
+                                                                        >
+                                                                            <Trash2 size={13} />
                                                                         </button>
                                                                     </div>
                                                                 </td>
@@ -4460,6 +4686,288 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
                                         </div>
                                     );
                                 })()}
+
+                                {/* ========================================================= */}
+                                {/* MODAL: BEKUKAN / BANNED PROPERTI KOSTMANAGER              */}
+                                {/* ========================================================= */}
+                                {propToBan && (
+                                    <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-[110] flex items-center justify-center p-4 animate-in fade-in">
+                                        <div className="bg-white rounded-[2rem] shadow-2xl max-w-lg w-full overflow-hidden flex flex-col border border-slate-100 animate-in zoom-in-95" onClick={e => e.stopPropagation()}>
+                                            {/* Header */}
+                                            <div className="p-6 border-b border-amber-100 flex justify-between items-center bg-amber-50/70 shrink-0">
+                                                <div className="flex items-center gap-3">
+                                                    <div className="w-10 h-10 rounded-2xl bg-amber-100 text-amber-700 flex items-center justify-center">
+                                                        <ShieldAlert size={20} />
+                                                    </div>
+                                                    <div>
+                                                        <h3 className="text-base font-black text-slate-900 uppercase tracking-tight">Bekukan Properti (Ban)</h3>
+                                                        <p className="text-[10px] text-amber-700 font-bold">Tindakan Disiplin Pelanggaran Kesepakatan</p>
+                                                    </div>
+                                                </div>
+                                                <button
+                                                    onClick={() => setPropToBan(null)}
+                                                    disabled={isSubmittingBan}
+                                                    className="p-2 hover:bg-slate-200/70 rounded-full text-slate-400 transition-colors cursor-pointer"
+                                                >
+                                                    <X size={16} />
+                                                </button>
+                                            </div>
+
+                                            {/* Body */}
+                                            <div className="p-6 space-y-4">
+                                                <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-100">
+                                                    <p className="text-xs font-black text-slate-900">{propToBan.title}</p>
+                                                    <p className="text-[10px] text-slate-500">{propToBan.address || 'Alamat properti'}</p>
+                                                    <p className="text-[10px] text-slate-400 font-bold mt-1">Pemilik: {propToBan.owner_uid || '-'}</p>
+                                                </div>
+
+                                                <div className="p-3 bg-amber-50 rounded-xl border border-amber-200/70 flex items-start gap-2.5">
+                                                    <AlertTriangle size={16} className="text-amber-600 shrink-0 mt-0.5" />
+                                                    <p className="text-[11px] text-amber-800 leading-relaxed">
+                                                        Saat dibekukan, properti <strong>tidak akan tampil di pencarian publik</strong> dan tidak dapat menerima pemesanan baru. Mitra pemilik akan menerima notifikasi resmi di dashboard mereka.
+                                                    </p>
+                                                </div>
+
+                                                <div>
+                                                    <label className="block text-xs font-black text-slate-700 uppercase tracking-wider mb-1.5">
+                                                        Kategori Pelanggaran
+                                                    </label>
+                                                    <select
+                                                        value={banCategory}
+                                                        onChange={e => setBanCategory(e.target.value)}
+                                                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-medium focus:ring-2 focus:ring-amber-500 focus:outline-none bg-white"
+                                                    >
+                                                        <option value="Menaikkan tarif sewa sepihak tanpa koordinasi">Menaikkan tarif sewa sepihak tanpa koordinasi</option>
+                                                        <option value="Menerima penyewa offline tanpa pencatatan KostManager">Menerima penyewa offline tanpa pencatatan KostManager</option>
+                                                        <option value="Menolak fasilitas yang sudah dijanjikan di listing">Menolak fasilitas yang sudah dijanjikan di listing</option>
+                                                        <option value="Komplain berat dari penghuni yang tidak ditindaklanjuti">Komplain berat dari penghuni yang tidak ditindaklanjuti</option>
+                                                        <option value="Tunggakan biaya operasional / pembagian hasil platform">Tunggakan biaya operasional / pembagian hasil platform</option>
+                                                        <option value="Lainnya">Pelanggaran Lainnya (Tuliskan di bawah)</option>
+                                                    </select>
+                                                </div>
+
+                                                <div>
+                                                    <label className="block text-xs font-black text-slate-700 uppercase tracking-wider mb-1.5">
+                                                        Catatan & Detail Pelanggaran <span className="text-slate-400 font-normal">(Opsional)</span>
+                                                    </label>
+                                                    <textarea
+                                                        value={banReason}
+                                                        onChange={e => setBanReason(e.target.value)}
+                                                        placeholder="Tuliskan catatan tambahan mengenai pelanggaran ini untuk bukti dan transparansi..."
+                                                        rows={3}
+                                                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs focus:ring-2 focus:ring-amber-500 focus:outline-none resize-none"
+                                                    />
+                                                </div>
+                                            </div>
+
+                                            {/* Footer */}
+                                            <div className="p-4 border-t border-slate-100 bg-slate-50/70 flex justify-end gap-2 shrink-0">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setPropToBan(null)}
+                                                    disabled={isSubmittingBan}
+                                                    className="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-200/70 transition-all cursor-pointer"
+                                                >
+                                                    Batal
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={handleConfirmBan}
+                                                    disabled={isSubmittingBan}
+                                                    className="px-5 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-black uppercase tracking-wider transition-all cursor-pointer shadow-md flex items-center gap-1.5 disabled:opacity-60"
+                                                >
+                                                    {isSubmittingBan ? (
+                                                        <>
+                                                            <RotateCw size={12} className="animate-spin" />
+                                                            <span>Membekukan...</span>
+                                                        </>
+                                                    ) : (
+                                                        <>
+                                                            <ShieldAlert size={14} />
+                                                            <span>Konfirmasi Bekukan (Ban)</span>
+                                                        </>
+                                                    )}
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* ========================================================= */}
+                                {/* MODAL: PULIHKAN / UNBAN PROPERTI                          */}
+                                {/* ========================================================= */}
+                                {propToUnban && (
+                                    <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-[110] flex items-center justify-center p-4 animate-in fade-in">
+                                        <div className="bg-white rounded-[2rem] shadow-2xl max-w-md w-full overflow-hidden flex flex-col border border-slate-100 animate-in zoom-in-95" onClick={e => e.stopPropagation()}>
+                                            {/* Header */}
+                                            <div className="p-6 border-b border-emerald-100 flex justify-between items-center bg-emerald-50/70 shrink-0">
+                                                <div className="flex items-center gap-3">
+                                                    <div className="w-10 h-10 rounded-2xl bg-emerald-100 text-emerald-700 flex items-center justify-center">
+                                                        <CheckCircle2 size={20} />
+                                                    </div>
+                                                    <div>
+                                                        <h3 className="text-base font-black text-slate-900 uppercase tracking-tight">Pulihkan Properti</h3>
+                                                        <p className="text-[10px] text-emerald-700 font-bold">Buka Pembekuan (Unban)</p>
+                                                    </div>
+                                                </div>
+                                                <button
+                                                    onClick={() => setPropToUnban(null)}
+                                                    disabled={isSubmittingUnban}
+                                                    className="p-2 hover:bg-slate-200/70 rounded-full text-slate-400 transition-colors cursor-pointer"
+                                                >
+                                                    <X size={16} />
+                                                </button>
+                                            </div>
+
+                                            {/* Body */}
+                                            <div className="p-6 space-y-4">
+                                                <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-100">
+                                                    <p className="text-xs font-black text-slate-900">{propToUnban.title}</p>
+                                                    <p className="text-[10px] text-slate-500">{propToUnban.address || 'Alamat properti'}</p>
+                                                    {(propToUnban.metadata as any)?.suspend_reason && (
+                                                        <p className="text-[10px] text-rose-600 font-semibold mt-1">
+                                                            Alasan pembekuan sebelumnya: {(propToUnban.metadata as any)?.suspend_reason}
+                                                        </p>
+                                                    )}
+                                                </div>
+
+                                                <div className="p-3 bg-emerald-50 rounded-xl border border-emerald-200/70 flex items-start gap-2.5">
+                                                    <CheckCircle2 size={16} className="text-emerald-600 shrink-0 mt-0.5" />
+                                                    <p className="text-[11px] text-emerald-800 leading-relaxed">
+                                                        Properti akan <strong>langsung aktif kembali (Published)</strong>, muncul di listing pencarian publik, dan mitra pemilik akan menerima notifikasi bahwa masa pembekuan telah dicabut.
+                                                    </p>
+                                                </div>
+                                            </div>
+
+                                            {/* Footer */}
+                                            <div className="p-4 border-t border-slate-100 bg-slate-50/70 flex justify-end gap-2 shrink-0">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setPropToUnban(null)}
+                                                    disabled={isSubmittingUnban}
+                                                    className="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-200/70 transition-all cursor-pointer"
+                                                >
+                                                    Batal
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={handleConfirmUnban}
+                                                    disabled={isSubmittingUnban}
+                                                    className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black uppercase tracking-wider transition-all cursor-pointer shadow-md flex items-center gap-1.5 disabled:opacity-60"
+                                                >
+                                                    {isSubmittingUnban ? (
+                                                        <>
+                                                            <RotateCw size={12} className="animate-spin" />
+                                                            <span>Memulihkan...</span>
+                                                        </>
+                                                    ) : (
+                                                        <>
+                                                            <CheckCircle2 size={14} />
+                                                            <span>Konfirmasi Pulihkan</span>
+                                                        </>
+                                                    )}
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* ========================================================= */}
+                                {/* MODAL: HAPUS PERMANEN PROPERTI                            */}
+                                {/* ========================================================= */}
+                                {propToDelete && (
+                                    <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-[110] flex items-center justify-center p-4 animate-in fade-in">
+                                        <div className="bg-white rounded-[2rem] shadow-2xl max-w-lg w-full overflow-hidden flex flex-col border border-slate-100 animate-in zoom-in-95" onClick={e => e.stopPropagation()}>
+                                            {/* Header */}
+                                            <div className="p-6 border-b border-rose-100 flex justify-between items-center bg-rose-50/70 shrink-0">
+                                                <div className="flex items-center gap-3">
+                                                    <div className="w-10 h-10 rounded-2xl bg-rose-100 text-rose-700 flex items-center justify-center">
+                                                        <Trash2 size={20} />
+                                                    </div>
+                                                    <div>
+                                                        <h3 className="text-base font-black text-rose-900 uppercase tracking-tight">Hapus Properti Permanen</h3>
+                                                        <p className="text-[10px] text-rose-600 font-bold">Tindakan Irreversible (Tidak Dapat Dibatalkan)</p>
+                                                    </div>
+                                                </div>
+                                                <button
+                                                    onClick={() => {
+                                                        setPropToDelete(null);
+                                                        setConfirmDeleteInput('');
+                                                    }}
+                                                    disabled={isSubmittingDelete}
+                                                    className="p-2 hover:bg-slate-200/70 rounded-full text-slate-400 transition-colors cursor-pointer"
+                                                >
+                                                    <X size={16} />
+                                                </button>
+                                            </div>
+
+                                            {/* Body */}
+                                            <div className="p-6 space-y-4">
+                                                <div className="p-3 bg-rose-50 rounded-xl border border-rose-200/70 flex items-start gap-2.5">
+                                                    <AlertTriangle size={18} className="text-rose-600 shrink-0 mt-0.5" />
+                                                    <div className="text-[11px] text-rose-800 space-y-1">
+                                                        <p className="font-bold">Peringatan Kritis Penghapusan Data:</p>
+                                                        <p>
+                                                            Seluruh data listing, kamar, foto properti di storage, dan sinkronisasi kemitraan KostManager akan <strong>dihapus total secara permanen</strong> dari sistem database.
+                                                        </p>
+                                                    </div>
+                                                </div>
+
+                                                <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-100">
+                                                    <p className="text-xs font-black text-slate-900">{propToDelete.title}</p>
+                                                    <p className="text-[10px] text-slate-500">{propToDelete.address || 'Alamat properti'}</p>
+                                                    <p className="text-[10px] text-slate-400 font-mono mt-0.5">ID: {propToDelete.id}</p>
+                                                </div>
+
+                                                <div>
+                                                    <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                                                        Ketik nama properti <span className="font-black text-rose-600 underline">"{propToDelete.title}"</span> untuk mengonfirmasi:
+                                                    </label>
+                                                    <input
+                                                        type="text"
+                                                        value={confirmDeleteInput}
+                                                        onChange={e => setConfirmDeleteInput(e.target.value)}
+                                                        placeholder={propToDelete.title}
+                                                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs focus:ring-2 focus:ring-rose-500 focus:outline-none font-medium"
+                                                    />
+                                                </div>
+                                            </div>
+
+                                            {/* Footer */}
+                                            <div className="p-4 border-t border-slate-100 bg-slate-50/70 flex justify-end gap-2 shrink-0">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        setPropToDelete(null);
+                                                        setConfirmDeleteInput('');
+                                                    }}
+                                                    disabled={isSubmittingDelete}
+                                                    className="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-200/70 transition-all cursor-pointer"
+                                                >
+                                                    Batal
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={handleConfirmDelete}
+                                                    disabled={isSubmittingDelete || confirmDeleteInput.trim().toLowerCase() !== (propToDelete.title || '').trim().toLowerCase()}
+                                                    className="px-5 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-black uppercase tracking-wider transition-all cursor-pointer shadow-md flex items-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed"
+                                                >
+                                                    {isSubmittingDelete ? (
+                                                        <>
+                                                            <RotateCw size={12} className="animate-spin" />
+                                                            <span>Menghapus...</span>
+                                                        </>
+                                                    ) : (
+                                                        <>
+                                                            <Trash2 size={14} />
+                                                            <span>Hapus Permanen</span>
+                                                        </>
+                                                    )}
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                         );
                     })()}
