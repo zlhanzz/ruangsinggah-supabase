@@ -2,6 +2,35 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 336. Pembaruan Alur Listing: Publikasi Instan (Instant Direct Publish), Audit Keamanan Pasca-Tayang oleh Admin, dan Notifikasi Email Ucapan Selamat Otomatis ke Mitra via Brevo REST API (`functions/src/index.ts`, `adminService.ts`, `KostFormMitra.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  - Konsep sistem persetujuan admin sebelum listing tayang ditiadakan sesuai keputusan bisnis terbaru: ketika mitra selesai mengisi dan mempublikasikan data kost, listing harus **langsung aktif tayang di katalog pencarian publik** tanpa ada perbedaan tampilan dengan listing lainnya.
+  - Peninjauan admin dialihkan fungsinya menjadi **audit kualitas & keamanan pasca-tayang (Post-Publish Moderation)** untuk memastikan properti aman dan tidak ada indikasi penipuan/kecurangan yang memerlukan pembekuan listing (*suspended/ban*). Jika admin melakukan ACC, artinya listing lolos verifikasi resmi tanpa kecurigaan.
+  - Begitu kost berhasil dipublish oleh mitra, sistem harus secara otomatis mengirimkan email resmi ucapan selamat ke email mitra melalui layanan **Brevo REST API**.
+- **Implementasi Solusi**:
+  1. **Cloud Function Email Selamat Mitra via Brevo REST API (`functions/src/index.ts`)**:
+     - Menambahkan fungsi Cloud Function `sendPropertyPublishedEmail` yang mengonsumsi endpoint Brevo v3 SMTP (`https://api.brevo.com/v3/smtp/email`) dengan `brevoApiKeyParam`.
+     - Mengirimkan email resmi dari pengirim `RuangSinggah.id <system@ruangsinggah.id>` dengan subjek: `🎉 Selamat! Listing Kost "${propertyName}" Berhasil Dipublikasikan di RuangSinggah.id`.
+     - Menyusun template HTML responsif bernuansa selebrasi (Emerald Green & RuangSinggah Orange), salam personal, info listing aktif, foto cover kost, rincian tarif dan lokasi, tombol CTA langsung ke halaman listing publik (`/kost/:id`) dan Dashboard Mitra, serta tips pengelolaan kamar.
+  2. **Penyesuaian Service Layer Listing Publikasi Instan (`adminService.ts`)**:
+     - Memperbarui `addPropertyWithMedia`: properti baru yang didaftarkan mitra kini langsung disimpan dengan `status: 'published'` (dengan `is_verified: false` untuk audit internal admin), sehingga calon penyewa dapat langsung menemukan kost di katalog pencarian publik seketika.
+     - Memperbarui `updatePropertyWithMedia`: memastikan status properti tetap `published` (kecuali jika properti berstatus `suspended` oleh admin).
+     - Menambahkan helper `sendMitraPublishedEmailBrevo` untuk memanggil endpoint Cloud Function `sendPropertyPublishedEmail` secara asinkron (*non-blocking*).
+  3. **Integrasi Alur Formulir Mitra (`KostFormMitra.tsx`)**:
+     - Saat mitra mengklik tombol publikasikan, formulir menyimpan properti baru dengan `status: 'published'`.
+     - Seketika data tersimpan, sistem memicu pengiriman email ucapan selamat via `sendMitraPublishedEmailBrevo` ke email mitra pemilik kost.
+     - Mengirimkan notifikasi audit ke admin di latar belakang agar admin dapat melakukan review keamanan data.
+     - Menampilkan notifikasi sukses modern: *"🎉 Selamat! Pendaftaran kost Anda berhasil dipublikasikan dan sudah langsung aktif tayang di katalog pencarian RuangSinggah.id! Surat pemberitahuan resmi telah dikirimkan ke email Anda."*
+- **File Tersentuh**:
+  - `functions/src/index.ts`
+  - `functions/public/adminService.ts`
+  - `functions/public/components/KostFormMitra.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi backend Cloud Functions TypeScript (`functions/`) `tsc` lulus 100% (0 error).
+  - Kompilasi build frontend Vite `cmd /c npm run build` di `functions/public/` lulus 100% (✓ 2510 modules transformed, built in 25.65s, 0 error).
+
 ### 335. Notifikasi Email & In-App Otomatis ke Admin untuk Listing Properti Baru & Draft yang Diajukan Mitra dalam Tahap Peninjauan / Review (`emailService.ts`, `KostFormMitra.tsx`) (September 2026)
 - **Permintaan & Masalah**:
   - Ketika mitra mendaftarkan properti kost baru atau mengajukan ulang perubahan listing yang masih draft/butuh revisi, listing masuk ke status **Tahap Peninjauan Admin (Estimasi 1×24 Jam)**.

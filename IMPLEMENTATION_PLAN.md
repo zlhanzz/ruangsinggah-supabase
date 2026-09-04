@@ -1,126 +1,103 @@
-# Rencana Implementasi: Notifikasi Email ke Admin untuk Listing yang Diajukan Mitra dalam Tahap Peninjauan
+# Rencana Implementasi: Publikasi Instan Listing Kost & Notifikasi Email Ucapan Selamat ke Mitra via Brevo
 
-Dokumen ini adalah **Implementation Plan (Fase 1)** untuk menambahkan sistem notifikasi email otomatis ke tim Administrator RuangSinggah ketika seorang mitra mendaftarkan kost baru atau mengajukan ulang perubahan listing yang masuk ke dalam **Tahap Peninjauan Admin (Review)**.
+Dokumen ini adalah **Implementation Plan (Fase 1)** untuk merevisi alur publikasi listing properti sesuai arahan terbaru dari pengguna:
+1. **Tidak Ada Lagi Sistem Hambatan Persetujuan Admin (Instant Direct Publish)**: Ketika mitra mengisi data kost, listing langsung berstatus `published` dan langsung tayang di katalog pencarian publik untuk calon penyewa, dengan tampilan yang normal dan sama persis dengan listing lainnya.
+2. **Fungsi Peninjauan Admin Menjadi Audit Pasca-Tayang (Post-Publish Quality & Safety Audit)**: Listing baru tetap tercatat dalam antrean peninjauan admin (`is_verified: false`) untuk memastikan keaslian data dan mendeteksi apakah ada indikasi kecurangan/penipuan yang memerlukan tindakan pembekuan (*suspend/ban*). Jika admin melakukan ACC, artinya listing dinyatakan lolos verifikasi resmi tanpa ada kecurigaan.
+3. **Email Ucapan Selamat Resmi dari RuangSinggah via Brevo**: Begitu mitra mempublikasikan kost miliknya, sistem otomatis mengirimkan email resmi ucapan selamat ke email mitra melalui layanan **Brevo REST API**.
 
 ---
 
-## 1. Analisis Masalah & Kebutuhan
+## 1. Analisis Alur & Kebutuhan
 
-### A. Konteks Masalah
-- Ketika mitra mendaftarkan kost baru melalui formulir kelola properti (`KostFormMitra.tsx`), status awal properti disimpan sebagai `draft` dengan status peninjauan `is_verified: false`.
-- Di antarmuka Dashboard Mitra, kartu listing menampilkan lencana **"SEDANG DITINJAU"** dan kartu panduan bertuliskan:
-  > **TAHAP PENINJAUAN ADMIN (ESTIMASI 1×24 JAM)**  
-  > *Listing Anda telah berhasil diajukan dan sedang diverifikasi oleh tim RuangSinggah. Listing akan otomatis tayang di pencarian publik setelah disetujui.*
-- Hal yang sama terjadi ketika mitra mengedit listing kost yang belum pernah dipublikasikan atau yang sebelumnya diminta revisi oleh admin.
-- Saat ini, **belum ada notifikasi email yang terkirim ke administrator** ketika peristiwa pengajuan ini terjadi. Admin harus secara manual membuka tab Pusat Moderasi Properti di Dashboard Admin untuk mengecek apakah ada listing baru yang masuk, sehingga berpotensi memperlambat waktu verifikasi (*turnaround time* > 24 jam).
+### A. Alur Publikasi Langsung (Instant Publish)
+- **Sebelumnya**: Listing baru disimpan dengan `status: 'draft'` dan `is_verified: false`. Calon penyewa tidak dapat melihat listing di katalog publik hingga admin menekan tombol publikasikan.
+- **Pembaruan**:
+  - Listing baru disimpan dengan `status: 'published'` dan `is_verified: false`.
+  - Properti langsung dapat dicari dan dilihat oleh calon penyewa di katalog (`/listings`, `/kost/:id`).
+  - Tidak ada badge peringatan "SEDANG DITINJAU" yang ditampilkan di sisi publik (calon penyewa melihat listing biasa yang aktif dan siap disewa).
 
-### B. Kebutuhan Solusi
-1. **Sistem Notifikasi Email Otomatis ke Admin**:
-   - Mengirimkan email resmi ke seluruh email admin (ditarik dinamis dari tabel `users` dengan fallback ke admin utama `sulhan77777@gmail.com`) melalui FormSubmit AJAX.
-2. **Payload Notifikasi Komprehensif & Kaya Konteks**:
-   - Judul & Subjek: `🏠 Pengajuan Listing Kost Baru Menunggu Peninjauan: [Nama Kost]` (atau `Pengajuan Ulang Listing Kost` jika resubmission).
-   - Data Properti: Nama Kost, Tipe (Putra/Putri/Campur), Alamat Lengkap, Kota/Area, Kisaran Harga Sewa Mulai (Rp/bulan), Jumlah Tipe Kamar & Unit Kamar Tersedia.
-   - Data Mitra / Pemilik: Nama Lengkap, Alamat Email Akun, Nomor WhatsApp Aktif.
-   - Media: URL Foto Cover Bangunan Depan / Fasad (sudah tersimpan di Supabase Storage).
-   - Tindakan Admin: Panduan dan tautan langsung ke Pusat Moderasi Dashboard Admin (`https://ruangsinggah.id/dashboard`).
-3. **Pemicu Non-Blocking & Tangguh**:
-   - Pengiriman email tidak boleh memblokir atau memperlambat alur submit pengguna di antarmuka (dieksekusi secara asinkron dengan *error handling* aman).
-   - Notifikasi in-app pelengkap ke tabel `notifications` untuk seluruh akun admin agar muncul di lonceng notifikasi Dashboard Admin.
+### B. Audit Pasca-Tayang di Sisi Admin
+- Admin di Pusat Moderasi Listing (`PropertyManagement.tsx`) tetap dapat melihat daftar properti yang belum diverifikasi (`is_verified === false`).
+- Jika data kost sesuai dan tidak ada indikasi penipuan, admin menekan tombol Verifikasi / ACC (`is_verified: true`).
+- Jika ditemukan pelanggaran berat, penipuan, atau indikasi mencurigakan, admin dapat membekukan listing (`status: 'suspended'`).
+
+### C. Email Ucapan Selamat Otomatis via Brevo
+- Dikirimkan segera setelah mitra berhasil mempublikasikan kost (baik kost baru maupun setelah pembaruan data).
+- **Pengirim Resmi**: `RuangSinggah.id <system@ruangsinggah.id>` via Brevo REST API (`https://api.brevo.com/v3/smtp/email`).
+- **Subjek**: `🎉 Selamat! Listing Kost "${propertyName}" Berhasil Dipublikasikan di RuangSinggah.id`
+- **Template HTML**:
+  - Banner Selebrasi Hijau Zamrud & Oranye RuangSinggah yang elegan.
+  - Salam hangat personal kepada mitra.
+  - Konfirmasi bahwa kost sudah **Resmi Aktif & Tayang** di katalog RuangSinggah.
+  - Rincian Properti: Nama Kost, Alamat/Kota, Harga Mulai, Tipe Kost.
+  - Tombol Aksi Utama: **"LIHAT LISTING KOST ANDA"** (`https://ruangsinggah.id/kost/${propertyId}`) dan **"BUKA DASHBOARD MITRA"** (`https://ruangsinggah.id/dashboard-mitra/properties`).
+  - Catatan Integritas: Keterangan bahwa tim RuangSinggah melakukan peninjauan berkala untuk memastikan keamanan dan kenyamanan komunitas sewa kost.
 
 ---
 
 ## 2. Dampak Perubahan (Files Touched)
 
-1. **`functions/public/emailService.ts`**:
-   - Menambahkan fungsi baru `notifyAdminPropertyReview(details: ...)` untuk menyusun payload email resmi yang profesional, menarik daftar admin aktif, dan mengirimkan email via FormSubmit AJAX.
-2. **`functions/public/components/KostFormMitra.tsx`**:
-   - Mengimpor fungsi `notifyAdminPropertyReview`.
-   - Pada handler `handleSubmit`:
-     - Menangkap ID properti baru dari `addPropertyWithMedia`.
-     - Mengirimkan notifikasi email admin saat pendaftaran kost baru berhasil.
-     - Mengirimkan notifikasi email admin saat pembaruan draft/revisi berhasil diajukan ulang (`!isCurrentlyPublished`).
-3. **`functions/PROGRESS.md`**:
-   - Mencatat penambahan fitur notifikasi email admin untuk review listing kost pada entri baru **#335**.
-4. **`WALKTHROUGH.md`**:
-   - Menerbitkan panduan pengujian dan ringkasan implementasi setelah eksekusi Fase 2 selesai.
+1. **`functions/src/index.ts` (Backend Cloud Functions)**:
+   - Menambahkan Cloud Function `sendPropertyPublishedEmail` yang memproses pengiriman email ucapan selamat resmi ke mitra via Brevo REST API menggunakan template HTML premium.
+2. **`functions/public/adminService.ts` (Core Property Service)**:
+   - Menyesuaikan `addPropertyWithMedia`: mengizinkan properti baru dari mitra langsung berstatus `status: 'published'` (dengan `is_verified: false`).
+   - Menyesuaikan `updatePropertyWithMedia`: menjaga status tetap `published` (kecuali jika sedang berstatus `suspended` oleh admin).
+   - Menambahkan fungsi helper `sendMitraPublishedEmailBrevo` untuk memanggil endpoint Cloud Function Brevo secara asinkron (*non-blocking*).
+3. **`functions/public/components/KostFormMitra.tsx` (Formulir Mitra)**:
+   - Mengubah status saat `addPropertyWithMedia` menjadi `status: 'published'`.
+   - Mengganti teks alert sukses: *"Selamat! Listing kost Anda berhasil dipublikasikan dan sudah langsung tayang di katalog pencarian RuangSinggah.id!"*.
+   - Memicu pengiriman email Brevo ucapan selamat ke mitra seketika setelah listing tersimpan.
+4. **`functions/PROGRESS.md`**:
+   - Mencatat penyesuaian alur Instant Publish dan integrasi email selamat Brevo pada entri **#336**.
+5. **`WALKTHROUGH.md`**:
+   - Dokumentasi alur baru, panduan deploy function, dan panduan pengujian pengguna.
 
 ---
 
 ## 3. Langkah-Langkah Eksekusi (Fase 2 - Setelah di-ACC)
 
-### Tahap 1: Pembuatan Service Notifikasi Email Admin (`emailService.ts`)
-- Mendefinisikan antarmuka parameter `PropertyReviewNotificationPayload`:
-  - `propertyId: string`
-  - `propertyName: string`
-  - `propertyCity?: string`
-  - `propertyAddress?: string`
-  - `propertyPrice?: number`
-  - `propertyType?: string`
-  - `ownerName?: string`
-  - `ownerEmail?: string`
-  - `ownerPhone?: string`
-  - `totalRoomTypes?: number`
-  - `totalUnits?: number`
-  - `coverPhotoUrl?: string`
-  - `isResubmission?: boolean`
-- Mengimplementasikan fungsi `notifyAdminPropertyReview` yang memanfaatkan `notifyAdminTransaction` dengan format pesan terstruktur dan subjek email yang jelas.
-- Memicu pembuatan entri notifikasi in-app ke tabel `notifications` untuk setiap admin ID.
+### Tahap 1: Backend Cloud Function Brevo (`functions/src/index.ts`)
+- Membuat endpoint `sendPropertyPublishedEmail`:
+  - Menerima payload: `{ email, name, propertyName, propertyId, city, address, price, type, coverUrl }`.
+  - Mengambil `brevoApiKey = brevoApiKeyParam.value()`.
+  - Menyusun template HTML responsif dengan desain modern RuangSinggah.
+  - Mengirimkan POST ke `https://api.brevo.com/v3/smtp/email`.
 
-### Tahap 2: Integrasi Pemicu di Formulir Pengajuan Mitra (`KostFormMitra.tsx`)
-- Pada blok `handleSubmit`:
-  - Pendaftaran Baru (`addPropertyWithMedia`):
-    ```typescript
-    const newPropertyId = await addPropertyWithMedia(...);
-    // Non-blocking call
-    notifyAdminPropertyReview({
-      propertyId: newPropertyId,
-      propertyName: form.title || 'Kost Tanpa Nama',
-      propertyCity: form.city || '',
-      propertyAddress: form.address || '',
-      propertyPrice: finalPrice,
-      propertyType: form.type || 'Campur',
-      ownerName: user?.displayName || user?.name || form.omnichannelContactName || 'Mitra RuangSinggah',
-      ownerEmail: user?.email || '',
-      ownerPhone: user?.phone || form.omnichannelContactPhone || '',
-      totalRoomTypes: (form.roomTypes || []).length,
-      totalUnits: (form.roomTypes || []).reduce((acc, r) => acc + (r.availableRoomCount ?? 1), 0),
-      coverPhotoUrl: allImagesList[0]?.url || allImagesList[0]?.original || '',
-      isResubmission: false
-    }).catch(err => console.warn('Gagal memicu email review admin:', err));
-    ```
-  - Pengajuan Ulang Draft/Revisi (`updatePropertyWithMedia` dengan `!isCurrentlyPublished`):
-    ```typescript
-    notifyAdminPropertyReview({
-      propertyId: editingKost.id,
-      propertyName: form.title || editingKost.title,
-      // ...
-      isResubmission: true
-    }).catch(err => console.warn('Gagal memicu email review admin:', err));
-    ```
+### Tahap 2: Penyesuaian Service Listing & Trigger Frontend (`functions/public/adminService.ts`)
+- Di `addPropertyWithMedia`:
+  - Mengatur `const targetStatus = kostData.status || 'published';`.
+  - Memastikan properti langsung tersimpan sebagai `published`.
+- Di `sendMitraPublishedEmailBrevo`:
+  - Mengirimkan payload ke endpoint `sendPropertyPublishedEmail` secara non-blocking.
 
-### Tahap 3: Uji Kompilasi & Build
-- Menjalankan `cmd /c npm run build` di `functions/public/` untuk memastikan 0 error kompilasi dan bundler Vite berhasil membangun bundle production.
-- Menjalankan `cmd /c npm run build` di `functions/` untuk memastikan backend `tsc` 0 error.
+### Tahap 3: Pembaruan Formulir Mitra (`functions/public/components/KostFormMitra.tsx`)
+- Pada saat submit pendaftaran kost baru:
+  - Panggil `addPropertyWithMedia({ ...data, status: 'published', isVerified: false }, pendingUploadPayload, [])`.
+  - Pemicuan otomatis `sendMitraPublishedEmailBrevo` ke email mitra pemilik.
+  - Notifikasi admin peninjauan tetap berjalan di background agar admin dapat melakukan audit mutu/keamanan.
 
-### Tahap 4: Pencatatan Progres & Deployment
-- Mencatat riwayat ke `functions/PROGRESS.md` (entri #335).
-- Membuat dokumen `WALKTHROUGH.md`.
-- Melakukan commit dan push git ke branch non-production `bukan-productions`.
+### Tahap 4: Uji Kompilasi & Build
+- Menjalankan `cmd /c npm run build` di `functions/public/` (memastikan frontend lulus kompilasi Vite 0 error).
+- Menjalankan `cmd /c npm run build` di `functions/` (memastikan backend TypeScript `tsc` 0 error).
+
+### Tahap 5: Dokumentasi & Git Push
+- Memperbarui `functions/PROGRESS.md` dan `WALKTHROUGH.md`.
+- Melakukan git commit dan push ke branch `bukan-productions`.
 
 ---
 
 ## 4. Rencana Verifikasi
 
 1. **Uji Kompilasi**:
-   - `npm run build` di `functions/public/` lulus tanpa peringatan/error TypeScript (`0 error`).
-   - `tsc` di `functions/` lulus tanpa error.
-2. **Uji Simulasi Alur**:
-   - Memastikan saat mitra menekan tombol **"Publikasikan Kost"**, fungsi `notifyAdminPropertyReview` dipanggil dengan data properti, nomor WhatsApp pemilik, dan tautan foto cover.
-   - Memastikan proses penyimpanan form tidak terganggu/terhambat meskipun jaringan pengiriman email lambat (non-blocking).
-   - Memverifikasi log konsol browser menampilkan keberhasilan pengiriman notifikasi via FormSubmit ke email admin.
+   - Build frontend dan backend lulus 100% dengan 0 error.
+2. **Verifikasi Publikasi Instan**:
+   - Saat mitra mendaftarkan kost baru, status langsung tersimpan sebagai `published`.
+   - Listing langsung dapat ditemukan di halaman katalog publik (`/listings`) dan detail kost (`/kost/:id`) tanpa ada blokir "Tahap Peninjauan Admin".
+3. **Verifikasi Pengiriman Email Brevo**:
+   - Email ucapan selamat resmi dari RuangSinggah berhasil dipicu dan dikirimkan ke alamat email mitra yang terdaftar.
 
 ---
 
 > [!IMPORTANT]
 > **Menunggu Persetujuan (Approval) User**:  
-> Sesuai protokol siklus kerja 2-fase, kami tidak akan memodifikasi kode sampai dokumen perencanaan ini disetujui (ACC / Proceed) oleh Anda.
+> Sesuai protokol baku siklus kerja 2-fase repositori ini, kami tidak akan memodifikasi file kode sampai dokumen perencanaan ini disetujui (ACC / Proceed) oleh Anda.

@@ -3094,6 +3094,149 @@ export const sendMitraStatusEmail = functions.https.onRequest({ cors: true }, as
 });
 
 /**
+ * sendPropertyPublishedEmail: Sends a congratulatory email to the mitra when their kost listing is published via Brevo REST API.
+ */
+export const sendPropertyPublishedEmail = functions.https.onRequest({ cors: true }, async (req, res) => {
+  const { email, name, propertyName, propertyId, city, address, price, type, coverUrl } = req.body;
+  console.log(`PROPERTY_PUBLISHED_EMAIL: Start (Email: ${email}, Property: ${propertyName}, ID: ${propertyId})`);
+
+  if (!email || !propertyName) {
+    res.status(400).send({ message: 'Missing email or propertyName' });
+    return;
+  }
+
+  try {
+    const brevoApiKey = brevoApiKeyParam.value();
+    if (!brevoApiKey) throw new Error('BREVO_API_KEY missing');
+
+    const formattedPrice = price 
+      ? `Rp ${Number(price).toLocaleString('id-ID')} / bulan`
+      : 'Tarif Tertera di Listing';
+
+    const kostUrl = propertyId ? `https://ruangsinggah.id/kost/${propertyId}` : 'https://ruangsinggah.id';
+    const dashboardUrl = 'https://ruangsinggah.id/dashboard-mitra/properties';
+
+    const coverHtml = coverUrl ? `
+      <div style="margin-bottom: 20px; border-radius: 16px; overflow: hidden; max-height: 220px; border: 1px solid #e2e8f0;">
+        <img src="${coverUrl}" alt="${propertyName}" style="width: 100%; height: 200px; object-fit: cover; display: block;" />
+      </div>
+    ` : '';
+
+    const contentHtml = `
+      <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f8fafc; padding: 40px 20px; text-align: center;">
+        <div style="max-width: 580px; margin: 0 auto; background-color: #ffffff; border-radius: 24px; overflow: hidden; box-shadow: 0 12px 36px rgba(0,0,0,0.06); text-align: left;">
+          
+          <!-- Header Selebrasi -->
+          <div style="background: linear-gradient(135deg, #059669 0%, #10b981 50%, #f97316 100%); padding: 42px 30px; text-align: center;">
+            <div style="display: inline-block; background-color: rgba(255, 255, 255, 0.2); padding: 8px 18px; border-radius: 50px; margin-bottom: 12px; backdrop-filter: blur(4px);">
+              <span style="color: #ffffff; font-size: 13px; font-weight: 800; text-transform: uppercase; letter-spacing: 1px;">🎉 Listing Resmi Terbit</span>
+            </div>
+            <h1 style="color: #ffffff; margin: 0; font-size: 24px; font-weight: 900; letter-spacing: -0.5px; line-height: 1.3;">
+              Selamat! Kost Anda Sudah Tayang
+            </h1>
+          </div>
+
+          <!-- Body Konten -->
+          <div style="padding: 38px 34px; color: #374151; line-height: 1.65;">
+            <p style="font-size: 16px; font-weight: 700; margin-top: 0; color: #0f172a;">Halo, ${name || 'Mitra Pemilik Kost'}!</p>
+            <p style="font-size: 15px; color: #475569; margin-bottom: 22px;">
+              Kabar gembira! Listing properti kost Anda <strong>"${propertyName}"</strong> telah berhasil dipublikasikan dan sekarang <strong>sudah langsung aktif tayang</strong> di katalog pencarian publik RuangSinggah.id.
+            </p>
+            ${coverHtml}
+            <p style="font-size: 14px; color: #64748b; margin-bottom: 26px;">
+              Calon penyewa di seluruh Indonesia kini dapat menemukan kost Anda, melihat fasilitas kamar, ketersediaan unit, serta menghubungi Anda atau melakukan pemesanan sewa secara langsung.
+            </p>
+
+            <!-- Kartu Rincian Properti -->
+            <div style="background-color: #f1f5f9; border-radius: 18px; padding: 20px 22px; margin-bottom: 30px; border: 1px solid #e2e8f0;">
+              <h3 style="margin: 0 0 12px 0; font-size: 15px; font-weight: 800; color: #0f172a;">
+                📋 Ringkasan Listing Properti
+              </h3>
+              <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+                <tr>
+                  <td style="padding: 6px 0; color: #64748b; width: 38%;">Nama Kost:</td>
+                  <td style="padding: 6px 0; color: #0f172a; font-weight: 700;">${propertyName}</td>
+                </tr>
+                <tr>
+                  <td style="padding: 6px 0; color: #64748b;">Tipe Kost:</td>
+                  <td style="padding: 6px 0; color: #0f172a; font-weight: 600;">${type || 'Kost Campur'}</td>
+                </tr>
+                <tr>
+                  <td style="padding: 6px 0; color: #64748b;">Lokasi:</td>
+                  <td style="padding: 6px 0; color: #0f172a; font-weight: 600;">${address ? address + ', ' : ''}${city || ''}</td>
+                </tr>
+                <tr>
+                  <td style="padding: 6px 0; color: #64748b;">Tarif Mulai:</td>
+                  <td style="padding: 6px 0; color: #059669; font-weight: 800; font-size: 14px;">${formattedPrice}</td>
+                </tr>
+                <tr>
+                  <td style="padding: 6px 0; color: #64748b;">Status Penayangan:</td>
+                  <td style="padding: 6px 0; color: #10b981; font-weight: 700;">✓ Aktif & Tayang Publik</td>
+                </tr>
+              </table>
+            </div>
+
+            <!-- Tombol Aksi Utama -->
+            <div style="text-align: center; margin: 32px 0 24px 0;">
+              <a href="${kostUrl}" style="display: inline-block; background: linear-gradient(135deg, #f97316 0%, #ea580c 100%); color: #ffffff; padding: 15px 34px; font-size: 14px; font-weight: 800; text-decoration: none; border-radius: 14px; box-shadow: 0 8px 20px rgba(249, 115, 22, 0.28); margin-bottom: 12px; text-transform: uppercase; letter-spacing: 0.5px;">
+                🔍 LIHAT LISTING KOST ANDA
+              </a>
+              <br/>
+              <a href="${dashboardUrl}" style="display: inline-block; color: #64748b; font-size: 13px; font-weight: 600; text-decoration: underline; padding: 6px 12px;">
+                Kelola Kamar di Dashboard Mitra &rarr;
+              </a>
+            </div>
+
+            <!-- Box Catatan Standar Komunitas -->
+            <div style="background-color: #fffbeb; border-left: 4px solid #f59e0b; padding: 14px 18px; border-radius: 0 12px 12px 0; margin-top: 25px;">
+              <p style="margin: 0; font-size: 12px; font-weight: 700; color: #92400e;">💡 Tips Pengelolaan & Kebijakan Keamanan:</p>
+              <p style="margin: 4px 0 0 0; font-size: 12px; color: #b45309; line-height: 1.5;">
+                Pastikan ketersediaan kamar kosong selalu diperbarui agar calon penyewa mendapat informasi akurat. Tim RuangSinggah melakukan peninjauan berkala untuk memastikan standar kenyamanan dan mencegah indikasi penipuan.
+              </p>
+            </div>
+
+          </div>
+
+          <!-- Footer Resmi -->
+          <div style="background-color: #f8fafc; border-top: 1px solid #e2e8f0; padding: 22px 30px; text-align: center;">
+            <p style="font-size: 12px; font-weight: 700; color: #475569; margin: 0 0 4px 0;">RuangSinggah.id — Platform Hunian Kost & Sewa Properti</p>
+            <p style="font-size: 11px; color: #94a3b8; margin: 0;">&copy; ${new Date().getFullYear()} RuangSinggah.id. Seluruh hak cipta dilindungi undang-undang.</p>
+          </div>
+
+        </div>
+      </div>
+    `;
+
+    const response = await fetch('https://api.brevo.com/v3/smtp/email', {
+      method: 'POST',
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+        'api-key': brevoApiKey
+      },
+      body: JSON.stringify({
+        sender: { name: "RuangSinggah.id", email: "system@ruangsinggah.id" },
+        to: [{ email, name: name || undefined }],
+        subject: `🎉 Selamat! Listing Kost "${propertyName}" Berhasil Dipublikasikan di RuangSinggah.id`,
+        htmlContent: contentHtml
+      })
+    });
+
+    const result = await response.json();
+    console.log(`PROPERTY_PUBLISHED_EMAIL: Brevo Status: ${response.status}`, JSON.stringify(result));
+
+    if (!response.ok) {
+      throw new Error(`Brevo Error: ${JSON.stringify(result)}`);
+    }
+
+    res.status(200).send({ success: true, messageId: result.messageId });
+  } catch (err: any) {
+    console.error("PROPERTY_PUBLISHED_EMAIL_EXCEPTION:", err);
+    res.status(500).send({ message: err.message });
+  }
+});
+
+/**
  * sendOtpEmail: Sends a security OTP code email via Brevo REST API.
  */
 export const sendOtpEmail = functions.https.onRequest({ cors: true }, async (req, res) => {

@@ -2017,7 +2017,7 @@ export async function addPropertyWithMedia(
 
   const isAdmin = await checkIfUserIsAdmin(user.id);
   const targetOwnerUid = (isAdmin && kostData.ownerUid) ? kostData.ownerUid : user.id;
-  const targetStatus = isAdmin ? (kostData.status || 'draft') : 'draft';
+  const targetStatus = kostData.status || 'published';
 
   // Generate a temporary ID for Storage path (will be overwritten with DB-generated UUID)
   const tempId = crypto.randomUUID();
@@ -2333,14 +2333,14 @@ export async function updatePropertyWithMedia(
   // Status & Verification Preservation:
   // - Admin dapat mengubah status secara bebas.
   // - Mitra / Non-Admin:
-  //   * Jika properti SUDAH 'published', status TETAP 'published' dan is_verified: (existing.is_verified ?? true).
-  //   * Jika properti masih 'draft', status TETAP 'draft' dan is_verified: false.
+  //   * Jika properti berstatus 'suspended' (dibanned admin), status TETAP 'suspended'.
+  //   * Jika properti biasa atau baru diajukan, status LANGSUNG 'published'.
   const targetStatus = isAdmin 
-    ? (kostData.status || existing.status || 'draft')
-    : (existing.status === 'published' ? 'published' : 'draft');
+    ? (kostData.status || existing.status || 'published')
+    : (existing.status === 'suspended' ? 'suspended' : 'published');
   const targetVerified = isAdmin
     ? (kostData.isVerified !== undefined ? kostData.isVerified : (existing.is_verified ?? false))
-    : (existing.status === 'published' ? (existing.is_verified ?? true) : false);
+    : (existing.is_verified ?? false);
 
   const { error: updateError } = await supabase
     .from('properties')
@@ -6347,4 +6347,50 @@ export async function saveKostManagerFeeSettings(
 
   return payload;
 }
+
+/**
+ * sendMitraPublishedEmailBrevo: Memicu pengiriman email selamat resmi via Cloud Function Brevo ke mitra ketika listing kost berhasil terbit.
+ */
+export async function sendMitraPublishedEmailBrevo(details: {
+  email: string;
+  name?: string;
+  propertyName: string;
+  propertyId: string;
+  city?: string;
+  address?: string;
+  price?: number;
+  type?: string;
+  coverUrl?: string;
+}): Promise<void> {
+  if (!details.email || !details.propertyName) return;
+
+  try {
+    fetch('https://us-central1-ruangsinggahid-3afb2.cloudfunctions.net/sendPropertyPublishedEmail', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: details.email,
+        name: details.name || 'Mitra RuangSinggah',
+        propertyName: details.propertyName,
+        propertyId: details.propertyId,
+        city: details.city || '',
+        address: details.address || '',
+        price: details.price || 0,
+        type: details.type || 'Campur',
+        coverUrl: details.coverUrl || ''
+      })
+    }).then(res => {
+      if (!res.ok) {
+        console.warn('[BREVO_EMAIL] Gagal mengirim email selamat ke mitra via Cloud Function:', res.status);
+      } else {
+        console.log('[BREVO_EMAIL] Email selamat resmi Brevo berhasil dikirim ke:', details.email);
+      }
+    }).catch(err => {
+      console.warn('[BREVO_EMAIL] Exception mengirim email Brevo:', err);
+    });
+  } catch (err) {
+    console.warn('[BREVO_EMAIL] Error triggering sendMitraPublishedEmailBrevo:', err);
+  }
+}
+
 
