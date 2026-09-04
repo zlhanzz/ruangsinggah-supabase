@@ -494,27 +494,31 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                 return daysLeft >= 0;
             }).length;
 
-            // 6. Dynamic Chart Data (Last 7 Days revenue)
+            // 6. Dynamic Chart Data (Last 7 Days Views Trend)
             const days = ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'];
             const last7DaysData = [];
             for (let i = 6; i >= 0; i--) {
                 const d = new Date(now);
                 d.setDate(d.getDate() - i);
                 const dayLabel = days[d.getDay()];
-                const dayRevenue = bookingsData
-                    .filter(b => {
-                        const isPaid = (b.status || '').toUpperCase() === 'PAID';
-                        if (!isPaid) return false;
-                        const bDate = new Date(b.created_at);
-                        return bDate.getDate() === d.getDate() &&
-                            bDate.getMonth() === d.getMonth() &&
-                            bDate.getFullYear() === d.getFullYear();
-                    })
-                    .reduce((a, b) => a + (b.amount || 0), 0);
+                const dateKey = d.toISOString().split('T')[0];
 
-                last7DaysData.push({ day: dayLabel, views: dayRevenue });
+                let dayViews = 0;
+                propsData.forEach((p: any) => {
+                    const meta = p.metadata || {};
+                    const dv = meta.daily_views || {};
+                    dayViews += Number(dv[dateKey] || 0);
+                });
+
+                last7DaysData.push({ day: dayLabel, views: dayViews });
             }
             setDynamicChartData(last7DaysData);
+
+            // 7. Click-Through Rate (CTR) Calculation: (Bookings + Chat Inquiries) / Total Views
+            const totalInteractions = bookingsData.length + nonKmChatSessions.length;
+            const computedCtr = totalViews > 0
+                ? parseFloat(((totalInteractions / totalViews) * 100).toFixed(1))
+                : (totalInteractions > 0 ? 100 : 0);
 
             setStats({
                 totalRevenue: allTimeRevenue,
@@ -522,7 +526,7 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                 pendingApprovals: bookingsData.filter(b => (b.status || '').toUpperCase() === 'PENDING_APPROVAL' && !kmPropIds.has(b.product_id)).length,
                 totalViews: totalViews,
                 activeTenants: activeCount,
-                ctr: totalViews > 0 ? parseFloat(((bookingsData.length * 5 / totalViews) * 100).toFixed(1)) : 0
+                ctr: computedCtr
             });
         } catch (e) {
             console.error(e);
@@ -1282,7 +1286,10 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                                                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F1F5F9" />
                                                 <XAxis dataKey="day" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#94A3B8', fontWeight: 700 }} />
                                                 <YAxis hide />
-                                                <RechartsTooltip contentStyle={{ borderRadius: 12, border: '1px solid #F1F5F9', boxShadow: '0 4px 20px rgba(0,0,0,0.08)', fontSize: 12 }} />
+                                                <RechartsTooltip 
+                                                    contentStyle={{ borderRadius: 12, border: '1px solid #F1F5F9', boxShadow: '0 4px 20px rgba(0,0,0,0.08)', fontSize: 12 }} 
+                                                    formatter={(val: any) => [`${val} Views`, 'Kunjungan']} 
+                                                />
                                                 <Area type="monotone" dataKey="views" stroke="#3b82f6" strokeWidth={3} fillOpacity={1} fill="url(#gViews)" />
                                             </AreaChart>
                                         </ResponsiveContainer>

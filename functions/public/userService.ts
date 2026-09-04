@@ -1231,34 +1231,57 @@ export async function getOwnerBookings(ownerId: string): Promise<any[]> {
   }
 }
 
-export async function incrementPropertyView(propertyId: string) {
+export async function incrementPropertyView(propertyId: string, viewerUid?: string) {
   try {
     if (!propertyId) return;
 
-    // 1. Try RPC first
-    const { error: rpcError } = await supabase.rpc('increment_property_view', { 
-      prop_id: propertyId 
-    });
-
-    // 2. Fallback to manual update if RPC is missing (404) or failed
-    if (rpcError) {
-      console.log("[DEBUG] RPC increment_property_view failed, trying manual update...", rpcError.message);
-      
-      const { data: prop, error: fetchError } = await supabase
-        .from('properties')
-        .select('views')
-        .eq('id', propertyId)
-        .maybeSingle();
-        
-      if (!fetchError && prop) {
-        await supabase
-          .from('properties')
-          .update({ views: (prop.views || 0) + 1 })
-          .eq('id', propertyId);
-      }
+    // 1. Anti-spam per browser session agar tidak mencatat dobel saat refresh berulang
+    const sessionKey = `viewed_kost_${propertyId}`;
+    if (typeof window !== 'undefined') {
+      if (sessionStorage.getItem(sessionKey)) return;
+      sessionStorage.setItem(sessionKey, '1');
     }
+
+    const todayStr = new Date().toISOString().split('T')[0]; // Format: YYYY-MM-DD
+
+    // 2. Ambil data properti saat ini
+    const { data: prop, error: fetchError } = await supabase
+      .from('properties')
+      .select('id, views, owner_uid, metadata')
+      .eq('id', propertyId)
+      .maybeSingle();
+
+    if (fetchError || !prop) return;
+
+    // Abaikan kunjungan jika yang melihat adalah pemilik kost itu sendiri
+    if (viewerUid && prop.owner_uid === viewerUid) return;
+
+    const newViews = Number(prop.views || 0) + 1;
+    const meta = typeof prop.metadata === 'object' && prop.metadata !== null ? { ...prop.metadata } : {};
+    const dailyViews = typeof meta.daily_views === 'object' && meta.daily_views !== null ? { ...meta.daily_views } : {};
+    
+    dailyViews[todayStr] = Number(dailyViews[todayStr] || 0) + 1;
+
+    // Bersihkan tanggal yang lebih dari 60 hari lalu agar metadata tetap ramping
+    const sixtyDaysAgo = new Date();
+    sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60);
+    const cutoffStr = sixtyDaysAgo.toISOString().split('T')[0];
+    for (const dKey of Object.keys(dailyViews)) {
+      if (dKey < cutoffStr) delete dailyViews[dKey];
+    }
+
+    meta.daily_views = dailyViews;
+
+    // 3. Simpan pembaruan views dan metadata ke Supabase
+    await supabase
+      .from('properties')
+      .update({
+        views: newViews,
+        metadata: meta
+      })
+      .eq('id', propertyId);
   } catch (error) {
-    // Silent fail for view counter to not disrupt user experience
+    // Silent fail agar tidak mengganggu rendering UI user
     console.warn('View counter increment failed (non-critical):', error);
   }
 }

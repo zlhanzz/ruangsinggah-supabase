@@ -133,9 +133,9 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
   // Auto-track view (only when not in isolated preview mode)
   useEffect(() => {
     if (kost.id && !hideBookingAndChat) {
-      incrementPropertyView(kost.id);
+      incrementPropertyView(kost.id, user?.uid);
     }
-  }, [kost.id, hideBookingAndChat]);
+  }, [kost.id, hideBookingAndChat, user?.uid]);
 
   const [selectedPeriod, setSelectedPeriod] = useState<PricingPeriod>('bulanan');
   const [isBookingModalOpen, setIsBookingModalOpen] = useState(false);

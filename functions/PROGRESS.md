@@ -2,6 +2,30 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 318. Aktivasi Sistem Pelacakan Kunjungan (Views), CTR, dan Grafik Tren Kunjungan Riil di Dashboard Mitra (`userService.ts`, `KostDetail.tsx`, `MitraDashboard.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  - Pemilik kost (Mitra) menanyakan apakah data Kunjungan, CTR, dan Tren Kunjungan di Dashboard Mitra dapat difungsikan secara nyata karena sebelumnya selalu bernilai 0 dan grafik datar. Hal ini terjadi karena belum ada pencatatan view saat pengunjung membuka kost, serta kalkulasi grafik sebelumnya mengambil nominal rupiah pesanan.
+- **Implementasi Solusi**:
+  1. **Pelacakan Kunjungan Riil & Anti-Spam (`userService.ts`, `KostDetail.tsx`)**:
+     - Mengembangkan `incrementPropertyView(propertyId, viewerUid)` dengan *anti-spam session deduplication* via `sessionStorage` (`viewed_kost_${propertyId}`) agar refresh berulang dalam 1 sesi tidak memanipulasi counter.
+     - Mengabaikan view jika yang membuka adalah pemilik kost itu sendiri.
+     - Menyimpan akumulasi `views` dan riwayat kunjungan harian ke `metadata.daily_views[YYYY-MM-DD]` pada Supabase.
+     - Terintegrasi otomatis pada *lifecycle* pemuatan detail properti di `KostDetail.tsx`.
+  2. **Kalkulasi CTR Real-time (`MitraDashboard.tsx`)**:
+     - Menghitung persentase konversi interaksi calon penyewa (booking request + chat inquiry) terhadap total views:
+       $\text{CTR} = \frac{\text{Bookings} + \text{Chat Inquiries}}{\text{Total Kunjungan}} \times 100\%$.
+  3. **Grafik Tren Kunjungan 7 Hari Terakhir (`MitraDashboard.tsx`)**:
+     - Memetakan data riil `metadata.daily_views` dari seluruh properti milik mitra selama 7 hari terakhir (Min, Sen, Sel, Rab, Kam, Jum, Sab).
+     - Menambahkan tooltip format *'{val} Views (Kunjungan)'* pada kurva `AreaChart`.
+- **File Tersentuh**:
+  - `functions/public/userService.ts`
+  - `functions/public/pages/KostDetail.tsx`
+  - `functions/public/pages/MitraDashboard.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi build lulus 100% (✓ 2509 modules transformed, built in 46.22s, 0 error).
+
 ### 317. Pembersihan Redundansi Top Navbar & Layout Presisi Tengah Halaman Login (`Navbar.tsx`, `Login.tsx`) (September 2026)
 - **Permintaan & Masalah**:
   - Pada halaman login (`/login`), top navbar website (`RuangSinggah.id Masuk [Daftar]`) masih muncul di bagian atas. Hal ini membuat tata letak terdorong ke bawah, tidak presisi berada di tengah layar (*not vertically centered*), dan menampilkan informasi ganda karena pengguna sudah berada di halaman login.
