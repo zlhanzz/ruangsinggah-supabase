@@ -1705,7 +1705,7 @@ const HierarchicalRoomFacilityInput: React.FC<{
                                     className="rounded border-gray-300 text-orange-500 focus:ring-orange-500 w-4 h-4 cursor-pointer accent-orange-500 shrink-0"
                                 />
                                 <span className="text-base shrink-0">{preset.icon}</span>
-                                <span className="text-xs font-bold truncate">{preset.label}</span>
+                                <span className="text-xs font-bold leading-snug break-words flex-1 min-w-0">{preset.label}</span>
                             </label>
 
                             {/* Sub Panel Inline: Kamar Mandi Dalam */}
@@ -1730,7 +1730,8 @@ const HierarchicalRoomFacilityInput: React.FC<{
                                                         onChange={() => handleToggleBathroomSub(opt.label)}
                                                         className="rounded border-gray-300 text-orange-500 focus:ring-orange-500 w-4 h-4 cursor-pointer accent-orange-500 shrink-0"
                                                     />
-                                                    <span className="text-xs text-gray-800 font-bold">{opt.icon} {opt.label}</span>
+                                                    <span className="text-sm shrink-0">{opt.icon}</span>
+                                                    <span className="text-xs text-gray-800 font-bold leading-snug break-words flex-1 min-w-0">{opt.label}</span>
                                                 </label>
                                             );
                                         })}
@@ -1822,7 +1823,8 @@ const HierarchicalRoomFacilityInput: React.FC<{
                                                         onChange={() => handleToggleKitchenSub(opt.label)}
                                                         className="rounded border-gray-300 text-orange-500 focus:ring-orange-500 w-4 h-4 cursor-pointer accent-orange-500 shrink-0"
                                                     />
-                                                    <span className="text-xs text-gray-800 font-bold">{opt.icon} {opt.label}</span>
+                                                    <span className="text-sm shrink-0">{opt.icon}</span>
+                                                    <span className="text-xs text-gray-800 font-bold leading-snug break-words flex-1 min-w-0">{opt.label}</span>
                                                 </label>
                                             );
                                         })}
