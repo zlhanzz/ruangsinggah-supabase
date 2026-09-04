@@ -26,8 +26,14 @@ import {
     RefreshCw, Bed, Bath, Fan, Sparkles, ImagePlus, ChevronDown, ChevronRight, Check,
     Smartphone, MessageCircle, ExternalLink, ArrowLeft, UploadCloud, Edit, Mail, Heart,
     Signal, Wifi, BatteryCharging, CheckSquare, Layers, Building2,
-    Loader2, GraduationCap, Store, ShoppingBag, Building, Fuel, Church
+    Loader2, GraduationCap, Store, ShoppingBag, Building, Fuel, Church,
+    ShieldAlert
 } from 'lucide-react';
+import {
+    isBannerProneCategory,
+    processPhotoWithAutoSensor,
+    processImageUrlWithAutoSensor
+} from '../autoSensorService';
 import { 
     findNearbyCuratedLandmarks, 
     calculateHaversineDistance,
@@ -854,6 +860,33 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
     const [isScanningLandmarks, setIsScanningLandmarks] = useState(false);
     const landmarkScanAbortRef = useRef<number>(0);
     const [isSearchingFacility, setIsSearchingFacility] = useState<Record<string, boolean>>({});
+    const [reScanningPhotoUrl, setReScanningPhotoUrl] = useState<string | null>(null);
+    const [kmBannerNotice, setKmBannerNotice] = useState<string | null>(null);
+
+    const handleReScanPublicPhoto = async (photoIndex: number, currentUrl: string, category: string) => {
+        try {
+            setReScanningPhotoUrl(currentUrl);
+            setKmBannerNotice(`Sedang memindai dan memproses banner untuk kategori "${category}"...`);
+            const processedUrl = await processImageUrlWithAutoSensor(currentUrl, category, (file, path) => uploadFileAndGetURL(file, path));
+            if (processedUrl && processedUrl !== currentUrl) {
+                const updatedImages = [...(kmListingForm.image_urls || [])];
+                updatedImages[photoIndex] = processedUrl;
+                setKmListingForm((prev: any) => ({
+                    ...prev,
+                    image_urls: updatedImages
+                }));
+                setKmBannerNotice(`✅ Banner/nomor kontak pada foto "${category}" berhasil disensor otomatis!`);
+            } else {
+                setKmBannerNotice(`ℹ️ Tidak ditemukan banner baru yang memerlukan sensor.`);
+            }
+        } catch (err) {
+            console.error('Failed to rescan public photo:', err);
+            setKmBannerNotice(`⚠️ Gagal memindai ulang foto: ${(err as Error).message}`);
+        } finally {
+            setReScanningPhotoUrl(null);
+            setTimeout(() => setKmBannerNotice(null), 6000);
+        }
+    };
 
     const isInvalidCampus = (name: string) => {
         if (!name) return false;
@@ -7827,7 +7860,21 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                                                         <span>⚠️ Perlu Revisi: Foto Area Properti</span>
                                                     </div>
                                                 )}
-                                                <label className="text-[11px] font-bold text-[#584235] uppercase tracking-wider">Dokumentasi Area Umum &amp; Fasilitas Properti</label>
+                                                <div className="flex items-center justify-between">
+                                                    <label className="text-[11px] font-bold text-[#584235] uppercase tracking-wider">Dokumentasi Area Umum &amp; Fasilitas Properti</label>
+                                                    <span className="text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-md flex items-center gap-1">
+                                                        <ShieldAlert className="w-3 h-3 text-amber-600" />
+                                                        <span>Auto-Sensor Banner Aktif</span>
+                                                    </span>
+                                                </div>
+
+                                                {kmBannerNotice && (
+                                                    <div className="p-2.5 rounded-lg bg-amber-500/10 border border-amber-300 text-amber-900 text-xs font-medium flex items-center gap-2 animate-fadeIn">
+                                                        <ShieldAlert className="w-4 h-4 text-amber-600 shrink-0 animate-bounce" />
+                                                        <span>{kmBannerNotice}</span>
+                                                    </div>
+                                                )}
+
                                                 {(() => {
                                                     const imagesWithCats = (kmListingForm.image_urls || []).map((urlOrObj: any, idx: number) => {
                                                         const url = getImageUrlString(urlOrObj);
@@ -7852,6 +7899,11 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                                                                                  label.includes('Dapur') ? <Home className="w-3.5 h-3.5 text-[#ff7a00] shrink-0" /> :
                                                                                  <Camera className="w-3.5 h-3.5 text-[#ff7a00] shrink-0" />}
                                                                                 <span className="text-[11px] font-bold text-[#584235] uppercase tracking-wider">{label}</span>
+                                                                                {isBannerProneCategory(label) && (
+                                                                                    <span className="text-[8px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 border border-amber-200">
+                                                                                        Banner Protected
+                                                                                    </span>
+                                                                                )}
                                                                             </div>
                                                                             <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full uppercase ${catPhotos.length > 0 ? 'bg-orange-100 text-[#ff7a00]' : 'bg-gray-100 text-gray-500'}`}>
                                                                                 {catPhotos.length} Foto
@@ -7859,32 +7911,53 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                                                                         </div>
 
                                                                         <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                                                                            {catPhotos.map((p, pIdx) => (
-                                                                                <div key={p.idx} className="aspect-video w-full rounded-lg overflow-hidden border border-gray-200 relative group bg-gray-50">
-                                                                                    <img src={getImageUrlString(p.url)} alt={`${label} ${pIdx + 1}`} className="w-full h-full object-cover" />
-                                                                                    <button
-                                                                                        type="button"
-                                                                                        onClick={() => {
-                                                                                            const updatedImages = [...(kmListingForm.image_urls || [])];
-                                                                                            const updatedCats = [...(kmListingForm.photoCategories || [])];
-                                                                                            updatedImages.splice(p.idx, 1);
-                                                                                            updatedCats.splice(p.idx, 1);
-                                                                                            setKmListingForm({ 
-                                                                                                ...kmListingForm, 
-                                                                                                image_urls: updatedImages,
-                                                                                                photoCategories: updatedCats
-                                                                                            });
-                                                                                        }}
-                                                                                        className="absolute top-1 right-1 bg-red-600 hover:bg-red-700 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold shadow-md transition-all active:scale-90"
-                                                                                        title="Hapus foto ini"
-                                                                                    >
-                                                                                        &times;
-                                                                                    </button>
-                                                                                    <div className="absolute bottom-0 left-0 right-0 bg-black/60 py-0.5 px-1 text-[8px] text-white text-center uppercase font-bold tracking-wider truncate">
-                                                                                        {label} {pIdx + 1}
+                                                                            {catPhotos.map((p, pIdx) => {
+                                                                                const isThisScanning = reScanningPhotoUrl === p.url;
+                                                                                return (
+                                                                                    <div key={p.idx} className="aspect-video w-full rounded-lg overflow-hidden border border-gray-200 relative group bg-gray-50">
+                                                                                        <img src={getImageUrlString(p.url)} alt={`${label} ${pIdx + 1}`} className="w-full h-full object-cover" />
+                                                                                        {isThisScanning && (
+                                                                                            <div className="absolute inset-0 bg-black/60 flex flex-col items-center justify-center text-white z-10">
+                                                                                                <Loader2 className="w-5 h-5 animate-spin text-orange-400 mb-1" />
+                                                                                                <span className="text-[9px] font-bold">Scanning...</span>
+                                                                                            </div>
+                                                                                        )}
+                                                                                        <button
+                                                                                            type="button"
+                                                                                            onClick={() => {
+                                                                                                const updatedImages = [...(kmListingForm.image_urls || [])];
+                                                                                                const updatedCats = [...(kmListingForm.photoCategories || [])];
+                                                                                                updatedImages.splice(p.idx, 1);
+                                                                                                updatedCats.splice(p.idx, 1);
+                                                                                                setKmListingForm({ 
+                                                                                                    ...kmListingForm, 
+                                                                                                    image_urls: updatedImages,
+                                                                                                    photoCategories: updatedCats
+                                                                                                });
+                                                                                            }}
+                                                                                            className="absolute top-1 right-1 bg-red-600 hover:bg-red-700 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold shadow-md transition-all active:scale-90 z-10"
+                                                                                            title="Hapus foto ini"
+                                                                                        >
+                                                                                            &times;
+                                                                                        </button>
+                                                                                        {isBannerProneCategory(label) && (
+                                                                                            <button
+                                                                                                type="button"
+                                                                                                disabled={isThisScanning}
+                                                                                                onClick={() => handleReScanPublicPhoto(p.idx, p.url, label)}
+                                                                                                className="absolute top-1 left-1 bg-amber-500/90 hover:bg-amber-600 text-white rounded px-1.5 py-0.5 text-[8px] font-bold shadow-sm transition-all flex items-center gap-1 z-10"
+                                                                                                title="Sensor ulang nomor HP/banner di foto ini"
+                                                                                            >
+                                                                                                <ShieldAlert className="w-2.5 h-2.5" />
+                                                                                                <span>Sensor Ulang</span>
+                                                                                            </button>
+                                                                                        )}
+                                                                                        <div className="absolute bottom-0 left-0 right-0 bg-black/60 py-0.5 px-1 text-[8px] text-white text-center uppercase font-bold tracking-wider truncate">
+                                                                                            {label} {pIdx + 1}
+                                                                                        </div>
                                                                                     </div>
-                                                                                </div>
-                                                                            ))}
+                                                                                );
+                                                                            })}
 
                                                                             <div 
                                                                                 onClick={async () => {
@@ -7901,7 +7974,8 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                                                                                                 const newUrls = [];
                                                                                                 for (let f = 0; f < files.length; f++) {
                                                                                                     const folder = `kostmanager/public/${Date.now()}_${f}`;
-                                                                                                    const publicUrl = await uploadFileAndGetURL(files[f], folder);
+                                                                                                    const processedFile = await processPhotoWithAutoSensor(files[f], label);
+                                                                                                    const publicUrl = await uploadFileAndGetURL(processedFile, folder);
                                                                                                     newUrls.push(publicUrl);
                                                                                                 }
                                                                                                 const updatedImages = [...(kmListingForm.image_urls || [])];
@@ -7927,7 +8001,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                                                                                 className={`aspect-video bg-white border-2 border-dashed border-[#ff7a00] rounded-lg flex flex-col items-center justify-center p-2 cursor-pointer hover:bg-orange-50/50 transition-all text-[#584235] ${catPhotos.length === 0 ? 'col-span-2 sm:col-span-3 py-4' : ''}`}
                                                                             >
                                                                                 {uploadingPublicAreas[`public_${label}`] ? (
-                                                                                    <span className="text-[10px] font-bold animate-pulse text-gray-500">Uploading...</span>
+                                                                                    <span className="text-[10px] font-bold animate-pulse text-gray-500">Processing &amp; Uploading...</span>
                                                                                 ) : (
                                                                                     <>
                                                                                         <ImagePlus className="w-5 h-5 text-[#ff7a00] shrink-0" />

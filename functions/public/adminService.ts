@@ -5582,74 +5582,384 @@ export interface ContactBannerDetectionResult {
 }
 
 export const detectPhotoContactBanner = async (
-  base64Image: string,
-  mimeType = 'image/webp'
+  base64Image: string, 
+  mimeType = 'image/jpeg'
 ): Promise<ContactBannerDetectionResult> => {
-  const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
-
-  const invokeAttempt = async (attemptNumber: number): Promise<any> => {
-    const timeoutPromise = new Promise((_, reject) =>
-      setTimeout(() => reject(new Error(`Deteksi banner kontak timeout (18s) - Percobaan ${attemptNumber}`)), 18000)
-    );
-
-    const invokePromise = supabase.functions.invoke('detect-contact-banner', {
-      body: { base64Image, mimeType },
-      headers: supabaseAnonKey ? {
-        apikey: supabaseAnonKey
-      } : undefined
+  try {
+    const { data, error } = await supabase.functions.invoke('detect-banner', {
+      body: { image: base64Image, mimeType }
     });
 
-    return await Promise.race([invokePromise, timeoutPromise]);
-  };
-
-  try {
-    console.log('[AI_BANNER] Memanggil Edge Function detect-contact-banner...');
-    let res: any;
-    let lastError: any = null;
-
-    // Percobaan 1
-    try {
-      res = await invokeAttempt(1);
-    } catch (err: any) {
-      lastError = err;
-      console.warn('[AI_BANNER] Percobaan 1 gagal, mencoba retry dalam 800ms...', err?.message || err);
-      // Tunggu 800ms sebelum retry
-      await new Promise(r => setTimeout(r, 800));
-      // Percobaan 2 (Retry)
-      res = await invokeAttempt(2);
-    }
-
-    const { data: aiRes, error: aiErr } = res || {};
-
-    if (aiErr) {
-      console.error('[AI_BANNER] Error invoke Edge Function:', aiErr);
-      return { 
-        hasContact: false, 
-        detectedTexts: [], 
-        boxes: [], 
-        error: aiErr.message || 'Gagal memanggil fungsi AI' 
-      };
-    }
-
-    if (aiRes && aiRes.success && aiRes.data) {
-      const data = aiRes.data;
-      console.log('[AI_BANNER] Sukses mendeteksi:', data);
+    if (error || !data) {
       return {
-        hasContact: !!data.has_contact,
-        detectedTexts: Array.isArray(data.detected_texts) ? data.detected_texts : [],
-        boxes: Array.isArray(data.boxes) ? data.boxes : []
+        hasContact: false,
+        boxes: [],
+        detectedTexts: []
       };
     }
 
-    return { hasContact: false, detectedTexts: [], boxes: [] };
-  } catch (err: any) {
-    console.warn('[AI_BANNER] Pemeriksaan banner kontak dilewati (fallback aman):', err);
-    return { 
-      hasContact: false, 
-      detectedTexts: [], 
-      boxes: [], 
-      error: err?.message || 'Gangguan jaringan saat memindai spanduk kontak' 
+    return {
+      hasContact: Boolean(data.hasContact),
+      detectedTexts: Array.isArray(data.detectedTexts) ? data.detectedTexts : [],
+      boxes: Array.isArray(data.boxes) ? data.boxes : []
     };
+  } catch (err: any) {
+    console.warn('[AI_BANNER] Error invoking detect-banner:', err);
+    return {
+      hasContact: false,
+      boxes: [],
+      detectedTexts: [],
+      error: err?.message
+    };
+  }
+};
+
+// ── SHARED AUTO-SENSOR & IMAGE PROCESSING UTILITIES ───────────────────────────
+
+export const isImageFile = (file: File): boolean => {
+  if (!file) return false;
+  if (file.type && file.type.startsWith('image/')) return true;
+  const name = (file.name || '').toLowerCase();
+  return /\.(jpe?g|png|webp|heic|bmp|gif|tiff?)$/i.test(name);
+};
+
+export const isBannerProneCategory = (category: string): boolean => {
+  const lower = (category || '').toLowerCase();
+  return (
+    lower.includes('depan') || 
+    lower.includes('fasad') || 
+    lower.includes('lingkungan') || 
+    lower.includes('parkir') ||
+    lower.includes('luar') ||
+    lower.includes('gerbang') ||
+    lower.includes('spanduk') ||
+    lower.includes('banner') ||
+    lower.includes('jalan')
+  );
+};
+
+export const createLowResBase64ForAi = async (file: File, maxDim = 1024, quality = 0.65): Promise<string> => {
+  return new Promise((resolve) => {
+    if (!isImageFile(file)) return resolve('');
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        let { width, height } = img;
+        if (width > maxDim || height > maxDim) {
+          if (width > height) {
+            height = Math.round((height * maxDim) / width);
+            width = maxDim;
+          } else {
+            width = Math.round((width * maxDim) / height);
+            height = maxDim;
+          }
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return resolve('');
+        ctx.drawImage(img, 0, 0, width, height);
+        const dataUrl = canvas.toDataURL('image/jpeg', quality);
+        const base64 = dataUrl.split(',')[1] || '';
+        resolve(base64);
+      };
+      img.onerror = () => resolve('');
+      img.src = e.target?.result as string;
+    };
+    reader.onerror = () => resolve('');
+    reader.readAsDataURL(file);
+  });
+};
+
+export const applyBlurToBoundingBoxes = async (
+  file: File, 
+  boxes: Array<{ ymin: number; xmin: number; ymax: number; xmax: number }>
+): Promise<File> => {
+  if (!boxes || boxes.length === 0) return file;
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        canvas.width = img.width;
+        canvas.height = img.height;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return resolve(file);
+
+        // Gambar citra asli
+        ctx.drawImage(img, 0, 0);
+
+        // 1. Konversi boxes (skala 0-1000) ke pixel absolut
+        const rawBoxesPx = boxes.map(box => {
+          const normYmin = Math.max(0, Math.min(1000, box.ymin));
+          const normXmin = Math.max(0, Math.min(1000, box.xmin));
+          const normYmax = Math.max(0, Math.min(1000, box.ymax));
+          const normXmax = Math.max(0, Math.min(1000, box.xmax));
+
+          const x = Math.round((normXmin / 1000) * img.width);
+          const y = Math.round((normYmin / 1000) * img.height);
+          const w = Math.round(((normXmax - normXmin) / 1000) * img.width);
+          const h = Math.round(((normYmax - normYmin) / 1000) * img.height);
+          return { x, y, w, h, r: x + w, b: y + h };
+        }).filter(b => b.w > 0 && b.h > 0);
+
+        if (rawBoxesPx.length === 0) return resolve(file);
+
+        // 2. Gabungkan kotak-kotak yang beririsan atau berdekatan (clustering spanduk)
+        const gapX = Math.round(img.width * 0.035);
+        const gapY = Math.round(img.height * 0.035);
+
+        const mergedBoxes: Array<{ x: number; y: number; w: number; h: number; r: number; b: number }> = [];
+        const used = new Array(rawBoxesPx.length).fill(false);
+
+        for (let i = 0; i < rawBoxesPx.length; i++) {
+          if (used[i]) continue;
+          let cluster = { ...rawBoxesPx[i] };
+          used[i] = true;
+
+          let expanded = true;
+          while (expanded) {
+            expanded = false;
+            for (let j = 0; j < rawBoxesPx.length; j++) {
+              if (used[j]) continue;
+              const b = rawBoxesPx[j];
+              const isClose = !(
+                b.x > cluster.r + gapX ||
+                b.r < cluster.x - gapX ||
+                b.y > cluster.b + gapY ||
+                b.b < cluster.y - gapY
+              );
+              if (isClose) {
+                cluster.x = Math.min(cluster.x, b.x);
+                cluster.y = Math.min(cluster.y, b.y);
+                cluster.r = Math.max(cluster.r, b.r);
+                cluster.b = Math.max(cluster.b, b.b);
+                cluster.w = cluster.r - cluster.x;
+                cluster.h = cluster.b - cluster.y;
+                used[j] = true;
+                expanded = true;
+              }
+            }
+          }
+          mergedBoxes.push(cluster);
+        }
+
+        const drawPill = (c: CanvasRenderingContext2D, px: number, py: number, pw: number, ph: number, pr: number) => {
+          c.beginPath();
+          c.moveTo(px + pr, py);
+          c.lineTo(px + pw - pr, py);
+          c.quadraticCurveTo(px + pw, py, px + pw, py + pr);
+          c.lineTo(px + pw, py + ph - pr);
+          c.quadraticCurveTo(px + pw, py + ph, px + pw - pr, py + ph);
+          c.lineTo(px + pr, py + ph);
+          c.quadraticCurveTo(px, py + ph, px, py + ph - pr);
+          c.lineTo(px, py + pr);
+          c.quadraticCurveTo(px, py, px + pr, py);
+          c.closePath();
+        };
+
+        // 3. Terapkan efek mosaik & watermark elegan pada setiap area gabungan
+        mergedBoxes.forEach(box => {
+          const { x, y, w, h } = box;
+          if (w <= 0 || h <= 0) return;
+
+          ctx.save();
+
+          // A. Mosaik / Pixelate di canvas
+          const offCanvas = document.createElement('canvas');
+          const scale = 0.06;
+          offCanvas.width = Math.max(1, Math.round(w * scale));
+          offCanvas.height = Math.max(1, Math.round(h * scale));
+          const offCtx = offCanvas.getContext('2d');
+          if (offCtx) {
+            offCtx.imageSmoothingEnabled = true;
+            offCtx.drawImage(canvas, x, y, w, h, 0, 0, offCanvas.width, offCanvas.height);
+            ctx.imageSmoothingEnabled = false;
+            ctx.drawImage(offCanvas, 0, 0, offCanvas.width, offCanvas.height, x, y, w, h);
+          }
+
+          // B. Lapisan Frosted Glassmorphism Gelap yang Bersih
+          ctx.fillStyle = 'rgba(15, 23, 42, 0.78)';
+          ctx.fillRect(x, y, w, h);
+
+          // Garis batas luar halus tipis
+          ctx.strokeStyle = 'rgba(255, 255, 255, 0.12)';
+          ctx.lineWidth = 1;
+          ctx.strokeRect(x, y, w, h);
+
+          // C. Render Watermark Kapsul Elegan "ruangsinggah.id"
+          if (w >= 45 && h >= 16) {
+            const centerX = x + w / 2;
+            const centerY = y + h / 2;
+
+            const fontSize = Math.max(11, Math.min(24, Math.round(Math.min(h * 0.38, w * 0.13))));
+            ctx.font = `bold ${fontSize}px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`;
+
+            const textPart1 = "ruangsinggah";
+            const textPart2 = ".id";
+            const width1 = ctx.measureText(textPart1).width;
+            const width2 = ctx.measureText(textPart2).width;
+            const totalTextWidth = width1 + width2;
+
+            const padX = Math.round(fontSize * 0.85);
+            const padY = Math.round(fontSize * 0.42);
+            const pillW = totalTextWidth + (padX * 2);
+            const pillH = fontSize + (padY * 2);
+            const pillX = centerX - (pillW / 2);
+            const pillY = centerY - (pillH / 2);
+            const pillRadius = Math.round(pillH / 2);
+
+            drawPill(ctx, pillX, pillY, pillW, pillH, pillRadius);
+            ctx.fillStyle = 'rgba(2, 6, 23, 0.88)';
+            ctx.fill();
+            ctx.strokeStyle = 'rgba(249, 115, 22, 0.65)';
+            ctx.lineWidth = 1.5;
+            ctx.stroke();
+
+            ctx.textAlign = 'left';
+            ctx.textBaseline = 'middle';
+            const startTextX = centerX - (totalTextWidth / 2);
+
+            // "ruangsinggah" (Putih bersih)
+            ctx.fillStyle = '#FFFFFF';
+            ctx.fillText(textPart1, startTextX, centerY);
+
+            // ".id" (Oranye khas RuangSinggah)
+            ctx.fillStyle = '#FB923C';
+            ctx.fillText(textPart2, startTextX + width1, centerY);
+          }
+
+          ctx.restore();
+        });
+
+        canvas.toBlob((blob) => {
+          if (!blob) return resolve(file);
+          const blurredFile = new File([blob], file.name, { type: file.type || 'image/jpeg' });
+          resolve(blurredFile);
+        }, file.type || 'image/jpeg', 0.95);
+      };
+      img.onerror = () => resolve(file);
+      img.src = e.target?.result as string;
+    };
+    reader.onerror = () => resolve(file);
+    reader.readAsDataURL(file);
+  });
+};
+
+export const compressImageToWebP = async (file: File, quality = 0.82): Promise<File> => {
+  return new Promise((resolve) => {
+    if (!isImageFile(file)) return resolve(file);
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        
+        const TARGET_WIDTH = 1200;
+        const TARGET_HEIGHT = 900;
+
+        canvas.width = TARGET_WIDTH;
+        canvas.height = TARGET_HEIGHT;
+
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return resolve(file);
+
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high';
+
+        const imgRatio = img.width / img.height;
+        const targetRatio = TARGET_WIDTH / TARGET_HEIGHT;
+        let sx = 0, sy = 0, sWidth = img.width, sHeight = img.height;
+
+        if (imgRatio > targetRatio) {
+          sWidth = img.height * targetRatio;
+          sx = (img.width - sWidth) / 2;
+        } else {
+          sHeight = img.width / targetRatio;
+          sy = (img.height - sHeight) / 2;
+        }
+
+        ctx.drawImage(img, sx, sy, sWidth, sHeight, 0, 0, TARGET_WIDTH, TARGET_HEIGHT);
+
+        canvas.toBlob((blob) => {
+          if (!blob) return resolve(file);
+          const newFileName = file.name.replace(/\.[^/.]+$/, "") + ".webp";
+          const webpFile = new File([blob], newFileName, { 
+            type: "image/webp",
+            lastModified: Date.now()
+          });
+          resolve(webpFile);
+        }, "image/webp", quality);
+      };
+      img.onerror = () => resolve(file);
+      img.src = e.target?.result as string;
+    };
+    reader.onerror = () => resolve(file);
+    reader.readAsDataURL(file);
+  });
+};
+
+export interface ProcessedPhotoResult {
+  processedFile: File;
+  isBlurred: boolean;
+  detectedTexts: string[];
+  error?: string;
+}
+
+export const processPhotoWithAutoSensor = async (
+  file: File, 
+  category: string
+): Promise<ProcessedPhotoResult> => {
+  try {
+    let fileToProcess = file;
+    let isBlurred = false;
+    let detectedTexts: string[] = [];
+    let scanError: string | undefined = undefined;
+
+    const needAiScan = isBannerProneCategory(category);
+    if (needAiScan) {
+      const lowResBase64 = await createLowResBase64ForAi(file, 1024, 0.65);
+      if (lowResBase64) {
+        const detection = await detectPhotoContactBanner(lowResBase64, 'image/jpeg');
+        if (detection.hasContact && detection.boxes && detection.boxes.length > 0) {
+          fileToProcess = await applyBlurToBoundingBoxes(file, detection.boxes);
+          isBlurred = true;
+          detectedTexts = detection.detectedTexts || [];
+        } else if (detection.error) {
+          scanError = detection.error;
+          console.warn('[AI_BANNER] Deteksi kontak terhambat:', detection.error);
+        }
+      }
+    }
+
+    const webpFile = await compressImageToWebP(fileToProcess);
+    return {
+      processedFile: webpFile,
+      isBlurred,
+      detectedTexts,
+      error: scanError
+    };
+  } catch (err: any) {
+    console.error('[AI_BANNER] Error memproses foto dengan auto sensor:', err);
+    try {
+      const webpFile = await compressImageToWebP(file);
+      return {
+        processedFile: webpFile,
+        isBlurred: false,
+        detectedTexts: [],
+        error: err?.message
+      };
+    } catch {
+      return {
+        processedFile: file,
+        isBlurred: false,
+        detectedTexts: [],
+        error: err?.message
+      };
+    }
   }
 };
 

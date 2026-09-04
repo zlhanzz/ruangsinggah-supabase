@@ -4,6 +4,11 @@ import { FORMAT_CURRENCY, INDONESIAN_BANKS } from '../../constants';
 import { 
     uploadFileAndGetURL 
 } from '../../adminService';
+import {
+    processPhotoWithAutoSensor,
+    processImageUrlWithAutoSensor,
+    isBannerProneCategory
+} from '../../autoSensorService';
 import { 
     Zap, Home, ClipboardList, Wallet, User, Users, ShieldCheck, 
     Menu, X, LogOut, Bell, MessageSquare, Search,
@@ -13,7 +18,7 @@ import {
     RefreshCw, Bed, Bath, Fan, Sparkles, ImagePlus, ChevronDown, ChevronRight, Check,
     Smartphone, MessageCircle, ExternalLink, ArrowLeft, UploadCloud, Edit, Mail, Heart,
     Signal, Wifi, BatteryCharging, CheckSquare, Layers, Building2, CookingPot, AppWindow,
-    ParkingCircle, Wind, Tv, Armchair, Droplets
+    ParkingCircle, Wind, Tv, Armchair, Droplets, ShieldAlert, Loader2
 } from 'lucide-react';
 
 export interface KostManagerPropertyFormModalProps {
@@ -838,6 +843,10 @@ export const KostManagerPropertyFormModal: React.FC<KostManagerPropertyFormModal
         }
     };
 
+    // Auto-Sensor Banner States
+    const [kmBannerNotice, setKmBannerNotice] = useState<string | null>(null);
+    const [reScanningPhotoUrl, setReScanningPhotoUrl] = useState<string | null>(null);
+
     // Public Photo Upload Handler
     const handleUploadPublicPhoto = async (category: string, files: FileList | null) => {
         if (!files || files.length === 0) return;
@@ -845,8 +854,13 @@ export const KostManagerPropertyFormModal: React.FC<KostManagerPropertyFormModal
         try {
             const uploadedUrls: any[] = [];
             for (let i = 0; i < files.length; i++) {
-                const webpFile = await compressImageToWebP(files[i]);
-                const url = await uploadFileAndGetURL(webpFile, `kostmanager/public/${Date.now()}`);
+                const processedFile = await processPhotoWithAutoSensor(files[i], category, (detectedBanner) => {
+                    if (detectedBanner) {
+                        setKmBannerNotice(`⚠️ Auto-Sensor mendeteksi & memburamkan ${detectedBanner.detectedCount} area informasi kontak / banner pada foto "${category}".`);
+                        setTimeout(() => setKmBannerNotice(null), 9000);
+                    }
+                });
+                const url = await uploadFileAndGetURL(processedFile, `kostmanager/public/${Date.now()}`);
                 uploadedUrls.push({ original: url, url: url, label: category });
             }
             setKmListingForm((prev: any) => ({
@@ -857,6 +871,42 @@ export const KostManagerPropertyFormModal: React.FC<KostManagerPropertyFormModal
             alert('Gagal mengunggah foto area umum: ' + err.message);
         } finally {
             setUploadingPublicAreas(prev => ({ ...prev, [category]: false }));
+        }
+    };
+
+    // Manual Re-Scan and Blur Public Photo
+    const handleReScanPublicPhoto = async (photoIdx: number, currentUrl: string, category: string) => {
+        if (!currentUrl) return;
+        setReScanningPhotoUrl(currentUrl);
+        try {
+            const processedUrl = await processImageUrlWithAutoSensor(currentUrl, category, (file, path) => uploadFileAndGetURL(file, path));
+            if (processedUrl && processedUrl !== currentUrl) {
+                const updatedImages = [...(kmListingForm.image_urls || [])];
+                const updatedCats = [...(kmListingForm.photoCategories || [])];
+                
+                // Replace in place
+                if (typeof updatedImages[photoIdx] === 'object') {
+                    updatedImages[photoIdx] = { ...updatedImages[photoIdx], url: processedUrl, original: processedUrl };
+                } else {
+                    updatedImages[photoIdx] = processedUrl;
+                }
+                
+                setKmListingForm({
+                    ...kmListingForm,
+                    image_urls: updatedImages,
+                    photoCategories: updatedCats
+                });
+                setKmBannerNotice(`✅ Berhasil! Nomor kontak / banner pada foto ${category} telah otomatis disensor.`);
+                setTimeout(() => setKmBannerNotice(null), 6000);
+            } else {
+                setKmBannerNotice(`ℹ️ Tidak ditemukan nomor HP / teks banner berlebih pada foto ${category}.`);
+                setTimeout(() => setKmBannerNotice(null), 5000);
+            }
+        } catch (err: any) {
+            console.error('Error re-scanning photo:', err);
+            alert('Gagal memproses sensor foto: ' + err.message);
+        } finally {
+            setReScanningPhotoUrl(null);
         }
     };
 
@@ -2131,9 +2181,23 @@ export const KostManagerPropertyFormModal: React.FC<KostManagerPropertyFormModal
 
                             {/* DOKUMENTASI AREA UMUM & FASILITAS PROPERTI */}
                             <div className="flex flex-col gap-3 p-4 bg-white rounded-2xl border border-[#e0c0af] shadow-xs relative transition-all">
-                                <label className="text-[11px] font-bold text-[#584235] uppercase tracking-wider block">
-                                    DOKUMENTASI AREA UMUM &amp; FASILITAS PROPERTI
-                                </label>
+                                <div className="flex items-center justify-between">
+                                    <label className="text-[11px] font-bold text-[#584235] uppercase tracking-wider block">
+                                        DOKUMENTASI AREA UMUM &amp; FASILITAS PROPERTI
+                                    </label>
+                                    <span className="text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-md flex items-center gap-1">
+                                        <ShieldAlert className="w-3 h-3 text-amber-600" />
+                                        <span>Auto-Sensor Banner Aktif</span>
+                                    </span>
+                                </div>
+
+                                {kmBannerNotice && (
+                                    <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-300 text-amber-900 text-xs font-medium flex items-center gap-2 animate-fadeIn">
+                                        <ShieldAlert className="w-4 h-4 text-amber-600 shrink-0 animate-bounce" />
+                                        <span>{kmBannerNotice}</span>
+                                    </div>
+                                )}
+
                                 {(() => {
                                     const imagesWithCats = (kmListingForm.image_urls || []).map((urlOrObj: any, idx: number) => {
                                         const url = getImageUrlString(urlOrObj);
@@ -2179,6 +2243,11 @@ export const KostManagerPropertyFormModal: React.FC<KostManagerPropertyFormModal
                                                                  label.includes('Dapur') ? <Home className="w-4 h-4 text-[#ff7a00] shrink-0" /> :
                                                                  <Camera className="w-4 h-4 text-[#ff7a00] shrink-0" />}
                                                                 <span className="text-xs font-black text-[#0b1c30] uppercase tracking-wider">{label}</span>
+                                                                {isBannerProneCategory(label) && (
+                                                                    <span className="text-[8px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 border border-amber-200">
+                                                                        Banner Protected
+                                                                    </span>
+                                                                )}
                                                             </div>
                                                             <span className={`text-[10px] font-black px-2.5 py-0.5 rounded-full uppercase tracking-wider ${
                                                                 catPhotos.length > 0 ? 'bg-orange-100 text-[#ff7a00]' : 'bg-gray-100 text-gray-500'
@@ -2188,32 +2257,53 @@ export const KostManagerPropertyFormModal: React.FC<KostManagerPropertyFormModal
                                                         </div>
 
                                                         <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
-                                                            {catPhotos.map((p: any, pIdx: number) => (
-                                                                <div key={p.idx} className="aspect-video w-full rounded-xl overflow-hidden border border-gray-200 relative group bg-gray-50">
-                                                                    <img src={getImageUrlString(p.url)} alt={`${label} ${pIdx + 1}`} className="w-full h-full object-cover" />
-                                                                    <button
-                                                                        type="button"
-                                                                        onClick={() => {
-                                                                            const updatedImages = [...(kmListingForm.image_urls || [])];
-                                                                            const updatedCats = [...(kmListingForm.photoCategories || [])];
-                                                                            updatedImages.splice(p.idx, 1);
-                                                                            updatedCats.splice(p.idx, 1);
-                                                                            setKmListingForm({ 
-                                                                                ...kmListingForm, 
-                                                                                image_urls: updatedImages,
-                                                                                photoCategories: updatedCats
-                                                                            });
-                                                                        }}
-                                                                        className="absolute top-1.5 right-1.5 bg-red-600 hover:bg-red-700 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold shadow-md transition-all active:scale-90 cursor-pointer"
-                                                                        title="Hapus foto ini"
-                                                                    >
-                                                                        &times;
-                                                                    </button>
-                                                                    <div className="absolute bottom-0 left-0 right-0 bg-black/60 py-1 px-1.5 text-[9px] text-white text-center uppercase font-black tracking-wider truncate">
-                                                                        {label} {pIdx + 1}
+                                                            {catPhotos.map((p: any, pIdx: number) => {
+                                                                const isThisScanning = reScanningPhotoUrl === p.url;
+                                                                return (
+                                                                    <div key={p.idx} className="aspect-video w-full rounded-xl overflow-hidden border border-gray-200 relative group bg-gray-50">
+                                                                        <img src={getImageUrlString(p.url)} alt={`${label} ${pIdx + 1}`} className="w-full h-full object-cover" />
+                                                                        {isThisScanning && (
+                                                                            <div className="absolute inset-0 bg-black/60 flex flex-col items-center justify-center text-white z-10">
+                                                                                <Loader2 className="w-5 h-5 animate-spin text-orange-400 mb-1" />
+                                                                                <span className="text-[9px] font-bold">Scanning...</span>
+                                                                            </div>
+                                                                        )}
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() => {
+                                                                                const updatedImages = [...(kmListingForm.image_urls || [])];
+                                                                                const updatedCats = [...(kmListingForm.photoCategories || [])];
+                                                                                updatedImages.splice(p.idx, 1);
+                                                                                updatedCats.splice(p.idx, 1);
+                                                                                setKmListingForm({ 
+                                                                                    ...kmListingForm, 
+                                                                                    image_urls: updatedImages,
+                                                                                    photoCategories: updatedCats
+                                                                                });
+                                                                            }}
+                                                                            className="absolute top-1.5 right-1.5 bg-red-600 hover:bg-red-700 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold shadow-md transition-all active:scale-90 cursor-pointer z-10"
+                                                                            title="Hapus foto ini"
+                                                                        >
+                                                                            &times;
+                                                                        </button>
+                                                                        {isBannerProneCategory(label) && (
+                                                                            <button
+                                                                                type="button"
+                                                                                disabled={isThisScanning}
+                                                                                onClick={() => handleReScanPublicPhoto(p.idx, p.url, label)}
+                                                                                className="absolute top-1.5 left-1.5 bg-amber-500/90 hover:bg-amber-600 text-white rounded px-2 py-0.5 text-[8px] font-bold shadow-sm transition-all flex items-center gap-1 z-10"
+                                                                                title="Sensor ulang nomor HP/banner di foto ini"
+                                                                            >
+                                                                                <ShieldAlert className="w-3 h-3" />
+                                                                                <span>Sensor Ulang</span>
+                                                                            </button>
+                                                                        )}
+                                                                        <div className="absolute bottom-0 left-0 right-0 bg-black/60 py-1 px-1.5 text-[9px] text-white text-center uppercase font-black tracking-wider truncate">
+                                                                            {label} {pIdx + 1}
+                                                                        </div>
                                                                     </div>
-                                                                </div>
-                                                            ))}
+                                                                );
+                                                            })}
 
                                                             <label 
                                                                 className={`aspect-video bg-white border-2 border-dashed border-[#ff7a00] rounded-xl flex flex-col items-center justify-center p-3 cursor-pointer hover:bg-orange-50/50 transition-all text-[#584235] ${
@@ -2234,9 +2324,14 @@ export const KostManagerPropertyFormModal: React.FC<KostManagerPropertyFormModal
                                                                             try {
                                                                                 const newUrls: any[] = [];
                                                                                 for (let f = 0; f < files.length; f++) {
-                                                                                    const webpFile = await compressImageToWebP(files[f]);
+                                                                                    const processedFile = await processPhotoWithAutoSensor(files[f], label, (detectedBanner) => {
+                                                                                        if (detectedBanner) {
+                                                                                            setKmBannerNotice(`⚠️ Auto-Sensor mendeteksi & memburamkan ${detectedBanner.detectedCount} area kontak pada foto "${label}".`);
+                                                                                            setTimeout(() => setKmBannerNotice(null), 9000);
+                                                                                        }
+                                                                                    });
                                                                                     const folder = `kostmanager/public/${Date.now()}_${f}`;
-                                                                                    const publicUrl = await uploadFileAndGetURL(webpFile, folder);
+                                                                                    const publicUrl = await uploadFileAndGetURL(processedFile, folder);
                                                                                     newUrls.push({ original: publicUrl, url: publicUrl, label });
                                                                                 }
                                                                                 const updatedImages = [...(kmListingForm.image_urls || []), ...newUrls];
@@ -2255,7 +2350,7 @@ export const KostManagerPropertyFormModal: React.FC<KostManagerPropertyFormModal
                                                                     }}
                                                                 />
                                                                 {uploadingPublicAreas[`public_${label}`] ? (
-                                                                    <span className="text-[11px] font-bold animate-pulse text-gray-500">Mengunggah...</span>
+                                                                    <span className="text-[11px] font-bold animate-pulse text-gray-500">Memproses &amp; Mengunggah...</span>
                                                                 ) : (
                                                                     <>
                                                                         <ImagePlus className="w-6 h-6 text-[#ff7a00] shrink-0" />
