@@ -1,118 +1,72 @@
-# WALKTHROUGH - Sistem Kendali Biaya Operasional Platform KostManager & Transparansi Laporan Keuangan
+# WALKTHROUGH - Perbaikan Sistem Deteksi Spanduk/Banner & Watermark Otomatis Foto Kost di Dashboard Mitra
 
-Dokumen ini merangkum penyelesaian implementasi sistem kendali biaya operasional platform RuangSinggah.id (default 5%) khusus untuk properti **KostManager**, simulator interaktif dan audit trail di Dashboard Admin, serta transparansi penuh pada Laporan Keuangan di Dashboard Mitra.
-
----
-
-## 1. Ringkasan Kebutuhan & Solusi
-
-1. **Kendali Penuh Biaya Platform di Dashboard Admin**:
-   - Menetapkan biaya operasional platform (default 5%) untuk menunjang layanan pencatatan kamar, pencatatan penghuni, penagihan sewa otomatis, pemasaran, dan pelaporan keuangan properti **KostManager**.
-   - Admin memiliki kendali penuh untuk menaikkan/menurunkan persentase, mengaktifkan/menonaktifkan pemotongan, mengatur cakupan transaksi (sewa baru, perpanjangan sewa, biaya ekstra penghuni, fasilitas), dan melihat audit trail perubahan tarif.
-2. **Kalkulator Simulasi Interaktif**:
-   - Admin dapat mensimulasikan nilai bruto transaksi sewa secara langsung di Admin Dashboard untuk melihat potongan platform dan penerimaan bersih mitra.
-3. **Transparansi Finansial di Dashboard Mitra**:
-   - Modal Laporan Keuangan Properti Bulanan pada menu *Kost Saya* (`MitraDashboard.tsx`) secara dinamis menghitung potongan operasional KostManager secara transparan.
-   - Properti mitra reguler tetap 0% potongan (100% pendapatan sewa utuh diterima mitra).
-   - Uang deposit jaminan 100% dikecualikan dari pemotongan (0% potongan).
-   - Format berbagi laporan ke WhatsApp otomatis mencantumkan rincian potongan operasional dan nilai net diterima.
+Dokumen ini merangkum perbaikan menyeluruh pada integrasi frontend dan Supabase Edge Function untuk deteksi spanduk/banner kontak promosi dan penyematan watermark otomatis `ruangsinggah.id` pada foto properti di Dashboard Mitra.
 
 ---
 
-## 2. Rincian Perubahan Kode
+## 1. Ringkasan Masalah & Solusi yang Diterapkan
 
-### A. Tipe Data & Skema Konfigurasi ([types.ts](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/types.ts))
-- Mendefinisikan antarmuka `KostManagerFeeSettings`:
-  ```ts
-  export interface KostManagerFeeSettings {
-    percentage: number; // default: 5
-    is_active: boolean; // default: true
-    applies_to_new_booking: boolean;
-    applies_to_extension: boolean;
-    applies_to_extra_occupant: boolean;
-    applies_to_facilities: boolean;
-    deposit_excluded: boolean; // fixed true
-    notes?: string;
-    updated_at: string;
-    updated_by: string;
-  }
-  ```
-- Mendefinisikan antarmuka `KostManagerFeeLogEntry` untuk mencatat riwayat perubahan tarif platform (*audit trail*).
+1. **Penyelarasan Nama Edge Function**:
+   - Sebelumnya frontend memanggil nama function `'detect-banner'` yang tidak ada / 404.
+   - Telah diselaraskan menjadi `'detect-contact-banner'` sesuai nama fungsi terdaftar di Supabase.
 
-### B. Service Layer & Persistensi Supabase ([adminService.ts](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/adminService.ts))
-- Menyediakan nilai default `DEFAULT_KOSTMANAGER_FEE_SETTINGS`.
-- Fungsi `getKostManagerFeeSettings()`: mengambil pengaturan tarif dari tabel `app_settings` (key: `'kostmanager_fee_settings'`) dengan mekanisme in-memory cache.
-- Fungsi `getKostManagerFeeLogs()`: mengambil daftar log audit perubahan tarif dari tabel `app_settings` (key: `'kostmanager_fee_logs'`).
-- Fungsi `saveKostManagerFeeSettings()`: menyimpan perubahan pengaturan ke `app_settings` sekaligus mencatat rekaman log baru dengan timestamp, email admin, persentase lama & baru, dan alasan perubahan.
+2. **Penyelarasan Payload Body Parameter**:
+   - Diperbarui menjadi `{ base64Image, image: base64Image, mimeType }` agar kompatibel ke dua arah baik di frontend maupun Edge Function backend.
 
-### C. Panel Kendali & Simulator di Admin Portal ([KostManagerPortal.tsx](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/components/admin/KostManagerPortal.tsx))
-- Ditempatkan pada tab **"Paket & Tarif"** (`activeTab === 'packages'`).
-- **Fitur Utama**:
-  1. **Saklar Status Operasional**: Toggle Aktif/Nonaktif pemotongan platform.
-  2. **Input Persentase & Quick Preset Chips**: Tombol preset instan `0% (Gratis Promo)`, `3%`, `5% (Rekomendasi Standar)`, `7.5%`, dan `10%`.
-  3. **Checklist Cakupan Transaksi**: Centang transaksi yang dikenakan potongan (Sewa Baru, Perpanjangan, Ekstra Penghuni, Fasilitas) disertai banner penegasan bahwa Uang Deposit Jaminan selalu 0% potongan.
-  4. **Kalkulator Simulasi Real-Time**: Input nominal sewa kotor $\rightarrow$ langsung menghitung potongan platform dan pendapatan bersih mitra secara instan.
-  5. **Tabel Audit Trail**: Menampilkan histori perubahan tarif, admin pembuat perubahan, dan catatan alasan.
+3. **Penyelarasan Ekstraksi Data Response AI**:
+   - Respons Edge Function yang mengembalikan data bersarang di `data.data` (dengan kunci `has_contact`, `boxes`, `detected_texts`) kini diekstrak secara dinamis dan tangguh:
+     ```typescript
+     const rawData = data?.data || data || {};
+     const hasContact = Boolean(rawData.has_contact ?? rawData.hasContact ?? false);
+     const boxes = Array.isArray(rawData.boxes) ? rawData.boxes : [];
+     const detectedTexts = Array.isArray(rawData.detected_texts) 
+       ? rawData.detected_texts 
+       : Array.isArray(rawData.detectedTexts) 
+         ? rawData.detectedTexts 
+         : [];
+     ```
 
-### D. Transparansi Laporan Keuangan Mitra ([MitraDashboard.tsx](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/MitraDashboard.tsx))
-- Mengambil konfigurasi `kmFeeSettings` secara otomatis saat dashboard dimuat.
-- Pada Modal Laporan Keuangan Properti Bulanan (`selectedKostForFinance`):
-  - Jika properti berstatus **KostManager** dan fee aktif:
-    - Menghitung `totalOperationalCut = grossRevenue * (feePercentage / 100)`.
-    - Menghitung `totalNetReceived = totalGrossIncome - totalOperationalCut`.
-    - Menampilkan **Kartu Rincian Potongan Operasional Platform KostManager (X%)** secara elegan.
-    - Mengarahkan kartu performa utama ke **Total Bersih Diterima Pemilik Kost** (hijau emerald).
-  - Jika properti berstatus reguler: potongan tetap Rp 0 (100% diterima mitra).
-  - Menyesuaikan klausul transparansi operasional dan template teks ekspor WhatsApp.
+4. **Timeout Guard & Retry Otomatis**:
+   - Menambahkan mekanisme timeout 18 detik dan retry otomatis 1x dalam 800ms jika terjadi *cold start* pada Edge Function atau latensi jaringan seluler.
 
-### E. Standar Ikon Pure SVG Bebas FOUT
-- Seluruh icon menggunakan komponen vector SVG dari package `lucide-react` (`Percent`, `Calculator`, `History`, `Save`, `ShieldCheck`, `FileText`, `Layers`, `Zap`).
+5. **Penyelarasan Cascade Model Gemini pada Edge Function**:
+   - `detect-contact-banner/index.ts` menggunakan daftar model aktif: `gemini-2.0-flash`, `gemini-1.5-flash`, `gemini-2.5-flash`, `gemini-1.5-pro`, `gemini-3.7-flash` dengan rotasi fallback otomatis antar kunci API.
 
 ---
 
-## 3. Berkas yang Disentuh
+## 2. Rincian Perubahan File
 
-1. **[types.ts](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/types.ts)**: Penambahan antarmuka `KostManagerFeeSettings` & `KostManagerFeeLogEntry`.
-2. **[adminService.ts](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/adminService.ts)**: Penambahan service query, mutation, caching, dan audit logging pada Supabase `app_settings`.
-3. **[KostManagerPortal.tsx](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/components/admin/KostManagerPortal.tsx)**: Pembuatan section pengaturan biaya platform, simulator kalkulasi, dan tabel audit log.
-4. **[MitraDashboard.tsx](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/MitraDashboard.tsx)**: Integrasi kalkulasi dinamis potongan platform, kartu transparansi, dan pembaruan format bagikan WhatsApp.
-5. **[functions/PROGRESS.md](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/PROGRESS.md)**: Dokumentasi progres entri nomor 333.
-6. **[WALKTHROUGH.md](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/WALKTHROUGH.md)**: Panduan walkthrough dan hasil pengujian.
+| File | Perubahan Logika |
+| :--- | :--- |
+| [adminService.ts](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/adminService.ts) | Memperbaiki fungsi `detectPhotoContactBanner`: memanggil `'detect-contact-banner'`, menyelaraskan body payload, menambahkan timeout guard 18s & retry 1x, serta meng-unwrap data response bersarang (`data.data.has_contact` & `data.data.boxes`). |
+| [detect-contact-banner/index.ts](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/supabase/functions/detect-contact-banner/index.ts) | Menambahkan fallback ekstraksi body `base64Image \|\| image`, dan menyempurnakan daftar candidate models Gemini. |
+| [functions/PROGRESS.md](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/PROGRESS.md) | Mencatat riwayat progres fitur #334. |
 
 ---
 
-## 4. Hasil Verifikasi & Uji Kompilasi
+## 3. Hasil Pengujian & Verifikasi Kompilasi
 
-1. **Build Frontend Vite (`functions/public`)**:
+1. **Uji Kompilasi Build Frontend (Vite)**:
    ```bash
-   cmd /c npm run build
+   cd functions/public && npm run build
    ```
-   **Hasil**: **LULUS (Exit Code 0)**. Sebanyak 2510 modul tertransformasi dan bundle production berhasil disalin ke `./dist` & `../../public` dalam waktu 30.40 detik tanpa error.
-2. **Build Backend Functions (`functions`)**:
+   - **Hasil**: ✓ 2510 modules transformed, built in 32.10s, **0 errors**.
+2. **Uji Kompilasi TypeScript Backend**:
    ```bash
-   cmd /c npm run build (tsc)
+   cd functions && tsc
    ```
-   **Hasil**: **LULUS (Exit Code 0)**. 0 error kompilasi TypeScript.
+   - **Hasil**: **0 errors**.
 
 ---
 
-## 5. Panduan Pengujian bagi Pengguna
+## 4. Panduan Pengujian oleh Pengguna (User Testing Guide)
 
-### A. Pengujian Kendali Tarif di Dashboard Admin
-1. Buka halaman **Admin Portal KostManager** (`/dashboard-admin/km_portal`).
-2. Masuk ke tab **"Paket & Tarif"**.
-3. Di bagian teratas, Anda akan melihat panel **"Pengaturan Biaya Layanan Platform KostManager"**:
-   - Coba klik chip preset persentase (misal: `3%`, `5%`, `7.5%`, atau `0%`).
-   - Coba ubah nilai pada **Kalkulator Simulasi Pendapatan** (misal masukkan `Rp 2.000.000`) dan perhatikan perubahan angka potongan platform dan net pemilik secara real-time.
-   - Masukkan alasan perubahan pada kolom catatan, lalu klik **"Simpan Pengaturan Biaya"**.
-   - Perhatikan notifikasi sukses dan amati pembaruan entri pada **Riwayat Perubahan Tarif Platform**.
-
-### B. Pengujian Transparansi di Dashboard Mitra
-1. Buka **Dashboard Mitra** (`/dashboard-mitra/properties`).
-2. Pada salah satu properti berstatus **KostManager**, klik tombol **"📄 Laporan Keuangan Kost"**.
-3. Amati tampilan modal:
-   - Terdapat kartu rincian **"Potongan Operasional Platform KostManager (5%)"**.
-   - Kartu statistik utama menampilkan **"Total Bersih Diterima Pemilik Kost"**.
-   - Klik tombol **"Kirim ke WhatsApp"** dan perhatikan bahwa draf pesan WhatsApp telah memuat rincian bruto, potongan platform, dan total net diterima.
-4. Buka modal laporan keuangan pada properti berstatus reguler:
-   - Pastikan potongan operasional tetap Rp 0 (100% diterima penuh).
+1. Buka Dashboard Mitra pada menu **Kelola Kost / Tambah Kost** (`/dashboard-mitra/properties` $\rightarrow$ *"Tambah Kost"* atau *"Edit Kost"*).
+2. Lanjutkan ke **Langkah 5: Dokumentasi Foto**.
+3. Unggah foto pada kategori **Bangunan Depan (Fasad)** yang memuat spanduk / banner kontak sewa kost (misal banner nomor HP/WhatsApp).
+4. **Verifikasi Hasil**:
+   - Sistem akan memindai foto secara otomatis menggunakan AI Vision Edge Function.
+   - Area spanduk nomor kontak akan otomatis disensor/dibutakan (*blurred*).
+   - Di atas area sensor, otomatis tersemat kapsul watermark resmi `ruangsinggah.id`.
+   - Kartu foto menampilkan badge status **"ruangsinggah.id"** berwarna gelap/oranye dan notifikasi perlindungan privasi aktif.
+   - Jika diperlukan, tombol 🛡️ dapat diklik kapan saja untuk memindai ulang foto.

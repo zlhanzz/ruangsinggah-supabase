@@ -7,10 +7,12 @@ const corsHeaders = {
 };
 
 // Model priority cascade: Gunakan model aktif Gemini Flash teruji dengan fallback otomatis
+// Model priority cascade: Gunakan model aktif Gemini Flash teruji dengan fallback otomatis
 const CANDIDATE_MODELS = [
-  "gemini-2.5-flash",
   "gemini-2.0-flash",
   "gemini-1.5-flash",
+  "gemini-2.5-flash",
+  "gemini-1.5-pro",
   "gemini-3.7-flash"
 ];
 
@@ -20,7 +22,9 @@ serve(async (req) => {
   }
 
   try {
-    const { imageUrl, base64Image, mimeType } = await req.json();
+    const rawBody = await req.json().catch(() => ({}));
+    const { imageUrl, mimeType } = rawBody;
+    const base64Image = rawBody.base64Image || rawBody.image;
     console.log("[EDGE_BANNER] Request diterima, panjang base64:", base64Image ? base64Image.length : 0);
 
     const GEMINI_KEYS_RAW = Deno.env.get('GEMINI_API_KEY') || "";
