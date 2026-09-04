@@ -1355,18 +1355,6 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                                 <StatCard label="Permintaan" value={`${pendingCount}`} sub="Butuh persetujuan" icon={<ClipboardList size={18} className="text-orange-500" />} color="orange" alert={pendingCount > 0} />
                             </div>
 
-                            {/* Quick Links — Mobile only */}
-                            <div className="grid grid-cols-2 gap-3 lg:hidden">
-                                <button onClick={() => handleMenuChange('bookings')} className="bg-white border border-gray-100 rounded-2xl p-4 flex items-center gap-3 shadow-sm active:scale-95 transition-transform">
-                                    <div className="w-10 h-10 rounded-xl bg-orange-50 flex items-center justify-center text-orange-500 shrink-0"><ClipboardList size={20} /></div>
-                                    <div className="text-left"><p className="text-xs font-black text-gray-900">Pesanan</p><p className="text-[10px] text-gray-400 font-bold">{pendingCount} Baru</p></div>
-                                </button>
-                                <button onClick={() => handleMenuChange('chat')} className="bg-white border border-gray-100 rounded-2xl p-4 flex items-center gap-3 shadow-sm active:scale-95 transition-transform">
-                                    <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center text-blue-500 shrink-0"><MessageSquare size={20} /></div>
-                                    <div className="text-left"><p className="text-xs font-black text-gray-900">Pesan</p><p className="text-[10px] text-gray-400 font-bold">{chatUnreadCount > 0 ? `${chatUnreadCount} Belum Dibaca` : 'Semua Terbaca'}</p></div>
-                                </button>
-                            </div>
-
                             {/* Charts — 2 col on desktop, full on mobile */}
                             <div className="grid grid-cols-1 lg:grid-cols-5 gap-5">
                                 {/* Area chart */}

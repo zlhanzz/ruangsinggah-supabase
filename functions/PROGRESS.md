@@ -2,6 +2,23 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 324. Penghapusan Shortcut Redundan Pesanan & Pesan pada Tampilan Mobile Dashboard Mitra (`MitraDashboard.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  - Pada tampilan mobile (`lg:hidden`) Beranda Dashboard Mitra, terdapat 2 tombol kartu pintasan (*Quick Links*): Pesanan dan Pesan.
+  - Pengguna meminta kedua menu tersebut dihapus dari area konten mobile karena kedua fitur tersebut sudah tersedia secara permanen dan mudah dijangkau pada **Bottom Navigation Bar** di smartphone. Keberadaan kartu pintasan ini di area dashboard membuat tata letak mobile terasa sesak dan redundan.
+- **Implementasi Solusi**:
+  1. **Pembersihan Kartu Quick Links Mobile (`MitraDashboard.tsx`)**:
+     - Menghapus kontainer `<div className="grid grid-cols-2 gap-3 lg:hidden">...</div>` yang memuat tombol kartu Pesanan dan Pesan di bawah Stat Cards.
+  2. **Optimalisasi Tata Letak & UX Mobile**:
+     - Tampilan Beranda Mitra pada resolusi smartphone menjadi lebih lega, ringkas, dan langsung berfokus pada kartu metrik performa kost (Kunjungan, CTR, Pendapatan, Permintaan) serta kurva grafik tren kunjungan.
+     - Navigasi menuju Pesanan dan Chat tetap berjalan mulus melalui Bottom Navigation Bar.
+- **File Tersentuh**:
+  - `functions/public/pages/MitraDashboard.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi build Vite `npm run build` lulus 100% (✓ 2509 modules transformed, built in 42.14s, 0 error).
+
 ### 323. Penghapusan Data Sensitif PII (NIK, Alamat KTP, dan Link Foto KTP) dari Email Notifikasi Admin (`emailService.ts`, `MitraProfile.tsx`, `AgentProfile.tsx`, `Profile.tsx`) (September 2026)
 - **Permintaan & Masalah**:
   - Saat ada pengajuan verifikasi identitas baru, email notifikasi yang dikirimkan ke admin sebelumnya memuat data sensitif pengguna (PII): Nomor NIK KTP, Alamat Lengkap KTP, dan tautan langsung foto KTP (`ktp_photo_url`).

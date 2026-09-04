@@ -1,55 +1,39 @@
-# WALKTHROUGH - Progres 323: Penghapusan Data Sensitif PII (NIK & Foto KTP) dari Email Notifikasi Admin
+# WALKTHROUGH - Progres 324: Penghapusan Shortcut Redundan Pesanan & Pesan pada Mobile Dashboard Mitra
 
 ## 📋 Ringkasan Perubahan
-Telah dilakukan pembersihan total data pribadi sensitif (*Personally Identifiable Information - PII*) dari sistem pengiriman email notifikasi verifikasi identitas mitra dan agen. Hal ini memastikan kepatuhan penuh terhadap standar perlindungan privasi data dan mencegah risiko kebocoran data (*data breach*) akibat pengiriman berkas identitas secara terbuka via email.
+Menghapus blok kartu pintasan (*Quick Links*) Pesanan dan Pesan pada tampilan smartphone di Beranda Dashboard Mitra ([`MitraDashboard.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/MitraDashboard.tsx#L1350-L1365)). Kedua navigasi tersebut sudah terintegrasi secara permanen pada **Bottom Navigation Bar** mobile.
 
 ---
 
 ## 🛠️ Detail Perubahan Kode
 
-### 1. `functions/public/emailService.ts` ([`notifyAdminIdentityVerification`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/emailService.ts#L133-L161))
-* **Payload Sebelumnya (Sensitif & Berisiko)**:
-  ```json
-  {
-    "Tipe Akun": "Calon Mitra / Pemilik Kost",
-    "Nama Lengkap": "...",
-    "Email Akun": "...",
-    "Nomor WhatsApp": "...",
-    "Nomor NIK KTP": "73710...",
-    "Alamat Sesuai KTP": "Jl. ...",
-    "Tautan Foto KTP": "https://.../ktp_photo.webp",
-    "ID Pengguna": "..."
-  }
+### [`functions/public/pages/MitraDashboard.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/MitraDashboard.tsx#L1350-L1365)
+* **Sebelumnya**:
+  Terdapat blok kartu mobile:
+  ```tsx
+  {/* Quick Links — Mobile only */}
+  <div className="grid grid-cols-2 gap-3 lg:hidden">
+      <button onClick={() => handleMenuChange('bookings')} ...>
+          ... Pesanan (0 Baru) ...
+      </button>
+      <button onClick={() => handleMenuChange('chat')} ...>
+          ... Pesan (Semua Terbaca) ...
+      </button>
+  </div>
   ```
-* **Payload Baru (Aman & Standar Korporat)**:
-  ```json
-  {
-    "Tipe Akun": "Calon Mitra / Pemilik Kost",
-    "Nama Lengkap": "...",
-    "Email Akun": "...",
-    "Nomor WhatsApp": "...",
-    "ID Pengguna": "...",
-    "Status Berkas": "Menunggu Peninjauan Admin (Pending)",
-    "Keamanan Data": "Dokumen fisik KTP & NIK tersimpan aman terenkripsi di sistem database.",
-    "Petunjuk Admin": "Silakan login ke Dashboard Admin resmi RuangSinggah untuk memeriksa berkas identitas dan menyetujui pengajuan ini.",
-    "Link Dashboard Admin": "https://ruangsinggah.id/dashboard"
-  }
-  ```
-
-### 2. Pembersihan Modul Pengirim Verifikasi
-* [`functions/public/pages/MitraProfile.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/MitraProfile.tsx#L713-L721): Menghapus passing `ktp_number`, `ktp_address`, dan `ktp_photo_url`.
-* [`functions/public/pages/AgentProfile.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/AgentProfile.tsx#L637-L645): Menghapus passing `ktp_number`, `ktp_address`, dan `ktp_photo_url`.
-* [`functions/public/pages/Profile.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/Profile.tsx#L264-L272): Menghapus passing `ktp_number` dan `ktp_photo_url`.
+* **Sesudah**:
+  Blok elemen kartu di atas dihapus sepenuhnya. Tata letak mobile langsung mengalir dari baris **Stat Cards** (Kunjungan, CTR, Pendapatan, Permintaan) ke bagian **Grafik Tren Kunjungan**, menghasilkan tampilan yang jauh lebih bersih, rapi, dan lega.
 
 ---
 
 ## 🧪 Hasil Pengujian & Kompilasi
-* **Build Project (`npm run build`)**: Lulus 100% tanpa error (`Exit Code: 0`, 2509 modul ditransformasikan, 39.02s).
-* **Audit Keamanan Data**: Tidak ada NIK, alamat lengkap KTP, maupun URL foto KTP yang terkirim ke jaringan email pihak ketiga. Seluruh pemeriksaan berkas kini 100% terpusat dan terotentikasi di dalam Dashboard Admin.
+* **Build Project (`npm run build`)**: Lulus 100% tanpa error (`Exit Code: 0`, 2509 modul ditransformasikan, 42.14s).
+* **Verifikasi Mobile UX**: Ruang vertikal di layar smartphone menjadi lebih optimal tanpa adanya kartu duplikat yang mengganggu.
 
 ---
 
-## 🔍 Alur Verifikasi Admin yang Benar
-1. Admin menerima email notifikasi sinyal pengajuan verifikasi baru (berisi nama, kontak, dan ID pengguna).
-2. Admin mengklik link menuju **Dashboard Admin** (`/dashboard`).
-3. Admin melihat dan memverifikasi dokumen fisik KTP langsung di portal moderasi admin yang terproteksi hak akses (*Role-Based Access Control*).
+## 🔍 Panduan Verifikasi Pengguna
+1. Buka halaman **Dashboard Mitra** pada smartphone atau aktifkan *Device Mode (Inspect Mobile)* di browser.
+2. Perhatikan bagian di bawah kartu statistik (Kunjungan, CTR, Pendapatan, Permintaan).
+3. Pastikan kartu tombol Pesanan dan Pesan sudah tidak muncul lagi.
+4. Akses menu **Pesanan** dan **Chat** dapat dilakukan secara instan melalui ikon di **Bottom Navigation Bar** bagian bawah layar.
