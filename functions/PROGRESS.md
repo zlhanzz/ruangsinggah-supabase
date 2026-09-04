@@ -2,6 +2,36 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 332. Modernisasi Alur & UI/UX Penambahan Tipe Kamar Dashboard Mitra: Onboarding Ikhtisar, Sub-Wizard 3 Tahap Ramah Mobile & Kalkulasi Luas Ruang Otomatis (`KostFormMitra.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  1. Sebelumnya, ketika mitra berpindah ke Langkah 3 (Tipe Kamar & Tarif), sistem secara agresif langsung membuka form entri default kamar ("Standard 3x4m"), memaksa pengguna langsung mengisi form tanpa ada layar ikhtisar awal.
+  2. Tab stepper 3 tahap pada sub-wizard kamar di layar smartphone terasa sempit, berhimpitan, dan kurang ergonomis.
+  3. Pemilihan ukuran kamar belum menyediakan kalkulasi luas ruangan (misal: "3x4 m" $\rightarrow$ "± 12 m²") yang merupakan standar industri hospitality modern.
+  4. Kartu ringkasan tipe kamar yang tersimpan membutuhkan penyempurnaan visual card yang lebih informatif, badge ketersediaan yang jelas, dan tombol aksi (Edit & Hapus) yang ramah sentuhan.
+- **Implementasi Solusi**:
+  1. **Kontrol Tampilan Bertahap & Empty State Onboarding**:
+     - Logika `isFormOpen` disesuaikan menjadi `editingRoomIndex !== null`. Form tidak lagi terbuka paksa saat pertama kali masuk ke Langkah 3.
+     - Jika kamar masih kosong (`roomList.length === 0`), ditampilkan Empty State Ikhtisar Awal berdesain modern dengan ilustrasi, 3 kartu keunggulan fitur (*Multi-Tipe Kamar*, *Tarif Fleksibel*, *Kapasitas Tamu*), dan tombol primer "+ Tambah Tipe Kamar Pertama".
+  2. **Sub-Wizard 3 Tahap Responsif**:
+     - Header sub-wizard dilengkapi stepper adaptif yang rapi di layar smartphone maupun desktop (`1. Profil & Ukuran`, `2. Kapasitas & Unit`, `3. Periode & Harga`).
+     - Tombol "Batal" / "Tutup" selalu tersedia di sudut kanan atas untuk kembali ke layar ikhtisar kapan saja tanpa kehilangan data form utama.
+  3. **Helper Otomatis Luas Kamar (m²)**:
+     - Disediakan fungsi `calculateRoomArea` untuk mengkalkulasi luas ruangan otomatis dari dimensi kamar (contoh: "3x4 m" $\rightarrow$ "± 12 m²").
+     - Chip preset dimensi kamar cepat dan input kustom dengan indikator luas dinamis.
+  4. **Redesain Kartu Ringkasan Tipe Kamar Tersimpan**:
+     - Nomor urut tipe kamar (#1, #2, dst.), badge status ketersediaan unit (`✓ X Unit Tersedia` atau `✕ Unit Penuh`), chip dimensi & luas, kuota penghuni, serta info biaya tambahan penghuni ekstra.
+     - Penonjolan tarif bulanan pokok yang tegas dan tombol aksi Edit & Hapus dengan touch target yang ramah pengguna.
+     - Tombol "+ Tambah Tipe Kamar Lainnya" dengan desain modern dashed card interaktif.
+  5. **Standar Bebas FOUT**:
+     - Seluruh ikon menggunakan pure vector SVG dari `lucide-react` (`Bed`, `Layers`, `DollarSign`, `Users`, `Pencil`, `Trash2`, `Plus`, `Sparkles`, `Check`, `X`, `ChevronRight`, `ChevronLeft`).
+- **File Tersentuh**:
+  - `functions/public/components/KostFormMitra.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi build frontend Vite `cmd /c npm run build` lulus 100% (✓ 2510 modules transformed, built in 30.95s, 0 error).
+  - Kompilasi backend `functions` `tsc` lulus 100% (0 error).
+
 ### 331. Optimasi Deteksi Fasilitas Sekitar Properti: Prioritas Ritel Tier 1 (Minimarket & SPBU Resmi) dan Filter Anti-Sampah (`KostFormMitra.tsx`, `AgentDashboard.tsx`) (September 2026)
 - **Permintaan & Masalah**:
   - Deteksi otomatis fasilitas harian mikro (Minimarket, SPBU, Laundry, Tempat Ibadah) menggunakan Google Places API sering memunculkan tempat tidak relevan (seperti toko kelontong acak, pertamini/bensin eceran botolan, atau entri data berkualitas rendah/sampah).

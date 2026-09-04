@@ -1,82 +1,116 @@
-# Rencana Implementasi: Perbaikan Scanner Landmark Mikro (Eliminasi False-Positive 'Mobil' & 'Bintang Khalifah', Serta Penajaman Deteksi Minimarket & SPBU Terdekat)
+# IMPLEMENTATION PLAN - Evaluasi & Modernisasi UI/UX Penambahan Tipe Kamar Dashboard Mitra
 
-Dokumen ini merinci rencana investigasi, eliminasi anomali deteksi, serta penguatan logika pemindai fasilitas mikro (*Micro Landmark Scanner*) pada antarmuka input properti mitra dan agen.
-
----
-
-## 1. Analisis Masalah & Investigasi Akar Masalah
-
-Berdasarkan pengujian pada lokasi kost baru dan bukti tangkapan layar yang dilampirkan:
-1. **Munculnya Landmark Anomali 'Mobil' (0.4 km) & Hilangnya SPBU Terdekat**:
-   - **Penyebab**: Pada fungsi `isValidMicroFacility('gas_station', place)`, pemeriksaan mengizinkan tempat lolos jika Google Places mengembalikan `types.includes('gas_station')` tanpa mewajibkan nama tempat mengandung kata kunci SPBU resmi. Di Indonesia, jaringan SPBU mini ExxonMobil atau bengkel pelumas terdaftar di Google Maps dengan nama tunggal **"Mobil"** (atau "Mobil 1").
-   - Karena tempat bernama "Mobil" tersebut berjarak sangat dekat (0.4 km), ia mengalahkan SPBU Pertamina resmi (yang berjarak 0.8 km s/d 1.5 km) dalam pengurutan jarak murni `sort((a, b) => a.kmVal - b.kmVal)`.
-   - Dengan pemotongan `.slice(0, 1)`, SPBU resmi terbuang dan yang muncul di kartu form adalah landmark aneh bernama "Mobil".
-2. **Munculnya Landmark Anomali 'Bintang khalifah' (0.2 km) & Hilangnya Minimarket Terdekat**:
-   - **Penyebab**: Pada fungsi `isValidMicroFacility('minimarket', place)`, validasi memperbolehkan tempat masuk jika memiliki `hasType` (`convenience_store`, `supermarket`, `grocery_or_supermarket`) atau kata generik seperti `'toko'`.
-   - Entitas lokal non-minimarket (seperti toko busana muslim, toko kelontong rumahan, atau lembaga yang terdaftar sebagai toko serba ada) bernama **"Bintang khalifah"** memiliki tag tersebut dan berada di jarak 0.2 km (sangat dekat).
-   - Akibatnya, "Bintang khalifah" (0.2 km) mengalahkan gerai **Indomaret / Alfamart / Alfamidi** nyata terdekat (yang mungkin berjarak 0.5 km) dan terpilih sebagai satu-satunya minimarket melalui `.slice(0, 1)`.
+Dokumen ini adalah rencana kerja Fase 1 untuk mengevaluasi dan merombak tampilan UI/UX penambahan tipe kamar pada formulir tambah/edit properti di Dashboard Mitra ([KostFormMitra.tsx](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/components/KostFormMitra.tsx)), agar lebih responsif di berbagai ukuran layar, berstandar industri modern, serta menerapkan flow entri baru di mana formulir input tidak langsung terbuka otomatis melainkan diawali oleh layar ikhtisar/tombol tambah.
 
 ---
 
-## 2. Dampak Perubahan File
+## 1. Analisis Masalah & Kebutuhan Pengguna
 
-Perubahan difokuskan secara presisi pada logika pemindaian dan sanitasi landmark di 2 file utama:
-1. `functions/public/components/KostFormMitra.tsx`:
-   - Formulir pendaftaran dan edit properti oleh Mitra Kost.
-2. `functions/public/pages/AgentDashboard.tsx`:
-   - Formulir input dan kurasi listing KostManager oleh Agen / Tim Operasional RuangSinggah.
+### A. Masalah Alur Entri (*Immediate Form Open*)
+- **Kondisi Saat Ini**:
+  Pada kode [KostFormMitra.tsx](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/components/KostFormMitra.tsx) baris 4505 terdapat logika:
+  ```ts
+  const isFormOpen = editingRoomIndex !== null || roomList.length === 0;
+  ```
+  Hal ini menyebabkan ketika mitra berpindah dari Langkah 2 (Lokasi) menuju Langkah 3 (Tipe Kamar), sistem **secara agresif langsung membuka formulir sub-wizard** pengisian dengan nilai default kamar ("Standard 3x4m") meskipun mitra belum pernah menekan tombol tambah kamar.
+- **Kebutuhan Pengguna**:
+  Ketika baru pertama kali masuk ke Langkah 3, sistem tidak boleh langsung memaksa membuka menu input kamar. Mitra harus melihat layar ikhtisar terlebih dahulu dan secara sadar menekan tombol **"+ Tambah Tipe Kamar"** baru kemudian formulir input muncul.
 
----
-
-## 3. Rencana Langkah-Langkah Eksekusi
-
-### Langkah 1: Penguatan Sanitasi Global (`isGarbageFacility`)
-- Menambahkan aturan penolakan mutlak untuk:
-  - Nama tunggal `'mobil'` atau `'mobil 1'` (yang tidak disertai kata 'spbu', 'pom', atau 'indostation').
-  - Usaha otomotif/rental: `'rental mobil'`, `'sewa mobil'`, `'cuci mobil'`, `'variasi mobil'`, `'showroom'`.
-  - Entitas non-publik: `'bintang khalifah'`, `'toko baju'`, `'toko pakaian'`, `'toko plastik'`, `'toko beras'`, `'toko bangunan'`, `'toko emas'`, `'warung sembako'`, `'paud'`, `'kb '`.
-
-### Langkah 2: Pengetatan Validasi Fasilitas Mikro (`isValidMicroFacility`)
-- **Kategori `minimarket`**:
-  - Mewajibkan nama tempat (`name`) secara eksplisit mengandung merek ritel resmi atau kata minimarket:
-    `'indomaret'`, `'alfamart'`, `'alfamidi'`, `'circle k'`, `'familymart'`, `'family mart'`, `'lawson'`, `'super indo'`, `'superindo'`, `'hypermart'`, `'minimarket'`, `'mini market'`, `'swalayan'`, atau akhiran `' mart'`.
-  - Menghapus kata kunci longgar seperti `'toko'` dan `'toko kelontong'` agar warung/toko biasa tidak menyamar sebagai minimarket.
-  - `hasType` dari Google Places **tidak boleh** meloloskan tempat jika namanya tidak cocok dengan kata kunci ritel di atas.
-  - Blacklist kata non-minimarket: `'bintang'`, `'khalifah'`, `'busana'`, `'baju'`, `'pakaian'`, `'distributor'`, `'grosir'`.
-- **Kategori `gas_station`**:
-  - Mewajibkan nama tempat mengandung identitas SPBU resmi:
-    `'spbu'`, `'pertamina'`, `'shell'`, `'bp '`, `'bp-'`, `'pom bensin'`, `'vivo'`.
-  - Jika nama memuat kata `'mobil'`, wajib disertai kata `'spbu'`, `'pom'`, atau `'indostation'` (contoh: *"SPBU Mobil Indostation"*), dan menolak keras nama yang hanya berbunyi *"Mobil"*.
-  - Menolak mutlak `'pertamini'`, `'eceran'`, `'pom mini'` (kios bensin botolan tidak resmi).
-
-### Langkah 3: Penerapan Sistem Prioritas Bertingkat (*Tiered Priority Ranking*)
-- **Minimarket**:
-  - **Tier 1 (Ritel Nasional Terverifikasi)**: Indomaret, Alfamart, Alfamidi, Circle K, FamilyMart, Lawson, Super Indo.
-  - **Tier 2 (Minimarket/Swalayan Independen)**: Memuat kata "minimarket", "swalayan".
-  - Logika seleksi: Jika ada Tier 1 dalam radius toleransi (hingga 3.5 km), pilih yang paling dekat dari Tier 1. Jika tidak ada sama sekali, baru gunakan Tier 2 terdekat.
-- **SPBU / Pom Bensin**:
-  - **Tier 1 (SPBU Resmi Nasional)**: Pertamina, Shell, BP, Vivo, atau diawali "SPBU".
-  - **Tier 2 (SPBU Mikro Terverifikasi)**: Indostation Mobil resmi.
-  - Logika seleksi: Utamakan SPBU resmi Pertamina/Shell/BP terdekat (radius hingga 5.0 km).
-
-### Langkah 4: Penguatan Query Penelusuran Google Places
-- Menambahkan query penelusuran paralel:
-  - Minimarket: menambahkan penelusuran eksplisit `keyword: 'alfamidi'`.
-  - SPBU: menambahkan penelusuran eksplisit `keyword: 'pertamina'`.
-- Menyesuaikan batas radius filter agar ramah kawasan perumahan/suburban:
-  - Minimarket: radius toleransi hingga `3.5 KM`.
-  - SPBU: radius toleransi hingga `5.0 KM`.
+### B. Masalah Keterbatasan UI/UX & Responsivitas
+1. **Mini-Stepper Sempit di Mobile**:
+   Tab navigasi 3 tahap (`1. Profil & Ukuran`, `2. Kapasitas & Unit`, `3. Periode & Harga`) pada layar smartphone terlihat padat dan teksnya saling berhimpitan atau terpotong.
+2. **Preset & Input Nama Kamar**:
+   Pilihan preset dan opsi nama kustom perlu transisi visual yang lebih halus dan intuitif.
+3. **Keterbacaan Dimensi Kamar**:
+   Pemilihan ukuran kamar (`3x3 m`, `3x4 m`, dll.) belum memberikan kalkulasi luas ruangan (misal: "± 12 m²") yang menjadi standar industri (seperti di Airbnb, Mamikos, Booking.com).
+4. **Kontrol Kapasitas & Ketersediaan Unit**:
+   Tombol stepper counter (+/-) dan kapasitas penghuni perlu target sentuh (*touch target*) minimal 44x44px yang nyaman di perangkat seluler dengan visual ikon `lucide-react` yang elegan.
+5. **Kerapian Kartu Ringkasan Kamar Tersimpan**:
+   Kartu kamar yang sudah dibuat membutuhkan visual card modern dengan badge status ketersediaan yang tegas, label harga utama yang menonjol, dan tombol aksi (Edit & Hapus) yang ergonomis.
 
 ---
 
-## 4. Rencana Verifikasi & Pengujian
+## 2. Dampak Perubahan
 
-1. **Uji Kompilasi Kode**:
-   - Menjalankan `cmd /c npm run build` pada `functions/public` untuk memastikan 0 error kompilasi Vite dan TypeScript.
-2. **Uji Simulasi Sanitasi & Filter**:
-   - Memastikan nama "Mobil" tereliminasi 100% dan digantikan oleh SPBU Pertamina/Shell terdekat.
-   - Memastikan nama "Bintang khalifah" tereliminasi 100% dan digantikan oleh Indomaret/Alfamart/Alfamidi terdekat.
-3. **Pencatatan Riwayat & Git**:
-   - Mencatat progres ke `functions/PROGRESS.md` (Entri #331).
-   - Menerbitkan `WALKTHROUGH.md`.
-   - Melakukan commit dan push ke branch `bukan-productions`.
+File yang disentuh:
+- **[KostFormMitra.tsx](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/components/KostFormMitra.tsx)**:
+  1. Penyesuaian state kontrol form terbuka/tertutup (`editingRoomIndex !== null`).
+  2. Implementasi **Layar Ikhtisar Awal / Empty State** yang memuat ilustrasi, ringkasan panduan, dan tombol aksi primer `+ Tambah Tipe Kamar Pertama`.
+  3. Redesain **Mini-Stepper 3 Tahap** yang adaptif di layar smartphone maupun desktop.
+  4. Peningkatan komponen input di setiap tahap:
+     - **Tahap 1**: Radio chip preset nama + transisi input nama kustom, quick chip ukuran kamar + indikator kalkulasi luas (m²).
+     - **Tahap 2**: Tombol pill kapasitas dengan ikon person, stepper ketersediaan kamar yang ramah sentuhan, dan switch pertanyaan biaya penghuni ekstra yang bersih.
+     - **Tahap 3**: Pilihan multi-periode dengan indikator tarif Bulanan sebagai tarif utama, input format Rupiah otomatis (`Rp X.XXX.XXX`), dan field biaya penghuni ekstra terpadu.
+  5. Redesain **Kartu Ringkasan Tipe Kamar** tersimpan agar setara standar aplikasi perhotelan & kost modern.
+  6. Penyediaan tombol **"Batal"** yang selalu aman diklik untuk kembali ke layar ikhtisar/daftar kamar tanpa menghilangkan data lain.
+
+> [!NOTE]
+> Seluruh skema struktur data `RoomType`, alur validasi `validateCurrentStep(2)`, dan binding database Supabase tetap dipertahankan 100% tanpa perubahan struktur tabel.
+
+---
+
+## 3. Langkah-Langkah Eksekusi Rinci
+
+### Langkah 1: Penyesuaian Logika Tampilan & State Buka/Tutup
+- Ubah penentu `isFormOpen`:
+  ```ts
+  const isFormOpen = editingRoomIndex !== null;
+  ```
+- Buat fungsi `startAddNewRoomFirstTime()` atau optimalkan `startAddRoom()` yang mengatur `editingRoomIndex(-1)` dan menginisialisasi draft kamar bersih.
+- Fungsi `cancelRoomDraft()` memastikan `editingRoomIndex` kembali ke `null`, menutup form dan kembali ke tampilan ikhtisar/daftar kamar.
+
+### Langkah 2: Pembuatan Komponen Layar Ikhtisar Awal (Empty State)
+- Jika `roomList.length === 0` dan `!isFormOpen`:
+  - Tampilkan card sambutan modern dengan ikon `Bed` / `Layers`.
+  - Judul: "Atur Tipe Kamar & Tarif Sewa".
+  - Penjelasan singkat manfaat pendaftaran tipe kamar.
+  - Poin keunggulan ringkas (misal: *Bisa buat beragam tipe*, *Fleksibilitas sewa bulanan/harian*, *Fasilitas detail diatur di langkah berikutnya*).
+  - Tombol aksi primer: **"+ Tambah Tipe Kamar Pertama"** yang mencolok dengan efek hover modern.
+
+### Langkah 3: Modernisasi Sub-Wizard Form (3 Tahap)
+- **Header Sub-Wizard**:
+  - Stepper adaptif dengan visual active bar / pill steps yang rapi di layar mobile (tidak membuat teks terpotong).
+  - Tombol "Batal" / "Tutup" yang jelas di sudut kanan atas.
+- **Tahap 1 (Profil & Ukuran)**:
+  - Preset nama tipe kamar yang responsif + animasi pembuka input kustom.
+  - Dimensi kamar: Chip preset + input teks dengan helper perhitungan luas otomatis (contoh: "3x4 m" $\rightarrow$ "± 12 m²").
+- **Tahap 2 (Kapasitas & Ketersediaan)**:
+  - Pilihan kapasitas penghuni (1, 2, 3 Orang) dengan ikon `User` / `Users`.
+  - Stepper unit kamar yang nyaman untuk tap jari di smartphone.
+  - Kartu opsi biaya sewa tambahan penghuni ekstra yang jelas.
+- **Tahap 3 (Periode Sewa & Harga)**:
+  - Chip toggle periode sewa (Bulanan sebagai tarif utama).
+  - Input nominal sewa dengan currency formatting otomatis.
+  - Input biaya tambahan penghuni (jika diaktifkan) dalam kartu aksen yang rapi.
+  - Tombol navigasi "Kembali" dan "Simpan Tipe Kamar" yang kontras dan responsif.
+
+### Langkah 4: Modernisasi Kartu Tipe Kamar Tersimpan (Summary View)
+- Jika `roomList.length > 0` dan `!isFormOpen`:
+  - Tampilkan kartu-kartu tipe kamar dengan desain berkelas:
+    - Chip status ketersediaan kamar (`X Kamar Tersedia` atau `Kamar Penuh`).
+    - Chip dimensi dan kapasitas penghuni.
+    - Nominal tarif bulanan yang besar dan jelas.
+    - Tombol aksi `Edit` dan `Hapus` dengan touch target yang ramah pengguna.
+  - Tombol `+ Tambah Tipe Kamar Lainnya` dengan style modern dashed card yang interaktif.
+  - Banner pemandu informatif bahwa fasilitas kasur/lemari/AC dan foto kamar akan diatur di Langkah 4 & 5.
+
+---
+
+## 4. Rencana Verifikasi
+
+1. **Uji Validasi Form & Flow Baru**:
+   - Memastikan saat masuk ke Langkah 3 pertama kali, form input TIDAK langsung terbuka; layar menampilkan ikhtisar dan tombol "+ Tambah Tipe Kamar Pertama".
+   - Menekan "+ Tambah Tipe Kamar Pertama" membuka form input 3 tahap secara mulus.
+   - Menekan tombol "Batal" menutup form dan kembali ke layar ikhtisar tanpa error.
+   - Mengisi dan menyimpan tipe kamar membuat kartu tipe kamar muncul di daftar.
+   - Menekan "+ Tambah Tipe Kamar Lainnya" membuka form untuk tipe kamar berikutnya.
+   - Menekan "Edit" pada kartu kamar mengisi data lama ke form dengan benar.
+   - Menghapus kamar berhasil dengan konfirmasi yang aman.
+2. **Uji Validasi Ketat Langkah Wizard**:
+   - Memastikan jika belum ada kamar terdaftar sama sekali, menekan tombol "Lanjut" utama di footer tetap dicegah oleh validator ("Wajib mendaftarkan minimal satu tipe kamar sebelum melanjutkan").
+   - Memastikan jika form sedang terbuka dan belum disimpan, tombol "Lanjut" mengingatkan user untuk menyimpan atau membatalkan draft kamar.
+3. **Uji Responsivitas Tampilan**:
+   - Memastikan stepper dan form tidak overflow atau berantakan pada resolusi mobile (360px - 414px) maupun desktop.
+4. **Uji Kompilasi Kode**:
+   - Menjalankan `cmd /c npm run build` pada folder `functions/public` untuk memastikan 0 error kompilasi TypeScript / Vite.
+   - Menjalankan `cmd /c npm run build` pada folder `functions` untuk memastikan build backend tetap lulus 100%.
