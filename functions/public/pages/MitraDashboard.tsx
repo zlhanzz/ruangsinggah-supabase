@@ -17,10 +17,10 @@ import {
 } from 'recharts';
 import {
     Zap, Home, ClipboardList, Wallet, User, Users, Compass,
-    Plus, Edit, Eye, Check, MessageSquare, Search, Filter, MoreHorizontal, ArrowUpRight, ArrowRight,
+    Plus, Edit, Eye, Check, MessageSquare, Search, Filter, MoreHorizontal, ArrowUpRight, ArrowDownRight, ArrowRight,
     Clock, LogOut, Bell, ChevronRight, TrendingUp, Menu, X, Landmark, CreditCard, Save,
     Briefcase, GraduationCap, Heart, MapPin, Trash2, FileText,
-    Bed, Lock, Send, ShieldCheck, Sparkles, CheckCircle2, AlertCircle, Phone
+    Bed, Lock, Send, ShieldCheck, Sparkles, CheckCircle2, AlertCircle, Phone, Building2, Receipt
 } from 'lucide-react';
 import MitraProfile from './MitraProfile';
 import ChatWindow from '../components/ChatWindow';
@@ -77,6 +77,32 @@ const CHART_DATA = [
 ];
 
 type MenuKey = 'overview' | 'properties' | 'bookings' | 'tenants' | 'chat' | 'wallet' | 'profile' | 'km_progress';
+
+// ── Pilihan Cepat Bank & E-Wallet Populer (Standard E-Commerce / Fintech) ─────
+const POPULAR_BANKS = [
+    { name: 'BCA', label: 'BCA', badge: 'Bank' },
+    { name: 'MANDIRI', label: 'Mandiri', badge: 'Bank' },
+    { name: 'BRI', label: 'BRI', badge: 'Bank' },
+    { name: 'BNI', label: 'BNI', badge: 'Bank' },
+    { name: 'BSI (Bank Syariah Indonesia)', label: 'BSI Syariah', badge: 'Syariah' },
+    { name: 'SEABANK', label: 'SeaBank', badge: 'Digital' },
+    { name: 'BANK JAGO', label: 'Bank Jago', badge: 'Digital' },
+    { name: 'GOPAY', label: 'GoPay', badge: 'E-Wallet' },
+    { name: 'OVO', label: 'OVO', badge: 'E-Wallet' },
+    { name: 'DANA', label: 'DANA', badge: 'E-Wallet' },
+    { name: 'SHOPEEPAY', label: 'ShopeePay', badge: 'E-Wallet' },
+];
+
+const formatCurrencyInput = (val: string | number) => {
+    const clean = String(val).replace(/\D/g, '');
+    if (!clean) return '';
+    return Number(clean).toLocaleString('id-ID');
+};
+
+const parseCurrencyInput = (val: string | number) => {
+    const clean = String(val).replace(/\D/g, '');
+    return clean ? parseInt(clean, 10) : 0;
+};
 
 // ── Sidebar Nav Item ──────────────────────────────────────────────────────────
 const SideNavItem: React.FC<{ active: boolean; icon: React.ReactNode; label: string; badge?: number; onClick: () => void }> = ({ active, icon, label, badge, onClick }) => (
@@ -284,6 +310,7 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
     const [testWaPhone, setTestWaPhone] = useState('');
     const [selectedBookingForProfile, setSelectedBookingForProfile] = useState<any | null>(null);
     const [selectedUserForProfile, setSelectedUserForProfile] = useState<any | null>(null);
+    const [selectedWithdrawalDetail, setSelectedWithdrawalDetail] = useState<any | null>(null);
 
     // --- KOSTMANAGER SMART AUTO-PILOT STATE ---
     const [selectedKmForRooms, setSelectedKmForRooms] = useState<Kost | null>(null);
@@ -417,13 +444,23 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
     };
 
     const saveWithdrawalAccount = async () => {
+        if (!editForm.bank_name || !editForm.bank_account || !editForm.bank_account_name) {
+            alert('Mohon lengkapi nama bank, nomor rekening, dan nama pemilik rekening.');
+            return;
+        }
+        if (editForm.bank_account.replace(/\D/g, '').length < 4) {
+            alert('Nomor rekening tidak valid. Mohon periksa kembali.');
+            return;
+        }
         setIsSavingBank(true);
         try {
+            const cleanAccount = editForm.bank_account.trim();
+            const cleanName = editForm.bank_account_name.trim().toUpperCase();
             const { error } = await supabase.from('user_bank_accounts').upsert({
                 user_id: uid,
                 bank_name: editForm.bank_name,
-                bank_account: editForm.bank_account,
-                bank_account_name: editForm.bank_account_name,
+                bank_account: cleanAccount,
+                bank_account_name: cleanName,
                 updated_at: new Date().toISOString()
             }, { onConflict: 'user_id' });
             if (error) throw error;
@@ -432,16 +469,20 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
             await supabase.auth.updateUser({
                 data: {
                     bank_name: editForm.bank_name,
-                    bank_account: editForm.bank_account,
-                    bank_account_name: editForm.bank_account_name
+                    bank_account: cleanAccount,
+                    bank_account_name: cleanName
                 }
             });
 
-            setWithdrawalAccount({ ...editForm });
+            setWithdrawalAccount({
+                bank_name: editForm.bank_name,
+                bank_account: cleanAccount,
+                bank_account_name: cleanName
+            });
             setIsEditingBank(false);
-            alert('Rekening penarikan diperbarui!');
+            alert('Rekening penarikan berhasil disimpan & terhubung!');
         } catch (e: any) {
-            alert('Gagal menyimpan: ' + e.message);
+            alert('Gagal menyimpan rekening: ' + e.message);
         } finally {
             setIsSavingBank(false);
         }
@@ -703,9 +744,15 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
     };
 
     const handleWithdraw = async () => {
-        const balance = stats.availableBalance;
-        if (balance < 10000) {
-            alert('Saldo minimal untuk penarikan adalah Rp 10.000');
+        const available = stats.availableBalance;
+        const requestedAmount = withdrawAmount ? parseCurrencyInput(withdrawAmount) : available;
+        
+        if (requestedAmount < 10000) {
+            alert('Nominal minimal penarikan adalah Rp 10.000');
+            return;
+        }
+        if (requestedAmount > available) {
+            alert(`Nominal penarikan (${FORMAT_CURRENCY(requestedAmount)}) melebihi saldo tersedia (${FORMAT_CURRENCY(available)}).`);
             return;
         }
         if (!withdrawalAccount.bank_name || !withdrawalAccount.bank_account || !withdrawalAccount.bank_account_name) {
@@ -718,7 +765,7 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                 .from('withdrawal_requests')
                 .insert([{
                     agent_id: uid,
-                    amount: balance,
+                    amount: requestedAmount,
                     bank_name: withdrawalAccount.bank_name,
                     bank_account: withdrawalAccount.bank_account,
                     bank_account_name: withdrawalAccount.bank_account_name,
@@ -726,14 +773,15 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                 }]);
             if (error) throw error;
 
-            alert('Pengajuan penarikan berhasil dikirim!');
+            alert(`Pengajuan penarikan dana sebesar ${FORMAT_CURRENCY(requestedAmount)} berhasil dikirim! Dana akan diproses maksimal 1x24 jam kerja.`);
             setShowWithdrawConfirm(false);
+            setWithdrawAmount('');
             await loadData();
 
             notifyAdminWithdrawalRequest({
                 agent_id: uid,
                 agent_name: user?.displayName || user?.name || 'Mitra (Owner)',
-                amount: balance,
+                amount: requestedAmount,
                 bank_name: withdrawalAccount.bank_name,
                 bank_account: withdrawalAccount.bank_account,
                 bank_account_name: withdrawalAccount.bank_account_name
@@ -885,11 +933,15 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
 
     const outTx = withdrawalHistory.map(w => ({
         id: `out-${w.id}`,
+        rawId: w.id,
         date: new Date(w.created_at),
         type: 'OUT',
-        title: `Penarikan Dana (${w.bank_name})`,
+        title: `Penarikan ke ${w.bank_name || 'Bank'}`,
         amount: Number(w.amount),
-        status: w.status
+        status: w.status,
+        bank_name: w.bank_name,
+        bank_account: w.bank_account,
+        bank_account_name: w.bank_account_name
     }));
 
     const allTransactions = [...inTx, ...outTx]
@@ -2239,7 +2291,7 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                         <div className="space-y-6 animate-in fade-in duration-300">
                             <div>
                                 <h3 className="font-black text-gray-900 text-lg">Dompet & Keuangan</h3>
-                                <p className="text-xs text-gray-400 font-bold mt-0.5 uppercase tracking-widest">Manajemen pendapatan sewa</p>
+                                <p className="text-xs text-gray-400 font-bold mt-0.5 uppercase tracking-widest">Manajemen pendapatan & pencairan saldo sewa</p>
                             </div>
                             <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
                                 {/* Balance Card */}
@@ -2249,7 +2301,7 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                                             <div>
                                                 <p className="text-[10px] font-bold uppercase tracking-wider text-white/40 mb-2">Saldo Tersedia</p>
                                                 <h3 className="text-3xl font-bold tracking-tighter text-orange-400">{FORMAT_CURRENCY(stats.availableBalance)}</h3>
-                                                <p className="text-[10px] font-semibold text-white/30 mt-1">Siap ditarik ke rekening Anda</p>
+                                                <p className="text-[10px] font-semibold text-white/30 mt-1">Siap ditarik ke rekening bank Anda</p>
                                             </div>
                                             <div className="w-12 h-12 rounded-2xl bg-white/10 flex items-center justify-center backdrop-blur-md border border-white/10 animate-pulse">
                                                 <Wallet size={24} className="text-white" />
@@ -2265,12 +2317,16 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                                                 }
                                                 if (!withdrawalAccount.bank_account || !withdrawalAccount.bank_name) {
                                                     alert('Silakan isi dan simpan data rekening penarikan terlebih dahulu.');
+                                                    setEditForm({ ...withdrawalAccount });
+                                                    setIsEditingBank(true);
                                                     return;
                                                 }
+                                                setWithdrawAmount(formatCurrencyInput(stats.availableBalance));
                                                 setShowWithdrawConfirm(true);
                                             }}
-                                            className="h-12 w-full bg-orange-500 rounded-2xl flex items-center justify-center font-black text-xs uppercase tracking-widest shadow-xl shadow-orange-500/20 hover:bg-orange-400 transition-colors active:scale-95"
+                                            className="h-12 w-full bg-orange-500 rounded-2xl flex items-center justify-center font-black text-xs uppercase tracking-widest shadow-xl shadow-orange-500/20 hover:bg-orange-400 transition-colors active:scale-95 gap-2"
                                         >
+                                            <ArrowDownRight size={18} />
                                             Tarik Dana Sekarang
                                         </button>
                                     </div>
@@ -2278,56 +2334,141 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                                     <div className="absolute bottom-0 left-0 w-32 h-32 bg-blue-500/10 rounded-full blur-[50px]" />
                                 </div>
 
-                                {/* Bank Account */}
-                                <div className="bg-white rounded-3xl border border-gray-100 p-6 shadow-sm flex flex-col">
-                                    <h4 className="font-black text-gray-900 mb-5">Rekening Penarikan</h4>
-                                    <div className="p-5 bg-gray-50 rounded-2xl border border-gray-100 flex items-center gap-4 flex-1">
-                                        <div className="w-14 h-14 rounded-2xl bg-white shadow-sm flex items-center justify-center text-orange-500 font-black text-[10px] uppercase border border-gray-100 px-2 text-center break-all leading-tight">{withdrawalAccount.bank_name}</div>
+                                {/* Bank Account Virtual Card (Ala Shopee / TikTok Shop) */}
+                                <div className="bg-white rounded-3xl border border-gray-100 p-6 shadow-sm flex flex-col justify-between">
+                                    <div className="flex items-center justify-between mb-2">
                                         <div>
-                                            <p className="font-black text-gray-900">{withdrawalAccount.bank_account}</p>
-                                            <p className="text-[10px] font-bold text-gray-400 mt-1 uppercase tracking-widest">A/N {withdrawalAccount.bank_account_name}</p>
+                                            <h4 className="font-black text-gray-900 text-sm">Rekening Penarikan</h4>
+                                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mt-0.5">Tujuan transfer dana otomatis</p>
+                                        </div>
+                                        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-50 text-emerald-600 border border-emerald-100">
+                                            <CheckCircle2 size={12} /> Terverifikasi
+                                        </span>
+                                    </div>
+
+                                    {/* Virtual Card Graphic */}
+                                    <div className="bg-gradient-to-tr from-slate-950 via-slate-900 to-indigo-950 rounded-2xl p-5 text-white relative overflow-hidden shadow-md border border-slate-800/80 my-2">
+                                        <div className="absolute top-0 right-0 w-40 h-40 bg-orange-500/10 rounded-full blur-2xl pointer-events-none" />
+                                        <div className="absolute -bottom-10 -left-10 w-32 h-32 bg-blue-500/10 rounded-full blur-2xl pointer-events-none" />
+                                        
+                                        {/* Card Header: Bank Name & Network */}
+                                        <div className="flex items-center justify-between relative z-10 mb-4">
+                                            <div className="flex items-center gap-2.5">
+                                                <div className="w-8 h-8 rounded-xl bg-white/10 backdrop-blur-md flex items-center justify-center border border-white/20 text-orange-400">
+                                                    <Landmark size={16} />
+                                                </div>
+                                                <span className="font-black tracking-widest text-sm uppercase text-white">
+                                                    {withdrawalAccount.bank_name || 'BELUM DIATUR'}
+                                                </span>
+                                            </div>
+                                            <span className="text-[9px] font-black uppercase tracking-widest px-2.5 py-0.5 rounded-md bg-white/10 text-white/80 border border-white/10 backdrop-blur-sm">
+                                                DEBIT / VIRTUAL
+                                            </span>
+                                        </div>
+
+                                        {/* Card Chip */}
+                                        <div className="flex items-center justify-between relative z-10 mb-4">
+                                            <div className="w-10 h-7 rounded-md bg-gradient-to-br from-amber-200 via-yellow-400 to-amber-600 shadow border border-amber-300/50 flex items-center justify-center">
+                                                <div className="w-7 h-5 border border-amber-800/30 rounded grid grid-cols-2 grid-rows-2 opacity-60" />
+                                            </div>
+                                            <div className="text-white/40 text-xs font-mono tracking-widest">
+                                                •••• RS-PAY
+                                            </div>
+                                        </div>
+
+                                        {/* Card Number & Holder */}
+                                        <div className="relative z-10 space-y-1">
+                                            <p className="font-mono text-base font-black tracking-widest text-white/90">
+                                                {withdrawalAccount.bank_account ? withdrawalAccount.bank_account : '•••• •••• •••• ••••'}
+                                            </p>
+                                            <div className="flex items-center justify-between pt-1">
+                                                <div>
+                                                    <p className="text-[8px] font-bold uppercase tracking-widest text-white/40">Pemilik Rekening</p>
+                                                    <p className="text-xs font-black uppercase tracking-wider text-white truncate max-w-[200px]">
+                                                        {withdrawalAccount.bank_account_name || 'BELUM DIISI'}
+                                                    </p>
+                                                </div>
+                                                <div className="text-right">
+                                                    <p className="text-[8px] font-bold uppercase tracking-widest text-white/40">Status</p>
+                                                    <p className="text-[10px] font-black text-emerald-400 uppercase tracking-wider">UTAMA</p>
+                                                </div>
+                                            </div>
                                         </div>
                                     </div>
-                                    <button className="mt-4 h-11 w-full border-2 border-dashed border-gray-200 text-gray-400 font-black text-xs uppercase tracking-widest rounded-xl hover:bg-orange-50 hover:text-orange-500 hover:border-orange-200 transition-colors" onClick={() => { setEditForm({ ...withdrawalAccount }); setIsEditingBank(true); }} >
-                                        + Ganti Rekening Penarikan
+
+                                    {/* Manage Bank Button */}
+                                    <button 
+                                        className="mt-2 h-11 w-full border border-gray-200 text-gray-700 font-black text-xs uppercase tracking-widest rounded-2xl hover:bg-orange-50 hover:text-orange-600 hover:border-orange-300 transition-all flex items-center justify-center gap-2 active:scale-95 shadow-sm" 
+                                        onClick={() => { 
+                                            setEditForm({ ...withdrawalAccount }); 
+                                            setIsEditingBank(true); 
+                                        }}
+                                    >
+                                        <CreditCard size={15} />
+                                        {withdrawalAccount.bank_account ? 'Ubah / Ganti Rekening' : '+ Atur Rekening Penarikan'}
                                     </button>
                                 </div>
                             </div>
 
                             {/* History */}
                             <div className="bg-white rounded-3xl border border-gray-100 p-6 shadow-sm">
-                                <h4 className="font-black text-gray-900 mb-5">Riwayat Transaksi</h4>
+                                <div className="flex items-center justify-between mb-5">
+                                    <div>
+                                        <h4 className="font-black text-gray-900">Riwayat Transaksi</h4>
+                                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-0.5">Pemasukan sewa & penarikan dana</p>
+                                    </div>
+                                    <span className="text-[10px] font-bold text-gray-400 bg-gray-50 px-3 py-1.5 rounded-full border border-gray-100">
+                                        Klik transaksi untuk rincian
+                                    </span>
+                                </div>
                                 <div className="space-y-3">
                                     {allTransactions.length === 0 ? (
-                                        <div className="text-center py-6 text-gray-400 font-bold text-xs uppercase tracking-widest">Belum ada transaksi</div>
+                                        <div className="text-center py-8 text-gray-400 font-bold text-xs uppercase tracking-widest">Belum ada riwayat transaksi</div>
                                     ) : (
                                         allTransactions.map(tx => (
-                                            <div key={tx.id} className="flex justify-between items-center p-4 rounded-2xl bg-gray-50 border border-gray-50 hover:bg-white hover:border-orange-100 transition-all group gap-4 min-w-0">
+                                            <div 
+                                                key={tx.id} 
+                                                onClick={() => {
+                                                    if (tx.type === 'OUT') {
+                                                        setSelectedWithdrawalDetail(tx);
+                                                    }
+                                                }}
+                                                className={`flex justify-between items-center p-4 rounded-2xl bg-gray-50 border border-gray-50 hover:bg-white hover:border-orange-200 hover:shadow-sm transition-all group gap-4 min-w-0 ${tx.type === 'OUT' ? 'cursor-pointer' : ''}`}
+                                            >
                                                 <div className="flex items-center gap-4 min-w-0 flex-1">
-                                                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold text-xs shrink-0 ${tx.type === 'IN' ? 'bg-green-100 text-green-600' : 'bg-rose-100 text-rose-600'
-                                                        }`}>
-                                                        {tx.type}
+                                                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold text-xs shrink-0 ${
+                                                        tx.type === 'IN' ? 'bg-green-100 text-green-600' : 'bg-rose-100 text-rose-600'
+                                                    }`}>
+                                                        {tx.type === 'IN' ? <ArrowUpRight size={18} /> : <ArrowDownRight size={18} />}
                                                     </div>
                                                     <div className="min-w-0 flex-1">
                                                         <p className="text-xs font-black text-gray-900 flex items-center gap-1.5 min-w-0">
                                                             <span className="block truncate flex-1">{tx.title}</span>
                                                             {tx.type === 'OUT' && tx.status === 'pending' && (
-                                                                <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-yellow-100 text-yellow-800 uppercase tracking-wider shrink-0">Diproses</span>
+                                                                <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-800 uppercase tracking-wider shrink-0">Diproses</span>
                                                             )}
                                                             {tx.type === 'OUT' && tx.status === 'rejected' && (
-                                                                <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-red-100 text-red-800 uppercase tracking-wider shrink-0">Ditolak</span>
+                                                                <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-red-100 text-red-800 uppercase tracking-wider shrink-0">Ditolak</span>
                                                             )}
                                                             {tx.type === 'OUT' && tx.status === 'approved' && (
-                                                                <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-green-100 text-green-800 uppercase tracking-wider shrink-0">Selesai</span>
+                                                                <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-green-100 text-green-800 uppercase tracking-wider shrink-0">Selesai</span>
                                                             )}
                                                         </p>
-                                                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-tight mt-0.5">{tx.date.toLocaleDateString('id-ID')}</p>
+                                                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-tight mt-0.5">{tx.date.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</p>
                                                     </div>
                                                 </div>
-                                                <p className={`text-sm font-black shrink-0 ${tx.type === 'IN' ? 'text-green-600' : 'text-rose-600'
+                                                <div className="text-right shrink-0">
+                                                    <p className={`text-sm font-black ${
+                                                        tx.type === 'IN' ? 'text-green-600' : 'text-rose-600'
                                                     }`}>
-                                                    {tx.type === 'IN' ? '+' : '-'}{FORMAT_CURRENCY(tx.amount)}
-                                                </p>
+                                                        {tx.type === 'IN' ? '+' : '-'}{FORMAT_CURRENCY(tx.amount)}
+                                                    </p>
+                                                    {tx.type === 'OUT' && (
+                                                        <span className="text-[9px] font-bold text-orange-500 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                            Lihat Bukti ➔
+                                                        </span>
+                                                    )}
+                                                </div>
                                             </div>
                                         ))
                                     )}
@@ -2394,142 +2535,406 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                 />
             )}
 
-            {/* Bank Edit Modal */}
+            {/* Bank Edit Modal - Professional E-Commerce Standard */}
             {isEditingBank && (
                 <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
                     <div className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm animate-in fade-in duration-300" onClick={() => setIsEditingBank(false)} />
-                    <div className="bg-white w-full max-w-md rounded-[2.5rem] shadow-2xl relative z-10 overflow-hidden animate-in zoom-in-95 fade-in duration-300">
-                        <div className="bg-orange-500 p-8 text-white relative">
-                            <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-3xl -mr-16 -mt-16"></div>
-                            <div className="flex items-center gap-4 relative z-10">
-                                <div className="w-12 h-12 rounded-2xl bg-white/20 flex items-center justify-center border border-white/30 backdrop-blur-md">
-                                    <Landmark size={24} />
+                    <div className="bg-white w-full max-w-lg rounded-[2.5rem] shadow-2xl relative z-10 overflow-hidden animate-in zoom-in-95 fade-in duration-300 max-h-[90vh] flex flex-col border border-gray-100">
+                        {/* Header */}
+                        <div className="bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 p-6 text-white relative shrink-0">
+                            <div className="absolute top-0 right-0 w-32 h-32 bg-orange-500/20 rounded-full blur-3xl -mr-16 -mt-16 pointer-events-none" />
+                            <div className="flex items-center justify-between relative z-10">
+                                <div className="flex items-center gap-3.5">
+                                    <div className="w-12 h-12 rounded-2xl bg-white/10 flex items-center justify-center border border-white/20 backdrop-blur-md text-orange-400">
+                                        <Landmark size={22} />
+                                    </div>
+                                    <div>
+                                        <h3 className="text-lg font-black uppercase tracking-tight text-white">Rekening Penarikan</h3>
+                                        <p className="text-[11px] font-bold text-white/60 tracking-wider">Atur rekening tujuan pencairan saldo sewa</p>
+                                    </div>
                                 </div>
-                                <div>
-                                    <h3 className="text-xl font-black uppercase tracking-tight">Rekening Penarikan</h3>
-                                    <p className="text-xs font-bold opacity-80 uppercase tracking-widest">Atur kemana dana Anda akan ditarik</p>
-                                </div>
+                                <button onClick={() => setIsEditingBank(false)} className="w-9 h-9 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white/80 transition-colors">
+                                    <X size={18} />
+                                </button>
                             </div>
                         </div>
 
-                        <div className="p-8 space-y-6">
-                            <div className="space-y-4">
-                                <div className="space-y-2">
-                                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block ml-1">Nama Bank / Dompet (BCA, Mandiri, OVO, dll)</label>
-                                    <div className="relative">
-                                        <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"><Landmark size={18} /></div>
-                                        <select
-                                            value={editForm.bank_name}
-                                            onChange={e => setEditForm({ ...editForm, bank_name: e.target.value })}
-                                            className="w-full h-14 bg-gray-50 border border-gray-100 rounded-2xl pl-12 pr-4 text-sm font-bold text-gray-900 focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none transition-all appearance-none cursor-pointer"
-                                        >
-                                            <option value="" disabled>Pilih Bank / Dompet</option>
-                                            {INDONESIAN_BANKS.map(bank => (
-                                                <option key={bank} value={bank}>{bank}</option>
-                                            ))}
-                                        </select>
-                                        <div className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"><ChevronRight size={16} className="rotate-90" /></div>
-                                    </div>
-                                </div>
-
-                                <div className="space-y-2">
-                                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block ml-1">Nomor Rekening / Virtual Account</label>
-                                    <div className="relative">
-                                        <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"><CreditCard size={18} /></div>
-                                        <input
-                                            type="text"
-                                            value={editForm.bank_account}
-                                            onChange={e => setEditForm({ ...editForm, bank_account: e.target.value })}
-                                            placeholder="Contoh: 1234567890"
-                                            className="w-full h-14 bg-gray-50 border border-gray-100 rounded-2xl pl-12 pr-4 text-sm font-bold text-gray-900 focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none transition-all"
-                                        />
-                                    </div>
-                                </div>
-
-                                <div className="space-y-2">
-                                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block ml-1">Atas Nama (Sesuai Rekening)</label>
-                                    <div className="relative">
-                                        <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"><User size={18} /></div>
-                                        <input
-                                            type="text"
-                                            value={editForm.bank_account_name}
-                                            onChange={e => setEditForm({ ...editForm, bank_account_name: e.target.value.toUpperCase() })}
-                                            placeholder="Contoh: AHMAD SUBARI"
-                                            className="w-full h-14 bg-gray-50 border border-gray-100 rounded-2xl pl-12 pr-4 text-sm font-bold text-gray-900 uppercase focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none transition-all"
-                                        />
-                                    </div>
+                        {/* Body */}
+                        <div className="p-6 overflow-y-auto space-y-5 flex-1">
+                            {/* Popular Banks Quick Select */}
+                            <div className="space-y-2.5">
+                                <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest block ml-1">
+                                    Pilih Cepat Bank / E-Wallet Populer
+                                </label>
+                                <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+                                    {POPULAR_BANKS.map(bank => {
+                                        const isSelected = editForm.bank_name === bank.name;
+                                        return (
+                                            <button
+                                                key={bank.name}
+                                                type="button"
+                                                onClick={() => setEditForm({ ...editForm, bank_name: bank.name })}
+                                                className={`p-2.5 rounded-2xl border text-center transition-all flex flex-col items-center justify-center gap-1 relative ${
+                                                    isSelected 
+                                                        ? 'border-orange-500 bg-orange-50/70 text-orange-600 shadow-sm ring-2 ring-orange-500/20' 
+                                                        : 'border-gray-100 bg-gray-50/70 hover:bg-white hover:border-gray-200 text-gray-700'
+                                                }`}
+                                            >
+                                                <span className="text-xs font-black tracking-tight">{bank.label}</span>
+                                                <span className={`text-[8px] font-bold uppercase tracking-wider px-1.5 py-0.2 rounded-full ${
+                                                    isSelected ? 'bg-orange-200/80 text-orange-800' : 'bg-gray-200/60 text-gray-500'
+                                                }`}>
+                                                    {bank.badge}
+                                                </span>
+                                            </button>
+                                        );
+                                    })}
                                 </div>
                             </div>
 
-                            <div className="flex gap-3 pt-2">
-                                <button
-                                    onClick={() => setIsEditingBank(false)}
-                                    className="flex-1 h-12 rounded-2xl border border-gray-100 text-gray-400 font-black text-[10px] uppercase tracking-widest hover:bg-gray-50 transition-all active:scale-95"
-                                >
-                                    Batal
-                                </button>
-                                <button
-                                    onClick={saveWithdrawalAccount}
-                                    disabled={isSavingBank || !editForm.bank_name || !editForm.bank_account || !editForm.bank_account_name}
-                                    className="flex-[2] h-12 bg-gray-900 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest flex items-center justify-center gap-2 shadow-xl shadow-gray-200 hover:bg-orange-500 hover:shadow-orange-100 transition-all active:scale-95 disabled:bg-gray-200 disabled:shadow-none"
-                                >
-                                    {isSavingBank ? (
-                                        <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                                    ) : (
-                                        <>
-                                            <Save size={16} />
-                                            Simpan Rekening
-                                        </>
-                                    )}
-                                </button>
+                            {/* All Banks Dropdown Fallback */}
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest block ml-1">
+                                    Daftar Lengkap Bank Indonesia
+                                </label>
+                                <div className="relative">
+                                    <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"><Building2 size={18} /></div>
+                                    <select
+                                        value={editForm.bank_name}
+                                        onChange={e => setEditForm({ ...editForm, bank_name: e.target.value })}
+                                        className="w-full h-12 bg-gray-50 border border-gray-200 rounded-2xl pl-12 pr-10 text-xs font-black text-gray-900 focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none transition-all appearance-none cursor-pointer"
+                                    >
+                                        <option value="" disabled>-- Pilih Bank / E-Wallet Lainnya --</option>
+                                        {INDONESIAN_BANKS.map(bank => (
+                                            <option key={bank} value={bank}>{bank}</option>
+                                        ))}
+                                    </select>
+                                    <div className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"><ChevronRight size={16} className="rotate-90" /></div>
+                                </div>
                             </div>
+
+                            {/* Account Number Input */}
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest block ml-1">
+                                    Nomor Rekening / Nomor E-Wallet
+                                </label>
+                                <div className="relative">
+                                    <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"><CreditCard size={18} /></div>
+                                    <input
+                                        type="text"
+                                        inputMode="numeric"
+                                        value={editForm.bank_account}
+                                        onChange={e => {
+                                            const clean = e.target.value.replace(/[^\d\s-]/g, '');
+                                            setEditForm({ ...editForm, bank_account: clean });
+                                        }}
+                                        placeholder="Contoh: 1234567890"
+                                        className="w-full h-12 bg-gray-50 border border-gray-200 rounded-2xl pl-12 pr-4 text-sm font-mono font-bold text-gray-900 focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none transition-all"
+                                    />
+                                </div>
+                                <p className="text-[10px] text-gray-400 font-bold ml-1">Ketik nomor rekening tanpa tanda titik atau spasi manual.</p>
+                            </div>
+
+                            {/* Account Name Input */}
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest block ml-1">
+                                    Nama Lengkap Pemilik Rekening
+                                </label>
+                                <div className="relative">
+                                    <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"><User size={18} /></div>
+                                    <input
+                                        type="text"
+                                        value={editForm.bank_account_name}
+                                        onChange={e => setEditForm({ ...editForm, bank_account_name: e.target.value.toUpperCase() })}
+                                        placeholder="Contoh: AHMAD SUBARI"
+                                        className="w-full h-12 bg-gray-50 border border-gray-200 rounded-2xl pl-12 pr-4 text-xs font-black uppercase text-gray-900 focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none transition-all"
+                                    />
+                                </div>
+                            </div>
+
+                            {/* Security Verification Assurance Notice */}
+                            <div className="p-4 bg-amber-50 border border-amber-200/80 rounded-2xl flex items-start gap-3 text-amber-800">
+                                <ShieldCheck size={20} className="text-amber-600 shrink-0 mt-0.5" />
+                                <p className="text-[11px] leading-relaxed font-bold">
+                                    <strong>Perhatian:</strong> Pastikan nama pemilik rekening sesuai dengan identitas KTP Anda untuk mencegah penolakan transfer otomatis oleh sistem bank.
+                                </p>
+                            </div>
+                        </div>
+
+                        {/* Footer Buttons */}
+                        <div className="p-6 bg-gray-50 border-t border-gray-100 flex items-center justify-end gap-3 shrink-0">
+                            <button
+                                type="button"
+                                onClick={() => setIsEditingBank(false)}
+                                className="px-6 py-3 rounded-2xl font-black text-xs uppercase tracking-widest text-gray-500 hover:bg-gray-200/70 transition-colors"
+                            >
+                                Batal
+                            </button>
+                            <button
+                                type="button"
+                                disabled={isSavingBank || !editForm.bank_name || !editForm.bank_account || !editForm.bank_account_name}
+                                onClick={saveWithdrawalAccount}
+                                className="px-7 py-3 bg-orange-500 hover:bg-orange-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg shadow-orange-500/20 flex items-center gap-2 transition-all active:scale-95 disabled:opacity-50 disabled:pointer-events-none"
+                            >
+                                {isSavingBank ? (
+                                    <>
+                                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                                        Menyimpan...
+                                    </>
+                                ) : (
+                                    <>
+                                        <Save size={16} />
+                                        Simpan Rekening
+                                    </>
+                                )}
+                            </button>
                         </div>
                     </div>
                 </div>
             )}
 
+            {/* Professional Withdrawal Modal (Ala E-Commerce & FinTech) */}
             {showWithdrawConfirm && (
                 <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-                    <div className="absolute inset-0 bg-gray-900/80 backdrop-blur-sm animate-in fade-in duration-300" onClick={() => setShowWithdrawConfirm(false)}></div>
-                    <div className="bg-white w-full max-w-md rounded-[2.5rem] shadow-2xl relative z-10 p-8 animate-in zoom-in-95 text-center border border-gray-100">
-                        <div className="w-16 h-16 bg-orange-100 text-orange-600 rounded-full flex items-center justify-center mx-auto mb-5 text-2xl shadow-inner animate-bounce">💰</div>
-                        <h3 className="text-2xl font-black text-gray-900 tracking-tight mb-1">Konfirmasi Penarikan</h3>
-                        <p className="text-sm text-gray-500 mb-6">Pastikan detail rekening dan nominal di bawah sudah benar.</p>
+                    <div className="absolute inset-0 bg-gray-900/70 backdrop-blur-sm animate-in fade-in duration-300" onClick={() => setShowWithdrawConfirm(false)} />
+                    <div className="bg-white w-full max-w-lg rounded-[2.5rem] shadow-2xl relative z-10 overflow-hidden animate-in zoom-in-95 max-h-[90vh] flex flex-col border border-gray-100">
+                        {/* Header */}
+                        <div className="bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 p-6 text-white relative shrink-0">
+                            <div className="absolute top-0 right-0 w-32 h-32 bg-orange-500/20 rounded-full blur-3xl -mr-16 -mt-16 pointer-events-none" />
+                            <div className="flex items-center justify-between relative z-10">
+                                <div className="flex items-center gap-3.5">
+                                    <div className="w-12 h-12 rounded-2xl bg-white/10 flex items-center justify-center border border-white/20 backdrop-blur-md text-orange-400">
+                                        <Wallet size={22} />
+                                    </div>
+                                    <div>
+                                        <h3 className="text-lg font-black uppercase tracking-tight text-white">Tarik Saldo Pendapatan</h3>
+                                        <p className="text-[11px] font-bold text-white/60 tracking-wider">Transfer aman ke rekening bank terdaftar</p>
+                                    </div>
+                                </div>
+                                <button onClick={() => setShowWithdrawConfirm(false)} className="w-9 h-9 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white/80 transition-colors">
+                                    <X size={18} />
+                                </button>
+                            </div>
+                        </div>
 
-                        <div className="space-y-4 mb-6">
-                            <div className="bg-orange-50/50 border border-orange-100 rounded-2xl p-5 text-center">
-                                <p className="text-[10px] font-bold text-orange-600 uppercase tracking-widest mb-1">Jumlah Tarik</p>
-                                <p className="text-3xl font-black text-orange-600">{FORMAT_CURRENCY(stats.availableBalance)}</p>
+                        {/* Modal Body */}
+                        <div className="p-6 overflow-y-auto space-y-5 flex-1">
+                            {/* Available Balance Box */}
+                            <div className="bg-gradient-to-r from-orange-50 to-amber-50 border border-orange-200/80 rounded-2xl p-4 flex items-center justify-between">
+                                <div>
+                                    <p className="text-[10px] font-black text-orange-600 uppercase tracking-widest">Saldo Tersedia</p>
+                                    <p className="text-xl font-black text-gray-900 tracking-tight mt-0.5">{FORMAT_CURRENCY(stats.availableBalance)}</p>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => setWithdrawAmount(formatCurrencyInput(stats.availableBalance))}
+                                    className="px-3.5 py-1.5 bg-orange-500 text-white rounded-xl text-[10px] font-black uppercase tracking-wider hover:bg-orange-600 transition-all shadow-sm active:scale-95"
+                                >
+                                    Tarik Semua
+                                </button>
                             </div>
 
-                            <div className="bg-gray-50/50 border border-gray-100 rounded-2xl p-5 text-left">
-                                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3">Tujuan Rekening</p>
-                                <div className="flex items-center gap-3">
-                                    <div className="w-10 h-10 bg-white rounded-xl border border-gray-200/80 flex items-center justify-center text-lg shadow-sm">🏦</div>
-                                    <div>
-                                        <p className="font-extrabold text-gray-900 text-sm">{withdrawalAccount.bank_name}</p>
-                                        <p className="text-xs text-gray-500 font-bold mt-0.5">{withdrawalAccount.bank_account}</p>
-                                        <p className="text-[10px] font-bold text-gray-400 uppercase mt-0.5">a.n. {withdrawalAccount.bank_account_name}</p>
+                            {/* Amount Input */}
+                            <div className="space-y-2">
+                                <div className="flex justify-between items-center">
+                                    <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest block ml-1">
+                                        Nominal Penarikan
+                                    </label>
+                                    <span className="text-[10px] font-bold text-gray-400">Min. Rp 10.000</span>
+                                </div>
+                                <div className="relative">
+                                    <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-900 font-black text-base">Rp</div>
+                                    <input
+                                        type="text"
+                                        inputMode="numeric"
+                                        value={withdrawAmount}
+                                        onChange={e => setWithdrawAmount(formatCurrencyInput(e.target.value))}
+                                        placeholder="0"
+                                        className="w-full h-14 bg-gray-50 border border-gray-200 rounded-2xl pl-12 pr-4 text-xl font-black text-gray-900 focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none transition-all"
+                                    />
+                                </div>
+                                {/* Quick Amount Chips */}
+                                <div className="flex flex-wrap gap-2 pt-1">
+                                    {[50000, 100000, 500000, 1000000].map(amt => (
+                                        <button
+                                            key={amt}
+                                            type="button"
+                                            disabled={amt > stats.availableBalance}
+                                            onClick={() => setWithdrawAmount(formatCurrencyInput(amt))}
+                                            className="px-3 py-1.5 rounded-xl border border-gray-200 text-xs font-bold text-gray-700 bg-white hover:border-orange-400 hover:text-orange-600 hover:bg-orange-50/40 transition-all disabled:opacity-30 disabled:pointer-events-none"
+                                        >
+                                            {amt >= 1000000 ? `${amt / 1000000} Juta` : `${amt / 1000}rb`}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* Destination Bank Account Mini Card */}
+                            <div className="bg-gray-50/80 border border-gray-200 rounded-2xl p-4">
+                                <div className="flex items-center justify-between mb-2.5">
+                                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Rekening Tujuan</p>
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setShowWithdrawConfirm(false);
+                                            setEditForm({ ...withdrawalAccount });
+                                            setIsEditingBank(true);
+                                        }}
+                                        className="text-[10px] font-black text-orange-600 hover:underline uppercase tracking-wider"
+                                    >
+                                        Ubah
+                                    </button>
+                                </div>
+                                <div className="flex items-center gap-3 bg-white p-3 rounded-xl border border-gray-100">
+                                    <div className="w-10 h-10 rounded-xl bg-orange-50 text-orange-500 flex items-center justify-center font-black text-xs shrink-0 border border-orange-100">
+                                        <Landmark size={18} />
                                     </div>
+                                    <div className="min-w-0 flex-1">
+                                        <div className="flex items-center gap-2">
+                                            <span className="font-black text-xs text-gray-900 uppercase">{withdrawalAccount.bank_name}</span>
+                                            <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-gray-100 text-gray-600 uppercase">Rekening Utama</span>
+                                        </div>
+                                        <p className="font-mono text-xs font-bold text-gray-600 mt-0.5">{withdrawalAccount.bank_account}</p>
+                                        <p className="text-[10px] font-bold text-gray-400 uppercase truncate">A/N {withdrawalAccount.bank_account_name}</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Fee & Transfer Summary Breakdown */}
+                            <div className="p-4 bg-slate-50 border border-slate-200/80 rounded-2xl space-y-2 text-xs">
+                                <div className="flex justify-between items-center text-gray-600 font-bold">
+                                    <span>Jumlah Penarikan</span>
+                                    <span className="font-black text-gray-900">
+                                        {FORMAT_CURRENCY(withdrawAmount ? parseCurrencyInput(withdrawAmount) : stats.availableBalance)}
+                                    </span>
+                                </div>
+                                <div className="flex justify-between items-center text-gray-600 font-bold">
+                                    <span>Biaya Layanan / Admin</span>
+                                    <span className="font-black text-emerald-600">Rp 0 (Bebas Biaya)</span>
+                                </div>
+                                <div className="border-t border-slate-200 pt-2 flex justify-between items-center">
+                                    <span className="font-black text-gray-900">Total Diterima di Rekening</span>
+                                    <span className="font-black text-base text-orange-600">
+                                        {FORMAT_CURRENCY(withdrawAmount ? parseCurrencyInput(withdrawAmount) : stats.availableBalance)}
+                                    </span>
+                                </div>
+                                <div className="pt-1 flex items-center gap-1.5 text-[10px] font-bold text-gray-400">
+                                    <Clock size={12} />
+                                    <span>Estimasi pencairan dana: <strong>Maksimal 1x24 Jam Kerja</strong></span>
                                 </div>
                             </div>
                         </div>
 
-                        <div className="flex gap-3">
+                        {/* Modal Footer */}
+                        <div className="p-6 bg-gray-50 border-t border-gray-100 flex gap-3 shrink-0">
                             <button
+                                type="button"
                                 onClick={() => setShowWithdrawConfirm(false)}
-                                className="flex-1 py-3.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-2xl text-xs font-black uppercase tracking-widest transition-all active:scale-[0.98]"
+                                className="flex-1 py-3.5 bg-gray-200/70 hover:bg-gray-200 text-gray-700 rounded-2xl text-xs font-black uppercase tracking-widest transition-all active:scale-95"
                             >
                                 Batal
                             </button>
                             <button
+                                type="button"
                                 onClick={handleWithdraw}
-                                disabled={isWithdrawing}
-                                className="flex-1 py-3.5 bg-orange-600 hover:bg-orange-700 text-white rounded-2xl text-xs font-black uppercase tracking-widest shadow-lg shadow-orange-600/10 active:scale-[0.98] transition-all disabled:opacity-50"
+                                disabled={isWithdrawing || (withdrawAmount ? parseCurrencyInput(withdrawAmount) < 10000 || parseCurrencyInput(withdrawAmount) > stats.availableBalance : stats.availableBalance < 10000)}
+                                className="flex-[2] py-3.5 bg-orange-500 hover:bg-orange-600 text-white rounded-2xl text-xs font-black uppercase tracking-widest shadow-lg shadow-orange-500/20 active:scale-95 transition-all disabled:opacity-40 disabled:pointer-events-none flex items-center justify-center gap-2"
                             >
-                                {isWithdrawing ? 'Memproses...' : 'Tarik Sekarang'}
+                                {isWithdrawing ? (
+                                    <>
+                                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                                        Memproses...
+                                    </>
+                                ) : (
+                                    <>
+                                        <Check size={16} />
+                                        Konfirmasi Tarik Dana
+                                    </>
+                                )}
                             </button>
                         </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Withdrawal Receipt Detail Modal */}
+            {selectedWithdrawalDetail && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+                    <div className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm animate-in fade-in duration-300" onClick={() => setSelectedWithdrawalDetail(null)} />
+                    <div className="bg-white w-full max-w-md rounded-[2.5rem] shadow-2xl relative z-10 overflow-hidden animate-in zoom-in-95 p-6 space-y-5 border border-gray-100">
+                        {/* Header */}
+                        <div className="text-center space-y-2 pt-2">
+                            <div className={`w-14 h-14 rounded-2xl mx-auto flex items-center justify-center text-2xl shadow-sm ${
+                                selectedWithdrawalDetail.status === 'approved' 
+                                    ? 'bg-emerald-100 text-emerald-600' 
+                                    : selectedWithdrawalDetail.status === 'rejected' 
+                                    ? 'bg-rose-100 text-rose-600' 
+                                    : 'bg-amber-100 text-amber-600'
+                            }`}>
+                                <Receipt size={26} />
+                            </div>
+                            <h3 className="text-lg font-black text-gray-900 tracking-tight">Rincian Penarikan Dana</h3>
+                            <div className="inline-block">
+                                {selectedWithdrawalDetail.status === 'approved' && (
+                                    <span className="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-100 text-emerald-800">
+                                        ✓ Berhasil Ditransfer
+                                    </span>
+                                )}
+                                {selectedWithdrawalDetail.status === 'rejected' && (
+                                    <span className="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-rose-100 text-rose-800">
+                                        ✕ Pengajuan Ditolak
+                                    </span>
+                                )}
+                                {selectedWithdrawalDetail.status === 'pending' && (
+                                    <span className="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-100 text-amber-800">
+                                        ⏳ Sedang Diproses Admin
+                                    </span>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Amount Box */}
+                        <div className="bg-gray-50 border border-gray-100 rounded-2xl p-4 text-center">
+                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Total Penarikan</p>
+                            <p className="text-2xl font-black text-gray-900 mt-1">{FORMAT_CURRENCY(selectedWithdrawalDetail.amount)}</p>
+                        </div>
+
+                        {/* Receipt Details */}
+                        <div className="space-y-3 text-xs bg-slate-50/70 p-4 rounded-2xl border border-slate-100">
+                            <div className="flex justify-between items-center text-gray-600 font-bold">
+                                <span>ID Penarikan</span>
+                                <span className="font-mono text-gray-900 font-black">{String(selectedWithdrawalDetail.rawId || selectedWithdrawalDetail.id).substring(0, 12)}...</span>
+                            </div>
+                            <div className="flex justify-between items-center text-gray-600 font-bold">
+                                <span>Waktu Pengajuan</span>
+                                <span className="text-gray-900 font-black">{selectedWithdrawalDetail.date?.toLocaleString('id-ID', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
+                            </div>
+                            <div className="flex justify-between items-center text-gray-600 font-bold">
+                                <span>Rekening Tujuan</span>
+                                <span className="text-gray-900 font-black">{selectedWithdrawalDetail.bank_name || withdrawalAccount.bank_name}</span>
+                            </div>
+                            <div className="flex justify-between items-center text-gray-600 font-bold">
+                                <span>No. Rekening</span>
+                                <span className="font-mono text-gray-900 font-black">{selectedWithdrawalDetail.bank_account || withdrawalAccount.bank_account}</span>
+                            </div>
+                            <div className="flex justify-between items-center text-gray-600 font-bold">
+                                <span>Penerima</span>
+                                <span className="text-gray-900 font-black uppercase">{selectedWithdrawalDetail.bank_account_name || withdrawalAccount.bank_account_name}</span>
+                            </div>
+                            <div className="flex justify-between items-center text-gray-600 font-bold">
+                                <span>Biaya Admin</span>
+                                <span className="text-emerald-600 font-black">Rp 0 (Gratis)</span>
+                            </div>
+                        </div>
+
+                        {/* Close Button */}
+                        <button
+                            type="button"
+                            onClick={() => setSelectedWithdrawalDetail(null)}
+                            className="w-full py-3.5 bg-gray-900 hover:bg-gray-800 text-white rounded-2xl text-xs font-black uppercase tracking-widest transition-all active:scale-95 shadow-md"
+                        >
+                            Tutup Tanda Terima
+                        </button>
                     </div>
                 </div>
             )}

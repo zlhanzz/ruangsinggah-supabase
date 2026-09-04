@@ -2,6 +2,37 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 325. Peningkatan Sistem Rekening & Pengajuan Penarikan Dana Mitra Standar E-Commerce Profesional (`MitraDashboard.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  - Sistem pengisian rekening dan pengajuan penarikan dana (Withdrawal) pada Dashboard Mitra sebelumnya masih sederhana dan kurang memberikan pengalaman finansial yang meyakinkan (*trustworthy*).
+  - Pengguna menginginkan antarmuka pengaturan rekening bank dan alur penarikan dana ditingkatkan agar lebih profesional layaknya platform terkemuka (TikTok Shop, Shopee Seller, dsb.), meliputi:
+    1. Input dan kartu profil rekening bank yang elegan, jelas, dan aman.
+    2. Alur penarikan dana fleksibel (penarikan nominal kustom / tarik semua, chip nominal instan, rincian biaya admin Rp 0, dan estimasi waktu proses).
+    3. Riwayat penarikan dana terperinci dengan modal tanda terima transaksi (*Withdrawal Receipt Details*).
+- **Implementasi Solusi**:
+  1. **Quick Select Bank/E-Wallet Populer & Dropdown Komprehensif (`POPULAR_BANKS`, `INDONESIAN_BANKS`)**:
+     - Menambahkan grid pilihan cepat untuk bank & e-wallet terpopuler di Indonesia (BCA, Mandiri, BRI, BNI, BSI, CIMB Niaga, Permata, Danamon, GoPay, OVO, DANA, ShopeePay) dengan lencana jenis institusi.
+     - Menyediakan fallback dropdown untuk seluruh bank resmi di Indonesia.
+     - Menambahkan validasi pembersihan karakter nomor rekening (`numeric inputMode`) dan kapitalisasi otomatis nama pemilik rekening.
+     - Menambahkan banner penegasan kecocokan nama pemilik rekening dengan data KTP.
+  2. **Kartu Rekening Bank & Saldo Elegan di Tab Dompet**:
+     - Menghadirkan kartu visual bank berdesain premium dengan nomor rekening tersamarkan sebagian (*masked* `•••• 5678`) dan tombol *"Tampilkan / Sembunyikan"* (`Eye` / `EyeOff`), lencana *"Terverifikasi & Aktif"*, serta aksi *"Ubah Rekening"*.
+     - Menyajikan kartu Saldo Tersedia dengan tombol *"Tarik Dana"* yang responsif.
+  3. **Modal Penarikan Dana FinTech Fleksibel (`showWithdrawConfirm`)**:
+     - Input nominal kustom berformat rupiah otomatis (`formatCurrencyInput` / `parseCurrencyInput`) dengan tombol cepat *"Tarik Semua"*.
+     - Chip nominal instan (Rp 50rb, 100rb, 500rb, 1 Juta) dengan proteksi penonaktifan jika nominal melebihi saldo tersedia.
+     - Kartu konfirmasi rekening tujuan penarikan.
+     - Rincian ringkasan penarikan: Jumlah Penarikan, Biaya Layanan/Admin (Rp 0 Bebas Biaya), Total Diterima, serta estimasi waktu (Maksimal 1x24 Jam Kerja).
+  4. **Tanda Terima Rincian Penarikan Dana (`selectedWithdrawalDetail`)**:
+     - Setiap baris riwayat penarikan dana (`OUT`) dapat diklik untuk menampilkan modal tanda terima digital (*Digital Receipt Modal*) yang memuat ID Penarikan, Status, Waktu Pengajuan, Rekening Tujuan, Nomor Rekening, Nama Penerima, dan Biaya Admin.
+     - Penggunaan ikon murni vector `lucide-react` (`Receipt`, `Building2`, `Landmark`, `ShieldCheck`, `ArrowDownRight`, `ArrowUpRight`, `Wallet`, `Check`, `Clock`, dll.) menjamin 0ms delay dan 100% bebas FOUT.
+- **File Tersentuh**:
+  - `functions/public/pages/MitraDashboard.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi build Vite `npm run build` lulus 100% (✓ 2509 modules transformed, built in 50.13s, 0 error).
+
 ### 324. Penghapusan Shortcut Redundan Pesanan & Pesan pada Tampilan Mobile Dashboard Mitra (`MitraDashboard.tsx`) (September 2026)
 - **Permintaan & Masalah**:
   - Pada tampilan mobile (`lg:hidden`) Beranda Dashboard Mitra, terdapat 2 tombol kartu pintasan (*Quick Links*): Pesanan dan Pesan.
