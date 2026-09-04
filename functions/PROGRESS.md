@@ -2,6 +2,28 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 326. Penonaktifan Pop-up Banner Promo Upgrade KostManager untuk Mitra Berstatus / Berlangganan KostManager (`MitraDashboard.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  - Pop-up banner promo Upgrade KostManager (*"Gak Punya Waktu Kelola Kost? Upgrade ke KostManager!"*) sebelumnya selalu muncul saat mitra membuka tab Kelola Properti (`/dashboard-mitra/properties`) tanpa memeriksa apakah mitra tersebut sudah berstatus atau berlangganan KostManager.
+  - Hal ini tidak relevan dan mengganggu pengalaman pengguna bagi mitra yang propertinya sudah dikelola oleh tim KostManager.
+- **Implementasi Solusi**:
+  1. **Pemeriksaan Status KostManager Komprehensif (`isKostManager`)**:
+     - Memeriksa apakah `user?.subscription_status === 'kostmanager'`, `mitraSubscriptionStatus === 'kostmanager'`, atau `(user as any)?.is_managed === true`.
+     - Memeriksa apakah mitra memiliki properti aktif yang dikelola KostManager (`properties.some(p => p.is_managed || p.isManaged || p.managed_by === 'kostmanager' || p.kost_manager_status === 'ACTIVE' || p.kostManager?.status === 'ACTIVE')`).
+     - Memeriksa apakah mitra memiliki pengajuan KostManager yang sedang aktif atau sudah disetujui (`kmRequests.some(r => ['COMPLETED', 'APPROVED', 'IN_PROGRESS', 'SURVEY_SCHEDULED', 'ACTIVE'].includes(r.status))`).
+  2. **Pengambilan Subscription Status Real-Time di `loadData`**:
+     - Menambahkan query `supabase.from('mitra').select('subscription_status').eq('user_id', uid)` secara paralel pada `loadData`.
+  3. **Guarding Ketat Pop-up Banner**:
+     - Mencegah inisialisasi popup di `useEffect` dan mereset `setShowPromoPopup(false)` jika `isKostManager === true`.
+     - Mencegah pemicuan popup pada handler navigasi `handleMenuChange('properties')` jika `isKostManager === true`.
+     - Menambahkan guard `!isKostManager` pada conditional rendering markup JSX pop-up modal.
+- **File Tersentuh**:
+  - `functions/public/pages/MitraDashboard.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi build Vite `npm run build` lulus 100% (✓ 2509 modules transformed, built in 1m 21s, 0 error).
+
 ### 325. Peningkatan Sistem Rekening & Pengajuan Penarikan Dana Mitra Standar E-Commerce Profesional (`MitraDashboard.tsx`) (September 2026)
 - **Permintaan & Masalah**:
   - Sistem pengisian rekening dan pengajuan penarikan dana (Withdrawal) pada Dashboard Mitra sebelumnya masih sederhana dan kurang memberikan pengalaman finansial yang meyakinkan (*trustworthy*).

@@ -1,68 +1,67 @@
-# IMPLEMENTATION PLAN - Peningkatan Sistem Rekening & Pengajuan Penarikan Dana Profesional Ala E-Commerce (`MitraDashboard.tsx`)
+# Implementation Plan - Penonaktifan Pop-up Banner Promo Upgrade KostManager untuk Mitra yang Sudah Berlangganan / Berstatus KostManager
+
+Dokumen ini merinci analisis masalah, dampak perubahan, langkah eksekusi, dan rencana verifikasi untuk mencegah kemunculan pop-up banner promo *"Gak Punya Waktu Kelola Kost? Upgrade ke KostManager!"* pada akun Mitra yang sudah aktif sebagai KostManager atau telah berlangganan layanan KostManager.
+
+---
 
 ## 1. Analisis Masalah & Kebutuhan
-- **Kondisi Saat Ini**:
-  - Modal input rekening bank masih sangat sederhana (form dasar dengan dropdown standar dan header oranye polos).
-  - Sistem penarikan dana saat ini langsung menarik seluruh saldo yang ada tanpa opsi memilih nominal kustom, tanpa breakdown biaya/estimasi waktu, dan tanpa konfirmasi rincian terstandarisasi.
-  - Tampilan kartu rekening di tab Dompet masih berbentuk kotak abu-abu datar tanpa visualisasi kartu bank modern.
-- **Kebutuhan Pengguna (Benchmark: TikTok Shop & Shopee Seller)**:
-  - **Penginputan & Profil Rekening Bank**:
-    1. Desain visual kartu bank virtual modern (tampilan kartu ATM/debit eksklusif dengan chip IC, nomor rekening terformat berjarak rapi, nama pemilik huruf kapital, dan badge *Terverifikasi/Rekening Utama*).
-    2. Modal edit rekening yang interaktif: pilihan cepat bank/e-wallet populer (BCA, Mandiri, BRI, BNI, BSI, Seabank, Jago, GoPay, OVO, DANA) + dropdown lengkap, auto-formatting nomor rekening, dan validasi nama pemilik sesuai identitas KTP.
-  - **Sistem Pengajuan Penarikan Dana Terintegrasi**:
-    1. Modal penarikan dana profesional dengan input nominal kustom (format rupiah otomatis) + tombol cepat (*Rp 50rb, Rp 100rb, Rp 500rb, Rp 1jt, Tarik Semua Saldo*).
-    2. Breakdown rincian transparan: Nominal Tarik, Biaya Admin (Rp 0 / Gratis), Total Masuk Rekening, dan Estimasi Waktu Pencairan (1x24 jam kerja).
-    3. Ringkasan kartu rekening tujuan di dalam modal penarikan dan proteksi *anti-double submission*.
-  - **Pelacakan Riwayat Penarikan Dana & Status Tracking**:
-    1. Pelacakan status pencairan yang jelas: 🟡 *Sedang Diproses*, 🟢 *Berhasil Ditransfer*, 🔴 *Ditolak*.
-    2. Modal tanda terima rincian penarikan (*Withdrawal Receipt Details*) saat riwayat diklik.
+
+### Masalah:
+- Saat ini di [MitraDashboard.tsx](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/MitraDashboard.tsx), pop-up banner promo KostManager (`showPromoPopup`) muncul saat membuka halaman Kelola Properti (`/dashboard-mitra/properties`) hanya dengan memeriksa:
+  1. Status verifikasi identitas (`isVerified === true`).
+  2. Tab aktif (`tab === 'properties'`).
+  3. Cooldown waktu 24 jam di `localStorage`.
+- Sistem **belum memeriksa status langganan atau kepemilikan KostManager mitra (`isKostManager`)**. Akibatnya, mitra yang propertinya sudah dikelola oleh KostManager atau yang akunnya sudah memiliki status `subscription_status: 'kostmanager'` tetap melihat tawaran pop-up upgrade tersebut. Hal ini membingungkan dan tidak efisien bagi mitra yang sudah berlangganan.
+
+### Solusi & Kebutuhan:
+1. Menambahkan state dan pemeriksaan komprehensif `isKostManager` di [MitraDashboard.tsx](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/MitraDashboard.tsx):
+   - **Tabel `mitra`**: Cek apakah `subscription_status === 'kostmanager'`.
+   - **User Object**: Cek apakah `user?.subscription_status === 'kostmanager'` atau `(user as any)?.is_managed === true`.
+   - **Daftar Properti Mitra (`properties`)**: Cek apakah ada properti yang dikelola KostManager (`p.is_managed === true || p.isManaged === true || p.managed_by === 'kostmanager' || p.kost_manager_status === 'ACTIVE' || p.kostManager?.status === 'ACTIVE'`).
+   - **Pengajuan KostManager (`kmRequests`)**: Cek apakah mitra memiliki pengajuan KostManager aktif/disetujui (`status in ['COMPLETED', 'APPROVED', 'IN_PROGRESS', 'SURVEY_SCHEDULED', 'ACTIVE']`).
+2. **Kondisi Guarding Ketat**:
+   - Jika `isKostManager` bernilai `true`, sistem **dilarang memicu `setShowPromoPopup(true)`** baik pada inisialisasi `useEffect`, navigasi tab `handleMenuChange('properties')`, maupun pada rendering JSX modal popup.
 
 ---
 
-## 2. Dampak Perubahan
-File yang akan disentuh:
-- [`functions/public/pages/MitraDashboard.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/MitraDashboard.tsx):
-  - Memperbarui komponen visual kartu rekening bank di tab Dompet (`withdrawalAccount`).
-  - Mengembangkan modal pengelolaan rekening penarikan terstandarisasi (`isEditingBank`).
-  - Mengembangkan modal pengajuan penarikan dana fleksibel (`showWithdrawModal` / `withdrawAmount`).
-  - Menambahkan modal tanda terima rincian penarikan (`selectedWithdrawalDetail`).
-  - Menyelaraskan fungsi `handleWithdraw` dan `saveWithdrawalAccount` dengan validasi nominal kustom.
-- [`functions/PROGRESS.md`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/PROGRESS.md):
-  - Mencatat riwayat implementasi Progres 325.
-- `WALKTHROUGH.md`:
-  - Menerbitkan dokumentasi panduan visual dan hasil pengujian sistem penarikan baru.
+## 2. Dampak Perubahan File
+
+| File | Bagian yang Dimodifikasi |
+|---|---|
+| `functions/public/pages/MitraDashboard.tsx` | 1. Menambahkan query `subscription_status` dari tabel `mitra` pada `loadData`.<br>2. Membuat memoized flag `isKostManager`.<br>3. Mencegah trigger popup di `useEffect` dan `handleMenuChange` jika `isKostManager === true`.<br>4. Menambahkan guard `!isKostManager` pada render JSX popup banner. |
+| `functions/PROGRESS.md` | Pencatatan riwayat progres 326 (Fase 2). |
+| `WALKTHROUGH.md` | Dokumentasi verifikasi dan pengujian fitur (Fase 2). |
 
 ---
 
-## 3. Langkah-Langkah Eksekusi (Fase 2 - Setelah Approval)
-1. **Peningkatan State & Helper Penarikan di `MitraDashboard.tsx`**:
-   - Menambahkan state `withdrawAmount: string`, `selectedWithdrawalDetail: any | null`.
-   - Mengintegrasikan helper format rupiah interaktif untuk input nominal penarikan kustom.
-2. **Redesain Kartu Rekening Penarikan di Tab Dompet**:
-   - Mengubah kartu rekening biasa menjadi *Virtual Bank Debit Card* elegan dengan efek glossy, chip kartu, nomor rekening terformat, dan tombol kelola.
-3. **Penyempurnaan Modal Rekening Penarikan (`BankEditModal`)**:
-   - Grid pilihan cepat Bank/E-Wallet terpopuler (dengan badge/icon khas).
-   - Input nomor rekening auto-format angka bersih.
-   - Peringatan keamanan pencairan data sesuai nama KTP.
-4. **Pengembangan Modal Pengajuan Penarikan Dana Profesional (`WithdrawModal`)**:
-   - Input nominal penarikan dinamis + tombol chip nominal cepat (*Rp 50rb, Rp 100rb, Rp 500rb, Tarik Semua*).
-   - Rincian penarikan (Nominal, Biaya Admin Rp 0, Estimasi Dana Masuk, Estimasi Waktu).
-   - Tampilan kartu mini rekening tujuan penarikan.
-   - Tombol konfirmasi aman dengan indikator loading.
-5. **Modal Tanda Terima Riwayat Penarikan (`WithdrawalReceiptModal`)**:
-   - Memberikan preview tanda terima resmi saat mitra mengklik salah satu riwayat penarikan dana.
-6. **Kompilasi & Build**:
-   - Menjalankan `cmd /c npm run build` untuk memastikan 100% lulus tanpa error kompilasi.
-7. **Pencatatan & Git Repository**:
-   - Mencatat ke `functions/PROGRESS.md` (Progres 325) dan memperbarui `WALKTHROUGH.md`.
-   - Commit & push ke branch `bukan-productions`.
+## 3. Langkah-Langkah Eksekusi (Fase 2 - Setelah di-ACC)
+
+1. **Pengambilan Data & State `mitraSubscriptionStatus`**:
+   - Memasukkan query `supabase.from('mitra').select('subscription_status').eq('user_id', uid).maybeSingle()` ke dalam `Promise.all` pada fungsi `loadData`.
+   - Menyimpan hasil ke state `mitraSubscriptionStatus`.
+2. **Definisi Memoized Flag `isKostManager`**:
+   - Mengevaluasi:
+     - `user?.subscription_status === 'kostmanager'`
+     - `mitraSubscriptionStatus === 'kostmanager'`
+     - `properties.some(p => p.is_managed || p.isManaged || p.managed_by === 'kostmanager' || p.kost_manager_status === 'ACTIVE' || p.kostManager?.status === 'ACTIVE')`
+     - `kmRequests.some(r => ['COMPLETED', 'APPROVED', 'IN_PROGRESS', 'SURVEY_SCHEDULED', 'ACTIVE'].includes((r.status || '').toUpperCase()))`
+3. **Penyisipan Guard pada Event Trigger Promo Popup**:
+   - Pada `useEffect` inisialisasi popup: Batalkan kemunculan jika `isKostManager` bernilai `true`.
+   - Pada `handleMenuChange`: Jangan buka promo jika `isKostManager` bernilai `true`.
+   - Pada JSX popup di akhir file: Tambahkan kondisi `!isKostManager`.
+4. **Kompilasi & Build Testing**:
+   - Menjalankan `cmd /c npm run build` untuk memastikan 0 error kompilasi.
+5. **Dokumentasi & Git Push**:
+   - Mencatat Progres 326 di `functions/PROGRESS.md` dan memperbarui `WALKTHROUGH.md`.
+   - Melakukan commit dan push ke remote branch `bukan-productions`.
 
 ---
 
 ## 4. Rencana Verifikasi
-- [ ] Buka Tab Dompet di Dashboard Mitra $\rightarrow$ Tampilan rekening tersaji sebagai *Virtual Bank Card* yang mewah dan profesional.
-- [ ] Klik "+ Ganti Rekening" $\rightarrow$ Modal input rekening menampilkan pilihan cepat bank populer, auto-format nomor rekening, dan validasi nama pemilik KTP.
-- [ ] Klik "Tarik Dana Sekarang" $\rightarrow$ Muncul modal penarikan profesional dengan input nominal kustom, tombol chip cepat, rincian biaya Rp 0, estimasi 1x24 jam, dan rekening tujuan.
-- [ ] Ajukan penarikan dengan nominal tertentu $\rightarrow$ Saldo berkurang sesuai nominal yang ditarik, masuk ke riwayat penarikan dengan status *Diproses*, dan notifikasi admin terkirim.
-- [ ] Klik item riwayat penarikan $\rightarrow$ Terbuka modal rincian tanda terima penarikan.
-- [ ] Uji kompilasi build project $\rightarrow$ 100% lolos tanpa error.
+
+1. **Uji Kompilasi**:
+   - Jalankan `cmd /c npm run build` untuk memverifikasi tidak ada error TypeScript maupun sintaks JSX.
+2. **Uji Skenario Akun Mitra Reguler (Bukan KostManager)**:
+   - Akun mitra yang terverifikasi dan belum memiliki properti KostManager tetap dapat melihat promo banner saat membuka tab Kelola Properti (sesuai aturan jeda waktu 24 jam).
+3. **Uji Skenario Akun Mitra KostManager (Sudah Berlangganan / Dikelola)**:
+   - Akun mitra yang memiliki status `subscription_status === 'kostmanager'` atau memiliki minimal satu properti yang berstatus `is_managed = true` **tidak akan pernah lagi melihat** pop-up promo upgrade KostManager.

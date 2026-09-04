@@ -1,30 +1,24 @@
-# Walkthrough: Peningkatan Sistem Rekening & Pengajuan Penarikan Dana Mitra Standar E-Commerce Profesional (Progres 325)
+# Walkthrough: Penonaktifan Pop-up Banner Promo Upgrade KostManager untuk Mitra Berstatus / Berlangganan KostManager (Progres 326)
 
-Dokumen ini merangkum penyempurnaan sistem rekening bank dan pengajuan penarikan dana (*Withdrawal System*) di Dashboard Mitra (`MitraDashboard.tsx`) agar setara dengan standar aplikasi e-commerce terkemuka seperti TikTok Shop dan Shopee Seller.
+Dokumen ini merangkum perbaikan logika kemunculan pop-up banner promo upgrade KostManager (*"Gak Punya Waktu Kelola Kost? Upgrade ke KostManager!"*) pada Dashboard Mitra (`MitraDashboard.tsx`) agar **tidak pernah muncul lagi** jika mitra sudah berstatus KostManager atau sudah berlangganan layanan KostManager.
 
 ---
 
 ## 📋 Ringkasan Perubahan
 
-### 1. Quick Select Bank / E-Wallet & Form Rekening Profesional (`POPULAR_BANKS`, `INDONESIAN_BANKS`)
-- **Pilihan Cepat Populer**: Menambahkan daftar bank & e-wallet terpopuler (BCA, Mandiri, BRI, BNI, BSI, CIMB Niaga, Permata, Danamon, GoPay, OVO, DANA, ShopeePay) dalam bentuk kartu grid interaktif dengan lencana institusi.
-- **Daftar Lengkap Bank**: Dropdown fallback yang memuat seluruh bank resmi di Indonesia.
-- **Validasi Input**: Pembersihan otomatis karakter pada input nomor rekening (`numeric inputMode`) dan kapitalisasi otomatis nama pemilik rekening.
-- **Pemberitahuan Keamanan**: Banner panduan penyesuaian nama pemilik rekening dengan identitas KTP untuk mencegah penolakan transfer otomatis.
+### 1. Deteksi Komprehensif Status KostManager (`isKostManager`)
+Menambahkan evaluasi multi-kriteria untuk mendeteksi apakah akun mitra aktif dalam ekosistem KostManager:
+- **Status Langganan User & Mitra**: `user?.subscription_status === 'kostmanager'` atau `mitra.subscription_status === 'kostmanager'`.
+- **Status Pengelolaan Properti**: `properties.some(p => p.is_managed === true || p.isManaged === true || p.managed_by === 'kostmanager' || p.kost_manager_status === 'ACTIVE' || p.kostManager?.status === 'ACTIVE')`.
+- **Pengajuan KostManager Aktif/Disetujui**: `kmRequests.some(r => ['COMPLETED', 'APPROVED', 'IN_PROGRESS', 'SURVEY_SCHEDULED', 'ACTIVE'].includes(r.status))`.
 
-### 2. Kartu Rekening Bank & Saldo Elegan di Tab Dompet
-- **Kartu Bank Virtual**: Desain kartu rekening bergradien gelap modern yang menampilkan lencana *"Terverifikasi & Aktif"*, nama bank, nomor rekening tersamarkan (*masked* `•••• 5678`) lengkap dengan tombol toggle *"Lihat / Sembunyikan"* (`Eye` / `EyeOff`), serta tombol *"Ubah Rekening"*.
-- **Kartu Saldo Tersedia**: Menampilkan saldo sewa yang siap ditarik dengan tombol aksi *"Tarik Saldo"*.
+### 2. Query Real-Time Status Mitra di `loadData`
+- Memasukkan query `supabase.from('mitra').select('subscription_status').eq('user_id', uid).maybeSingle()` ke dalam `Promise.all` pada fungsi `loadData` untuk sinkronisasi instan saat data dashboard dimuat.
 
-### 3. Modal Penarikan Dana FinTech Fleksibel (`showWithdrawConfirm`)
-- **Penarikan Nominal Kustom & Tarik Semua**: Mitra dapat menarik sebagian saldo atau menekan tombol *"Tarik Semua"*.
-- **Input Rupiah Otomatis**: Input angka otomatis terformat separator ribuan rupiah (*live currency format*).
-- **Chip Nominal Cepat**: Pilihan nominal instan (Rp 50rb, Rp 100rb, Rp 500rb, Rp 1 Juta) dengan proteksi penonaktifan jika nominal melebihi saldo tersedia.
-- **Rincian Ringkasan Transaksi**: Rincian jumlah penarikan, biaya admin (Rp 0 / Bebas Biaya), total diterima, serta estimasi waktu proses (Maksimal 1x24 Jam Kerja).
-
-### 4. Modal Rincian Tanda Terima Penarikan Dana (`selectedWithdrawalDetail`)
-- Riwayat penarikan dana (`OUT`) dapat diklik untuk membuka modal tanda terima penarikan (*Withdrawal Receipt Details*) yang memuat ID transaksi, status pengajuan (Diproses/Selesai/Ditolak), waktu pengajuan, detail bank tujuan, nomor rekening, nama penerima, dan biaya admin.
-- Seluruh icon menggunakan Pure Bundled Vector SVG `lucide-react` (`Receipt`, `Building2`, `Landmark`, `ShieldCheck`, `ArrowDownRight`, `ArrowUpRight`, `Wallet`, `Check`, `Clock`, dll.) menjamin performa instan tanpa FOUT.
+### 3. Guarding Ketat Trigger & Rendering Pop-up
+- **Inisialisasi `useEffect`**: Jika `isKostManager === true`, proses inisialisasi promo popup langsung dihentikan dan `setShowPromoPopup(false)` dipanggil.
+- **Handler Navigasi `handleMenuChange('properties')`**: Ditambahkan syarat `!isKostManager` agar perpindahan tab ke Kelola Properti tidak memicu kemunculan popup.
+- **Render JSX**: Ditambahkan guard `!isKostManager` pada conditional render modal popup iklan promo di bagian bawah komponen.
 
 ---
 
@@ -32,8 +26,8 @@ Dokumen ini merangkum penyempurnaan sistem rekening bank dan pengajuan penarikan
 
 | File | Deskripsi Perubahan |
 |---|---|
-| `functions/public/pages/MitraDashboard.tsx` | Implementasi selector bank populer, kartu rekening virtual, form rekening terintegrasi, modal penarikan kustom, dan modal tanda terima rincian transaksi |
-| `functions/PROGRESS.md` | Pencatatan riwayat progres 325 |
+| `functions/public/pages/MitraDashboard.tsx` | Implementasi flag memoized `isKostManager`, penambahan query `subscription_status` di `loadData`, serta guarding ketat pada `useEffect`, `handleMenuChange`, dan rendering modal JSX |
+| `functions/PROGRESS.md` | Pencatatan riwayat progres 326 |
 | `WALKTHROUGH.md` | Dokumentasi walkthrough pengujian dan implementasi fitur |
 
 ---
@@ -50,23 +44,18 @@ transforming...
 ✓ 2509 modules transformed.
 rendering chunks...
 computing gzip size...
-✓ built in 50.13s
+✓ built in 1m 21s
 ```
 
 ---
 
 ## 📱 Panduan Pengujian Mitra
 
-1. Masuk ke **Dashboard Mitra** $\rightarrow$ buka tab **Dompet**.
-2. **Atur Rekening**:
-   - Jika belum ada rekening tersimpan, klik tombol **"Atur Rekening Penarikan"**.
-   - Pilih salah satu bank populer (misal: BCA, Mandiri, BRI, atau GoPay) dengan 1 klik, lalu masukkan nomor rekening dan nama lengkap.
-   - Klik **"Simpan Rekening"**. Kartu rekening akan tampil rapi dengan opsi toggle sensor nomor rekening.
-3. **Uji Tarik Dana**:
-   - Klik tombol **"Tarik Saldo"** pada kartu Saldo Tersedia.
-   - Masukkan nominal kustom atau klik chip nominal (misal: 100rb atau "Tarik Semua").
-   - Periksa ringkasan biaya admin (Rp 0) dan estimasi pencairan (1x24 jam kerja).
-   - Klik **"Konfirmasi Tarik Dana"**.
-4. **Lihat Rincian Tanda Terima**:
-   - Pada tabel **Riwayat Transaksi**, klik salah satu baris penarikan dana (dengan lencana *Diproses* / *Selesai*).
-   - Modal **Rincian Penarikan Dana** akan terbuka menampilkan tanda terima digital lengkap.
+1. **Pengujian Akun Mitra KostManager (Eksisting / Berlangganan)**:
+   - Login dengan akun mitra yang memiliki status KostManager atau memiliki properti dengan status `is_managed = true`.
+   - Buka menu **Kelola Properti** (`/dashboard-mitra/properties`).
+   - **Hasil yang Diharapkan**: Pop-up promo *"Gak Punya Waktu Kelola Kost? Upgrade ke KostManager!"* **tidak akan muncul sama sekali**.
+2. **Pengujian Akun Mitra Reguler (Non-KostManager)**:
+   - Login dengan akun mitra reguler baru yang belum memiliki properti KostManager.
+   - Buka menu **Kelola Properti**.
+   - Pop-up promo banner akan muncul sesuai jadwal promosi wajar (cooldown 24 jam).

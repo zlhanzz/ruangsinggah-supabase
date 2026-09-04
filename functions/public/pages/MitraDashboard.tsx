@@ -162,12 +162,6 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
         }
     }, [tab]);
 
-    const handleMenuChange = (menu: MenuKey) => {
-        if (menu === 'properties' && promoPopupSetting?.is_active) {
-            setShowPromoPopup(true);
-        }
-        navigate(`${Page.DASHBOARD_MITRA}/${menu}`);
-    };
     const [bookingTab, setBookingTab] = useState<'pending' | 'awaiting_payment' | 'completed'>('pending');
     const [loading, setLoading] = useState(true);
     const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
@@ -184,6 +178,8 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
     const [previewingKost, setPreviewingKost] = useState<Kost | null>(null);
     const [promoPopupSetting, setPromoPopupSetting] = useState<MitraPromoPopupSetting | null>(null);
     const [showPromoPopup, setShowPromoPopup] = useState(false);
+    const [kmRequests, setKmRequests] = useState<any[]>([]);
+    const [mitraSubscriptionStatus, setMitraSubscriptionStatus] = useState<string>((user as any)?.subscription_status || 'regular');
     const [isStartingFresh, setIsStartingFresh] = useState(false);
     const [quickRoomModalKost, setQuickRoomModalKost] = useState<Kost | null>(null);
     const [updatingRoomKostId, setUpdatingRoomKostId] = useState<string | null>(null);
@@ -197,6 +193,36 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
 
     const isVerified = user?.verification_status === 'verified';
 
+    // Cek apakah mitra berstatus KostManager, memiliki properti KostManager, atau sedang berlangganan KostManager
+    const isKostManager = useMemo(() => {
+        if (user?.subscription_status === 'kostmanager' || mitraSubscriptionStatus === 'kostmanager' || (user as any)?.is_managed === true || (user as any)?.is_kostmanager === true) {
+            return true;
+        }
+        if (properties.some((p: any) => p.is_managed === true || p.isManaged === true || p.managed_by === 'kostmanager' || p.kost_manager_status === 'ACTIVE' || p.kostManager?.status === 'ACTIVE')) {
+            return true;
+        }
+        if (kmRequests.some((r: any) => ['COMPLETED', 'APPROVED', 'IN_PROGRESS', 'SURVEY_SCHEDULED', 'ACTIVE'].includes((r.status || '').toUpperCase()))) {
+            return true;
+        }
+        return false;
+    }, [user, mitraSubscriptionStatus, properties, kmRequests]);
+
+    const handleMenuChange = (menu: MenuKey) => {
+        if (menu === 'properties' && promoPopupSetting?.is_active && !isKostManager && isVerified) {
+            try {
+                const storageKey = `km_promo_popup_last_shown_${uid || 'guest'}`;
+                const lastShown = localStorage.getItem(storageKey);
+                const now = Date.now();
+                const COOLDOWN_MS = 24 * 60 * 60 * 1000;
+                if (!lastShown || (now - Number(lastShown)) > COOLDOWN_MS) {
+                    setShowPromoPopup(true);
+                    localStorage.setItem(storageKey, String(now));
+                }
+            } catch { }
+        }
+        navigate(`${Page.DASHBOARD_MITRA}/${menu}`);
+    };
+
     const handleClosePromoPopup = useCallback(() => {
         setShowPromoPopup(false);
         try {
@@ -205,8 +231,13 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
         } catch { }
     }, [uid]);
 
-    // Load promo popup setting on mount dan HANYA trigger jika mitra sudah terverifikasi dan masuk ke flow 2 (Kelola Kost)
+    // Load promo popup setting on mount dan HANYA trigger jika mitra sudah terverifikasi, bukan KostManager, dan masuk ke flow 2 (Kelola Kost)
     useEffect(() => {
+        if (isKostManager) {
+            setShowPromoPopup(false);
+            return;
+        }
+
         getMitraPromoPopupSetting().then(setting => {
             setPromoPopupSetting(setting);
             if (!setting?.is_active) return;
@@ -214,10 +245,13 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
             // 1. Syarat Utama: JANGAN tampilkan jika masih dalam tahap verifikasi identitas (belum lolos verified)
             if (!isVerified) return;
 
-            // 2. Hanya izinkan ketika mitra sudah masuk ke Flow 2 (Kelola Properti / Upload Kost)
+            // 2. JANGAN tampilkan jika mitra SUDAH KostManager atau SUDAH berlangganan KostManager
+            if (isKostManager) return;
+
+            // 3. Hanya izinkan ketika mitra sudah masuk ke Flow 2 (Kelola Properti / Upload Kost)
             if (tab !== 'properties') return;
 
-            // 3. Batasi frekuensi kemunculan (cukup sesekali, maksimal 1x per 24 jam)
+            // 4. Batasi frekuensi kemunculan (cukup sesekali, maksimal 1x per 24 jam)
             try {
                 const storageKey = `km_promo_popup_last_shown_${uid || 'guest'}`;
                 const lastShown = localStorage.getItem(storageKey);
@@ -230,7 +264,7 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                 }
             } catch { }
         });
-    }, [tab, isVerified, uid]);
+    }, [tab, isVerified, uid, isKostManager]);
 
     // Handle Escape key for popup
     useEffect(() => {
@@ -288,7 +322,6 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
     };
 
     const [dynamicChartData, setDynamicChartData] = useState<any[]>(CHART_DATA);
-    const [kmRequests, setKmRequests] = useState<any[]>([]);
 
     // Withdrawal State
     const [withdrawalHistory, setWithdrawalHistory] = useState<any[]>([]);
@@ -501,14 +534,19 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
         if (!uid) return;
         if (!silent) setLoading(true);
         try {
-            const [propsData, rawBookingsData, statusRecords, chatData, withdrawalRequestsData, kmRequestsData] = await Promise.all([
+            const [propsData, rawBookingsData, statusRecords, chatData, withdrawalRequestsData, kmRequestsData, mitraData] = await Promise.all([
                 getOwnerProperties(uid),
                 getOwnerBookings(uid),
                 getResidentStatus(uid),
                 getMyChatSessions(uid, 'owner'),
                 supabase.from('withdrawal_requests').select('*').eq('agent_id', uid).order('created_at', { ascending: false }),
-                supabase.from('kostmanager_requests').select('*').eq('user_id', uid).order('created_at', { ascending: false })
+                supabase.from('kostmanager_requests').select('*').eq('user_id', uid).order('created_at', { ascending: false }),
+                supabase.from('mitra').select('subscription_status').eq('user_id', uid).maybeSingle()
             ]);
+
+            if (mitraData?.data?.subscription_status) {
+                setMitraSubscriptionStatus(mitraData.data.subscription_status);
+            }
 
             // GROUPING LOGIC: Group split transactions (Rent + Facility) into one card for the Owner
             const groupedBookingsMap = new Map<string, any>();
@@ -3373,7 +3411,7 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                 </div>
             )}
             {/* ── POP-UP IKLAN GRAFIS PROMO MITRA (KOSTMANAGER) ── */}
-            {showPromoPopup && promoPopupSetting && promoPopupSetting.is_active && (
+            {showPromoPopup && !isKostManager && promoPopupSetting && promoPopupSetting.is_active && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-md animate-in fade-in duration-200">
                     <div className="relative w-full max-w-lg mx-auto">
                         {/* Tombol Close Melayang di Sudut Kanan Atas */}
