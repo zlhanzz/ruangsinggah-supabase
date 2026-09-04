@@ -2,6 +2,30 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 331. Optimasi Deteksi Fasilitas Sekitar Properti: Prioritas Ritel Tier 1 (Minimarket & SPBU Resmi) dan Filter Anti-Sampah (`KostFormMitra.tsx`, `AgentDashboard.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  - Deteksi otomatis fasilitas harian mikro (Minimarket, SPBU, Laundry, Tempat Ibadah) menggunakan Google Places API sering memunculkan tempat tidak relevan (seperti toko kelontong acak, pertamini/bensin eceran botolan, atau entri data berkualitas rendah/sampah).
+  - Diperlukan algoritma penapisan cerdas yang memprioritaskan merek ritel nasional resmi (*Tier 1*) dan menolak tempat yang tidak valid atau sampah (*garbage entries*).
+- **Implementasi Solusi**:
+  1. **Penyaringan Sampah / Non-Fasilitas (`isGarbageFacility`)**:
+     - Memfilter nama-nama entri tempat yang terindikasi tidak valid, rusak, atau bukan fasilitas publik riil (misal: "tutup", "pindah", "bensin eceran", "pertamini", "warung pulsa", nama duplikat non-resmi).
+  2. **Prioritas Ritel Nasional Tier 1 untuk Minimarket**:
+     - Melakukan multi-query paralel (`indomaret`, `alfamart`, `alfamidi`, `convenience_store`) dan menandai merek ritel terverifikasi (`Indomaret`, `Alfamart`, `Alfamidi`, `Circle K`, `FamilyMart`, `Lawson`, `Super Indo`).
+     - Jika ditemukan minimarket Tier 1 dalam radius hingga 3.5 KM, sistem otomatis memprioritaskan yang terdekat daripada toko kelontong tanpa merek.
+  3. **Prioritas SPBU Resmi Tier 1 untuk Bahan Bakar**:
+     - Melakukan query paralel SPBU resmi (`spbu`, `pertamina`, `gas_station`).
+     - Memprioritaskan SPBU resmi Pertamina, Shell, BP, atau Vivo, sehingga menjamin listing kost tidak mengarahkan calon penyewa ke pertamini eceran pinggir jalan.
+  4. **Peningkatan Kualitas Filter Laundry dan Tempat Ibadah**:
+     - Radius dan validasi tipe tempat diperketat dengan penapisan kata kunci negatif untuk menjaga higienitas data listing properti.
+- **File Tersentuh**:
+  - `functions/public/components/KostFormMitra.tsx`
+  - `functions/public/pages/AgentDashboard.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi build frontend Vite `npm run build` lulus 100% (✓ 2510 modules transformed, built in 43.75s, 0 error).
+  - Kompilasi backend `functions` `tsc` lulus 100% (0 error).
+
 ### 330. Sistem Kendali Disiplin Properti KostManager: Bekukan (Ban), Pulihkan (Unban), & Hapus Permanen (`KostManagerPortal.tsx`, `adminService.ts`) (September 2026)
 - **Permintaan & Masalah**:
   - Administrator KostManager memerlukan wewenang penuh untuk menertibkan listing properti yang melanggar kesepakatan kerjasama (misal: menaikkan tarif sepihak, menerima penyewa offline tanpa pencatatan, atau mengabaikan komplain penghuni).

@@ -1,95 +1,82 @@
-# IMPLEMENTATION PLAN: Perbaikan Foreign Key Constraint `resident_status_kost_id_fkey` saat Hapus Properti Permanen
+# Rencana Implementasi: Perbaikan Scanner Landmark Mikro (Eliminasi False-Positive 'Mobil' & 'Bintang Khalifah', Serta Penajaman Deteksi Minimarket & SPBU Terdekat)
 
-## 1. Analisis Masalah / Kebutuhan
-- **Pesan Kesalahan**:
-  ```text
-  Gagal menghapus properti permanen: update or delete on table "properties" violates foreign key constraint "resident_status_kost_id_fkey" on table "resident_status"
-  ```
-- **Akar Masalah**:
-  1. Pada database PostgreSQL Supabase, tabel `resident_status` memiliki *foreign key constraint* `resident_status_kost_id_fkey` yang menghubungkan kolom `kost_id` ke `properties.id`.
-  2. Constraint tersebut dibuat tanpa opsi `ON DELETE CASCADE`.
-  3. Ketika Administrator melakukan aksi **Hapus Permanen** di Portal KostManager atau Dashboard Admin, fungsi `deleteProperty(propertyId)` di [`adminService.ts`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/adminService.ts) langsung mencoba mengeksekusi `DELETE FROM properties WHERE id = propertyId`.
-  4. Karena properti tersebut memiliki data anak yang masih tersimpan di tabel `resident_status` (riwayat penghuni/kamar), PostgreSQL menolak penghapusan baris induk (*parent row*) untuk mencegah terjadinya *orphan records*.
-  5. Selain `resident_status`, tabel relasional lain yang berpotensi memiliki data anak terikat pada properti adalah `rooms`, `room_bookings`, `complaints`, `chat_sessions`, `property_reports`, dan `mitra_kostmanager`.
+Dokumen ini merinci rencana investigasi, eliminasi anomali deteksi, serta penguatan logika pemindai fasilitas mikro (*Micro Landmark Scanner*) pada antarmuka input properti mitra dan agen.
 
 ---
 
-## 2. Rencana Solusi Komprehensif
+## 1. Analisis Masalah & Investigasi Akar Masalah
 
-### A. Mekanisme Pembersihan Dependensi Berjenjang (*Defensive Cascade Cleanup*) di [`adminService.ts`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/adminService.ts)
-Sebelum baris induk properti dihapus dari tabel `properties`, fungsi `deleteProperty` akan membersihkan seluruh data relasional anak dengan urutan aman:
-1. **Amankan Transaksi Terkait (`transactions`)**:
-   - Cari data `resident_status` yang memiliki `kost_id = propertyId`.
-   - Jika terdapat transaksi yang menyimpan pointer `resident_status_id`, lakukan `update { resident_status_id: null }` agar histori keuangan tetap tersimpan dan tidak memblokir penghapusan baris `resident_status`.
-2. **Hapus Data Penghuni (`resident_status`)**:
-   - Hapus seluruh baris di tabel `resident_status` yang memiliki `kost_id = propertyId`.
-3. **Hapus Data Kamar & Pemesanan Kamar (`rooms` & `room_bookings`)**:
-   - Ambil daftar ID kamar (`rooms`) yang memiliki `property_id = propertyId`.
-   - Hapus pemesanan kamar di `room_bookings` untuk kamar-kamar tersebut.
-   - Hapus baris kamar di tabel `rooms`.
-4. **Hapus Komplain & Laporan (`complaints` & `property_reports`)**:
-   - Hapus baris di `complaints` dengan `kost_id = propertyId`.
-   - Hapus baris di `property_reports` dengan `property_id = propertyId`.
-5. **Hapus Sesi Chat (`chat_sessions`)**:
-   - Hapus baris di `chat_sessions` dengan `property_id = propertyId` (pesan di dalamnya otomatis terhapus karena foreign key `session_id` memiliki `ON DELETE CASCADE`).
-6. **Hapus Metadata KostManager (`mitra_kostmanager`)**:
-   - Hapus baris di `mitra_kostmanager` dengan `property_id = propertyId` atau `id = propertyId`.
-7. **Hapus Media dari Supabase Storage**:
-   - Hapus seluruh file gambar dan video dari bucket storage (sudah berjalan baik).
-8. **Hapus Properti Utama (`properties`)**:
-   - Mengeksekusi penghapusan baris di tabel `properties` setelah seluruh dependensi anak bersih 100%.
-
-### B. Penyempurnaan UX pada Modal Hapus di [`KostManagerPortal.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/components/admin/KostManagerPortal.tsx)
-- Menampilkan pesan status loading yang informatif saat proses penghapusan berjenjang sedang berlangsung (*"Sedang membersihkan relasi data & media..."*).
-- Menampilkan notifikasi sukses yang jelas dan menangani pesan error dengan transparan jika terjadi kendala jaringan.
-
-### C. Penyediaan Skrip DDL Database (`CASCADE_RESIDENT_STATUS_FK.sql`)
-- Menyediakan file skrip SQL di root project agar pengembang/admin dapat memperbarui constraint di Supabase SQL Editor:
-  ```sql
-  ALTER TABLE public.resident_status
-  DROP CONSTRAINT IF EXISTS resident_status_kost_id_fkey;
-
-  ALTER TABLE public.resident_status
-  ADD CONSTRAINT resident_status_kost_id_fkey
-  FOREIGN KEY (kost_id)
-  REFERENCES public.properties(id)
-  ON DELETE CASCADE;
-  ```
-  *(Catatan: Solusi kode di `adminService.ts` tetap menjamin penghapusan berhasil bahkan jika skrip SQL belum dijalankan di database).*
+Berdasarkan pengujian pada lokasi kost baru dan bukti tangkapan layar yang dilampirkan:
+1. **Munculnya Landmark Anomali 'Mobil' (0.4 km) & Hilangnya SPBU Terdekat**:
+   - **Penyebab**: Pada fungsi `isValidMicroFacility('gas_station', place)`, pemeriksaan mengizinkan tempat lolos jika Google Places mengembalikan `types.includes('gas_station')` tanpa mewajibkan nama tempat mengandung kata kunci SPBU resmi. Di Indonesia, jaringan SPBU mini ExxonMobil atau bengkel pelumas terdaftar di Google Maps dengan nama tunggal **"Mobil"** (atau "Mobil 1").
+   - Karena tempat bernama "Mobil" tersebut berjarak sangat dekat (0.4 km), ia mengalahkan SPBU Pertamina resmi (yang berjarak 0.8 km s/d 1.5 km) dalam pengurutan jarak murni `sort((a, b) => a.kmVal - b.kmVal)`.
+   - Dengan pemotongan `.slice(0, 1)`, SPBU resmi terbuang dan yang muncul di kartu form adalah landmark aneh bernama "Mobil".
+2. **Munculnya Landmark Anomali 'Bintang khalifah' (0.2 km) & Hilangnya Minimarket Terdekat**:
+   - **Penyebab**: Pada fungsi `isValidMicroFacility('minimarket', place)`, validasi memperbolehkan tempat masuk jika memiliki `hasType` (`convenience_store`, `supermarket`, `grocery_or_supermarket`) atau kata generik seperti `'toko'`.
+   - Entitas lokal non-minimarket (seperti toko busana muslim, toko kelontong rumahan, atau lembaga yang terdaftar sebagai toko serba ada) bernama **"Bintang khalifah"** memiliki tag tersebut dan berada di jarak 0.2 km (sangat dekat).
+   - Akibatnya, "Bintang khalifah" (0.2 km) mengalahkan gerai **Indomaret / Alfamart / Alfamidi** nyata terdekat (yang mungkin berjarak 0.5 km) dan terpilih sebagai satu-satunya minimarket melalui `.slice(0, 1)`.
 
 ---
 
-## 3. Dampak Perubahan (Files to Touch)
+## 2. Dampak Perubahan File
 
-1. **[`functions/public/adminService.ts`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/adminService.ts)**:
-   - Memperbarui fungsi `deleteProperty` untuk mengeksekusi pembersihan dependensi relasional berjenjang sebelum menghapus baris properti.
-2. **[`functions/public/components/admin/KostManagerPortal.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/components/admin/KostManagerPortal.tsx)**:
-   - Menyempurnakan penanganan modal konfirmasi hapus dan feedback error/sukses.
-3. **`CASCADE_RESIDENT_STATUS_FK.sql`** (File baru di workspace root):
-   - Skrip SQL migrasi untuk menambahkan `ON DELETE CASCADE` pada constraint `resident_status_kost_id_fkey`.
-
----
-
-## 4. Langkah-Langkah Eksekusi (Hanya Setelah di-ACC)
-1. Modifikasi `deleteProperty` di [`adminService.ts`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/adminService.ts) dengan logika *cascade cleanup*.
-2. Modifikasi `handleConfirmDelete` di [`KostManagerPortal.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/components/admin/KostManagerPortal.tsx) untuk feedback yang lebih optimal.
-3. Buat file `CASCADE_RESIDENT_STATUS_FK.sql`.
-4. Jalankan pengujian kompilasi:
-   - Frontend: `cmd /c npm run build` di `functions/public/`
-   - Backend: `cmd /c npm run build` di `functions/`
-5. Catat progres ke `functions/PROGRESS.md` (Entri 331).
-6. Buat `WALKTHROUGH.md` dan push perubahan ke branch `bukan-productions`.
+Perubahan difokuskan secara presisi pada logika pemindaian dan sanitasi landmark di 2 file utama:
+1. `functions/public/components/KostFormMitra.tsx`:
+   - Formulir pendaftaran dan edit properti oleh Mitra Kost.
+2. `functions/public/pages/AgentDashboard.tsx`:
+   - Formulir input dan kurasi listing KostManager oleh Agen / Tim Operasional RuangSinggah.
 
 ---
 
-## 5. Rencana Verifikasi
-- **Kompilasi**: Memastikan `npm run build` di frontend dan `tsc` di backend sukses dengan 0 error.
-- **Validasi Alur Penghapusan**: Mengonfirmasi bahwa setiap tahapan penghapusan data anak (`resident_status`, `rooms`, dll.) ditangani dengan blok try-catch yang aman sehingga tidak menghentikan proses pembersihan data lainnya.
-   - Memastikan badge status auto-pilot berubah menjadi merah jika kost berstatus suspended/banned.
-2. **Verifikasi Aksi Banned**:
-   - Menguji alur pembekuan dengan memasukkan alasan pelanggaran.
-   - Memverifikasi status berubah di tabel dan tombol berubah menjadi opsi "Pulihkan".
-3. **Verifikasi Aksi Hapus Permanen**:
-   - Menguji modal konfirmasi keamanan ganda dan memastikan penghapusan berjalan tuntas tanpa crash.
-4. **Verifikasi Build**:
-   - Memastikan `npm run build` berhasil tanpa error TypeScript.
+## 3. Rencana Langkah-Langkah Eksekusi
+
+### Langkah 1: Penguatan Sanitasi Global (`isGarbageFacility`)
+- Menambahkan aturan penolakan mutlak untuk:
+  - Nama tunggal `'mobil'` atau `'mobil 1'` (yang tidak disertai kata 'spbu', 'pom', atau 'indostation').
+  - Usaha otomotif/rental: `'rental mobil'`, `'sewa mobil'`, `'cuci mobil'`, `'variasi mobil'`, `'showroom'`.
+  - Entitas non-publik: `'bintang khalifah'`, `'toko baju'`, `'toko pakaian'`, `'toko plastik'`, `'toko beras'`, `'toko bangunan'`, `'toko emas'`, `'warung sembako'`, `'paud'`, `'kb '`.
+
+### Langkah 2: Pengetatan Validasi Fasilitas Mikro (`isValidMicroFacility`)
+- **Kategori `minimarket`**:
+  - Mewajibkan nama tempat (`name`) secara eksplisit mengandung merek ritel resmi atau kata minimarket:
+    `'indomaret'`, `'alfamart'`, `'alfamidi'`, `'circle k'`, `'familymart'`, `'family mart'`, `'lawson'`, `'super indo'`, `'superindo'`, `'hypermart'`, `'minimarket'`, `'mini market'`, `'swalayan'`, atau akhiran `' mart'`.
+  - Menghapus kata kunci longgar seperti `'toko'` dan `'toko kelontong'` agar warung/toko biasa tidak menyamar sebagai minimarket.
+  - `hasType` dari Google Places **tidak boleh** meloloskan tempat jika namanya tidak cocok dengan kata kunci ritel di atas.
+  - Blacklist kata non-minimarket: `'bintang'`, `'khalifah'`, `'busana'`, `'baju'`, `'pakaian'`, `'distributor'`, `'grosir'`.
+- **Kategori `gas_station`**:
+  - Mewajibkan nama tempat mengandung identitas SPBU resmi:
+    `'spbu'`, `'pertamina'`, `'shell'`, `'bp '`, `'bp-'`, `'pom bensin'`, `'vivo'`.
+  - Jika nama memuat kata `'mobil'`, wajib disertai kata `'spbu'`, `'pom'`, atau `'indostation'` (contoh: *"SPBU Mobil Indostation"*), dan menolak keras nama yang hanya berbunyi *"Mobil"*.
+  - Menolak mutlak `'pertamini'`, `'eceran'`, `'pom mini'` (kios bensin botolan tidak resmi).
+
+### Langkah 3: Penerapan Sistem Prioritas Bertingkat (*Tiered Priority Ranking*)
+- **Minimarket**:
+  - **Tier 1 (Ritel Nasional Terverifikasi)**: Indomaret, Alfamart, Alfamidi, Circle K, FamilyMart, Lawson, Super Indo.
+  - **Tier 2 (Minimarket/Swalayan Independen)**: Memuat kata "minimarket", "swalayan".
+  - Logika seleksi: Jika ada Tier 1 dalam radius toleransi (hingga 3.5 km), pilih yang paling dekat dari Tier 1. Jika tidak ada sama sekali, baru gunakan Tier 2 terdekat.
+- **SPBU / Pom Bensin**:
+  - **Tier 1 (SPBU Resmi Nasional)**: Pertamina, Shell, BP, Vivo, atau diawali "SPBU".
+  - **Tier 2 (SPBU Mikro Terverifikasi)**: Indostation Mobil resmi.
+  - Logika seleksi: Utamakan SPBU resmi Pertamina/Shell/BP terdekat (radius hingga 5.0 km).
+
+### Langkah 4: Penguatan Query Penelusuran Google Places
+- Menambahkan query penelusuran paralel:
+  - Minimarket: menambahkan penelusuran eksplisit `keyword: 'alfamidi'`.
+  - SPBU: menambahkan penelusuran eksplisit `keyword: 'pertamina'`.
+- Menyesuaikan batas radius filter agar ramah kawasan perumahan/suburban:
+  - Minimarket: radius toleransi hingga `3.5 KM`.
+  - SPBU: radius toleransi hingga `5.0 KM`.
+
+---
+
+## 4. Rencana Verifikasi & Pengujian
+
+1. **Uji Kompilasi Kode**:
+   - Menjalankan `cmd /c npm run build` pada `functions/public` untuk memastikan 0 error kompilasi Vite dan TypeScript.
+2. **Uji Simulasi Sanitasi & Filter**:
+   - Memastikan nama "Mobil" tereliminasi 100% dan digantikan oleh SPBU Pertamina/Shell terdekat.
+   - Memastikan nama "Bintang khalifah" tereliminasi 100% dan digantikan oleh Indomaret/Alfamart/Alfamidi terdekat.
+3. **Pencatatan Riwayat & Git**:
+   - Mencatat progres ke `functions/PROGRESS.md` (Entri #331).
+   - Menerbitkan `WALKTHROUGH.md`.
+   - Melakukan commit dan push ke branch `bukan-productions`.

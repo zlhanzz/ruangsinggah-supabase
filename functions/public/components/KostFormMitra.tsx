@@ -2639,22 +2639,31 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
     // Helper sanitasi global multi-layer: menolak tempat usaha non-fasilitas publik kost (printer, servis, fotocopy, bengkel, konter, dll.)
     const isGarbageFacility = useCallback((name: string) => {
         if (!name) return false;
-        const lower = name.toLowerCase();
+        const lower = name.toLowerCase().trim();
+
+        // Tolak mutlak jika namanya hanya "mobil", "mobil 1", dsb. tanpa kata spbu/indostation/pom
+        if (lower === 'mobil' || lower === 'mobil 1' || lower === 'mobil satu') return true;
+        if (lower.startsWith('mobil ') && !lower.includes('spbu') && !lower.includes('pom') && !lower.includes('indostation') && !lower.includes('bensin')) return true;
+
         const garbageKeywords = [
             'printer', 'service', 'servis', 'print',
             'fotocopy', 'foto copy', 'percetakan', 'copy center',
             'cuci motor', 'cuci mobil', 'car wash', 'steam',
             'bengkel', 'tambal ban', 'sparepart', 'variasi motor', 'variasi mobil',
+            'rental mobil', 'sewa mobil', 'rent car', 'showroom',
             'counter pulsa', 'konter', 'cell', 'elektronik',
-            'salon', 'barber', 'barbershop', 'pijat', 'massage', 'spa'
+            'salon', 'barber', 'barbershop', 'pijat', 'massage', 'spa',
+            'bintang khalifah', 'toko baju', 'toko pakaian', 'toko busana', 'toko kain',
+            'toko plastik', 'toko bangunan', 'toko beras', 'toko emas', 'toko jam',
+            'warung sembako', 'agen beras', 'distributor', 'paud', 'kb '
         ];
         return garbageKeywords.some(b => lower.includes(b));
     }, []);
 
-    // Helper validasi sanitasi nama & kategori fasilitas mikro (mencegah false-positive seperti "Service Printer", "Cuci Motor", "Bengkel")
+    // Helper validasi sanitasi nama & kategori fasilitas mikro (mencegah false-positive seperti "Service Printer", "Cuci Motor", "Bengkel", "Mobil", "Bintang khalifah")
     const isValidMicroFacility = useCallback((category: 'minimarket' | 'laundry' | 'mosque' | 'church' | 'gas_station', place: any) => {
         if (!place?.name) return false;
-        const name = place.name.toLowerCase();
+        const name = place.name.toLowerCase().trim();
         const types: string[] = place.types || [];
 
         if (category === 'laundry') {
@@ -2673,17 +2682,23 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
         }
 
         if (category === 'minimarket') {
-            // Wajib mengandung nama ritel minimarket / supermarket
+            // Wajib mengandung nama ritel minimarket terverifikasi atau kata minimarket/swalayan
             const validKeywords = [
-                'indomaret', 'alfamart', 'alfamidi', 'minimarket', 'supermarket', 'mart',
-                'circle k', 'family mart', 'familymart', 'lawson', 'toko kelontong', 'swalayan', 'toko'
+                'indomaret', 'alfamart', 'alfamidi', 'circle k', 'family mart', 'familymart',
+                'lawson', 'super indo', 'superindo', 'hypermart', 'minimarket', 'mini market',
+                'swalayan'
             ];
-            const hasKeyword = validKeywords.some(k => name.includes(k));
-            const hasType = types.some(t => ['convenience_store', 'supermarket', 'grocery_or_supermarket'].includes(t));
-            if (!hasKeyword && !hasType) return false;
+            const hasRetailKeyword = validKeywords.some(k => name.includes(k)) || name.endsWith(' mart') || name.includes(' mart ');
+            // hasType saja TIDAK BOLEH meloloskan tempat jika namanya tidak cocok ritel minimarket
+            if (!hasRetailKeyword) return false;
 
-            // Blacklist
-            const blacklist = ['service', 'printer', 'bengkel', 'laundry', 'fotocopy', 'salon', 'barber', 'apotek', 'counter', 'pulsa'];
+            // Blacklist nama usaha non-minimarket/toko umum
+            const blacklist = [
+                'service', 'printer', 'bengkel', 'laundry', 'fotocopy', 'salon', 'barber',
+                'apotek', 'counter', 'pulsa', 'bintang', 'khalifah', 'busana', 'pakaian',
+                'baju', 'bangunan', 'plastik', 'emas', 'kacamata', 'distributor', 'grosir',
+                'warung', 'kios', 'sembako'
+            ];
             return !blacklist.some(b => name.includes(b));
         }
 
@@ -2693,7 +2708,7 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
             const hasType = types.includes('mosque');
             if (!hasKeyword && !hasType) return false;
 
-            if (name.includes('travel') || name.includes('tour') || name.includes('yayasan')) return false;
+            if (name.includes('travel') || name.includes('tour') || name.includes('yayasan') || name.includes('sekolah')) return false;
             return true;
         }
 
@@ -2708,12 +2723,22 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
         }
 
         if (category === 'gas_station') {
-            const validKeywords = ['spbu', 'pertamina', 'shell', 'bp ', 'pom bensin'];
-            const hasKeyword = validKeywords.some(k => name.includes(k));
-            const hasType = types.includes('gas_station');
-            if (!hasKeyword && !hasType) return false;
+            // Tolak mutlak jika namanya hanya "mobil" atau varian kendaraan/rental
+            if (name === 'mobil' || name === 'mobil 1' || name === 'mobil satu') return false;
+            if (name.startsWith('mobil ') && !name.includes('spbu') && !name.includes('pom') && !name.includes('indostation') && !name.includes('bensin')) return false;
 
-            if (name.includes('pertamini') || name.includes('eceran')) return false;
+            // Wajib mengandung kata kunci SPBU resmi
+            const validKeywords = ['spbu', 'pertamina', 'shell', 'bp ', 'bp-', 'pom bensin', 'vivo', 'indostation'];
+            const hasKeyword = validKeywords.some(k => name.includes(k));
+            if (!hasKeyword) return false;
+
+            // Tolak kios bensin eceran/botolan
+            if (name.includes('pertamini') || name.includes('eceran') || name.includes('pom mini')) return false;
+
+            // Tolak usaha otomotif/rental/cuci
+            const blacklist = ['rental', 'sewa mobil', 'cuci', 'bengkel', 'variasi', 'salon', 'showroom', 'onderdil', 'sparepart', 'service', 'servis'];
+            if (blacklist.some(b => name.includes(b))) return false;
+
             return true;
         }
 
@@ -2834,7 +2859,7 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                     .slice(0, 3);
             });
 
-        // 4. Scan Fasilitas Harian Mikro: Minimarket Terdekat (Urutan Jarak Fisik Sejati - Tepat 1 Terdekat)
+        // 4. Scan Fasilitas Harian Mikro: Minimarket Terdekat (Prioritas Ritel Nasional Terverifikasi)
         const searchMini1 = performSearch({
             location: centerLatLng,
             rankBy: google.maps.places.RankBy.DISTANCE,
@@ -2848,16 +2873,22 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
         const searchMini3 = performSearch({
             location: centerLatLng,
             rankBy: google.maps.places.RankBy.DISTANCE,
+            keyword: 'alfamidi'
+        });
+        const searchMini4 = performSearch({
+            location: centerLatLng,
+            rankBy: google.maps.places.RankBy.DISTANCE,
             keyword: 'minimarket'
         });
 
-        const scanMinimarket = Promise.all([searchMini1, searchMini2, searchMini3]).then(([r1, r2, r3]) => {
-            const combined = [...r1, ...r2, ...r3];
+        const scanMinimarket = Promise.all([searchMini1, searchMini2, searchMini3, searchMini4]).then(([r1, r2, r3, r4]) => {
+            const combined = [...r1, ...r2, ...r3, ...r4];
             const seen = new Set<string>();
-            return combined
+            const mapped = combined
                 .filter(p => {
                     if (!p.name || !p.geometry?.location) return false;
                     if (!isValidMicroFacility('minimarket', p)) return false;
+                    if (isGarbageFacility(p.name)) return false;
                     const key = p.place_id || `${p.name}_${p.geometry.location.lat().toFixed(4)}_${p.geometry.location.lng().toFixed(4)}`;
                     if (seen.has(key)) return false;
                     seen.add(key);
@@ -2867,19 +2898,29 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                     const pLat = p.geometry.location.lat();
                     const pLng = p.geometry.location.lng();
                     const km = getKm(pLat, pLng);
+                    const lowerName = p.name.toLowerCase();
+                    // Tier 1: Ritel nasional terverifikasi
+                    const isTier1 = ['indomaret', 'alfamart', 'alfamidi', 'circle k', 'familymart', 'family mart', 'lawson', 'super indo', 'superindo'].some(brand => lowerName.includes(brand));
                     return {
                         name: p.name,
                         lat: pLat,
                         lng: pLng,
                         distance: `± ${km} KM`,
                         kmVal: km,
+                        isTier1,
                         transportMode: km <= 1.0 ? 'walk' : 'motorcycle',
                         isLiveGoogleApi: true
                     };
                 })
-                .filter(p => p.kmVal <= 2.5)
-                .sort((a, b) => a.kmVal - b.kmVal)
-                .slice(0, 1);
+                .filter(p => p.kmVal <= 3.5);
+
+            // Jika ada minimarket ritel Tier 1 (Indomaret/Alfamart/Alfamidi), prioritaskan yang paling dekat
+            const tier1Items = mapped.filter(p => p.isTier1).sort((a, b) => a.kmVal - b.kmVal);
+            if (tier1Items.length > 0) {
+                return tier1Items.slice(0, 1);
+            }
+
+            return mapped.sort((a, b) => a.kmVal - b.kmVal).slice(0, 1);
         });
 
         // 5. Scan Fasilitas Harian Mikro: Laundry Kiloan Terdekat (Urutan Jarak Fisik Sejati - Tepat 1 Terdekat)
@@ -2889,7 +2930,7 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
             keyword: 'laundry'
         }).then(results => {
             return results
-                .filter(p => p.name && p.geometry?.location && isValidMicroFacility('laundry', p))
+                .filter(p => p.name && p.geometry?.location && isValidMicroFacility('laundry', p) && !isGarbageFacility(p.name))
                 .map(p => {
                     const pLat = p.geometry.location.lat();
                     const pLng = p.geometry.location.lng();
@@ -2904,7 +2945,7 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                         isLiveGoogleApi: true
                     };
                 })
-                .filter(p => p.kmVal <= 2.5)
+                .filter(p => p.kmVal <= 3.0)
                 .sort((a, b) => a.kmVal - b.kmVal)
                 .slice(0, 1);
         });
@@ -2928,6 +2969,7 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                 .filter(p => {
                     if (!p.name || !p.geometry?.location) return false;
                     if (!isValidMicroFacility('mosque', p)) return false;
+                    if (isGarbageFacility(p.name)) return false;
                     const key = p.place_id || `${p.name}_${p.geometry.location.lat().toFixed(4)}_${p.geometry.location.lng().toFixed(4)}`;
                     if (seen.has(key)) return false;
                     seen.add(key);
@@ -2971,6 +3013,7 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                 .filter(p => {
                     if (!p.name || !p.geometry?.location) return false;
                     if (!isValidMicroFacility('church', p)) return false;
+                    if (isGarbageFacility(p.name)) return false;
                     const key = p.place_id || `${p.name}_${p.geometry.location.lat().toFixed(4)}_${p.geometry.location.lng().toFixed(4)}`;
                     if (seen.has(key)) return false;
                     seen.add(key);
@@ -2995,25 +3038,31 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                 .slice(0, 1);
         });
 
-        // 8. Scan Fasilitas Vital: SPBU / Pom Bensin Terdekat (Urutan Jarak Fisik Sejati - Tepat 1 Terdekat)
+        // 8. Scan Fasilitas Vital: SPBU / Pom Bensin Terdekat (Prioritas SPBU Resmi Pertamina/Shell/BP)
         const searchSpbu1 = performSearch({
-            location: centerLatLng,
-            rankBy: google.maps.places.RankBy.DISTANCE,
-            type: 'gas_station'
-        });
-        const searchSpbu2 = performSearch({
             location: centerLatLng,
             rankBy: google.maps.places.RankBy.DISTANCE,
             keyword: 'spbu'
         });
+        const searchSpbu2 = performSearch({
+            location: centerLatLng,
+            rankBy: google.maps.places.RankBy.DISTANCE,
+            keyword: 'pertamina'
+        });
+        const searchSpbu3 = performSearch({
+            location: centerLatLng,
+            rankBy: google.maps.places.RankBy.DISTANCE,
+            type: 'gas_station'
+        });
 
-        const scanGasStation = Promise.all([searchSpbu1, searchSpbu2]).then(([r1, r2]) => {
-            const combined = [...r1, ...r2];
+        const scanGasStation = Promise.all([searchSpbu1, searchSpbu2, searchSpbu3]).then(([r1, r2, r3]) => {
+            const combined = [...r1, ...r2, ...r3];
             const seen = new Set<string>();
-            return combined
+            const mapped = combined
                 .filter(p => {
                     if (!p.name || !p.geometry?.location) return false;
                     if (!isValidMicroFacility('gas_station', p)) return false;
+                    if (isGarbageFacility(p.name)) return false;
                     const key = p.place_id || `${p.name}_${p.geometry.location.lat().toFixed(4)}_${p.geometry.location.lng().toFixed(4)}`;
                     if (seen.has(key)) return false;
                     seen.add(key);
@@ -3023,19 +3072,29 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                     const pLat = p.geometry.location.lat();
                     const pLng = p.geometry.location.lng();
                     const km = getKm(pLat, pLng);
+                    const lowerName = p.name.toLowerCase();
+                    // Tier 1: SPBU resmi utama (Pertamina, Shell, BP, Vivo atau diawali 'SPBU')
+                    const isTier1 = ['pertamina', 'shell', 'bp ', 'bp-', 'vivo'].some(brand => lowerName.includes(brand)) || lowerName.startsWith('spbu');
                     return {
                         name: p.name,
                         lat: pLat,
                         lng: pLng,
                         distance: `± ${km} KM`,
                         kmVal: km,
+                        isTier1,
                         transportMode: 'motorcycle',
                         isLiveGoogleApi: true
                     };
                 })
-                .filter(p => p.kmVal <= 4.0)
-                .sort((a, b) => a.kmVal - b.kmVal)
-                .slice(0, 1);
+                .filter(p => p.kmVal <= 5.0);
+
+            // Jika ada SPBU resmi Tier 1 (Pertamina/Shell/BP), utamakan yang terdekat
+            const tier1Items = mapped.filter(p => p.isTier1).sort((a, b) => a.kmVal - b.kmVal);
+            if (tier1Items.length > 0) {
+                return tier1Items.slice(0, 1);
+            }
+
+            return mapped.sort((a, b) => a.kmVal - b.kmVal).slice(0, 1);
         });
 
         Promise.all([
