@@ -5846,9 +5846,9 @@ export const applyBlurToBoundingBoxes = async (
 
         if (rawBoxesPx.length === 0) return resolve(file);
 
-        // 2. Gabungkan kotak-kotak yang beririsan atau berdekatan (clustering spanduk)
-        const gapX = Math.round(img.width * 0.035);
-        const gapY = Math.round(img.height * 0.035);
+        // 2. Gabungkan kotak-kotak yang beririsan langsung (clustering spanduk ultra-tight)
+        const gapX = Math.max(3, Math.round(img.width * 0.008));
+        const gapY = Math.max(3, Math.round(img.height * 0.008));
 
         const mergedBoxes: Array<{ x: number; y: number; w: number; h: number; r: number; b: number }> = [];
         const used = new Array(rawBoxesPx.length).fill(false);
@@ -5899,16 +5899,16 @@ export const applyBlurToBoundingBoxes = async (
           c.closePath();
         };
 
-        // 3. Terapkan efek mosaik & watermark elegan pada setiap area gabungan
+        // 3. Terapkan efek mosaik & watermark elegan pada setiap area gabungan secara pas (tight fit)
         mergedBoxes.forEach(box => {
           const { x, y, w, h } = box;
           if (w <= 0 || h <= 0) return;
 
           ctx.save();
 
-          // A. Mosaik / Pixelate di canvas
+          // A. Mosaik / Pixelate di canvas (Resolusi pixel mikro yang rapat & bersih)
           const offCanvas = document.createElement('canvas');
-          const scale = 0.06;
+          const scale = 0.05;
           offCanvas.width = Math.max(1, Math.round(w * scale));
           offCanvas.height = Math.max(1, Math.round(h * scale));
           const offCtx = offCanvas.getContext('2d');
@@ -5919,21 +5919,21 @@ export const applyBlurToBoundingBoxes = async (
             ctx.drawImage(offCanvas, 0, 0, offCanvas.width, offCanvas.height, x, y, w, h);
           }
 
-          // B. Lapisan Frosted Glassmorphism Gelap yang Bersih
-          ctx.fillStyle = 'rgba(15, 23, 42, 0.78)';
+          // B. Lapisan Frosted Glassmorphism Gelap yang Bersih & Rapi
+          ctx.fillStyle = 'rgba(15, 23, 42, 0.82)';
           ctx.fillRect(x, y, w, h);
 
           // Garis batas luar halus tipis
-          ctx.strokeStyle = 'rgba(255, 255, 255, 0.12)';
+          ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
           ctx.lineWidth = 1;
           ctx.strokeRect(x, y, w, h);
 
-          // C. Render Watermark Kapsul Elegan "ruangsinggah.id"
-          if (w >= 45 && h >= 16) {
+          // C. Render Watermark Kapsul Elegan "ruangsinggah.id" (Proporsional dengan ukuran spanduk)
+          if (w >= 36 && h >= 14) {
             const centerX = x + w / 2;
             const centerY = y + h / 2;
 
-            const fontSize = Math.max(11, Math.min(24, Math.round(Math.min(h * 0.38, w * 0.13))));
+            const fontSize = Math.max(9, Math.min(22, Math.round(Math.min(h * 0.36, w * 0.12))));
             ctx.font = `bold ${fontSize}px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`;
 
             const textPart1 = "ruangsinggah";
@@ -5942,32 +5942,35 @@ export const applyBlurToBoundingBoxes = async (
             const width2 = ctx.measureText(textPart2).width;
             const totalTextWidth = width1 + width2;
 
-            const padX = Math.round(fontSize * 0.85);
-            const padY = Math.round(fontSize * 0.42);
+            const padX = Math.round(fontSize * 0.75);
+            const padY = Math.round(fontSize * 0.38);
             const pillW = totalTextWidth + (padX * 2);
             const pillH = fontSize + (padY * 2);
-            const pillX = centerX - (pillW / 2);
-            const pillY = centerY - (pillH / 2);
-            const pillRadius = Math.round(pillH / 2);
 
-            drawPill(ctx, pillX, pillY, pillW, pillH, pillRadius);
-            ctx.fillStyle = 'rgba(2, 6, 23, 0.88)';
-            ctx.fill();
-            ctx.strokeStyle = 'rgba(249, 115, 22, 0.65)';
-            ctx.lineWidth = 1.5;
-            ctx.stroke();
+            if (pillW <= w * 1.15 && pillH <= h * 1.15) {
+              const pillX = centerX - (pillW / 2);
+              const pillY = centerY - (pillH / 2);
+              const pillRadius = Math.round(pillH / 2);
 
-            ctx.textAlign = 'left';
-            ctx.textBaseline = 'middle';
-            const startTextX = centerX - (totalTextWidth / 2);
+              drawPill(ctx, pillX, pillY, pillW, pillH, pillRadius);
+              ctx.fillStyle = 'rgba(2, 6, 23, 0.90)';
+              ctx.fill();
+              ctx.strokeStyle = 'rgba(249, 115, 22, 0.70)';
+              ctx.lineWidth = 1.2;
+              ctx.stroke();
 
-            // "ruangsinggah" (Putih bersih)
-            ctx.fillStyle = '#FFFFFF';
-            ctx.fillText(textPart1, startTextX, centerY);
+              ctx.textAlign = 'left';
+              ctx.textBaseline = 'middle';
+              const startTextX = centerX - (totalTextWidth / 2);
 
-            // ".id" (Oranye khas RuangSinggah)
-            ctx.fillStyle = '#FB923C';
-            ctx.fillText(textPart2, startTextX + width1, centerY);
+              // "ruangsinggah" (Putih bersih)
+              ctx.fillStyle = '#FFFFFF';
+              ctx.fillText(textPart1, startTextX, centerY);
+
+              // ".id" (Oranye khas RuangSinggah)
+              ctx.fillStyle = '#FB923C';
+              ctx.fillText(textPart2, startTextX + width1, centerY);
+            }
           }
 
           ctx.restore();

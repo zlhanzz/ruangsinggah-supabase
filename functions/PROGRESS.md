@@ -2,12 +2,10 @@
 
 ## Fitur Selesai (Completed Features)
 
-### 334. Perbaikan Integrasi Edge Function Deteksi Banner Kontak (`detect-contact-banner`), Body Payload & Auto-Watermark di Dashboard Mitra (`adminService.ts`, `detect-contact-banner/index.ts`, `KostFormMitra.tsx`) (September 2026)
+### 334. Perbaikan Integrasi Edge Function Deteksi Banner Kontak (`detect-contact-banner`), Pengetatan Presisi Sensor (Ultra-Tight Fit), & Auto-Watermark di Dashboard Mitra (`adminService.ts`, `detect-contact-banner/index.ts`, `KostFormMitra.tsx`) (September 2026)
 - **Permintaan & Masalah**:
-  1. Fitur otomatis sensor foto (blur area spanduk dan penempelan watermark kapsul `ruangsinggah.id`) tidak berfungsi saat mitra mengunggah foto properti (seperti Foto Fasad/Bangunan Depan) di Dashboard Mitra.
-  2. Investigasi menemukan pemanggilan di frontend memanggil `'detect-banner'` yang tidak terdaftar (nama Edge Function di Supabase adalah `'detect-contact-banner'`).
-  3. Format pengiriman body payload mengirimkan kunci `image` alih-alih `base64Image` yang diharapkan oleh Edge Function.
-  4. Format ekstraksi respons AI di frontend membaca root `data.hasContact` dan `data.boxes`, padahal Edge Function mengembalikan data bersarang di `data.data.has_contact` dan `data.data.boxes`.
+  1. Fitur otomatis sensor foto (blur area spanduk dan penempelan watermark kapsul `ruangsinggah.id`) sebelumnya tidak berfungsi karena ketidakcocokan nama Edge Function (`'detect-banner'` vs `'detect-contact-banner'`), parameter payload (`image` vs `base64Image`), dan parsing response bersarang.
+  2. Setelah deteksi aktif, area sensor tampak terlalu besar dan tinggi (*over-extended*), memanjang vertikal dari spanduk hingga ke jeruji gerbang/atap karena AI vision menangkap struktur bangunan vertikal di belakang spanduk dan clustering gap yang terlalu longgar.
 - **Implementasi Solusi**:
   1. **Penyelarasan Invokasi Edge Function (`adminService.ts`)**:
      - Memperbarui pemanggilan Supabase Edge Function menjadi `supabase.functions.invoke('detect-contact-banner', ...)`.
@@ -17,18 +15,20 @@
      - Mengambil `rawData = data?.data || data || {}`.
      - Membaca `hasContact` secara tangguh dari `rawData.has_contact ?? rawData.hasContact ?? false`.
      - Membaca `boxes` dan `detectedTexts` (`rawData.detected_texts ?? rawData.detectedTexts`) sehingga koordinat bounding box spanduk berhasil diteruskan ke `applyBlurToBoundingBoxes`.
-  3. **Penyelarasan Edge Function Backend (`detect-contact-banner/index.ts`)**:
-     - Memastikan penerimaan parameter body yang toleran terhadap `base64Image` maupun `image`.
+  3. **Pengetatan Prompt AI Vision Ultra-Tight Fit (`detect-contact-banner/index.ts`)**:
+     - Menambahkan aturan ketat *Ultra-Tight Bounding Box*: melarang keras memasukkan struktur gerbang, jeruji pagar kayu/besi vertikal, dinding, kanopi atap, tiang, atau lantai ke dalam kotak sensor.
+     - Memastikan `ymin`, `ymax`, `xmin`, `xmax` menempel pas hanya pada 4 sudut tepi lembaran kain/kertas spanduk.
      - Mengatur cascade model aktif Gemini (`gemini-2.0-flash`, `gemini-1.5-flash`, `gemini-2.5-flash`, `gemini-1.5-pro`, `gemini-3.7-flash`).
-  4. **Efek Blur & Watermark Elegan Tetap Presisi**:
-     - Spanduk kontak terdeteksi langsung disensor dengan pixelate canvas + lapisan frosted glassmorphism gelap + watermark kapsul `ruangsinggah.id` dengan teks putih dan oranye khas RuangSinggah.
+  4. **Optimasi Algoritma Clustering & Sensor Fit Presisi (`adminService.ts`)**:
+     - Memperkecil toleransi gap clustering menjadi *direct intersection* (`Math.max(3, img * 0.008)`) agar kotak tidak membengkak menjangkau area non-spanduk.
+     - Merender pixelate mikro yang rapat, lapisan gelap frosted glassmorphism rapi, dan watermark kapsul `ruangsinggah.id` yang proporsional di tengah spanduk.
 - **File Tersentuh**:
   - `functions/public/adminService.ts`
   - `supabase/functions/detect-contact-banner/index.ts`
   - `functions/PROGRESS.md`
   - `WALKTHROUGH.md`
 - **Verifikasi**:
-  - Kompilasi build frontend Vite `cmd /c npm run build` di `functions/public/` lulus 100% (✓ 2510 modules transformed, built in 32.10s, 0 error).
+  - Kompilasi build frontend Vite `cmd /c npm run build` di `functions/public/` lulus 100% (✓ 2510 modules transformed, built in 30.09s, 0 error).
   - Kompilasi backend `functions` `tsc` lulus 100% (0 error).
 
 ### 333. Sistem Kendali Biaya Operasional / Platform Fee KostManager (Default 5%), Simulasi Interaktif di Portal Admin, Audit Log Perubahan Tarif, dan Transparansi Laporan Keuangan di Dashboard Mitra (`KostManagerPortal.tsx`, `MitraDashboard.tsx`, `adminService.ts`, `types.ts`) (September 2026)

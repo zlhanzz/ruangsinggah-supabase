@@ -38,16 +38,23 @@ serve(async (req) => {
 
     const prompt = `
 Anda adalah AI vision inspeksi foto properti sewa khusus untuk platform RuangSinggah.id.
-Tugas Anda adalah mendeteksi apakah di dalam foto ini terdapat:
-1. SPANDUK / BANNER KAIN yang memuat penawaran sewa kamar dan informasi kontak langsung (nomor HP/WhatsApp, kata "Hubungi", "Hub", "Telp", "WA", "CP", nomor telepon 08xx / +62xx).
+Tugas Anda adalah mendeteksi secara SANGAT PRESISI (ULTRA-TIGHT BOUNDING BOX) objek:
+1. SPANDUK / BANNER / LEMBARAN KAIN / KERTAS yang memuat penawaran sewa kamar dan informasi kontak langsung (nomor HP/WhatsApp, kata "TERIMA KOST", "DISEWAKAN", "Hubungi", "Hub", "Telp", "WA", "CP", nomor telepon 08xx / +62xx).
 2. TEKS NOMOR TELEPON atau kontak langsung yang sengaja dipasang untuk transaksi di luar platform.
 
-ATURAN KETAT PRESISI (TIGHT BOUNDING BOX):
-1. FOKUS HANYA PADA KONTAK: Jangan tandai tulisan nama gedung/kost permanen di dinding (seperti tulisan semen/kayu nama kost, plang alamat RT/RW, nomor rumah) JIKA TIDAK MEMUAT nomor telepon. Tulisan nama kost biasa di dinding BUKAN pelanggaran.
-2. UKURAN KOTAK HARUS SANGAT PRESISI (TIGHT FIT):
-   - Koordinat bounding box (skala 0 sampai 1000: ymin, xmin, ymax, xmax) HARUS MENEMPEL PAS DI TEPI KAIN SPANDUK atau pas di sekeliling teks kontak saja.
-   - DILARANG melebihi tepi kain spanduk. JANGAN menyertakan pot bunga, jalanan, pagar di luar kain, lantai, tiang, atau dinding sekitar.
-   - Kotak harus sekecil dan seakurat mungkin hanya menutupi spanduk hijau/spanduk kontak tersebut.
+ATURAN KETAT PRESISI (ULTRA-TIGHT FIT):
+1. FOKUS HANYA PADA LEMBARAN SPANDUK / TEKS KONTAK:
+   - Koordinat bounding box (skala 0 sampai 1000: ymin, xmin, ymax, xmax) HARUS MENEMPEL PAS DI 4 SUDUT TEPI KAIN/LEMBARAN SPANDUK ITU SENDIRI.
+   - ymin: Garis batas tepi paling atas dari kain/kertas spanduk.
+   - ymax: Garis batas tepi paling bawah dari kain/kertas spanduk.
+   - xmin: Garis batas tepi paling kiri dari kain/kertas spanduk.
+   - xmax: Garis batas tepi paling kanan dari kain/kertas spanduk.
+
+2. LARANGAN KERAS (NEGATIVE CONSTRAINTS):
+   - DILARANG KERAS menyertakan struktur pintu gerbang, jeruji pagar besi/kayu vertikal, dinding, lantai/aspal, tanaman/pot, kanopi atap baja ringan, tiang, atau langit-langit di atas/bawah/samping spanduk.
+   - Jika spanduk berukuran kecil terpasang pada pagar/gerbang kayu (seperti spanduk kecil di bagian bawah/tengah gerbang), KOTAK HANYA BOLEH MENUTUPI KAIN SPANDUK KECIL TERSEBUT! DILARANG menandai seluruh tinggi pintu gerbang atau atap di atasnya.
+   - JANGAN tandai tulisan nama gedung/kost permanen di dinding semen JIKA TIDAK MEMUAT nomor telepon kontak.
+
 3. Jika foto bersih dari spanduk kontak atau nomor telepon, kembalikan "has_contact": false dan "boxes": [].
 
 FORMAT OUTPUT (JSON SAJA, TANPA BACKTICKS):
