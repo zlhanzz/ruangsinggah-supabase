@@ -1425,7 +1425,15 @@ const MitraProfile: React.FC<MitraProfileProps> = ({ uid, user: initialUser, onB
                                     </div>
                                 </div>
                                 <button
-                                    onClick={(e) => { e.stopPropagation(); navigate('/kostmanager'); }}
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        if (formData.verification_status !== 'verified') {
+                                            alert('Syarat Mendaftar KostManager: Anda harus menyelesaikan verifikasi identitas terlebih dahulu. Silakan lengkapi data dan dokumen identitas pada formulir berikut.');
+                                            setSearchParams({ edit: 'true', step: '2' });
+                                            return;
+                                        }
+                                        navigate('/kostmanager');
+                                    }}
                                     className="w-full sm:w-auto px-5 py-2.5 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-[10px] font-black uppercase tracking-wider transition-all active:scale-95 shadow-md shadow-orange-500/10 shrink-0 text-center"
                                 >
                                     Upgrade ke KostManager
@@ -1489,7 +1497,15 @@ const MitraProfile: React.FC<MitraProfileProps> = ({ uid, user: initialUser, onB
                                         <p className="text-xs text-gray-400 font-medium mt-1">Anda belum pernah mengajukan program KostManager.</p>
                                     </div>
                                     <button
-                                        onClick={() => { setShowKmProgressModal(false); navigate('/kostmanager'); }}
+                                        onClick={() => {
+                                            setShowKmProgressModal(false);
+                                            if (formData.verification_status !== 'verified') {
+                                                alert('Syarat Mendaftar KostManager: Anda harus menyelesaikan verifikasi identitas terlebih dahulu. Silakan lengkapi data dan dokumen identitas pada formulir berikut.');
+                                                setSearchParams({ edit: 'true', step: '2' });
+                                                return;
+                                            }
+                                            navigate('/kostmanager');
+                                        }}
                                         className="px-6 py-3 bg-orange-500 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-orange-600 transition-colors"
                                     >
                                         Gabung KostManager Sekarang

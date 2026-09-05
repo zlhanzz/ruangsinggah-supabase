@@ -884,6 +884,11 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
             window.open(url, '_blank');
             return;
         }
+        if (!isVerified) {
+            alert('Syarat Mendaftar KostManager: Anda harus menyelesaikan verifikasi identitas terlebih dahulu. Anda akan dialihkan otomatis ke halaman profil untuk melengkapi data dan dokumen identitas.');
+            navigate(`${Page.DASHBOARD_MITRA}/profile?edit=true&step=2`);
+            return;
+        }
         const target = url ? (url === '/kost-manager' ? Page.KOSTMANAGER : url) : Page.KOSTMANAGER;
         if (onPageChange) {
             onPageChange(target as Page);

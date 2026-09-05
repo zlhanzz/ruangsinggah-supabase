@@ -306,11 +306,43 @@ const KostManagerLanding: React.FC<KostManagerLandingProps> = ({ user, onBack, i
     }
   };
 
-  const handleOpenRegistration = () => {
+  const checkIdentityVerification = (): boolean => {
     if (!user) {
       navigate('/login?role=owner&mode=register');
-      return;
+      return false;
     }
+    if (user.verification_status !== 'verified') {
+      alert('Syarat Mendaftar KostManager: Anda harus menyelesaikan verifikasi identitas terlebih dahulu. Anda akan dialihkan otomatis ke halaman profil untuk melengkapi data dan dokumen identitas.');
+      if (isMitra) {
+        navigate(`${Page.DASHBOARD_MITRA}/profile?edit=true&step=2`);
+      } else {
+        navigate('/profile?view=edit');
+      }
+      return false;
+    }
+    return true;
+  };
+
+  // Proteksi URL langsung (?register=true) agar tidak bisa bypass verifikasi identitas
+  useEffect(() => {
+    if (isModalOpen) {
+      if (!user) {
+        setIsModalOpen(false);
+        navigate('/login?role=owner&mode=register');
+      } else if (user.verification_status !== 'verified') {
+        setIsModalOpen(false);
+        alert('Syarat Mendaftar KostManager: Anda harus menyelesaikan verifikasi identitas terlebih dahulu. Anda akan dialihkan otomatis ke halaman profil untuk melengkapi data dan dokumen identitas.');
+        if (isMitra) {
+          navigate(`${Page.DASHBOARD_MITRA}/profile?edit=true&step=2`);
+        } else {
+          navigate('/profile?view=edit');
+        }
+      }
+    }
+  }, [isModalOpen, user, isMitra]);
+
+  const handleOpenRegistration = () => {
+    if (!checkIdentityVerification()) return;
     setIsModalOpen(true);
   };
 
@@ -376,6 +408,7 @@ const KostManagerLanding: React.FC<KostManagerLandingProps> = ({ user, onBack, i
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!checkIdentityVerification()) return;
     if (!formData.kostName || !formData.kostType || !formData.totalRooms || !formData.emptyRooms || !formData.address) {
       alert('Mohon lengkapi seluruh formulir data kost.');
       return;

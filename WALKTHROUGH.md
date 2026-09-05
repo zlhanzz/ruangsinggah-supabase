@@ -1,34 +1,35 @@
-# Walkthrough: Penayangan Berkelanjutan Pop-Up Iklan KostManager Setiap Kali Masuk Menu "Kost Saya" atau "Beranda"
+# Walkthrough: Syarat Wajib Verifikasi Identitas Sebelum Mendaftar KostManager & Pengalihan Otomatis ke Profil
 
 ## Ringkasan Perubahan
-Fitur promosi KostManager pada akun mitra biasa telah disempurnakan agar **selalu muncul secara otomatis dalam bentuk iklan pop-up modal interaktif setiap kali mitra masuk atau berpindah ke menu "Kost Saya" maupun menu "Beranda"** di Dashboard Mitra (`/mitra`), memberikan visibilitas promosi yang optimal dan berkelanjutan.
+Sistem pendaftaran program **KostManager** telah dilengkapi dengan validasi verifikasi identitas wajib (`verification_status === 'verified'`). Jika pengguna atau mitra belum menyelesaikan verifikasi identitas (KTP dan data diri), setiap upaya mendaftar KostManager akan dicegah dan **dialihkan secara otomatis langsung ke halaman profil verifikasi identitas**.
 
 ---
 
 ## 1. Detail Implementasi
 
-### A. Pembaruan Reaktif Navigasi Menu di [`MitraDashboard.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/MitraDashboard.tsx)
-1. **Hook Reaktif `useEffect` pada `activeMenu`**:
-   - Memantau perubahan menu aktif. Begitu mitra berada pada tab `overview` (Beranda) atau `properties` (Kost Saya) dan berstatus non-KostManager (`!isKostManager`), pop-up iklan KostManager otomatis langsung dibuka:
-     ```ts
-     useEffect(() => {
-         if (!isKostManager && (activeMenu === 'overview' || activeMenu === 'properties')) {
-             setShowPromoPopup(true);
-         }
-     }, [activeMenu, isKostManager]);
-     ```
-2. **Pemicu Langsung pada Klik Menu (`handleMenuChange`)**:
-   - Ketika mitra mengklik tombol menu *Beranda* atau *Kost Saya* (baik dari sidebar desktop maupun mobile navigation), pop-up iklan KostManager dipicu seketika:
-     ```ts
-     const handleMenuChange = (menu: MenuKey) => {
-         if (!isKostManager && (menu === 'overview' || menu === 'properties')) {
-             setShowPromoPopup(true);
-         }
-         navigate(`${Page.DASHBOARD_MITRA}/${menu}`);
-     };
-     ```
-3. **Penyederhanaan `handleClosePromoPopup`**:
-   - Menutup pop-up saat tombol silang `X`, *"Nanti Saja"*, backdrop, atau tombol `Escape` ditekan (`setShowPromoPopup(false)`), tanpa memblokir pembukaan kembali saat berpindah menu berikutnya.
+### A. Proteksi Pendaftaran pada [`KostManagerLanding.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/KostManagerLanding.tsx)
+1. **Fungsi Validasi `checkIdentityVerification()`**:
+   - Memeriksa status login dan verifikasi pengguna:
+     - Jika belum login $\rightarrow$ mengarahkan ke halaman login pendaftaran mitra (`/login?role=owner&mode=register`).
+     - Jika `user.verification_status !== 'verified'` $\rightarrow$ memunculkan alert notifikasi:
+       > *"Syarat Mendaftar KostManager: Anda harus menyelesaikan verifikasi identitas terlebih dahulu. Anda akan dialihkan otomatis ke halaman profil untuk melengkapi data dan dokumen identitas."*
+       dan langsung mengalihkan pengguna ke:
+       - **Mitra**: `/dashboard-mitra/profile?edit=true&step=2` (Langkah 2: Verifikasi Identitas & Unggah KTP).
+       - **User Umum**: `/profile?view=edit`.
+2. **Proteksi Pembukaan Modal (`handleOpenRegistration`)**:
+   - Mencegah modal pendaftaran terbuka jika akun belum terverifikasi.
+3. **Proteksi Akses URL Langsung (`?register=true`)**:
+   - Menambahkan hook reaktif `useEffect` yang mengecek status verifikasi saat halaman diakses via URL pendaftaran langsung. Jika belum terverifikasi, modal ditutup dan pengguna dialihkan ke profil.
+4. **Proteksi Submit Layer (`handleSubmit`)**:
+   - Memastikan data onboarding dan checkout pembayaran tidak dapat dikirim sebelum verifikasi identitas berstatus `verified`.
+
+### B. Proteksi Pop-up Iklan Promo pada [`MitraDashboard.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/MitraDashboard.tsx)
+- Pada fungsi `handlePromoNavigate`, saat tombol *"Pelajari & Ajukan Sekarang"* diklik:
+  - Jika mitra belum terverifikasi (`!isVerified`), sistem memunculkan notifikasi edukasi dan langsung mengarahkan mitra ke `/dashboard-mitra/profile?edit=true&step=2`.
+
+### C. Proteksi Tombol Upgrade pada [`MitraProfile.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/MitraProfile.tsx)
+- Tombol *"Upgrade ke KostManager"* pada kartu profil mitra dan tombol modal progres memvalidasi status `formData.verification_status !== 'verified'`.
+- Jika belum terverifikasi, tombol langsung membuka formulir Langkah 2 Verifikasi Identitas (`setSearchParams({ edit: 'true', step: '2' })`).
 
 ---
 
@@ -38,23 +39,24 @@ Fitur promosi KostManager pada akun mitra biasa telah disempurnakan agar **selal
   ```bash
   cmd /c npm run build (di functions/public)
   ```
-  **Status**: `✓ 2511 modules transformed. ✓ built in 35.91s` (**0 Error, 0 Warning Kritis**).
+  **Status**: `✓ 2511 modules transformed. ✓ built in 40.01s` (**0 Error, 0 Warning Kritis**).
 
 ---
 
 ## 3. Panduan Pengujian untuk Pengguna (User Testing Steps)
 
-1. **Buka Dashboard Mitra (Beranda)**:
-   - Akses `/mitra` atau `/mitra/overview`.
-   - **Pop-up modal iklan KostManager langsung muncul secara otomatis di tengah layar**.
-2. **Tutup Pop-Up**:
-   - Klik tombol silang **`X`** di sudut kanan atas (atau tombol *"Nanti Saja"* / klik backdrop). Modal tertutup seketika.
-3. **Pindah ke Menu "Kost Saya"**:
-   - Klik menu **Kost Saya** (`/mitra/properties`).
-   - **Pop-up iklan KostManager langsung muncul kembali secara otomatis**.
-4. **Pindah ke Menu Lain (misal "Pemesanan" / "Dompet")**:
-   - Klik menu **Pemesanan** atau **Dompet & Pendapatan**.
-   - Pop-up tidak menghalangi menu operasional ini.
-5. **Kembali ke Menu "Beranda" atau "Kost Saya"**:
-   - Klik kembali menu **Beranda** atau **Kost Saya**.
-   - **Pop-up iklan KostManager akan selalu terus muncul kembali secara konsisten**.
+1. **Uji Melalui Pop-up Iklan KostManager di Dashboard Mitra**:
+   - Login dengan akun mitra yang status identitasnya belum diverifikasi.
+   - Buka Beranda Dashboard Mitra (`/mitra`) $\rightarrow$ Modal pop-up iklan KostManager muncul.
+   - Klik tombol **"Pelajari & Ajukan Sekarang"**.
+   - Sistem akan memunculkan alert: *"Syarat Mendaftar KostManager: Anda harus menyelesaikan verifikasi identitas terlebih dahulu..."* dan langsung mengarahkan ke tab **Profil (Langkah 2: Verifikasi Identitas & KTP)**.
+2. **Uji Melalui Landing Page KostManager (`/kostmanager`)**:
+   - Akses `/kostmanager`.
+   - Klik tombol **"Daftar KostManager Sekarang"** atau tombol **"Pilih Paket & Daftar"**.
+   - Sistem akan memunculkan alert dan otomatis mengalihkan pengguna langsung ke halaman pengisian verifikasi identitas.
+3. **Uji Akses URL Langsung `/kostmanager?register=true`**:
+   - Buka `/kostmanager?register=true` pada akun yang belum terverifikasi.
+   - Halaman pendaftaran otomatis ditutup dan pengguna dialihkan ke profil verifikasi.
+4. **Uji Akun Mitra Terverifikasi (`verified`)**:
+   - Login dengan akun mitra yang sudah terverifikasi (`verification_status: 'verified'`).
+   - Buka `/kostmanager` $\rightarrow$ Klik daftar $\rightarrow$ Modal pendaftaran KostManager terbuka secara normal dan siap diisi.

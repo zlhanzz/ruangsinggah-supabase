@@ -2,6 +2,29 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 365. Syarat Wajib Verifikasi Identitas Sebelum Mendaftar KostManager & Pengalihan Otomatis ke Profil (`KostManagerLanding.tsx`, `MitraDashboard.tsx`, `MitraProfile.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna meminta agar verifikasi identitas (`verification_status === 'verified'`) dijadikan sebagai **syarat wajib** untuk mendaftar atau bergabung ke program KostManager.
+  2. Setiap kali ada pengguna atau mitra yang mencoba mendaftar KostManager namun belum menyelesaikan proses verifikasi identitas, sistem wajib **langsung mengarahkan pengguna secara otomatis ke halaman profil** untuk mengisi seluruh data dan dokumen identitas yang diperlukan.
+- **Implementasi Solusi**:
+  1. **Proteksi Komprehensif Landing Page KostManager (`KostManagerLanding.tsx`)**:
+     - Menambahkan fungsi validasi `checkIdentityVerification()`:
+       - Jika belum login $\rightarrow$ diarahkan ke halaman login pendaftaran mitra (`/login?role=owner&mode=register`).
+       - Jika status belum `verified` $\rightarrow$ memunculkan alert notifikasi edukatif dan mengalihkan secara otomatis ke halaman profil verifikasi identitas (`/dashboard-mitra/profile?edit=true&step=2` untuk mitra atau `/profile?view=edit` untuk user umum).
+     - Memproteksi pembukaan modal registrasi (`handleOpenRegistration`), pengiriman formulir data sewa (`handleSubmit`), serta akses langsung via query parameter URL `?register=true` melalui hook reaktif `useEffect`.
+  2. **Proteksi Pop-up Iklan Promo di Dashboard Mitra (`MitraDashboard.tsx`)**:
+     - Pada fungsi `handlePromoNavigate`, saat mitra mengklik tombol CTA *"Pelajari & Ajukan Sekarang"*, sistem memvalidasi `!isVerified`. Jika belum terverifikasi, sistem memberikan alert edukasi dan mengarahkan mitra langsung ke `/dashboard-mitra/profile?edit=true&step=2`.
+  3. **Proteksi Tombol Upgrade pada Halaman Profil Mitra (`MitraProfile.tsx`)**:
+     - Memperbarui tombol *"Upgrade ke KostManager"* dan modal progres agar memvalidasi status `formData.verification_status !== 'verified'`. Jika belum terverifikasi, langsung mengarahkan mitra ke formulir Step 2 Verifikasi KTP/Identitas (`setSearchParams({ edit: 'true', step: '2' })`).
+- **File Tersentuh**:
+  - `functions/public/pages/KostManagerLanding.tsx`
+  - `functions/public/pages/MitraDashboard.tsx`
+  - `functions/public/pages/MitraProfile.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi build frontend Vite (`cmd /c npm run build` di `functions/public`) lulus 100% (`✓ 2511 modules transformed, built in 40.01s`, 0 error).
+
 ### 364. Penayangan Berkelanjutan Pop-Up Iklan KostManager Setiap Kali Masuk Menu "Kost Saya" atau "Beranda" (`MitraDashboard.tsx`) (September 2026)
 - **Permintaan & Masalah**:
   1. Pengguna meminta agar iklan pop-up promosi KostManager **selalu terus muncul** secara otomatis setiap kali mitra (dengan status mitra reguler / `!isKostManager`) masuk atau berpindah ke menu **Kost Saya** (`/mitra/properties`) atau ke menu **Beranda** (`/mitra/overview`).
