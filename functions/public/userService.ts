@@ -131,11 +131,51 @@ export interface PropertyFilterParams {
 
 export function transformPropertyRow(row: any): Kost {
   const rawImages = row.image_urls || [];
-  const images = rawImages.map(getDisplayImageUrl).filter((u: string) => u !== '');
+  let images = rawImages.map(getDisplayImageUrl).filter((u: string) => u !== '');
   const photosMeta = (row.metadata?.photos_meta || rawImages).map(getDisplayImageObject).filter(Boolean) as ImageUrlObject[];
 
   const rawVideos = row.video_urls || [];
   const videos = rawVideos.map(getDisplayVideoUrl).filter((u: string) => u !== '');
+
+  const roomTypes = row.room_types || [];
+
+  // Prioritaskan foto kamar dari tipe kamar berharga termahal di Index 0 (Cover Preview Utama)
+  if (roomTypes.length > 0) {
+    const getRoomPrice = (r: any) => {
+      if (Array.isArray(r.pricing) && r.pricing.length > 0) {
+        const bulanan = r.pricing.find((p: any) => p.period === 'bulanan');
+        if (bulanan && Number(bulanan.price) > 0) return Number(bulanan.price);
+        const maxP = Math.max(...r.pricing.map((p: any) => Number(p.price || 0)));
+        if (maxP > 0) return maxP;
+      }
+      return Number(r.price || 0);
+    };
+
+    const sortedRooms = [...roomTypes].sort((a, b) => getRoomPrice(b) - getRoomPrice(a));
+
+    let bestRoomPhotoUrl = '';
+    for (const rm of sortedRooms) {
+      const rmImgs = Array.isArray(rm.images) ? rm.images : [];
+      for (const rImg of rmImgs) {
+        const displayUrl = getDisplayImageUrl(rImg);
+        if (displayUrl) {
+          bestRoomPhotoUrl = displayUrl;
+          break;
+        }
+      }
+      if (bestRoomPhotoUrl) break;
+    }
+
+    if (bestRoomPhotoUrl) {
+      const existingIdx = images.findIndex(u => u === bestRoomPhotoUrl || u.includes(bestRoomPhotoUrl) || bestRoomPhotoUrl.includes(u));
+      if (existingIdx > 0) {
+        const [moved] = images.splice(existingIdx, 1);
+        images.unshift(moved);
+      } else if (existingIdx === -1) {
+        images.unshift(bestRoomPhotoUrl);
+      }
+    }
+  }
 
   return {
     id: row.id,

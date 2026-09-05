@@ -1084,14 +1084,6 @@ export const KostManagerPropertyFormModal: React.FC<KostManagerPropertyFormModal
             }).filter((p: number) => p > 0);
             const finalPrice = prices.length > 0 ? Math.min(...prices) : Number(kmListingForm.price || 0);
 
-            // Normalize public photos
-            const finalImageUrls = (kmListingForm.image_urls || []).map((img: any, idx: number) => {
-                const urlStr = normalizePhotoUrl(img);
-                if (!urlStr) return null;
-                const label = photoCategories[idx] || (typeof img === 'object' && img.label) || 'Foto Area Properti';
-                return { original: urlStr, url: urlStr, label };
-            }).filter(Boolean);
-
             // Strictly normalize and sanitize room photo categories before saving
             const normalizedRoomTypesPayload = (kmListingForm.roomTypes || []).map((rm: any) => {
                 const categorized = getRoomCategorizedPhotos(rm);
@@ -1110,6 +1102,48 @@ export const KostManagerPropertyFormModal: React.FC<KostManagerPropertyFormModal
                     photoCategories: finalPhotoCategories
                 };
             });
+
+            // Urutkan tipe kamar berdasarkan tarif bulanan tertinggi (paling mahal)
+            const getRoomEffectivePrice = (rm: any) => {
+                if (Array.isArray(rm.pricing) && rm.pricing.length > 0) {
+                    const bulanan = rm.pricing.find((p: any) => p.period === 'bulanan');
+                    if (bulanan && Number(bulanan.price) > 0) return Number(bulanan.price);
+                    const maxP = Math.max(...rm.pricing.map((p: any) => Number(p.price || 0)));
+                    if (maxP > 0) return maxP;
+                }
+                return Number(rm.price || 0);
+            };
+
+            const sortedRoomsByPrice = [...normalizedRoomTypesPayload].sort((a, b) => getRoomEffectivePrice(b) - getRoomEffectivePrice(a));
+
+            // Kumpulkan foto kamar dengan prioritas kamar termahal di urutan terdepan (Index 0 = Cover Utama)
+            const roomPhotosPayload: any[] = [];
+            sortedRoomsByPrice.forEach((rm: any) => {
+                const rmImages = Array.isArray(rm.images) ? rm.images : [];
+                rmImages.forEach((img: any, i: number) => {
+                    const urlStr = normalizePhotoUrl(img);
+                    if (!urlStr) return;
+                    const cat = (rm.photoCategories && rm.photoCategories[i]) || `Kamar: ${rm.name || 'Unit'}`;
+                    roomPhotosPayload.push({
+                        original: urlStr,
+                        url: urlStr,
+                        label: cat.startsWith('Kamar:') ? cat : `Kamar: ${rm.name || 'Unit'} - ${cat}`
+                    });
+                });
+            });
+
+            // Normalize public photos
+            const publicImageUrls = (kmListingForm.image_urls || []).map((img: any, idx: number) => {
+                const urlStr = normalizePhotoUrl(img);
+                if (!urlStr) return null;
+                const label = photoCategories[idx] || (typeof img === 'object' && img.label) || 'Foto Area Properti';
+                return { original: urlStr, url: urlStr, label };
+            }).filter(Boolean);
+
+            // Susun finalImageUrls: Foto Kamar (Dimulai dari tipe termahal) + Foto Area Properti
+            const finalImageUrls = roomPhotosPayload.length > 0
+                ? [...roomPhotosPayload, ...publicImageUrls]
+                : publicImageUrls;
 
             const propertyPayload: any = {
                 title: kmListingForm.title.trim(),
@@ -3071,17 +3105,49 @@ export const KostManagerPropertyFormModal: React.FC<KostManagerPropertyFormModal
 
                                 <div className="max-w-xs mx-auto bg-slate-950 rounded-3xl p-3 border-4 border-slate-800 shadow-2xl space-y-3">
                                     <div className="aspect-video bg-slate-800 rounded-2xl overflow-hidden relative">
-                                        {kmListingForm.image_urls && kmListingForm.image_urls.length > 0 ? (
-                                            <img 
-                                                src={getImageUrlString(kmListingForm.image_urls[0])} 
-                                                alt="Cover" 
-                                                className="w-full h-full object-cover" 
-                                            />
-                                        ) : (
-                                            <div className="w-full h-full flex items-center justify-center text-slate-500 text-xs font-bold">
-                                                Foto Sampul
-                                            </div>
-                                        )}
+                                        {(() => {
+                                            // Cari foto dari tipe kamar termahal untuk preview cover mobile
+                                            let previewCover = '';
+                                            const rooms = kmListingForm.roomTypes || [];
+                                            if (rooms.length > 0) {
+                                                const getP = (r: any) => {
+                                                    if (Array.isArray(r.pricing) && r.pricing.length > 0) {
+                                                        const b = r.pricing.find((p: any) => p.period === 'bulanan');
+                                                        if (b && Number(b.price) > 0) return Number(b.price);
+                                                        const max = Math.max(...r.pricing.map((p: any) => Number(p.price || 0)));
+                                                        if (max > 0) return max;
+                                                    }
+                                                    return Number(r.price || 0);
+                                                };
+                                                const sorted = [...rooms].sort((a, b) => getP(b) - getP(a));
+                                                for (const r of sorted) {
+                                                    const rImgs = Array.isArray(r.images) ? r.images : [];
+                                                    for (const img of rImgs) {
+                                                        const u = getImageUrlString(img);
+                                                        if (u) {
+                                                            previewCover = u;
+                                                            break;
+                                                        }
+                                                    }
+                                                    if (previewCover) break;
+                                                }
+                                            }
+                                            if (!previewCover) {
+                                                previewCover = getImageUrlString(kmListingForm.image_urls?.[0]);
+                                            }
+
+                                            return previewCover ? (
+                                                <img 
+                                                    src={previewCover} 
+                                                    alt="Cover Preview Kamar" 
+                                                    className="w-full h-full object-cover" 
+                                                />
+                                            ) : (
+                                                <div className="w-full h-full flex items-center justify-center text-slate-500 text-xs font-bold">
+                                                    Foto Sampul Kamar
+                                                </div>
+                                            );
+                                        })()}
                                         <span className="absolute top-2 left-2 bg-orange-600 text-white px-2 py-0.5 rounded-full text-[8px] font-black uppercase">
                                             {kmListingForm.type || 'Campur'}
                                         </span>

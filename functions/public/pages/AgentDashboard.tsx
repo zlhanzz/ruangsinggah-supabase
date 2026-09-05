@@ -1911,6 +1911,40 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
 
             const validOwnerUid = resolveValidOwnerUid(currentForm.owner_uid, isEditingKostManager, mitraProfile);
 
+            // Urutkan tipe kamar berdasarkan harga bulanan tertinggi (paling mahal)
+            const getRoomPrice = (r: any) => {
+                if (Array.isArray(r.pricing) && r.pricing.length > 0) {
+                    const bulanan = r.pricing.find((p: any) => p.period === 'bulanan');
+                    if (bulanan && Number(bulanan.price) > 0) return Number(bulanan.price);
+                    const maxP = Math.max(...r.pricing.map((p: any) => Number(p.price || 0)));
+                    if (maxP > 0) return maxP;
+                }
+                return Number(r.price || 0);
+            };
+
+            const sortedRooms = [...(currentForm.roomTypes || [])].sort((a, b) => getRoomPrice(b) - getRoomPrice(a));
+            const roomPhotosList: any[] = [];
+            sortedRooms.forEach((rm: any) => {
+                const rmImgs = Array.isArray(rm.images) ? rm.images : [];
+                rmImgs.forEach((img: any, i: number) => {
+                    const urlStr = getImageUrlString(img);
+                    if (!urlStr) return;
+                    const cat = (rm.photoCategories && rm.photoCategories[i]) || `Kamar: ${rm.name || 'Unit'}`;
+                    roomPhotosList.push({
+                        original: urlStr,
+                        url: urlStr,
+                        label: cat.startsWith('Kamar:') ? cat : `Kamar: ${rm.name || 'Unit'} - ${cat}`
+                    });
+                });
+            });
+
+            const publicPhotosList = (currentForm.image_urls || []).map((img: any, idx: number) => {
+                const url = getImageUrlString(img);
+                if (!url) return null;
+                const label = photoCategories[idx] || (typeof img === 'object' && img.label) || 'Foto Lainnya';
+                return { original: url, url: url, label: label };
+            }).filter(Boolean);
+
             const propertyPayload = {
                 title: currentForm.title,
                 description: currentForm.description,
@@ -1927,12 +1961,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                 facilities: currentForm.facilities,
                 location: currentForm.location,
                 rules: currentForm.rules,
-                image_urls: (currentForm.image_urls || []).map((img: any, idx: number) => {
-                    const url = getImageUrlString(img);
-                    if (!url) return null;
-                    const label = photoCategories[idx] || 'Foto Lainnya';
-                    return { original: url, label: label };
-                }).filter(Boolean),
+                image_urls: roomPhotosList.length > 0 ? [...roomPhotosList, ...publicPhotosList] : publicPhotosList,
                 campuses: currentForm.campuses,
                 metadata: {
                     province: currentForm.province || '',
@@ -3070,6 +3099,40 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                 };
             });
 
+            // Urutkan tipe kamar berdasarkan tarif bulanan tertinggi (paling mahal)
+            const getRoomPrice = (r: any) => {
+                if (Array.isArray(r.pricing) && r.pricing.length > 0) {
+                    const bulanan = r.pricing.find((p: any) => p.period === 'bulanan');
+                    if (bulanan && Number(bulanan.price) > 0) return Number(bulanan.price);
+                    const maxP = Math.max(...r.pricing.map((p: any) => Number(p.price || 0)));
+                    if (maxP > 0) return maxP;
+                }
+                return Number(r.price || 0);
+            };
+
+            const sortedRooms = [...normalizedRoomTypesPayload].sort((a, b) => getRoomPrice(b) - getRoomPrice(a));
+            const roomPhotosList: any[] = [];
+            sortedRooms.forEach((rm: any) => {
+                const rmImgs = Array.isArray(rm.images) ? rm.images : [];
+                rmImgs.forEach((img: any, i: number) => {
+                    const urlStr = getImageUrlString(img);
+                    if (!urlStr) return;
+                    const cat = (rm.photoCategories && rm.photoCategories[i]) || `Kamar: ${rm.name || 'Unit'}`;
+                    roomPhotosList.push({
+                        original: urlStr,
+                        url: urlStr,
+                        label: cat.startsWith('Kamar:') ? cat : `Kamar: ${rm.name || 'Unit'} - ${cat}`
+                    });
+                });
+            });
+
+            const publicPhotosList = (kmListingForm.image_urls || []).map((img: any, idx: number) => {
+                const url = getImageUrlString(img);
+                if (!url) return null;
+                const label = photoCategories[idx] || (typeof img === 'object' && img.label) || 'Foto Lainnya';
+                return { original: url, url: url, label: label };
+            }).filter(Boolean);
+
             const propertyPayload = {
                 title: kmListingForm.title,
                 description: kmListingForm.description,
@@ -3086,12 +3149,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                 facilities: kmListingForm.facilities,
                 location: kmListingForm.location,
                 rules: kmListingForm.rules,
-                image_urls: (kmListingForm.image_urls || []).map((img: any, idx: number) => {
-                    const url = getImageUrlString(img);
-                    if (!url) return null;
-                    const label = photoCategories[idx] || 'Foto Lainnya';
-                    return { original: url, label: label };
-                }).filter(Boolean),
+                image_urls: roomPhotosList.length > 0 ? [...roomPhotosList, ...publicPhotosList] : publicPhotosList,
                 campuses: kmListingForm.campuses,
                 metadata: {
                     province: kmListingForm.province || '',

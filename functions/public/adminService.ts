@@ -2007,6 +2007,51 @@ export async function deleteResidentStatus(residentId: string): Promise<void> {
   triggerCrossTabRefresh();
 }
 
+// Helper untuk mengurutkan foto properti dengan foto kamar dari tipe termahal di Index 0 (Cover Utama)
+export function sortPropertyImagesWithRoomCover(images: any[], roomTypes: any[] = []): any[] {
+  if (!images || images.length <= 1) return images || [];
+
+  const getRoomPrice = (r: any) => {
+    if (Array.isArray(r.pricing) && r.pricing.length > 0) {
+      const bulanan = r.pricing.find((p: any) => p.period === 'bulanan');
+      if (bulanan && Number(bulanan.price) > 0) return Number(bulanan.price);
+      const maxP = Math.max(...r.pricing.map((p: any) => Number(p.price || 0)));
+      if (maxP > 0) return maxP;
+    }
+    return Number(r.price || 0);
+  };
+
+  const sortedRooms = [...(roomTypes || [])].sort((a, b) => getRoomPrice(b) - getRoomPrice(a));
+
+  const getScore = (img: any): number => {
+    const rawCat = (typeof img === 'object' ? (img.category || img.label) : '') || '';
+    const catLower = rawCat.trim().toLowerCase();
+
+    for (let rIdx = 0; rIdx < sortedRooms.length; rIdx++) {
+      const rm = sortedRooms[rIdx];
+      const rName = (rm.name || `Tipe Kamar ${rIdx + 1}`).trim().toLowerCase();
+      if (catLower === `kamar: ${rName}` || (catLower.startsWith('kamar:') && catLower.includes(rName))) {
+        return 10 + (rIdx * 10);
+      }
+      if (catLower.includes(rName) && (catLower.includes('kamar mandi') || catLower.includes('km dalam') || catLower.includes('dapur dalam'))) {
+        return 15 + (rIdx * 10);
+      }
+    }
+
+    if (catLower.startsWith('kamar:')) return 50;
+    if (catLower === 'bangunan depan') return 100;
+    if (catLower === 'koridor') return 105;
+    if (catLower === 'area parkir') return 110;
+    if (catLower === 'dapur bersama') return 115;
+    if (catLower === 'ruang tamu') return 120;
+    if (catLower === 'wc umum') return 125;
+    if (catLower === 'lingkungan') return 130;
+    return 150;
+  };
+
+  return [...images].sort((a, b) => getScore(a) - getScore(b));
+}
+
 export async function addPropertyWithMedia(
   kostData: Partial<Kost>,
   imageFiles: (File | { file: File; label?: string; category?: string })[],
@@ -2060,7 +2105,8 @@ export async function addPropertyWithMedia(
     newVideoObjects.push({ original: url });
   }
 
-  const allImages = [...existingImages, ...newImageObjects];
+  const rawAllImages = [...existingImages, ...newImageObjects];
+  const allImages = sortPropertyImagesWithRoomCover(rawAllImages, kostData.roomTypes || []);
   const derivedPhotoCategories = kostData.photoCategories && kostData.photoCategories.length > 0
     ? kostData.photoCategories
     : allImages.map((img: any) => img.label || img.category || '');
@@ -2309,7 +2355,8 @@ export async function updatePropertyWithMedia(
   }
 
   const targetOwnerUid = (isAdmin && kostData.ownerUid) ? kostData.ownerUid : existing.owner_uid;
-  const allImages = [...finalImageObjects, ...newImageObjects];
+  const rawAllImages = [...finalImageObjects, ...newImageObjects];
+  const allImages = sortPropertyImagesWithRoomCover(rawAllImages, kostData.roomTypes || existing.room_types || []);
 
   const derivedPhotoCategories = (kostData.photoCategories && kostData.photoCategories.length > 0 && kostData.photoCategories.some((c: any) => !!c))
     ? kostData.photoCategories

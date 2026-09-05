@@ -73,7 +73,7 @@ interface PublicPhotoCategoryDef {
 }
 
 const PUBLIC_PHOTO_CATEGORIES: PublicPhotoCategoryDef[] = [
-    { id: 'Bangunan Depan', label: 'Bangunan Depan (Fasad)', desc: 'Tampak depan gedung & jalan akses (Cover Utama)', required: true },
+    { id: 'Bangunan Depan', label: 'Bangunan Depan (Fasad)', desc: 'Tampak depan gedung & jalan akses kost', required: true },
     { id: 'Koridor', label: 'Koridor & Akses Masuk', desc: 'Lorong antar kamar, tangga, atau pintu masuk utama' },
     { id: 'Area Parkir', label: 'Area Parkir', desc: 'Tempat parkir motor atau mobil penghuni' },
     { id: 'Dapur Bersama', label: 'Dapur Bersama', desc: 'Area memasak bersama, wastafel, & kompor' },
@@ -2043,7 +2043,7 @@ const computeActivePhotoCategories = (
 ): PublicPhotoCategoryDef[] => {
     // 1. Kategori Area Umum Pokok (Selalu Ada)
     const categories: PublicPhotoCategoryDef[] = [
-        { id: 'Bangunan Depan', label: 'Bangunan Depan (Fasad)', desc: 'Tampak depan gedung & jalan akses (Cover Utama)', required: true },
+        { id: 'Bangunan Depan', label: 'Bangunan Depan (Fasad)', desc: 'Tampak depan gedung & jalan akses kost', required: true },
         { id: 'Koridor', label: 'Koridor & Akses Masuk', desc: 'Lorong antar kamar, tangga, atau pintu masuk utama' },
         { id: 'Lingkungan', label: 'Lingkungan Sekitar', desc: 'Suasana jalan dan lingkungan di sekitar kost' },
     ];
@@ -4155,11 +4155,56 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                 omnichannelContactType: 'owner'
             };
 
-            // Susun urutan foto: Bangunan Depan selalu di urutan paling awal (Cover Utama)
+            // Tentukan urutan prioritas kategori foto:
+            // 1. Tipe kamar diurutkan berdasarkan harga bulanan tertinggi (paling mahal) ke terendah
+            // 2. Foto Kamar (interior utama) dari tipe kamar termahal menjadi prioritas 0 (Cover Utama Katalog)
+            // 3. Foto KM Dalam / Dapur Dalam dari tipe termahal
+            // 4. Foto Kamar dari tipe-tipe berikutnya
+            // 5. Foto Area Umum: Bangunan Depan, Koridor, Area Parkir, Dapur Bersama, Fasilitas Lainnya
+            const getRoomPrice = (r: any) => {
+                if (Array.isArray(r.pricing) && r.pricing.length > 0) {
+                    const bulanan = r.pricing.find((p: any) => p.period === 'bulanan');
+                    if (bulanan && Number(bulanan.price) > 0) return Number(bulanan.price);
+                    const maxP = Math.max(...r.pricing.map((p: any) => Number(p.price || 0)));
+                    if (maxP > 0) return maxP;
+                }
+                return Number(r.price || 0);
+            };
+
+            const sortedRoomsForPriority = [...(form.roomTypes || [])].sort((a, b) => getRoomPrice(b) - getRoomPrice(a));
+
+            const getPhotoScore = (catName: string): number => {
+                const rawCat = (catName || '').trim();
+                const catLower = rawCat.toLowerCase();
+
+                for (let rIdx = 0; rIdx < sortedRoomsForPriority.length; rIdx++) {
+                    const rm = sortedRoomsForPriority[rIdx];
+                    const rName = (rm.name || `Tipe Kamar ${rIdx + 1}`).trim().toLowerCase();
+
+                    // 1. Foto interior kamar tidur tipe kamar ini
+                    if (catLower === `kamar: ${rName}` || (catLower.startsWith('kamar:') && catLower.includes(rName))) {
+                        return 10 + (rIdx * 10);
+                    }
+                    // 2. Foto fasilitas kamar (KM dalam / Dapur dalam)
+                    if (catLower.includes(rName) && (catLower.includes('kamar mandi') || catLower.includes('km dalam') || catLower.includes('dapur dalam'))) {
+                        return 15 + (rIdx * 10);
+                    }
+                }
+
+                if (catLower.startsWith('kamar:')) return 50;
+                if (catLower === 'bangunan depan') return 100;
+                if (catLower === 'koridor') return 105;
+                if (catLower === 'area parkir') return 110;
+                if (catLower === 'dapur bersama') return 115;
+                if (catLower === 'ruang tamu') return 120;
+                if (catLower === 'wc umum') return 125;
+                if (catLower === 'lingkungan') return 130;
+                return 150;
+            };
+
+            // Susun urutan foto: Foto Kamar dari Tipe Termahal selalu di urutan paling awal (Cover Utama)
             const sortedNewItems = [...newPhotoItems].sort((a, b) => {
-                if (a.category === 'Bangunan Depan' && b.category !== 'Bangunan Depan') return -1;
-                if (a.category !== 'Bangunan Depan' && b.category === 'Bangunan Depan') return 1;
-                return 0;
+                return getPhotoScore(a.category) - getPhotoScore(b.category);
             });
 
             // Pisahkan foto baru:
@@ -4217,16 +4262,14 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                 return { original: url, url, label, category, caption };
             });
 
-            // Satukan seluruh gambar yang sudah siap di cloud
+            // Satukan seluruh gambar yang sudah siap di cloud dengan cover foto kamar termahal di posisi terdepan
             const allImagesList = [...existingImagesWithLabels, ...alreadyUploadedItems].sort((a: any, b: any) => {
-                if (a.label === 'Bangunan Depan' && b.label !== 'Bangunan Depan') return -1;
-                if (a.label !== 'Bangunan Depan' && b.label === 'Bangunan Depan') return 1;
-                return 0;
+                return getPhotoScore(a.label || a.category) - getPhotoScore(b.label || b.category);
             });
 
             const totalPhotos = allImagesList.length + pendingUploadPayload.length;
             if (totalPhotos < 1) {
-                setError('Mohon unggah minimal 1 foto kost (terutama Bangunan Depan / Fasad).');
+                setError('Mohon unggah minimal 1 foto kost (terutama Foto Kamar Tidur).');
                 setStep(4);
                 setSubmitting(false);
                 return;
@@ -5652,7 +5695,27 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                 }).filter(p => !!p.src);
 
                 const totalAllPhotos = existingWithCats.length + newPhotoItems.length;
-                const hasFrontCover = existingWithCats.some(p => p.cat === 'Bangunan Depan') || newPhotoItems.some(p => p.category === 'Bangunan Depan');
+                const hasRoomCover = existingWithCats.some(p => p.cat.startsWith('Kamar:')) || newPhotoItems.some(p => p.category.startsWith('Kamar:'));
+
+                // Cari tipe kamar dengan tarif bulanan tertinggi (paling mahal)
+                const mostExpensiveRoom = (() => {
+                    const rooms = form.roomTypes || [];
+                    if (rooms.length === 0) return null;
+                    const getPrice = (r: any) => {
+                        if (Array.isArray(r.pricing) && r.pricing.length > 0) {
+                            const bulanan = r.pricing.find((p: any) => p.period === 'bulanan');
+                            if (bulanan && Number(bulanan.price) > 0) return Number(bulanan.price);
+                            const highest = Math.max(...r.pricing.map((p: any) => Number(p.price || 0)));
+                            if (highest > 0) return highest;
+                        }
+                        return Number(r.price || 0);
+                    };
+                    return [...rooms].sort((a, b) => getPrice(b) - getPrice(a))[0];
+                })();
+
+                const primaryCoverCategoryTarget = mostExpensiveRoom 
+                    ? `Kamar: ${mostExpensiveRoom.name || 'Tipe Kamar 1'}`
+                    : '';
 
                 return (
                     <div className="space-y-6">
@@ -5667,7 +5730,7 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                                         </h3>
                                     </div>
                                     <p className="text-xs text-gray-600 mt-1">
-                                        Daftar foto otomatis menyesuaikan dengan fasilitas umum dan tipe kamar yang Anda pilih. Anda juga dapat memberi keterangan (caption) pada masing-masing foto.
+                                        Foto kamar dari tipe kamar berharga termahal akan otomatis dijadikan <strong>Foto Cover Utama</strong> pada preview pencarian. Anda juga dapat memberi keterangan (caption) pada masing-masing foto.
                                     </p>
                                 </div>
                                 <div className="flex items-center gap-2">
@@ -5678,10 +5741,10 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                             </div>
 
                             {/* Status Cover Alert */}
-                            {!hasFrontCover && (
+                            {!hasRoomCover && (
                                 <div className="mt-3 flex items-center gap-2 bg-amber-100/70 border border-amber-300/80 text-amber-900 text-xs px-3 py-2 rounded-xl">
                                     <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
-                                    <span><strong>Perhatian:</strong> Mohon unggah minimal 1 foto pada <strong>Bangunan Depan (Fasad)</strong> untuk dijadikan foto Cover Utama kost Anda.</span>
+                                    <span><strong>Perhatian:</strong> Mohon unggah minimal 1 foto pada kategori <strong>Kamar Tidur</strong> (terutama tipe kamar termahal) untuk dijadikan Cover Utama preview kost Anda.</span>
                                 </div>
                             )}
                         </div>
@@ -5752,11 +5815,6 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                                                         <span className="text-xs sm:text-sm font-black text-gray-900">
                                                             {cat.label}
                                                         </span>
-                                                        {isFront && (
-                                                            <span className="px-2 py-0.5 bg-orange-100 text-orange-700 text-[9px] font-black uppercase rounded-md tracking-wider">
-                                                                Cover Utama
-                                                            </span>
-                                                        )}
                                                     </div>
                                                     <p className="text-[11px] text-gray-500 mt-0.5">
                                                         {cat.desc}
@@ -5780,11 +5838,6 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                                             {currentCatExisting.map((p, idx) => (
                                                 <div key={`existing-${idx}`} className="aspect-square rounded-2xl overflow-hidden border border-gray-200 relative group bg-gray-50">
                                                     <img src={p.src} alt={cat.label} className="w-full h-full object-cover" />
-                                                    {isFront && idx === 0 && (
-                                                        <span className="absolute top-1.5 left-1.5 bg-orange-500 text-white text-[8px] font-black px-2 py-0.5 rounded-md shadow-xs uppercase tracking-wider">
-                                                            Cover
-                                                        </span>
-                                                    )}
                                                     <div className="absolute top-1.5 right-1.5 flex items-center gap-1">
                                                         <button 
                                                             type="button" 
@@ -5926,27 +5979,37 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                                     const currentCatNew = newPhotoItems.filter(p => p.category === cat.id);
                                     const catPhotosCount = currentCatExisting.length + currentCatNew.length;
                                     const isBathroom = cat.id.startsWith('Kamar Mandi:');
+                                    const isPrimaryCoverTarget = primaryCoverCategoryTarget && cat.id === primaryCoverCategoryTarget;
 
                                     return (
                                         <div 
                                             key={cat.id} 
                                             className={`p-4 sm:p-5 rounded-3xl border transition-all ${
-                                                catPhotosCount > 0 
-                                                    ? 'bg-white border-orange-200 shadow-xs' 
-                                                    : 'bg-white border-gray-200/80'
+                                                isPrimaryCoverTarget
+                                                    ? 'bg-gradient-to-br from-orange-50/70 to-white border-orange-300 shadow-xs'
+                                                    : catPhotosCount > 0 
+                                                        ? 'bg-white border-orange-200 shadow-xs' 
+                                                        : 'bg-white border-gray-200/80'
                                             }`}
                                         >
                                             <div className="flex flex-wrap items-start justify-between gap-2 mb-3">
                                                 <div className="flex items-start gap-2.5">
                                                     <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${
-                                                        isBathroom ? 'bg-blue-100 text-blue-600' : 'bg-orange-100 text-orange-600'
+                                                        isPrimaryCoverTarget ? 'bg-orange-500 text-white' : isBathroom ? 'bg-blue-100 text-blue-600' : 'bg-orange-100 text-orange-600'
                                                     }`}>
                                                         {isBathroom ? <Droplets size={16} /> : <Bed size={16} />}
                                                     </div>
                                                     <div>
-                                                        <span className="text-xs sm:text-sm font-black text-gray-900">
-                                                            {cat.label}
-                                                        </span>
+                                                        <div className="flex flex-wrap items-center gap-2">
+                                                            <span className="text-xs sm:text-sm font-black text-gray-900">
+                                                                {cat.label}
+                                                            </span>
+                                                            {isPrimaryCoverTarget && (
+                                                                <span className="px-2 py-0.5 bg-orange-500 text-white text-[9px] font-black uppercase rounded-md tracking-wider shadow-xs">
+                                                                    ⭐ Cover Utama (Kamar Termahal)
+                                                                </span>
+                                                            )}
+                                                        </div>
                                                         <p className="text-[11px] text-gray-500 mt-0.5">
                                                             {cat.desc}
                                                         </p>
@@ -5967,6 +6030,11 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                                                 {currentCatExisting.map((p, idx) => (
                                                     <div key={`existing-${idx}`} className="aspect-square rounded-2xl overflow-hidden border border-gray-200 relative group bg-gray-50">
                                                         <img src={p.src} alt={cat.label} className="w-full h-full object-cover" />
+                                                        {isPrimaryCoverTarget && idx === 0 && (
+                                                            <span className="absolute top-1.5 left-1.5 bg-orange-500 text-white text-[8px] font-black px-2 py-0.5 rounded-md shadow-xs uppercase tracking-wider z-10">
+                                                                Cover Utama
+                                                            </span>
+                                                        )}
                                                         <div className="absolute top-1.5 right-1.5 flex items-center gap-1">
                                                             <button 
                                                                 type="button" 
@@ -5997,10 +6065,14 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                                                     </div>
                                                 ))}
 
-                                                {currentCatNew.map((item) => (
+                                                {currentCatNew.map((item, itemIdx) => (
                                                     <div key={item.id} className="aspect-square rounded-2xl overflow-hidden border-2 border-orange-400 relative group bg-gray-50 shadow-xs animate-in zoom-in-95 duration-200">
                                                         <img src={item.preview} alt={cat.label} className="w-full h-full object-cover" />
-                                                        {item.isBlurred ? (
+                                                        {isPrimaryCoverTarget && currentCatExisting.length === 0 && itemIdx === 0 ? (
+                                                            <span className="absolute top-1.5 left-1.5 bg-orange-500 text-white text-[8px] font-black px-2 py-0.5 rounded-md shadow-xs uppercase tracking-wider z-10">
+                                                                Cover Utama
+                                                            </span>
+                                                        ) : item.isBlurred ? (
                                                             <span className="absolute top-1.5 left-1.5 bg-slate-900/90 border border-orange-500/50 text-white text-[9px] font-black px-2 py-0.5 rounded-full shadow-md uppercase tracking-wider flex items-center gap-1 backdrop-blur-xs" title="Spanduk kontak telah diberi watermark resmi ruangsinggah.id">
                                                                 <span className="w-1.5 h-1.5 rounded-full bg-orange-500 animate-pulse"></span>
                                                                 ruangsinggah.id

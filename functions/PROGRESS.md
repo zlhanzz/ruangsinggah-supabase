@@ -2,6 +2,37 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 353. Penataan Foto Cover Preview Listing Properti: Prioritas Foto Kamar dari Tipe Kamar Termahal (`KostFormMitra.tsx`, `KostManagerPropertyFormModal.tsx`, `AgentDashboard.tsx`, `adminService.ts`, `userService.ts`) (September 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna menemukan bahwa saat properti dilisting, foto cover preview yang tampil di katalog pencarian dan dashboard adalah tampak bangunan depan (fasad) kost.
+  2. Pengguna meminta agar foto cover preview listing **HARUS Foto Kamar Tidur**.
+  3. Jika properti memiliki banyak tipe kamar (> 1), sistem wajib memilih foto kamar dari **tipe kamar dengan harga paling mahal (tertinggi)** untuk dijadikan cover preview utama (`imageUrls[0]`).
+- **Implementasi Solusi**:
+  1. **Logika Pengurutan Foto Listing Mitra (`KostFormMitra.tsx`)**:
+     - Menghapus aturan lama yang memprioritaskan `'Bangunan Depan'` di urutan pertama.
+     - Menerapkan fungsi scoring prioritas foto berdasarkan urutan tipe kamar termahal:
+       - **Index 0**: Foto interior kamar dari tipe kamar dengan tarif bulanan tertinggi.
+       - **Index 1..n**: Foto kamar lainnya dari seluruh tipe kamar.
+       - **Index n+1..dst**: Foto-foto area publik (Bangunan Depan, Koridor, Area Parkir, Dapur Bersama, Fasilitas Lainnya).
+     - Menambahkan badge visual *"⭐ Cover Utama (Kamar Termahal)"* pada formulir Step 4 Media dan memperbarui pesan peringatan cover alert.
+  2. **Penggabungan Foto Kamar Termahal di KostManager / Admin / Surveyor Listing (`KostManagerPropertyFormModal.tsx`, `AgentDashboard.tsx`)**:
+     - Menyesuaikan pembentukan array `image_urls` saat menyimpan properti KostManager agar menggabungkan foto-foto kamar (diurutkan dari tipe termahal) di urutan pertama sebelum foto area publik.
+     - Memperbarui widget *Simulasi Tampilan Mobile* di Step 3 agar secara instan menampilkan foto kamar termahal sebagai preview cover.
+  3. **Integritas Penyimpanan Backend (`adminService.ts`)**:
+     - Menambahkan fungsi `sortPropertyImagesWithRoomCover` yang otomatis mengurutkan array gambar properti di `addPropertyWithMedia` dan `updatePropertyWithMedia` sebelum disimpan ke tabel `properties`.
+  4. **Katalog & Frontend Data Transformer (`userService.ts`)**:
+     - Memperbarui fungsi `transformPropertyRow` untuk memastikan cover `imageUrls[0]` selalu memprioritaskan foto kamar tipe termahal dari data `room_types` saat dimuat dari database.
+- **File Tersentuh**:
+  - `functions/public/components/KostFormMitra.tsx`
+  - `functions/public/components/admin/KostManagerPropertyFormModal.tsx`
+  - `functions/public/pages/AgentDashboard.tsx`
+  - `functions/public/adminService.ts`
+  - `functions/public/userService.ts`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi build frontend Vite (`functions/public`) lulus 100% (`✓ built in 46.32s`, 0 error).
+
 ### 352. Penyederhanaan Desain Modal Pop-Up Penolakan Gender Mismatch: Tampilan Minimalis, Bersih, dan To-The-Point (`KostDetail.tsx`) (September 2026)
 - **Permintaan & Masalah**:
   1. Pengguna meminta agar tampilan modal penolakan gender mismatch disederhanakan tanpa elemen yang rumit (*"cukup tampilan sederhana, tidak usah seribet ini, yang penting pesan tersampaikan dan efektif"*).
