@@ -2,6 +2,27 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 378. Alur Konfirmasi & Penolakan Penugasan Surveyor KostManager (Tab Permintaan ➔ Aktif) (`AgentDashboard.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna memberikan masukan bahwa ketika admin menetapkan agen survey untuk pesanan pendataan KostManager, pesanan tersebut malah langsung masuk ke tab **Aktif**, padahal seharusnya masuk ke tab **Permintaan** terlebih dahulu untuk dikonfirmasi atau ditolak oleh agen survey (*"sekarang malah langsung masuk ke aktif, seharusnya di permintaan dulu untuk dikonfirmasi atau tidak oleh agen surveynya, kalau konfirmasi artinya prosesnya lanjut, tapi kalau tidak kembalu ke admin harus menetapkan lagi agen survey untuk pesanan pendataan kostmanager ini"*).
+  2. Status `AGENT_ASSIGNED` sebelumnya langsung dimasukkan ke filter tab `active`, sehingga melewati tahapan persetujuan/konfirmasi penerimaan tugas oleh surveyor di tab `pending`.
+- **Implementasi Solusi**:
+  1. **Pembaruan Filter Tab di `AgentDashboard.tsx`**:
+     - Memasukkan status `AGENT_ASSIGNED` dan `PENDING_ASSIGNMENT` secara eksklusif ke dalam tab **"Permintaan"** (`pending`).
+     - Tab **"Aktif"** (`active`) murni memuat tugas yang telah dikonfirmasi dan sedang dalam proses berjalan (`HEADING_TO_LOCATION`, `SURVEYING`, `RESCHEDULED`, `SUBMITTED`, `REVISION_REQUIRED`, `NEED_REVISION`).
+     - Tab **"Riwayat"** (`history`) tetap memuat tugas yang telah selesai (`COMPLETED`, `APPROVED`, `ACTIVE`, `CANCELLED`).
+  2. **Pembaruan Label & Badge Status**:
+     - Status `AGENT_ASSIGNED` kini diberi label jelas: **`"TUGAS BARU (PERLU KONFIRMASI)"`** dengan badge oranye tebal.
+  3. **Aksi Konfirmasi & Penolakan Tugas Terpadu**:
+     - **⚡ Terima & Konfirmasi Pendataan**: Mengonfirmasi tugas, mengubah status menjadi `'SURVEYING'`, mengirimkan notifikasi in-app, dan otomatis memindahkan tugas ke tab **"Aktif"** untuk memulai pendataan survei.
+     - **Tolak Tugas**: Menolak penugasan, mengembalikan status ke `'PENDING_ASSIGNMENT'`, dan mengosongkan data agen (`assigned_agent_id: null`, `agent_name: ''`, `agent_phone: ''`), sehingga tiket otomatis kembali ke Admin (tab *Perlu Agen* di KostManager Management) untuk ditugaskan ke surveyor lain.
+- **File Tersentuh**:
+  - `functions/public/pages/AgentDashboard.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi build frontend Vite (`cmd /c npm run build`) lulus 100% (`✓ 2511 modules transformed, built in 49.34s`, 0 error).
+
 ### 377. Perbaikan Alur Status Pendataan KostManager Listing Eksisting (Tab Permintaan vs Riwayat) (`adminService.ts`) (September 2026)
 - **Permintaan & Masalah**:
   1. Pengguna melaporkan bahwa saat mendaftarkan properti yang sudah listing di RuangSinggah ke program KostManager, pesanan pendataan survei baru langsung masuk ke tab **Riwayat** dengan banner *"SELESAI (SUDAH LISTING KOSTMANAGER)"*, padahal seharusnya masuk sebagai pesanan baru di tab **Permintaan** (*"pada alur kostmanager, kost yang awalnya sudah listing dan diajukan dan didftarkan ke kostmanager, kemudian masuk ke pendataan agen, seharusnya masuk nya sebagai pesanan baru dari agen, masuknya di kolom permintaan dulu, kenapa langsung masuk ke riwayat?"*).

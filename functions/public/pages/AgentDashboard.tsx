@@ -5032,8 +5032,8 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
 
     const renderTasks = () => {
         const filteredRequests = surveyRequests.filter(req => {
-            if (agentTab === 'pending') return req.status === 'PENDING_ASSIGNMENT';
-            if (agentTab === 'active') return ['AGENT_ASSIGNED', 'HEADING_TO_LOCATION', 'SURVEYING', 'RESCHEDULED', 'SUBMITTED', 'REVISION_REQUIRED', 'NEED_REVISION'].includes(req.status) && !['COMPLETED', 'APPROVED', 'ACTIVE', 'CANCELLED'].includes(req.status);
+            if (agentTab === 'pending') return ['PENDING_ASSIGNMENT', 'AGENT_ASSIGNED'].includes(req.status);
+            if (agentTab === 'active') return ['HEADING_TO_LOCATION', 'SURVEYING', 'RESCHEDULED', 'SUBMITTED', 'REVISION_REQUIRED', 'NEED_REVISION'].includes(req.status) && !['COMPLETED', 'APPROVED', 'ACTIVE', 'CANCELLED'].includes(req.status);
             if (agentTab === 'history') return ['COMPLETED', 'CANCELLED', 'APPROVED', 'ACTIVE'].includes(req.status);
             return false;
         });
@@ -5058,8 +5058,8 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                             <span>{t.icon}</span>
                             {t.label}
                             {surveyRequests.filter(r => {
-                                if (t.id === 'pending') return r.status === 'PENDING_ASSIGNMENT';
-                                if (t.id === 'active') return ['AGENT_ASSIGNED', 'HEADING_TO_LOCATION', 'SURVEYING', 'RESCHEDULED', 'SUBMITTED', 'REVISION_REQUIRED', 'NEED_REVISION'].includes(r.status) && !['COMPLETED', 'APPROVED', 'ACTIVE', 'CANCELLED'].includes(r.status);
+                                if (t.id === 'pending') return ['PENDING_ASSIGNMENT', 'AGENT_ASSIGNED'].includes(r.status);
+                                if (t.id === 'active') return ['HEADING_TO_LOCATION', 'SURVEYING', 'RESCHEDULED', 'SUBMITTED', 'REVISION_REQUIRED', 'NEED_REVISION'].includes(r.status) && !['COMPLETED', 'APPROVED', 'ACTIVE', 'CANCELLED'].includes(r.status);
                                 if (t.id === 'history') return ['COMPLETED', 'CANCELLED', 'APPROVED', 'ACTIVE'].includes(r.status);
                                 return false;
                             }).length > 0 && (
@@ -5144,7 +5144,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                                             const statusColorMap: any = {
                                                 'AWAITING_PAYMENT': 'bg-yellow-100 text-yellow-900 border border-yellow-200',
                                                 'PENDING_ASSIGNMENT': 'bg-amber-100 text-amber-900 border border-amber-200',
-                                                'AGENT_ASSIGNED': 'bg-blue-100 text-blue-900 border border-blue-200',
+                                                'AGENT_ASSIGNED': 'bg-orange-100 text-orange-950 border-2 border-orange-400 font-extrabold shadow-sm',
                                                 'HEADING_TO_LOCATION': 'bg-indigo-100 text-indigo-900 border border-indigo-200',
                                                 'SURVEYING': 'bg-orange-100 text-orange-900 border border-orange-200',
                                                 'SUBMITTED': 'bg-emerald-100 text-emerald-950 border border-emerald-300 font-bold',
@@ -5159,7 +5159,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                                             const labelMap: any = {
                                                 'AWAITING_PAYMENT': 'MENUNGGU PEMBAYARAN',
                                                 'PENDING_ASSIGNMENT': 'MENUNGGU AGEN',
-                                                'AGENT_ASSIGNED': 'TUGAS BARU',
+                                                'AGENT_ASSIGNED': 'TUGAS BARU (PERLU KONFIRMASI)',
                                                 'HEADING_TO_LOCATION': 'OTW KE LOKASI',
                                                 'SURVEYING': 'SEDANG SURVEY',
                                                 'SUBMITTED': 'DATA DIKIRIM (MENUNGGU TINJAUAN ADMIN)',
@@ -5332,18 +5332,18 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                                                             onMenuChange('profile');
                                                             return;
                                                         }
-                                                        if (window.confirm('Terima tugas pendataan KostManager ini?')) {
+                                                        if (window.confirm('Terima dan konfirmasi tugas pendataan KostManager ini?')) {
                                                             try {
                                                                 setIsSubmitting(true);
                                                                 await updateSurveyRequest(req.id, { 
-                                                                    status: 'AGENT_ASSIGNED',
+                                                                    status: 'SURVEYING',
                                                                     assigned_agent_id: uid,
                                                                     agent_name: user?.name || user?.displayName || 'Surveyor RuangSinggah',
                                                                     agent_phone: user?.phone || user?.phoneNumber || '',
                                                                     agent_photo_url: user?.photo_url || user?.photoURL || ''
                                                                 });
-                                                                await notifySurveyStatusUpdate(req.id, 'AGENT_ASSIGNED');
-                                                                alert('Pesanan Diterima! Tugas kini ada di tab Aktif.');
+                                                                await notifySurveyStatusUpdate(req.id, 'SURVEYING');
+                                                                alert('Pesanan Dikonfirmasi & Diterima! Tugas kini ada di tab Aktif.');
                                                                 await loadSurveyRequests(true);
                                                                 setAgentTab('active');
                                                             } catch (error) {
@@ -5356,23 +5356,24 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                                                     disabled={isSubmitting}
                                                     className={`w-full py-3.5 px-4 rounded-xl flex items-center justify-center gap-2 hover:bg-opacity-90 transition-opacity font-bold text-label-lg shadow-sm ${
                                                         verificationStatus === 'verified' && !isSubmitting
-                                                        ? 'bg-primary text-white'
+                                                        ? 'bg-primary text-white cursor-pointer active:scale-95'
                                                         : 'bg-surface text-on-surface-variant border border-outline-variant cursor-not-allowed'
                                                     }`}
                                                 >
-                                                    {isSubmitting ? 'Memproses...' : '⚡ Terima Pendataan'}
+                                                    {isSubmitting ? 'Memproses...' : '⚡ Terima & Konfirmasi Pendataan'}
                                                 </button>
                                                 <button 
                                                     onClick={async () => {
-                                                        if (window.confirm('Yakin ingin menolak tugas ini? Tugas akan dikembalikan ke Admin untuk ditugaskan ulang.')) {
+                                                        if (window.confirm('Yakin ingin menolak tugas ini? Tugas akan dikembalikan ke Admin untuk ditugaskan ulang ke agen lain.')) {
                                                             try {
                                                                 setIsSubmitting(true);
                                                                 await updateSurveyRequest(req.id, { 
+                                                                    status: 'PENDING_ASSIGNMENT',
                                                                     assigned_agent_id: null,
                                                                     agent_name: '',
                                                                     agent_phone: ''
                                                                 } as any);
-                                                                alert('Tugas Ditolak.');
+                                                                alert('Tugas berhasil ditolak. Pesanan dikembalikan ke Admin.');
                                                                 await loadSurveyRequests(true);
                                                             } catch (error) {
                                                                 alert('Gagal menolak tugas.');
@@ -5382,9 +5383,9 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                                                         }
                                                     }} 
                                                     disabled={isSubmitting}
-                                                    className="w-full bg-surface text-error border border-error/20 py-3 px-4 rounded-xl flex items-center justify-center gap-2 hover:bg-red-50 transition-opacity font-bold text-label-lg shadow-sm"
+                                                    className="w-full bg-surface text-error border border-error/20 py-3 px-4 rounded-xl flex items-center justify-center gap-2 hover:bg-red-50 transition-opacity font-bold text-label-lg shadow-sm cursor-pointer active:scale-95"
                                                 >
-                                                    Tolak
+                                                    Tolak Tugas
                                                 </button>
                                             </div>
                                         )}
@@ -5700,17 +5701,18 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                                                         onMenuChange('profile');
                                                         return;
                                                     }
-                                                    if (window.confirm('Terima tugas survey ini?')) {
+                                                    if (window.confirm('Terima dan konfirmasi tugas survey ini?')) {
                                                         try {
                                                             setIsSubmitting(true);
                                                             await updateSurveyRequest(req.id, { 
-                                                                status: 'AGENT_ASSIGNED',
+                                                                status: 'SURVEYING',
+                                                                assigned_agent_id: uid,
                                                                 agent_name: user?.name || user?.displayName || 'Surveyor RuangSinggah',
                                                                 agent_phone: user?.phone || user?.phoneNumber || '',
                                                                 agent_photo_url: user?.photo_url || user?.photoURL || ''
                                                             });
-                                                            await notifySurveyStatusUpdate(req.id, 'AGENT_ASSIGNED');
-                                                            alert('Pesanan Diterima! Tugas kini ada di tab Aktif.');
+                                                            await notifySurveyStatusUpdate(req.id, 'SURVEYING');
+                                                            alert('Pesanan Dikonfirmasi & Diterima! Tugas kini ada di tab Aktif.');
                                                             await loadSurveyRequests(true);
                                                             setAgentTab('active');
                                                         } catch (error) {
@@ -5723,23 +5725,24 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                                                 disabled={isSubmitting}
                                                 className={`w-full py-3.5 rounded-2xl text-xs font-black uppercase tracking-widest shadow-sm active:scale-95 transition-all ${
                                                     verificationStatus === 'verified' && !isSubmitting
-                                                    ? 'bg-orange-600 hover:bg-orange-700 text-white' 
+                                                    ? 'bg-orange-600 hover:bg-orange-700 text-white cursor-pointer' 
                                                     : 'bg-gray-200 text-gray-400 cursor-not-allowed'
                                                 }`}
                                             >
-                                                {isSubmitting ? 'Memproses...' : 'Terima Tugas'}
+                                                {isSubmitting ? 'Memproses...' : 'Terima & Konfirmasi Tugas'}
                                             </button>
                                             <button 
                                                 onClick={async () => {
-                                                    if (window.confirm('Yakin ingin menolak tugas ini? Tugas akan dikembalikan ke Admin untuk ditugaskan ulang.')) {
+                                                    if (window.confirm('Yakin ingin menolak tugas ini? Tugas akan dikembalikan ke Admin untuk ditugaskan ulang ke agen lain.')) {
                                                         try {
                                                             setIsSubmitting(true);
                                                             await updateSurveyRequest(req.id, { 
+                                                                status: 'PENDING_ASSIGNMENT',
                                                                 assigned_agent_id: null,
                                                                 agent_name: '',
                                                                 agent_phone: ''
                                                             } as any);
-                                                            alert('Tugas Ditolak.');
+                                                            alert('Tugas berhasil ditolak. Pesanan dikembalikan ke Admin.');
                                                             await loadSurveyRequests(true);
                                                         } catch (error) {
                                                             alert('Gagal menolak tugas.');
@@ -5749,9 +5752,9 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                                                     }
                                                 }} 
                                                 disabled={isSubmitting}
-                                                className="w-full bg-red-50 hover:bg-red-500 text-red-600 hover:text-white border border-red-200 py-3.5 rounded-2xl text-xs font-black uppercase tracking-widest transition-all"
+                                                className="w-full bg-red-50 hover:bg-red-500 text-red-600 hover:text-white border border-red-200 py-3.5 rounded-2xl text-xs font-black uppercase tracking-widest transition-all cursor-pointer active:scale-95"
                                             >
-                                                Tolak
+                                                Tolak Tugas
                                             </button>
                                         </div>
                                     )}
