@@ -2,7 +2,42 @@
 
 ## Fitur Selesai (Completed Features)
 
-### 339. Arsitektur Gerbang Sakral Murni (Sacred Multi-Role Gateways) & Isolasi Total Konteks Peran/Aktivitas (`App.tsx`, `Login.tsx`, `Navbar.tsx`, `MitraDashboard.tsx`) (September 2026)
+### 340. Redesain Profile Hub Dashboard Interaktif, Sub-view Edit Data Pribadi, dan Modal Preferensi Keamanan (`Profile.tsx`, `Navbar.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  1. Halaman `/profile` sebelumnya langsung membuka formulir data pribadi mentah (input nama, kontak, foto profil, KTP, dll.) saat pengguna mengklik menu Profil.
+  2. Pengguna meminta agar halaman profil bertransformasi menjadi **Profile Hub Dashboard** yang elegan dan intuitif (sesuai referensi UI mobile):
+     - **Tampilan Mobile**: Menyajikan Profile Hub yang terstruktur rapi ke dalam beberapa section:
+       - **Header Profil**: Foto profil pengguna, nama, nomor telepon/email terdaftar, dan lencana status verifikasi identitas (Terverifikasi/Belum Terverifikasi).
+       - **Aktivitas Sewa & Transaksi**: Kost Saya (dengan badge counter riil), Riwayat Transaksi / Pembayaran, Pesan & Chat.
+       - **Pengaturan Akun & Keamanan**:
+         - *Edit Profil & Data Kontak Pribadi*: Mengakses formulir lengkap data diri.
+         - *Ganti Kata Sandi*: Modal popup interaktif untuk mengubah password Supabase Auth.
+         - *Preferensi Notifikasi*: Modal kontrol perizinan notifikasi WhatsApp, Email, dan Penawaran Promo.
+       - **Bantuan & Informasi Legal**: Pusat Bantuan & CS WhatsApp 24/7, Syarat & Ketentuan Layanan, Kebijakan Privasi.
+       - **Aksi Keluar & Footer**: Tombol logout merah tegas dan footer versi aplikasi.
+     - **Sub-view Edit Data Pribadi**: Ketika pengguna mengklik opsi *"Edit Profil & Data Kontak Pribadi"*, halaman membuka formulir data diri dengan tombol navigasi `← Kembali ke Menu Profil` di bagian atas. Seluruh validasi data, upload KTP WebP, dan penyimpanan Supabase tetap berjalan 100% stabil.
+     - **Tampilan Desktop**: Penyelarasan menu navigasi di dropdown avatar navbar atas dan layout Profile Hub yang terpusat dan bersih di desktop.
+- **Implementasi Solusi**:
+  1. **Arsitektur Dual View Mode (`Profile.tsx`)**:
+     - Menambahkan state `viewMode: 'hub' | 'edit_personal_data'` (default `'hub'`).
+     - Jika URL dipanggil dengan prop `forceEdit === true` (atau parameter pengeditan), sistem otomatis membuka sub-view formulir edit data pribadi.
+  2. **Penyusunan Profile Hub Dashboard UI (`Profile.tsx`)**:
+     - Menggunakan pure bundled SVG dari `lucide-react` (0 network delay, bebas FOUT).
+     - Menghubungkan setiap kartu/opsi ke navigasi React Router & handler yang tepat (`Page.MY_BOOKINGS`, `Page.PAYMENT_HISTORY`, `Page.CHAT`, `Page.TERMS`, `Page.CONTACT`, dll.).
+     - Menghitung jumlah kost aktif dari tabel `contracts` dan `bookings` di Supabase untuk ditampilkan pada badge counter "Kost Saya".
+  3. **Modal Preferensi Notifikasi & Ganti Kata Sandi Terintegrasi (`Profile.tsx`)**:
+     - Menghadirkan modal interaktif preferensi notifikasi (WhatsApp, Email, Promo) dengan toggle switches responsif.
+     - Menghadirkan modal ganti kata sandi dengan validasi keamanan minimal 6 karakter dan konfirmasi kata sandi.
+  4. **Sub-view Edit Data Pribadi dengan Navigasi Mulus (`Profile.tsx`)**:
+     - Menyematkan header navigasi `← Kembali ke Menu Profil` yang dengan satu klik mengembalikan tampilan ke menu Profile Hub utama.
+     - Menjaga keutuhan seluruh state validasi, upload WebP kompresi KTP, dan integrasi update Supabase.
+- **File Tersentuh**:
+  - `functions/public/pages/Profile.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi build frontend Vite (`cmd /c npm run build` di `functions/public`) lulus 100% (✓ 2510 modules transformed, 0 error).
+
 - **Permintaan & Masalah**:
   1. Pengguna menginginkan kedua gerbang login (**Pencari Kost (USER)** vs **Pemilik Kost (MITRA)**) bersifat mutlak dan sakral.
   2. Sebelumnya, pengguna dengan akun mitra yang login secara otomatis ditimpa `portal_view = 'owner'` dan dipaksa redirect dari seluruh halaman publik (`/`, `/listings`, `/products`, dll.) ke Dashboard Mitra (`/mitra-dashboard`). Hal ini menghalangi pemilik kost untuk mencari/menyewa kost lain menggunakan akun yang sama sebagai pencari kost.

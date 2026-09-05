@@ -6,8 +6,9 @@ import { Page } from '../types';
 import { 
   ArrowLeft, Edit3, Lock, CheckCircle2, ShieldCheck, Calendar, 
   Briefcase, Building2, User, Users, MapPin, Sparkles, Heart, 
-  Phone, MessageSquare, Check, X, Shield, Key, Camera, Trash2, 
-  Mail, RefreshCw, AlertCircle, Eye, EyeOff
+  Phone, MessageSquare, MessageCircle, Check, X, Shield, Key, Camera, Trash2, 
+  Mail, RefreshCw, AlertCircle, Eye, EyeOff, ChevronRight, CreditCard,
+  Bell, HelpCircle, FileText, LogOut, ExternalLink
 } from 'lucide-react';
 
 interface ProfileProps {
@@ -20,8 +21,10 @@ interface ProfileProps {
 
 const Profile: React.FC<ProfileProps> = ({ user, onLogout, onSaveSuccess, forceEdit, onBack }) => {
   const navigate = useNavigate();
-  const [isEditing, setIsEditing] = useState(false);
+  const [viewMode, setViewMode] = useState<'hub' | 'edit_personal_data'>(forceEdit ? 'edit_personal_data' : 'hub');
+  const [isEditing, setIsEditing] = useState(forceEdit || false);
   const [loading, setLoading] = useState(false);
+  const [activeKostCount, setActiveKostCount] = useState<number>(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Modal Ganti Kata Sandi
@@ -31,6 +34,14 @@ const Profile: React.FC<ProfileProps> = ({ user, onLogout, onSaveSuccess, forceE
   const [showPassword, setShowPassword] = useState(false);
   const [passwordLoading, setPasswordLoading] = useState(false);
   const [passwordMessage, setPasswordMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  // Modal Preferensi Notifikasi
+  const [isNotifModalOpen, setIsNotifModalOpen] = useState(false);
+  const [notifSettings, setNotifSettings] = useState({
+    emailNotif: true,
+    waNotif: true,
+    promoNotif: false,
+  });
 
   const [formData, setFormData] = useState({
     displayName: '',
@@ -78,8 +89,27 @@ const Profile: React.FC<ProfileProps> = ({ user, onLogout, onSaveSuccess, forceE
   }, [user]);
 
   useEffect(() => {
-    if (forceEdit) setIsEditing(true);
+    if (forceEdit) {
+      setIsEditing(true);
+      setViewMode('edit_personal_data');
+    }
   }, [forceEdit]);
+
+  useEffect(() => {
+    if (!user?.uid) return;
+    supabase
+      .from('resident_status')
+      .select('id, end_date')
+      .eq('user_id', user.uid)
+      .then(({ data }) => {
+        if (data) {
+          const now = new Date();
+          const active = data.filter((r: any) => !r.end_date || new Date(r.end_date) >= now).length;
+          setActiveKostCount(active);
+        }
+      })
+      .catch(() => {});
+  }, [user]);
 
   if (!user) return null;
   const isAdmin = user.role === 'admin';
@@ -289,6 +319,7 @@ const Profile: React.FC<ProfileProps> = ({ user, onLogout, onSaveSuccess, forceE
       }
 
       setIsEditing(false);
+      setViewMode('hub');
       if (onSaveSuccess) {
         onSaveSuccess();
       } else {
@@ -322,6 +353,7 @@ const Profile: React.FC<ProfileProps> = ({ user, onLogout, onSaveSuccess, forceE
       verification_status: user.verification_status || 'unverified'
     });
     setIsEditing(false);
+    setViewMode('hub');
   };
 
   const handlePasswordChange = async (e: React.FormEvent) => {
@@ -374,76 +406,417 @@ const Profile: React.FC<ProfileProps> = ({ user, onLogout, onSaveSuccess, forceE
     }
   };
 
+  const isPersonalDataComplete = Boolean(
+    formData.displayName &&
+    formData.phone &&
+    formData.occupation &&
+    formData.institution &&
+    formData.address &&
+    formData.gender &&
+    formData.religion &&
+    formData.birthDate
+  );
+
   return (
     <div className="min-h-screen bg-[#F8FAFC] py-4 sm:py-8 lg:py-12 font-sans selection:bg-orange-100 selection:text-orange-900 pb-28 sm:pb-16">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        
-        {/* DESKTOP BREADCRUMB & HEADER SECTION */}
-        <div className="hidden lg:block mb-8">
-          <div className="flex items-center gap-2 text-xs font-semibold text-gray-400 mb-3">
-            <span className="text-gray-300">/</span>
-            <span className="text-gray-500 hover:text-gray-700 cursor-pointer" onClick={() => onBack ? onBack() : navigate(Page.HOME)}>
-              Pengaturan Akun
-            </span>
-            <span className="text-gray-300">/</span>
-            <span className="text-[#ff7a00] font-bold">Profil {getRoleTitle()}</span>
+      
+      {/* ── PROFILE HUB DASHBOARD VIEW ───────────────────────────────────────── */}
+      {viewMode === 'hub' ? (
+        <div className="max-w-md lg:max-w-xl mx-auto px-4 sm:px-6">
+          
+          {/* TOP BAR HEADER (Mobile/Desktop Title) */}
+          <div className="flex items-center justify-between mb-5">
+            <div className="flex items-center gap-2">
+              <img src="/logo.png" alt="RuangSinggah" className="h-8 w-auto" />
+              <span className="font-extrabold text-lg text-gray-900 tracking-tight">
+                RuangSinggah<span className="text-[#ff7a00]">.id</span>
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setIsNotifModalOpen(true)}
+                className="w-9 h-9 rounded-full bg-white border border-gray-200 text-gray-600 hover:text-orange-500 hover:border-orange-200 flex items-center justify-center transition-all shadow-2xs active:scale-95 cursor-pointer"
+                title="Preferensi Notifikasi"
+              >
+                <Bell className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => window.open('https://wa.me/6281527080656?text=Halo%20Tim%20Bantuan%20RuangSinggah%2C%20saya%20butuh%20informasi...', '_blank')}
+                className="w-9 h-9 rounded-full bg-white border border-gray-200 text-gray-600 hover:text-orange-500 hover:border-orange-200 flex items-center justify-center transition-all shadow-2xs active:scale-95 cursor-pointer"
+                title="Bantuan 24/7"
+              >
+                <HelpCircle className="w-4 h-4" />
+              </button>
+            </div>
           </div>
 
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <div>
-              <div className="flex items-center gap-3">
-                <h1 className="text-2xl sm:text-3xl font-black text-gray-900 tracking-tight">
-                  Profil {getRoleTitle()}
-                </h1>
-                <span className="bg-orange-50 text-[#ff7a00] border border-orange-200 text-xs font-extrabold px-3 py-0.5 rounded-full shadow-2xs">
-                  {getRoleBadge()}
-                </span>
+          {/* MAIN PROFILE CARD */}
+          <div className="bg-gradient-to-b from-orange-50/40 via-white to-white rounded-3xl p-5 sm:p-6 border border-orange-100 shadow-sm mb-6">
+            <div className="flex items-center gap-4">
+              {/* Avatar Circle */}
+              <div className="relative shrink-0">
+                <div className="w-16 h-16 sm:w-18 sm:h-18 rounded-2xl bg-[#0b1c30] text-white flex items-center justify-center font-black text-xl overflow-hidden shadow-md">
+                  {formData.photoURL ? (
+                    <img 
+                      src={formData.photoURL} 
+                      alt="Profile" 
+                      className="w-full h-full object-cover"
+                      onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                    />
+                  ) : (
+                    getInitials(formData.displayName)
+                  )}
+                </div>
+                {/* Verified Badge */}
+                <div className="absolute -bottom-1 -right-1 bg-[#ff7a00] text-white p-1 rounded-full border-2 border-white shadow-xs">
+                  <Check className="w-3 h-3 stroke-[3]" />
+                </div>
               </div>
-              <p className="text-xs sm:text-sm text-gray-500 font-medium mt-1">
-                Kelola data personal, aksesibilitas sistem, dan parameter verifikasi identitas Anda.
-              </p>
+
+              {/* User Info */}
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <h2 className="text-base sm:text-lg font-black text-gray-900 truncate">
+                    {formData.displayName || user.displayName || user.name || 'Pengguna RuangSinggah'}
+                  </h2>
+                  <CheckCircle2 className="w-4 h-4 text-[#ff7a00] fill-orange-100 shrink-0" />
+                </div>
+                <p className="text-xs text-gray-500 font-medium truncate mt-0.5">
+                  {user.email}
+                </p>
+                <div className="mt-1.5">
+                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black bg-orange-50 text-orange-700 border border-orange-200">
+                    <Sparkles className="w-3 h-3 text-orange-500" />
+                    {getRoleBadge()}
+                  </span>
+                </div>
+              </div>
             </div>
 
-            <div className="flex items-center gap-3 shrink-0">
+            {/* Banner Action: Edit Profil & Data Kontak Pribadi */}
+            <button
+              onClick={() => {
+                setIsEditing(true);
+                setViewMode('edit_personal_data');
+              }}
+              className="w-full mt-5 bg-orange-500/5 hover:bg-orange-500/10 border border-orange-200 rounded-2xl p-3 sm:p-3.5 flex items-center justify-between transition-all group active:scale-[0.99] cursor-pointer"
+            >
+              <div className="flex items-center gap-2.5 text-xs font-bold text-gray-800">
+                <div className="w-7 h-7 rounded-xl bg-orange-500 text-white flex items-center justify-center shadow-xs">
+                  <Edit3 className="w-3.5 h-3.5" />
+                </div>
+                <span className="truncate">Edit Profil & Data Kontak Pribadi</span>
+              </div>
+              <div className="flex items-center gap-1 text-[11px] font-extrabold text-orange-600 shrink-0 ml-2">
+                <span>{isPersonalDataComplete ? 'Ubah' : 'Lengkapi'}</span>
+                <ChevronRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
+              </div>
+            </button>
+          </div>
+
+          {/* ── GROUP 1: AKTIVITAS SEWA & TRANSAKSI ── */}
+          <div className="mb-6">
+            <h3 className="text-[11px] font-black uppercase text-gray-400 tracking-wider mb-2.5 px-1">
+              AKTIVITAS SEWA & TRANSAKSI
+            </h3>
+            <div className="bg-white rounded-3xl border border-gray-100 shadow-xs divide-y divide-gray-50 overflow-hidden">
+              
+              {/* Riwayat Sewa & Kontrak */}
               <button
-                onClick={() => onBack ? onBack() : navigate(Page.HOME)}
-                className="px-4 sm:px-5 py-2.5 bg-white border border-gray-200 text-gray-700 rounded-xl text-xs font-bold hover:bg-gray-50 hover:border-gray-300 transition-all shadow-xs active:scale-95 flex items-center gap-2 cursor-pointer"
+                onClick={() => navigate(`${Page.MY_BOOKINGS}/aktif`)}
+                className="w-full p-4 flex items-center justify-between text-left hover:bg-orange-50/40 transition-colors group cursor-pointer"
               >
-                <ArrowLeft className="w-4 h-4 text-gray-500" />
-                Kembali ke Beranda
+                <div className="flex items-center gap-3.5 min-w-0">
+                  <div className="w-10 h-10 rounded-2xl bg-orange-50 text-orange-600 flex items-center justify-center shrink-0">
+                    <User className="w-5 h-5" />
+                  </div>
+                  <div className="min-w-0">
+                    <h4 className="text-sm font-black text-gray-900 group-hover:text-orange-600 transition-colors">
+                      Riwayat Sewa & Kontrak
+                    </h4>
+                    <p className="text-xs text-gray-400 font-medium truncate mt-0.5">
+                      Unit kost aktif & masa berakhir sewa
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 shrink-0 ml-2">
+                  {activeKostCount > 0 && (
+                    <span className="px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-[10px] font-black border border-emerald-200">
+                      {activeKostCount} Aktif
+                    </span>
+                  )}
+                  <ChevronRight className="w-4 h-4 text-gray-400 group-hover:text-orange-500 group-hover:translate-x-0.5 transition-all" />
+                </div>
               </button>
 
+              {/* Kost Favorit Saya */}
               <button
-                onClick={() => {
-                  if (isEditing) {
-                    handleSave();
-                  } else {
-                    setIsEditing(true);
-                  }
-                }}
-                disabled={loading}
-                className="px-5 sm:px-6 py-2.5 bg-[#ff7a00] hover:bg-orange-600 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-orange-500/20 active:scale-95 flex items-center gap-2 cursor-pointer disabled:opacity-50"
+                onClick={() => navigate(Page.LISTINGS)}
+                className="w-full p-4 flex items-center justify-between text-left hover:bg-orange-50/40 transition-colors group cursor-pointer"
               >
-                {loading ? (
-                  <>
-                    <RefreshCw className="w-4 h-4 animate-spin" />
-                    Menyimpan...
-                  </>
-                ) : isEditing ? (
-                  <>
-                    <Check className="w-4 h-4" />
-                    Simpan Perubahan
-                  </>
-                ) : (
-                  <>
-                    <Edit3 className="w-4 h-4" />
-                    Edit Profil
-                  </>
-                )}
+                <div className="flex items-center gap-3.5 min-w-0">
+                  <div className="w-10 h-10 rounded-2xl bg-rose-50 text-rose-500 flex items-center justify-center shrink-0">
+                    <Heart className="w-5 h-5" />
+                  </div>
+                  <div className="min-w-0">
+                    <h4 className="text-sm font-black text-gray-900 group-hover:text-orange-600 transition-colors">
+                      Kost Favorit Saya
+                    </h4>
+                    <p className="text-xs text-gray-400 font-medium truncate mt-0.5">
+                      Daftar hunian kost tersimpan
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 shrink-0 ml-2">
+                  <ChevronRight className="w-4 h-4 text-gray-400 group-hover:text-orange-500 group-hover:translate-x-0.5 transition-all" />
+                </div>
+              </button>
+
+              {/* Riwayat Transaksi & Tagihan */}
+              <button
+                onClick={() => navigate(`${Page.MY_BOOKINGS}/riwayat`)}
+                className="w-full p-4 flex items-center justify-between text-left hover:bg-orange-50/40 transition-colors group cursor-pointer"
+              >
+                <div className="flex items-center gap-3.5 min-w-0">
+                  <div className="w-10 h-10 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0">
+                    <CreditCard className="w-5 h-5" />
+                  </div>
+                  <div className="min-w-0">
+                    <h4 className="text-sm font-black text-gray-900 group-hover:text-orange-600 transition-colors">
+                      Riwayat Transaksi & Tagihan
+                    </h4>
+                    <p className="text-xs text-gray-400 font-medium truncate mt-0.5">
+                      Bukti transfer, invoice & DP sewa
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 shrink-0 ml-2">
+                  <ChevronRight className="w-4 h-4 text-gray-400 group-hover:text-orange-500 group-hover:translate-x-0.5 transition-all" />
+                </div>
               </button>
             </div>
+          </div>
+
+          {/* ── GROUP 2: PENGATURAN AKUN & KEAMANAN ── */}
+          <div className="mb-6">
+            <h3 className="text-[11px] font-black uppercase text-gray-400 tracking-wider mb-2.5 px-1">
+              PENGATURAN AKUN & KEAMANAN
+            </h3>
+            <div className="bg-white rounded-3xl border border-gray-100 shadow-xs divide-y divide-gray-50 overflow-hidden">
+              
+              {/* Keamanan & Kata Sandi */}
+              <button
+                onClick={() => setIsPasswordModalOpen(true)}
+                className="w-full p-4 flex items-center justify-between text-left hover:bg-orange-50/40 transition-colors group cursor-pointer"
+              >
+                <div className="flex items-center gap-3.5 min-w-0">
+                  <div className="w-10 h-10 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
+                    <Lock className="w-5 h-5" />
+                  </div>
+                  <div className="min-w-0">
+                    <h4 className="text-sm font-black text-gray-900 group-hover:text-orange-600 transition-colors">
+                      Keamanan & Kata Sandi
+                    </h4>
+                    <p className="text-xs text-gray-400 font-medium truncate mt-0.5">
+                      Ganti PIN, password & autentikasi
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 shrink-0 ml-2">
+                  <ChevronRight className="w-4 h-4 text-gray-400 group-hover:text-orange-500 group-hover:translate-x-0.5 transition-all" />
+                </div>
+              </button>
+
+              {/* Preferensi Notifikasi */}
+              <button
+                onClick={() => setIsNotifModalOpen(true)}
+                className="w-full p-4 flex items-center justify-between text-left hover:bg-orange-50/40 transition-colors group cursor-pointer"
+              >
+                <div className="flex items-center gap-3.5 min-w-0">
+                  <div className="w-10 h-10 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center shrink-0">
+                    <Bell className="w-5 h-5" />
+                  </div>
+                  <div className="min-w-0">
+                    <h4 className="text-sm font-black text-gray-900 group-hover:text-orange-600 transition-colors">
+                      Preferensi Notifikasi
+                    </h4>
+                    <p className="text-xs text-gray-400 font-medium truncate mt-0.5">
+                      Email, WhatsApp & promo kost
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 shrink-0 ml-2">
+                  <ChevronRight className="w-4 h-4 text-gray-400 group-hover:text-orange-500 group-hover:translate-x-0.5 transition-all" />
+                </div>
+              </button>
+            </div>
+          </div>
+
+          {/* ── GROUP 3: BANTUAN & INFORMASI LEGAL ── */}
+          <div className="mb-6">
+            <h3 className="text-[11px] font-black uppercase text-gray-400 tracking-wider mb-2.5 px-1">
+              BANTUAN & INFORMASI LEGAL
+            </h3>
+            <div className="bg-white rounded-3xl border border-gray-100 shadow-xs divide-y divide-gray-50 overflow-hidden">
+              
+              {/* Pusat Bantuan 24/7 */}
+              <button
+                onClick={() => window.open('https://wa.me/6281527080656?text=Halo%20Tim%20Bantuan%20RuangSinggah%2C%20saya%20butuh%20bantuan%20sewa%20kost...', '_blank')}
+                className="w-full p-4 flex items-center justify-between text-left hover:bg-orange-50/40 transition-colors group cursor-pointer"
+              >
+                <div className="flex items-center gap-3.5 min-w-0">
+                  <div className="w-10 h-10 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
+                    <MessageCircle className="w-5 h-5" />
+                  </div>
+                  <div className="min-w-0">
+                    <h4 className="text-sm font-black text-gray-900 group-hover:text-orange-600 transition-colors">
+                      Pusat Bantuan 24/7
+                    </h4>
+                    <p className="text-xs text-gray-400 font-medium truncate mt-0.5">
+                      Live chat WhatsApp & FAQ sewa
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 shrink-0 ml-2">
+                  <span className="px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-600 text-[10px] font-black border border-emerald-200">
+                    Online
+                  </span>
+                  <ChevronRight className="w-4 h-4 text-gray-400 group-hover:text-orange-500 group-hover:translate-x-0.5 transition-all" />
+                </div>
+              </button>
+
+              {/* Syarat & Ketentuan Sewa */}
+              <button
+                onClick={() => navigate(Page.TERMS)}
+                className="w-full p-4 flex items-center justify-between text-left hover:bg-orange-50/40 transition-colors group cursor-pointer"
+              >
+                <div className="flex items-center gap-3.5 min-w-0">
+                  <div className="w-10 h-10 rounded-2xl bg-gray-100 text-gray-600 flex items-center justify-center shrink-0">
+                    <FileText className="w-5 h-5" />
+                  </div>
+                  <div className="min-w-0">
+                    <h4 className="text-sm font-black text-gray-900 group-hover:text-orange-600 transition-colors">
+                      Syarat & Ketentuan Sewa
+                    </h4>
+                    <p className="text-xs text-gray-400 font-medium truncate mt-0.5">
+                      Aturan pemesanan & pembatalan
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 shrink-0 ml-2">
+                  <ChevronRight className="w-4 h-4 text-gray-400 group-hover:text-orange-500 group-hover:translate-x-0.5 transition-all" />
+                </div>
+              </button>
+
+              {/* Kebijakan Privasi Data */}
+              <button
+                onClick={() => navigate(Page.TERMS)}
+                className="w-full p-4 flex items-center justify-between text-left hover:bg-orange-50/40 transition-colors group cursor-pointer"
+              >
+                <div className="flex items-center gap-3.5 min-w-0">
+                  <div className="w-10 h-10 rounded-2xl bg-cyan-50 text-cyan-600 flex items-center justify-center shrink-0">
+                    <ShieldCheck className="w-5 h-5" />
+                  </div>
+                  <div className="min-w-0">
+                    <h4 className="text-sm font-black text-gray-900 group-hover:text-orange-600 transition-colors">
+                      Kebijakan Privasi Data
+                    </h4>
+                    <p className="text-xs text-gray-400 font-medium truncate mt-0.5">
+                      Keamanan data pribadi pengguna
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 shrink-0 ml-2">
+                  <ChevronRight className="w-4 h-4 text-gray-400 group-hover:text-orange-500 group-hover:translate-x-0.5 transition-all" />
+                </div>
+              </button>
+            </div>
+          </div>
+
+          {/* ── TOMBOL KELUAR ── */}
+          <div className="mb-8">
+            <button
+              onClick={onLogout}
+              className="w-full py-3.5 px-4 bg-red-50 hover:bg-red-100 text-red-600 border border-red-200/80 rounded-2xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 transition-all active:scale-[0.98] shadow-xs cursor-pointer"
+            >
+              <LogOut className="w-4 h-4 text-red-500" />
+              <span>Keluar dari Akun</span>
+            </button>
+          </div>
+
+          {/* ── FOOTER INFORMASI APLIKASI ── */}
+          <div className="text-center pb-6">
+            <p className="text-xs font-bold text-gray-500">
+              RuangSinggah.id • Solusi Hunian Kost Terpercaya
+            </p>
+            <p className="text-[10px] font-semibold text-gray-400 mt-1 tracking-wider">
+              Versi Aplikasi v2.4.1 (Build 2026.2)
+            </p>
           </div>
         </div>
+      ) : (
+        /* ── SUB-VIEW: EDIT DATA PRIBADI FORM ────────────────────────────────── */
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          
+          {/* TOP BACK TO HUB BUTTON & HEADER */}
+          <div className="mb-6 flex items-center justify-between gap-4">
+            <button
+              onClick={() => {
+                setIsEditing(false);
+                setViewMode('hub');
+              }}
+              className="px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-xl text-xs font-bold hover:bg-gray-50 hover:border-gray-300 transition-all shadow-xs active:scale-95 flex items-center gap-2 cursor-pointer"
+            >
+              <ArrowLeft className="w-4 h-4 text-gray-500" />
+              <span>Kembali ke Menu Profil</span>
+            </button>
+
+            <button
+              onClick={handleSave}
+              disabled={loading}
+              className="px-5 py-2 bg-[#ff7a00] hover:bg-orange-600 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-orange-500/20 active:scale-95 flex items-center gap-2 cursor-pointer disabled:opacity-50"
+            >
+              {loading ? (
+                <>
+                  <RefreshCw className="w-4 h-4 animate-spin" />
+                  Menyimpan...
+                </>
+              ) : (
+                <>
+                  <Check className="w-4 h-4" />
+                  Simpan Perubahan
+                </>
+              )}
+            </button>
+          </div>
+
+          {/* DESKTOP BREADCRUMB & HEADER SECTION */}
+          <div className="hidden lg:block mb-8">
+            <div className="flex items-center gap-2 text-xs font-semibold text-gray-400 mb-3">
+              <span className="text-gray-300">/</span>
+              <span className="text-gray-500 hover:text-gray-700 cursor-pointer" onClick={() => setViewMode('hub')}>
+                Menu Profil
+              </span>
+              <span className="text-gray-300">/</span>
+              <span className="text-[#ff7a00] font-bold">Edit Data Kontak Pribadi</span>
+            </div>
+
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div>
+                <div className="flex items-center gap-3">
+                  <h1 className="text-2xl sm:text-3xl font-black text-gray-900 tracking-tight">
+                    Edit Data Kontak Pribadi
+                  </h1>
+                  <span className="bg-orange-50 text-[#ff7a00] border border-orange-200 text-xs font-extrabold px-3 py-0.5 rounded-full shadow-2xs">
+                    {getRoleBadge()}
+                  </span>
+                </div>
+                <p className="text-xs sm:text-sm text-gray-500 font-medium mt-1">
+                  Kelola data personal, aksesibilitas sistem, dan parameter verifikasi identitas Anda.
+                </p>
+              </div>
+            </div>
+          </div>
 
         {/* Force Edit Message Alert */}
         {forceEdit && isEditing && (
@@ -1068,8 +1441,8 @@ const Profile: React.FC<ProfileProps> = ({ user, onLogout, onSaveSuccess, forceE
 
           </div>
         </div>
-
       </div>
+      )}
 
       {/* MODAL GANTI KATA SANDI */}
       {isPasswordModalOpen && (
@@ -1161,6 +1534,76 @@ const Profile: React.FC<ProfileProps> = ({ user, onLogout, onSaveSuccess, forceE
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ── MODAL PREFERENSI NOTIFIKASI ───────────────────────────────────────── */}
+      {isNotifModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-sm w-full shadow-2xl border border-gray-100 relative">
+            <button 
+              onClick={() => setIsNotifModalOpen(false)}
+              className="absolute right-5 top-5 p-1.5 rounded-full hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors cursor-pointer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+            <div className="flex items-center gap-3 mb-5">
+              <div className="w-10 h-10 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center">
+                <Bell className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-base font-black text-gray-900">Preferensi Notifikasi</h3>
+                <p className="text-xs text-gray-400">Atur kanal notifikasi akun Anda</p>
+              </div>
+            </div>
+            <div className="space-y-3.5">
+              <div className="flex items-center justify-between p-3.5 bg-gray-50 rounded-2xl">
+                <div>
+                  <p className="text-xs font-bold text-gray-800">Notifikasi WhatsApp</p>
+                  <p className="text-[10px] text-gray-500">Pengingat sewa & update pesanan</p>
+                </div>
+                <input 
+                  type="checkbox" 
+                  checked={notifSettings.waNotif} 
+                  onChange={(e) => setNotifSettings(prev => ({ ...prev, waNotif: e.target.checked }))}
+                  className="w-5 h-5 accent-orange-500 rounded cursor-pointer" 
+                />
+              </div>
+              <div className="flex items-center justify-between p-3.5 bg-gray-50 rounded-2xl">
+                <div>
+                  <p className="text-xs font-bold text-gray-800">Notifikasi Email</p>
+                  <p className="text-[10px] text-gray-500">Kwitansi digital & laporan akun</p>
+                </div>
+                <input 
+                  type="checkbox" 
+                  checked={notifSettings.emailNotif} 
+                  onChange={(e) => setNotifSettings(prev => ({ ...prev, emailNotif: e.target.checked }))}
+                  className="w-5 h-5 accent-orange-500 rounded cursor-pointer" 
+                />
+              </div>
+              <div className="flex items-center justify-between p-3.5 bg-gray-50 rounded-2xl">
+                <div>
+                  <p className="text-xs font-bold text-gray-800">Promo & Rekomendasi</p>
+                  <p className="text-[10px] text-gray-500">Diskon kamar kost terbaru</p>
+                </div>
+                <input 
+                  type="checkbox" 
+                  checked={notifSettings.promoNotif} 
+                  onChange={(e) => setNotifSettings(prev => ({ ...prev, promoNotif: e.target.checked }))}
+                  className="w-5 h-5 accent-orange-500 rounded cursor-pointer" 
+                />
+              </div>
+            </div>
+            <button 
+              onClick={() => {
+                setIsNotifModalOpen(false);
+                alert('Preferensi notifikasi berhasil disimpan.');
+              }}
+              className="w-full mt-6 py-3.5 bg-[#ff7a00] hover:bg-orange-600 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-orange-500/20 active:scale-95 cursor-pointer"
+            >
+              Simpan Preferensi
+            </button>
           </div>
         </div>
       )}

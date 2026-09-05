@@ -1,59 +1,76 @@
-# WALKTHROUGH: Integrasi Ekosistem Meta WhatsApp Cloud API Resmi & Verifikasi Identitas Anti-Bobol
+# Walkthrough: Redesain Profile Hub Dashboard Interaktif & Sub-view Edit Data Pribadi
 
-Dokumen ini merangkum seluruh perubahan, integrasi, dan hasil pengujian aktivasi ekosistem **WhatsApp Cloud API (Meta Developer)** pada platform **RuangSinggah**.
-
----
-
-## 📌 Ringkasan Perubahan
-
-### 1. Ekosistem Modular WhatsApp Cloud API (`functions/public/whatsappService.ts`)
-- Memperbarui helper runtime `sendWhatsAppTemplate` dengan penanganan fallback token dinamis dan normalisasi nomor telepon Indonesia (`628...`).
-- Menyediakan fungsi-fungsi helper modular:
-  - **`sendWaOtpVerification(phone, otpCode)`**: Mengirimkan kode 6 digit OTP resmi ke nomor WhatsApp pengguna via template Meta.
-  - **`sendWaTenantComplaintNotification(phone, details)`**: Mengirimkan notifikasi aduan/keluhan penghuni secara instan ke nomor WhatsApp pemilik kost.
-  - **`sendWaRentBillingReminder(phone, details)`**: Mengirimkan pengingat tagihan jatuh tempo sewa KostManager lengkap dengan rincian biaya dan link pembayaran digital.
-  - **`sendWaMonthlyFinancialReport(phone, details)`**: Mengirimkan ringkasan laporan keuangan bulanan (total pemasukan, pengeluaran, laba bersih, dan okupansi kamar).
-
-### 2. Hard Gatekeeper & Proteksi Anti-Bypass Verifikasi Identitas Mitra (`functions/public/pages/MitraProfile.tsx`)
-- **Penghapusan Fallback Palsu**: Menghilangkan fallback `hello_world` yang sebelumnya memungkinkan lolos tanpa OTP riil.
-- **Validasi Keras (*Hard Gatekeeper*)**:
-  - `saveStep1Draft` dan `handleSave` menolak proses simpan atau pengajuan verifikasi identitas secara mutlak jika `!waOtpVerified && !initialUser?.whatsapp_verified`.
-  - Langkah 2 (Verifikasi KTP) menyematkan banner penguncian visual dan menonaktifkan (*disabled*) upload foto KTP serta tombol "SIMPAN & AJUKAN VERIFIKASI" jika nomor WhatsApp belum diverifikasi OTP di Langkah 1.
-- **Sinkronisasi Database Instan**: Begitu kode OTP cocok, status `whatsapp_verified: true` langsung disimpan ke tabel `users` di Supabase.
-- **Dukungan Ubah Nomor WhatsApp**: Fitur pergantian nomor WhatsApp terlindungi dengan validasi ganda (OTP email keamanan + OTP nomor WhatsApp baru).
-
-### 3. Proteksi Verifikasi Identitas Agen Surveyor (`functions/public/pages/AgentProfile.tsx`)
-- Menerapkan penguncian OTP WhatsApp, validasi keras submit, dan penguncian formulir KTP Langkah 2 yang sama untuk akun agen surveyor resmi.
-
-### 4. Pemicu WhatsApp Otomatis Keluhan Penghuni KostManager (`functions/public/pages/MyKost.tsx`)
-- Pada fungsi `submitComplaint`, setelah laporan kendala tersimpan di Supabase, sistem secara otomatis mengambil nomor telepon pengelola/pemilik kost (`properties.owner_uid` / `properties.omnichannel_contact_phone`) dan mengirimkan notifikasi WhatsApp instan berisi rincian:
-  - Nama Properti & Nomor Kamar
-  - Kategori & Urgensi Kendala
-  - Judul & Rincian Masalah
-  - Nama & Kontak Penghuni
+## Ringkasan Pekerjaan
+Pembaruan komprehensif pada halaman **Profil Pengguna (`/profile`)** untuk mentransformasikan antarmuka dari formulir data pribadi mentah menjadi **Profile Hub Dashboard** yang elegan, modern, dan intuitif (sesuai referensi UI pengguna). Seluruh fitur sebelumnya (validasi, upload KTP WebP, penyimpanan data diri Supabase) tetap terjaga 100% dan dapat diakses melalui sub-view edit data pribadi.
 
 ---
 
-## 🧪 Hasil Verifikasi & Uji Kompilasi
+## 📸 Detail Struktur Antarmuka Baru
 
-| Komponen | Perintah Uji | Hasil | Status |
-| :--- | :--- | :--- | :--- |
-| **Frontend Vite** | `cmd /c npm run build` (di `functions/public/`) | ✓ 2510 modules transformed, built in 52.12s | **LULUS (0 Error)** |
-| **Backend Functions** | `cmd /c npm run build` (di `functions/`) | `tsc` compile check | **LULUS (0 Error)** |
+### 1. Header Profil Pengguna
+- **Avatar Dinamis**: Menampilkan foto profil pengguna dengan opsi inisial cerdas jika foto belum diunggah.
+- **Nama & Kontak**: Menampilkan nama lengkap dan nomor WhatsApp / email terdaftar.
+- **Lencana Verifikasi Identitas**: Status verifikasi KTP instan (`Terverifikasi` berwarna hijau dengan ikon `ShieldCheck` atau `Belum Terverifikasi` berwarna abu-abu/oranye).
+
+### 2. Menu Aktivitas Sewa & Transaksi
+- **Kost Saya**: Menghubungkan langsung ke `/my-kost` dilengkapi *live counter badge* jumlah kost/kamar aktif penyewa.
+- **Riwayat Transaksi**: Menghubungkan ke riwayat transaksi dan pembayaran tagihan sewa.
+- **Pesan & Chat**: Menghubungkan ke `/chat` untuk berkirim pesan dengan pemilik kost/pengelola.
+
+### 3. Pengaturan Akun & Keamanan
+- **Edit Profil & Data Kontak Pribadi**: Membuka sub-view formulir edit data diri lengkap.
+- **Ganti Kata Sandi**: Membuka modal popup interaktif untuk mereset/mengganti password akun Supabase Auth dengan konfirmasi keamanan.
+- **Preferensi Notifikasi**: Membuka modal kontrol pengaturan notifikasi via WhatsApp, Email, dan Penawaran Promo.
+
+### 4. Bantuan & Legalitas
+- **Pusat Bantuan & Layanan CS 24/7**: Tautan langsung ke layanan pelanggan WhatsApp / form kontak bantuan.
+- **Syarat & Ketentuan**: Membuka dokumen Syarat & Ketentuan Layanan.
+- **Kebijakan Privasi**: Membuka dokumen Kebijakan Privasi data pengguna.
+
+### 5. Tombol Keluar & Footer
+- **Keluar / Logout**: Tombol keluar berwarna merah dengan konfirmasi pembersihan sesi.
+- **Footer**: Identitas versi aplikasi RuangSinggah.
 
 ---
 
-## 📋 Panduan Pengujian bagi Pengguna
+## 🔄 Alur Navigasi Sub-view Formulir Data Pribadi
+1. Pengguna membuka `/profile` ➔ Tampilan default adalah **Profile Hub Dashboard**.
+2. Pengguna menekan opsi *"Edit Profil & Data Kontak Pribadi"*.
+3. Sistem beralih ke sub-view formulir edit data lengkap dengan tombol navigasi `← Kembali ke Menu Profil` di bagian atas.
+4. Pengguna dapat mengubah nama, nomor HP, pekerjaan, jenis kelamin, status perkawinan, agama, tempat & tanggal lahir, alamat, foto profil, serta upload KTP.
+5. Menekan tombol `Simpan Perubahan` akan memperbarui data ke Supabase dan secara otomatis mengembalikan tampilan ke Profile Hub dengan data ter-refresh.
+6. Menekan tombol `← Kembali ke Menu Profil` atau `Batal` mengembalikan tampilan ke Profile Hub tanpa kehilangan konteks.
 
-1. **Uji Verifikasi Identitas Mitra (Pemilik Kost)**:
-   - Masuk ke menu **Profil Mitra** (`/mitra-profile?edit=true&step=1`).
-   - Masukkan nomor WhatsApp Anda lalu klik tombol **Kirim OTP**.
-   - Periksa WhatsApp Anda untuk menerima kode 6 digit OTP resmi.
-   - Masukkan 6 digit OTP dan klik **Verifikasi WhatsApp**.
-   - Coba akses Langkah 2 KTP (`?step=2`); form KTP kini terbuka dan tombol pengajuan aktif. Jika nomor belum diverifikasi OTP, Langkah 2 akan terkunci total dengan banner peringatan.
-2. **Uji Pengiriman Keluhan Penghuni**:
-   - Masuk ke **Kost Saya** (`/my-kost`), buka modal **Lapor Kendala / Komplain**.
-   - Isi judul dan deskripsi masalah, lalu klik kirim.
-   - Notifikasi WhatsApp akan otomatis terkirim ke nomor pemilik kost / pengelola properti.
-3. **Uji Pengingat Tagihan Sewa KostManager**:
-   - Pada halaman KostManager, klik tombol **Kirim Pengingat Tagihan (WhatsApp)** pada daftar penyewa; pesan pengingat resmi berserta tautan pembayaran digital akan terkirim langsung ke nomor WhatsApp penyewa.
+---
+
+## 🧪 Hasil Pengujian & Verifikasi
+
+### 1. Kompilasi Build Frontend (`npm run build`)
+- **Status**: **LULUS (100% PASS)**
+- **Hasil Rollup/Vite**:
+  ```text
+  ✓ 2510 modules transformed.
+  rendering chunks...
+  computing gzip size...
+  ../../public/assets/Profile-SZYc3N9_.js    54.99 kB │ gzip: 11.06 kB
+  ✓ built in 1m 38s
+  ```
+- **0 Error Kompilasi, 0 Warning Syntax**.
+
+### 2. Standar Baku UI/UX & Ikon
+- **100% Pure Bundled SVG (`lucide-react`)**: Bebas Flash of Unstyled Text (FOUT), 0 network request untuk rendering icon.
+
+---
+
+## 🚀 Panduan Pengujian oleh Pengguna (User Testing Guide)
+
+1. Buka aplikasi di browser (mode mobile maupun desktop).
+2. Login sebagai pengguna/pencari kost.
+3. Klik ikon atau menu **Profil** di navigasi bawah (mobile) atau dropdown avatar di navbar (desktop):
+   - Pastikan yang pertama kali muncul adalah **Profile Hub Dashboard** yang rapi.
+4. Uji interaksi fitur:
+   - Klik **Kost Saya** ➔ memastikan masuk ke halaman `/my-kost`.
+   - Klik **Ganti Kata Sandi** ➔ pastikan modal ganti kata sandi muncul.
+   - Klik **Preferensi Notifikasi** ➔ pastikan modal pengaturan notifikasi muncul dan toggle switch dapat digeser.
+   - Klik **Edit Profil & Data Kontak Pribadi** ➔ pastikan formulir data pribadi terbuka lengkap dengan tombol `← Kembali ke Menu Profil` di atasnya.
+   - Lakukan edit data atau tekan `← Kembali ke Menu Profil` untuk kembali ke hub dashboard.
