@@ -1,45 +1,49 @@
-# Rencana Implementasi: Modernisasi & Responsivitas Form Pendaftaran KostManager (Standar Industri & Preview Foto Properti)
+# Rencana Implementasi: Pemisahan Tahapan Pemilihan Metode Pendaftaran KostManager di Awal (Dedicated Selection Step)
 
 ## 1. Analisis Masalah & Kebutuhan
 - **Masalah Saat Ini**:
-  1. **Tampilan Kurang Responsif & Modern**: Modal formulir pendaftaran KostManager terasa kaku pada perangkat mobile. Tombol navigasi/aksi bawah berisiko terpotong pada layar sempit, dan hierarki visual antar elemen input belum memenuhi standar UI/UX industri modern (seperti Airbnb / Traveloka / Mamikos).
-  2. **Ketiadaan Preview Foto Properti**: Saat memilih opsi *"Pilih dari Kost Saya"*, sistem saat ini hanya menyediakan `<select>` dropdown teks polos dan peta mentah, tanpa menampilkan thumbnail/foto utama properti, kartu ringkasan visual, maupun badge status properti yang jelas.
-  3. **Visual Hierarchy & Multi-Step**: Indikator langkah (Step 1 Data Properti, Step 2 Syarat & Ketentuan) masih berupa teks polos dan belum memiliki *step progress indicator* yang interaktif dan mewah.
+  - Saat modal pendaftaran KostManager dibuka, seluruh elemen form (pilihan metode, daftar kartu kost, preview foto, dan kolom input data) langsung tampil bertumpuk dalam satu layar panjang.
+  - Hal ini membuat calon mitra tidak menyadari secara jelas bahwa mereka memiliki 2 pilihan alur yang berbeda (*Pilih Listing Kost yang Sudah Ada* vs *Daftar Kost Baru secara Eksklusif*).
 - **Tujuan Pengembangan**:
-  1. Merombak desain modal pendaftaran KostManager menjadi *responsive dialog / mobile-friendly bottom sheet* yang adaptif, bersih, dan modern.
-  2. Mengimplementasikan **Visual Property Selector Card & High-Resolution Preview Banner** lengkap dengan foto properti (diambil dari kolom `image_urls`/`images`), badge jenis kost, jumlah kamar, lokasi, dan status langganan.
-  3. Menyediakan navigasi multi-step yang intuitif (*Progress Bar / Step Pills*), form input dengan *icon prefix* & *micro-animations*, serta *order summary card* pada tahap Syarat & Ketentuan (MoU).
+  - Memisahkan alur pendaftaran menjadi **3 Tahapan Bertahap (Dedicated Multi-Step Flow)**:
+    1. **Tahap 1: Pemilihan Metode Pendaftaran (Dedicated Initial Screen)**
+       - Menampilkan 2 kartu pilihan metode yang eksklusif, jelas, dan berwibawa:
+         - **Opsi A: Pilih dari Kost Saya (Listing Terdaftar)** $\rightarrow$ Daftarkan kost yang sudah aktif di akun mitra; data kamar, foto, dan titik lokasi disinkronkan otomatis.
+         - **Opsi B: Daftarkan Kost Baru (Eksklusif)** $\rightarrow$ Daftarkan properti kost baru yang belum pernah diunggah dengan mengisi formulir dari awal.
+    2. **Tahap 2: Input / Konfirmasi Data Properti (Sesuai Metode Terpilih)**
+       - **Jika Opsi A**: Menampilkan pemilih kartu properti visual eksisting, showcase cover foto properti terpilih, konfirmasi sinkronisasi, dan tinjauan formulir.
+       - **Jika Opsi B**: Menampilkan formulir input lengkap data properti baru (Nama, Jenis Kost, Jumlah Kamar, GPS, Pinpoint Peta Google Maps, dan Alamat).
+       - Tersedia tombol *"← Ganti Metode"* untuk kembali ke Tahap 1 kapan saja.
+    3. **Tahap 3: Syarat & Ketentuan (MoU) & Ringkasan Pembayaran**
+       - Menampilkan ringkasan data properti & paket langganan yang dipilih, klausul Syarat & Ketentuan, checkbox persetujuan, dan tombol checkout pembayaran.
 
 ---
 
 ## 2. Dampak Perubahan
 File yang akan disentuh:
 - `functions/public/pages/KostManagerLanding.tsx`
-  - Memperluas query database Supabase `properties` agar mengambil data gambar (`images`, `image_urls`, `price`, `status`).
-  - Menambahkan utilitas resolusi cover image properti yang aman dan anti-broken link.
-  - Merombak arsitektur markup modal menjadi modern responsive container (sticky blurred header & footer, smooth scrolling body).
-  - Mengganti dropdown teks biasa dengan **Visual Property Selector Cards** (grid/carousel kartu properti dengan foto thumbnail, nama kost, tipe, kota, kamar) dan **Selected Property Preview Banner**.
-  - Memperbarui styling seluruh field formulir (input Nama Kost, Jenis Kost, Jumlah Kamar, Kamar Kosong, Link Google Maps, dan Alamat) dengan visual design sistem modern.
-  - Mempercantik Step 2 (MoU / Syarat & Ketentuan) dengan *Subscription & Property Summary Card* sebelum checkout pembayaran.
+  - Memperbarui state `modalStep` menjadi `'method' | 'form' | 'mou'`.
+  - Merancang antarmuka **Tahap 1 (Dedicated Method Selection Screen)** dengan 2 kartu interaktif yang menonjol.
+  - Memperbarui **Tahap 2 (Property Data Step)** agar menyesuaikan tampilannya secara bersih berdasarkan metode yang dipilih (`isManualInput`).
+  - Menyelaraskan **Multi-Step Progress Indicator Bar** menjadi 3 tahap: `1. Metode` $\rightarrow$ `2. Data Properti` $\rightarrow$ `3. Syarat & MoU`.
+  - Menambahkan navigasi kembali bertahap (*Back Navigation*) di setiap tahapan.
 
 ---
 
 ## 3. Langkah-Langkah Eksekusi (Fase 2 Setelah di-ACC)
-1. **Langkah 1: Optimasi Fetching Data Properti Pemilik**:
-   - Perbarui query Supabase pada `loadUserKosts` untuk mengambil `id, title, type, room_types, address, city, area, location, is_managed, images, image_urls, price, status`.
-   - Implementasikan fungsi helper `getKostPhoto(kost)` untuk mengekstrak foto utama dari berbagai format JSON Supabase.
-2. **Langkah 2: Modernisasi Modal Container & Progress Header**:
-   - Buat kontainer modal responsif dengan `max-h-[90vh] sm:max-h-[85vh]`, backdrop blur, rounded corners modern, dan sticky header/footer.
-   - Tambahkan *Multi-Step Indicator Bar* (Langkah 1: Data Properti, Langkah 2: Syarat & Ketentuan).
-3. **Langkah 3: Implementasi Visual Property Selector & Rich Preview**:
-   - Buat kartu pilihan kost interaktif dengan foto thumbnail, label status, jenis kost, dan checkmark badge.
-   - Buat card preview properti terpilih dengan cover banner besar, ringkasan data, dan peta mini terintegrasi.
-4. **Langkah 4: Polishing Input Form & Micro-Interactions**:
-   - Tambahkan icon pendukung (`Building`, `Users`, `DoorOpen`, `MapPin`, `Sparkles`) pada setiap field.
-   - Optimalkan integrasi geolocation GPS dan pinpoint Google Maps agar rapi dan responsif di mobile.
-5. **Langkah 5: Penyempurnaan Step 2 Syarat & Ketentuan (MoU)**:
-   - Tampilkan ringkasan pesanan paket langganan dan properti terpilih.
-   - Desain ulang kotak Syarat & Ketentuan berformat dokumen profesional dengan checkmark persetujuan interaktif.
+1. **Langkah 1: Perluasan State Multi-Step di `KostManagerLanding.tsx`**:
+   - Menambahkan tipe `modalStep: 'method' | 'form' | 'mou'`.
+   - Mengatur `handleOpenRegistration` agar menginisialisasi `modalStep = 'method'` jika mitra memiliki kost terdaftar (`userKosts.length > 0`), atau langsung `form` jika belum memiliki kost.
+2. **Langkah 2: Pembuatan Antarmuka Tahap 1 (Layar Pemilihan Metode Dedicated)**:
+   - Desain 2 kartu pilihan besar ber-hover effect dengan icon `<Building2 />` dan `<PlusCircle />`, judul tebal, deskripsi manfaat masing-masing opsi, badge jumlah listing tersedia, dan tombol aksi "Pilih & Lanjutkan".
+3. **Langkah 3: Pemisahan & Penyesuaian Tahap 2 (Data Properti)**:
+   - Tampilkan sub-flow khusus **Pilih dari Kost Saya** (Visual Cards Grid, Cover Photo Showcase Preview, Mini-Map, dan Data Confirmation).
+   - Tampilkan sub-flow khusus **Daftar Kost Baru Manual** (Formulir input baru lengkap dengan GPS dan Google Maps picker).
+   - Sediakan tombol *"Ganti Metode"* di header/footer untuk memudahkan mitra beralih metode.
+4. **Langkah 4: Sinkronisasi Tahap 3 (Syarat & Ketentuan MoU)**:
+   - Memastikan tombol *"Kembali"* di tahap MoU mengarahkan kembali ke Tahap 2 (`form`).
+5. **Langkah 5: Penyesuaian Multi-Step Indicator Bar**:
+   - Memperbarui bar indikator di header menjadi 3 langkah visual: `1. Metode` $\rightarrow$ `2. Data Properti` $\rightarrow$ `3. Syarat & MoU`.
 6. **Langkah 6: Kompilasi, Verifikasi, dan Git Push**:
    - Jalankan `npm run build` di `functions/public` untuk memastikan 0 error kompilasi.
    - Catat progres ke `functions/PROGRESS.md` dan terbitkan `WALKTHROUGH.md`.
@@ -50,11 +54,11 @@ File yang akan disentuh:
 ## 4. Rencana Verifikasi
 1. **Verifikasi Kompilasi**:
    - Menjalankan `npm run build` di `functions/public` hingga lulus tanpa error TypeScript.
-2. **Verifikasi Tampilan Responsif (Mobile & Desktop)**:
-   - Memastikan modal terbuka rapi di layar HP (lebar < 640px) dan desktop tanpa ada tombol yang terpotong.
-3. **Verifikasi Visual Selector & Preview Foto**:
-   - Memastikan saat memilih *"Pilih dari Kost Saya"*, foto kost muncul dengan jelas, thumbnail kartu dapat diklik untuk berganti properti, dan preview banner menampilkan detail kost terpilih secara instan.
-4. **Verifikasi Alur Daftar Kost Baru (Manual)**:
-   - Memastikan peralihan ke *"Daftar Kost Baru (Manual)"* mengosongkan form dan memungkinkan input manual serta pemilihan peta koordinat tanpa kendala.
-5. **Verifikasi Syarat & Ketentuan**:
-   - Memastikan validasi form bekerja sebelum lanjut ke Step 2, ringkasan paket muncul, dan checkbox persetujuan mengaktifkan tombol pembayaran.
+2. **Verifikasi Layar Tahap 1 (Pemilihan Metode)**:
+   - Membuka modal pendaftaran dan memastikan hanya muncul 2 kartu pilihan metode yang jelas (tanpa langsung menampilkan input formulir).
+3. **Verifikasi Alur Opsi A (Pilih dari Kost Saya)**:
+   - Memilih Opsi A $\rightarrow$ Memastikan sistem masuk ke Tahap 2 dengan menampilkan pemilih kartu visual properti eksisting dan preview foto cover.
+4. **Verifikasi Alur Opsi B (Daftar Kost Baru Eksklusif)**:
+   - Memilih Opsi B $\rightarrow$ Memastikan sistem masuk ke Tahap 2 dengan menampilkan formulir kosong untuk kost baru beserta fitur GPS & Google Maps.
+5. **Verifikasi Tombol Ganti Metode & Back Navigation**:
+   - Memastikan tombol kembali / ganti metode dapat mengembalikan mitra ke layar pemilihan metode dengan mulus.

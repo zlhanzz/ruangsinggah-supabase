@@ -165,7 +165,7 @@ const KostManagerLanding: React.FC<KostManagerLandingProps> = ({ user, onBack, i
     setSearchParams(params);
   };
   const [hasAgreedMoU, setHasAgreedMoU] = useState(false);
-  const [modalStep, setModalStep] = useState<'form' | 'mou'>('form');
+  const [modalStep, setModalStep] = useState<'method' | 'form' | 'mou'>('method');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isDetectingLocation, setIsDetectingLocation] = useState(false);
   const [showMapPicker, setShowMapPicker] = useState(false);
@@ -178,7 +178,7 @@ const KostManagerLanding: React.FC<KostManagerLandingProps> = ({ user, onBack, i
   // User Properties Selection for Existing Mitra (Case 1 vs Case 2)
   const [userKosts, setUserKosts] = useState<any[]>([]);
   const [selectedKostId, setSelectedKostId] = useState<string>('');
-  const [isManualInput, setIsManualInput] = useState<boolean>(true);
+  const [isManualInput, setIsManualInput] = useState<boolean>(false);
 
   const [packages, setPackages] = useState<KostManagerPackage[]>([]);
   const [selectedPackageId, setSelectedPackageId] = useState<string>('');
@@ -359,7 +359,12 @@ const KostManagerLanding: React.FC<KostManagerLandingProps> = ({ user, onBack, i
 
   const handleOpenRegistration = () => {
     if (!checkIdentityVerification()) return;
-    setModalStep('form');
+    if (userKosts.length > 0) {
+      setModalStep('method');
+    } else {
+      setModalStep('form');
+      setIsManualInput(true);
+    }
     setIsModalOpen(true);
   };
 
@@ -873,137 +878,271 @@ const KostManagerLanding: React.FC<KostManagerLandingProps> = ({ user, onBack, i
                 </button>
               </div>
 
-              {/* Progress Step Indicator */}
-              <div className="mt-4 pt-3 border-t border-slate-200/60 flex items-center justify-between gap-3">
-                <div className="flex items-center gap-2 flex-1">
+              {/* Progress Step Indicator (3 Steps) */}
+              <div className="mt-4 pt-3 border-t border-slate-200/60 flex items-center justify-between gap-2">
+                {/* Step 1: Metode */}
+                <div className="flex items-center gap-2">
                   <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-black transition-all ${
-                    modalStep === 'form' 
-                      ? 'bg-orange-500 text-white ring-4 ring-orange-500/20' 
+                    modalStep === 'method' 
+                      ? 'bg-orange-500 text-white ring-4 ring-orange-500/20 shadow-xs' 
                       : 'bg-emerald-500 text-white'
                   }`}>
-                    {modalStep === 'mou' ? <Check size={12} className="stroke-[3]" /> : '1'}
+                    {modalStep !== 'method' ? <Check size={12} className="stroke-[3]" /> : '1'}
                   </div>
-                  <div className="flex flex-col">
-                    <span className={`text-xs font-bold ${modalStep === 'form' ? 'text-orange-600' : 'text-slate-700'}`}>
-                      Data Properti
-                    </span>
-                    <span className="text-[9px] text-slate-400 font-medium hidden sm:inline">Pilih atau input kost</span>
-                  </div>
+                  <span className={`text-xs font-bold ${modalStep === 'method' ? 'text-orange-600' : 'text-slate-700'}`}>
+                    Pilih Metode
+                  </span>
                 </div>
 
-                {/* Divider bar */}
-                <div className={`h-1 flex-1 max-w-[60px] sm:max-w-[100px] rounded-full transition-all ${
+                {/* Divider 1 */}
+                <div className={`h-1 flex-1 max-w-[40px] sm:max-w-[70px] rounded-full transition-all ${
+                  modalStep !== 'method' ? 'bg-orange-500' : 'bg-slate-200'
+                }`} />
+
+                {/* Step 2: Data Properti */}
+                <div className="flex items-center gap-2">
+                  <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-black transition-all ${
+                    modalStep === 'form' 
+                      ? 'bg-orange-500 text-white ring-4 ring-orange-500/20 shadow-xs' 
+                      : (modalStep === 'mou' ? 'bg-emerald-500 text-white' : 'bg-slate-200 text-slate-500')
+                  }`}>
+                    {modalStep === 'mou' ? <Check size={12} className="stroke-[3]" /> : '2'}
+                  </div>
+                  <span className={`text-xs font-bold ${
+                    modalStep === 'form' ? 'text-orange-600' : (modalStep === 'mou' ? 'text-slate-700' : 'text-slate-400')
+                  }`}>
+                    Data Properti
+                  </span>
+                </div>
+
+                {/* Divider 2 */}
+                <div className={`h-1 flex-1 max-w-[40px] sm:max-w-[70px] rounded-full transition-all ${
                   modalStep === 'mou' ? 'bg-orange-500' : 'bg-slate-200'
                 }`} />
 
-                <div className="flex items-center gap-2 flex-1 justify-end">
+                {/* Step 3: Syarat & MoU */}
+                <div className="flex items-center gap-2">
                   <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-black transition-all ${
                     modalStep === 'mou' 
-                      ? 'bg-orange-500 text-white ring-4 ring-orange-500/20' 
+                      ? 'bg-orange-500 text-white ring-4 ring-orange-500/20 shadow-xs' 
                       : 'bg-slate-200 text-slate-500'
                   }`}>
-                    2
+                    3
                   </div>
-                  <div className="flex flex-col text-right">
-                    <span className={`text-xs font-bold ${modalStep === 'mou' ? 'text-orange-600' : 'text-slate-400'}`}>
-                      Syarat & Ketentuan
-                    </span>
-                    <span className="text-[9px] text-slate-400 font-medium hidden sm:inline">MoU & Pembayaran</span>
-                  </div>
+                  <span className={`text-xs font-bold ${modalStep === 'mou' ? 'text-orange-600' : 'text-slate-400'}`}>
+                    Syarat & MoU
+                  </span>
                 </div>
               </div>
             </div>
 
             {/* Scrollable Body */}
             <div className="flex-1 overflow-y-auto p-5 sm:p-7 bg-white space-y-6">
-              {modalStep === 'form' ? (
-                /* Langkah 1: Formulir Data Kost */
-                <form onSubmit={handleProceedToMoU} className="space-y-6">
-                  
-                  {/* Selector Metode (Pilih dari Kost Saya vs Daftar Kost Baru) */}
-                  {userKosts.length > 0 && (
-                    <div className="space-y-2">
-                      <label className="block text-[11px] font-black text-slate-500 uppercase tracking-widest">
-                        Pilih Metode Pendaftaran
-                      </label>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        {/* Option 1: Kost Saya */}
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setIsManualInput(false);
-                            if (userKosts.length > 0 && !selectedKostId) {
-                              handleKostSelection(userKosts[0].id);
-                            } else if (selectedKostId && selectedKostId !== 'NEW') {
-                              handleKostSelection(selectedKostId);
-                            } else if (userKosts.length > 0) {
-                              handleKostSelection(userKosts[0].id);
-                            }
-                          }}
-                          className={`p-3.5 rounded-2xl text-left transition-all border flex items-center gap-3 cursor-pointer ${
-                            !isManualInput 
-                              ? 'bg-orange-50/60 border-orange-500 ring-2 ring-orange-500/20 shadow-sm' 
-                              : 'bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-50/50'
-                          }`}
-                        >
-                          <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 transition-colors ${
-                            !isManualInput ? 'bg-orange-500 text-white' : 'bg-slate-100 text-slate-600'
-                          }`}>
-                            <Building2 size={20} />
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center justify-between">
-                              <span className="text-xs font-black text-slate-900 block truncate">
-                                Pilih dari Kost Saya
-                              </span>
-                              {!isManualInput && (
-                                <span className="w-2 h-2 rounded-full bg-orange-500 animate-pulse" />
-                              )}
-                            </div>
-                            <span className="text-[11px] text-slate-500 font-medium block truncate mt-0.5">
-                              {userKosts.length} listing terdaftar
-                            </span>
-                          </div>
-                        </button>
+              
+              {/* ========================================================================= */}
+              {/* TAHAP 1: LAYAR DEDICATED PEMILIHAN METODE PENDAFTARAN                     */}
+              {/* ========================================================================= */}
+              {modalStep === 'method' && (
+                <div className="space-y-6 animate-in fade-in duration-300">
+                  <div className="text-center max-w-lg mx-auto space-y-1">
+                    <h4 className="text-base sm:text-lg font-black text-slate-900">
+                      Bagaimana Anda Ingin Mendaftarkan Kost?
+                    </h4>
+                    <p className="text-xs text-slate-500 font-medium leading-relaxed">
+                      Silakan tentukan apakah Anda ingin mendaftarkan listing yang sudah ada atau mendaftarkan properti kost baru secara eksklusif.
+                    </p>
+                  </div>
 
-                        {/* Option 2: Manual / Kost Baru */}
-                        <button
-                          type="button"
-                          onClick={() => handleKostSelection('NEW')}
-                          className={`p-3.5 rounded-2xl text-left transition-all border flex items-center gap-3 cursor-pointer ${
-                            isManualInput 
-                              ? 'bg-orange-50/60 border-orange-500 ring-2 ring-orange-500/20 shadow-sm' 
-                              : 'bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-50/50'
-                          }`}
-                        >
-                          <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 transition-colors ${
-                            isManualInput ? 'bg-orange-500 text-white' : 'bg-slate-100 text-slate-600'
-                          }`}>
-                            <PlusCircle size={20} />
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center justify-between">
-                              <span className="text-xs font-black text-slate-900 block truncate">
-                                Daftar Kost Baru
-                              </span>
-                              {isManualInput && (
-                                <span className="w-2 h-2 rounded-full bg-orange-500 animate-pulse" />
-                              )}
-                            </div>
-                            <span className="text-[11px] text-slate-500 font-medium block truncate mt-0.5">
-                              Input data kost baru manual
+                  <div className="grid grid-cols-1 gap-4 pt-1">
+                    {/* Opsi A: Pilih dari Kost Saya */}
+                    <div
+                      onClick={() => {
+                        setIsManualInput(false);
+                        if (userKosts.length > 0 && !selectedKostId) {
+                          handleKostSelection(userKosts[0].id);
+                        } else if (selectedKostId && selectedKostId !== 'NEW') {
+                          handleKostSelection(selectedKostId);
+                        } else if (userKosts.length > 0) {
+                          handleKostSelection(userKosts[0].id);
+                        }
+                      }}
+                      className={`p-4 sm:p-5 rounded-3xl border-2 transition-all cursor-pointer flex flex-col sm:flex-row items-start sm:items-center gap-4 relative group ${
+                        !isManualInput 
+                          ? 'border-orange-500 bg-orange-50/50 shadow-md shadow-orange-500/10 ring-2 ring-orange-500/20' 
+                          : 'border-slate-200 bg-white hover:border-orange-300 hover:bg-slate-50/60'
+                      }`}
+                    >
+                      <div className={`w-14 h-14 rounded-2xl flex items-center justify-center flex-shrink-0 transition-colors ${
+                        !isManualInput ? 'bg-orange-500 text-white shadow-md shadow-orange-500/20' : 'bg-slate-100 text-slate-600 group-hover:bg-orange-100 group-hover:text-orange-600'
+                      }`}>
+                        <Building2 size={26} />
+                      </div>
+
+                      <div className="flex-1 min-w-0 space-y-2">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <h5 className="text-sm font-black text-slate-900">
+                            Pilih dari Listing Kost Saya
+                          </h5>
+                          {userKosts.length > 0 ? (
+                            <span className="text-[10px] font-black px-2.5 py-0.5 rounded-full bg-orange-100 text-orange-700 border border-orange-200">
+                              {userKosts.length} Properti Tersedia
                             </span>
-                          </div>
-                        </button>
+                          ) : (
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">
+                              Belum ada listing
+                            </span>
+                          )}
+                        </div>
+
+                        <p className="text-xs text-slate-500 font-medium leading-relaxed">
+                          Daftarkan properti kost yang sudah ada di akun Anda ke program KostManager Autopilot. Data spesifikasi kamar, foto, dan lokasi GPS tersinkronisasi otomatis tanpa input ulang.
+                        </p>
+
+                        <div className="flex flex-wrap items-center gap-2 pt-1 text-[10px] font-bold text-slate-600">
+                          <span className="flex items-center gap-1 bg-white px-2 py-1 rounded-lg border border-slate-200 shadow-2xs">
+                            <CheckCircle2 size={12} className="text-emerald-600" /> Foto Otomatis
+                          </span>
+                          <span className="flex items-center gap-1 bg-white px-2 py-1 rounded-lg border border-slate-200 shadow-2xs">
+                            <CheckCircle2 size={12} className="text-emerald-600" /> Koordinat GPS
+                          </span>
+                          <span className="flex items-center gap-1 bg-white px-2 py-1 rounded-lg border border-slate-200 shadow-2xs">
+                            <CheckCircle2 size={12} className="text-emerald-600" /> Proses Instan
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Selection Radio Circle */}
+                      <div className="self-end sm:self-center flex-shrink-0">
+                        <div className={`w-6 h-6 rounded-full flex items-center justify-center transition-all ${
+                          !isManualInput ? 'bg-orange-500 text-white shadow-sm' : 'border-2 border-slate-300 bg-white'
+                        }`}>
+                          {!isManualInput && <Check size={14} className="stroke-[3]" />}
+                        </div>
                       </div>
                     </div>
-                  )}
 
-                  {/* Visual Card Selector & Showcase Preview untuk Kost Eksisting */}
+                    {/* Opsi B: Daftarkan Kost Baru */}
+                    <div
+                      onClick={() => {
+                        setIsManualInput(true);
+                        handleKostSelection('NEW');
+                      }}
+                      className={`p-4 sm:p-5 rounded-3xl border-2 transition-all cursor-pointer flex flex-col sm:flex-row items-start sm:items-center gap-4 relative group ${
+                        isManualInput 
+                          ? 'border-orange-500 bg-orange-50/50 shadow-md shadow-orange-500/10 ring-2 ring-orange-500/20' 
+                          : 'border-slate-200 bg-white hover:border-orange-300 hover:bg-slate-50/60'
+                      }`}
+                    >
+                      <div className={`w-14 h-14 rounded-2xl flex items-center justify-center flex-shrink-0 transition-colors ${
+                        isManualInput ? 'bg-orange-500 text-white shadow-md shadow-orange-500/20' : 'bg-slate-100 text-slate-600 group-hover:bg-orange-100 group-hover:text-orange-600'
+                      }`}>
+                        <PlusCircle size={26} />
+                      </div>
+
+                      <div className="flex-1 min-w-0 space-y-2">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <h5 className="text-sm font-black text-slate-900">
+                            Daftar Kost Baru Eksklusif (Manual)
+                          </h5>
+                          <span className="text-[10px] font-black px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-200">
+                            Input Baru
+                          </span>
+                        </div>
+
+                        <p className="text-xs text-slate-500 font-medium leading-relaxed">
+                          Daftarkan unit properti kost baru yang belum pernah diunggah ke RuangSinggah.id. Anda akan dipandu untuk melengkapi informasi properti, titik lokasi peta, dan spesifikasi kamar dari awal.
+                        </p>
+
+                        <div className="flex flex-wrap items-center gap-2 pt-1 text-[10px] font-bold text-slate-600">
+                          <span className="flex items-center gap-1 bg-white px-2 py-1 rounded-lg border border-slate-200 shadow-2xs">
+                            <CheckCircle2 size={12} className="text-emerald-600" /> Formulir Mandiri
+                          </span>
+                          <span className="flex items-center gap-1 bg-white px-2 py-1 rounded-lg border border-slate-200 shadow-2xs">
+                            <CheckCircle2 size={12} className="text-emerald-600" /> Pinpoint Peta Google
+                          </span>
+                          <span className="flex items-center gap-1 bg-white px-2 py-1 rounded-lg border border-slate-200 shadow-2xs">
+                            <CheckCircle2 size={12} className="text-emerald-600" /> Registrasi Baru
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Selection Radio Circle */}
+                      <div className="self-end sm:self-center flex-shrink-0">
+                        <div className={`w-6 h-6 rounded-full flex items-center justify-center transition-all ${
+                          isManualInput ? 'bg-orange-500 text-white shadow-sm' : 'border-2 border-slate-300 bg-white'
+                        }`}>
+                          {isManualInput && <Check size={14} className="stroke-[3]" />}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Sticky Footer Tahap 1 */}
+                  <div className="pt-4 border-t border-slate-100 flex items-center justify-between gap-3 bg-white sticky bottom-0">
+                    <button
+                      type="button"
+                      disabled={isSubmitting}
+                      onClick={() => setIsModalOpen(false)}
+                      className="px-5 py-2.5 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 text-xs sm:text-sm font-bold transition-all disabled:opacity-50 cursor-pointer"
+                    >
+                      Batal
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!isManualInput) {
+                          if (userKosts.length > 0 && !selectedKostId) {
+                            handleKostSelection(userKosts[0].id);
+                          } else if (selectedKostId && selectedKostId !== 'NEW') {
+                            handleKostSelection(selectedKostId);
+                          } else if (userKosts.length > 0) {
+                            handleKostSelection(userKosts[0].id);
+                          } else {
+                            // Fallback if no kosts
+                            setIsManualInput(true);
+                            handleKostSelection('NEW');
+                          }
+                        } else {
+                          handleKostSelection('NEW');
+                        }
+                        setModalStep('form');
+                      }}
+                      className="px-6 sm:px-8 py-3 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white rounded-xl text-xs sm:text-sm font-black uppercase tracking-wider flex items-center justify-center gap-2 active:scale-95 shadow-lg shadow-orange-500/25 transition-all cursor-pointer"
+                    >
+                      <span>Lanjut ke Data Properti</span>
+                      <ArrowRight size={16} />
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* ========================================================================= */}
+              {/* TAHAP 2: FORMULIR / KONFIRMASI DATA PROPERTI                             */}
+              {/* ========================================================================= */}
+              {modalStep === 'form' && (
+                <form onSubmit={handleProceedToMoU} className="space-y-6 animate-in fade-in duration-300">
+                  
+                  {/* Top Navigation & Method Indicator */}
+                  <div className="flex flex-wrap items-center justify-between gap-2 p-3 bg-slate-50 rounded-2xl border border-slate-200/80">
+                    <button
+                      type="button"
+                      onClick={() => setModalStep('method')}
+                      className="inline-flex items-center gap-1.5 text-xs font-bold text-orange-600 hover:text-orange-700 bg-white hover:bg-orange-50/50 px-3 py-1.5 rounded-xl border border-orange-200 transition-all cursor-pointer shadow-2xs"
+                    >
+                      <ArrowLeft size={13} className="stroke-[2.5]" />
+                      <span>Ganti Pilihan Metode</span>
+                    </button>
+
+                    <div className="text-[11px] font-bold text-slate-500">
+                      Metode: <strong className="text-slate-900">{!isManualInput ? 'Pilih dari Kost Saya' : 'Daftar Kost Baru (Manual)'}</strong>
+                    </div>
+                  </div>
+
+                  {/* Kasus A: Jika Memilih "Pilih dari Kost Saya" */}
                   {!isManualInput && userKosts.length > 0 && (
                     <div className="space-y-4 animate-in fade-in duration-300">
                       
-                      {/* Daftar Pilihan Kost Card Grid / Horizontal List */}
+                      {/* Daftar Pilihan Kost Card Grid */}
                       <div className="space-y-2">
                         <div className="flex justify-between items-center">
                           <label className="text-[11px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-1.5">
@@ -1042,7 +1181,6 @@ const KostManagerLanding: React.FC<KostManagerLandingProps> = ({ user, onBack, i
                                       alt={kost.title}
                                       className="w-full h-full object-cover"
                                       onError={(e) => {
-                                        // Fallback if image fails to load
                                         (e.target as HTMLElement).style.display = 'none';
                                       }}
                                     />
@@ -1194,7 +1332,7 @@ const KostManagerLanding: React.FC<KostManagerLandingProps> = ({ user, onBack, i
                     <div className="flex items-center gap-2 border-b border-slate-100 pb-2">
                       <span className="text-[11px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-1.5">
                         <FileText size={13} className="text-orange-500" />
-                        Detail Formulir Properti
+                        {!isManualInput ? 'Konfirmasi Data Properti' : 'Formulir Properti Kost Baru'}
                       </span>
                     </div>
 
@@ -1358,15 +1496,16 @@ const KostManagerLanding: React.FC<KostManagerLandingProps> = ({ user, onBack, i
                     </div>
                   </div>
 
-                  {/* Sticky Footer */}
+                  {/* Sticky Footer Tahap 2 */}
                   <div className="pt-4 border-t border-slate-100 flex items-center justify-between gap-3 bg-white sticky bottom-0">
                     <button
                       type="button"
                       disabled={isSubmitting}
-                      onClick={() => setIsModalOpen(false)}
-                      className="px-5 py-2.5 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 text-xs sm:text-sm font-bold transition-all disabled:opacity-50 cursor-pointer"
+                      onClick={() => setModalStep('method')}
+                      className="px-5 py-2.5 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 text-xs sm:text-sm font-bold transition-all disabled:opacity-50 cursor-pointer flex items-center gap-1.5"
                     >
-                      Batal
+                      <ArrowLeft size={14} />
+                      <span>Kembali ke Pilihan Metode</span>
                     </button>
                     <button
                       type="submit"
@@ -1378,8 +1517,12 @@ const KostManagerLanding: React.FC<KostManagerLandingProps> = ({ user, onBack, i
                     </button>
                   </div>
                 </form>
-              ) : (
-                /* Langkah 2: Syarat & Ketentuan KostManager (MoU di Akhir) */
+              )}
+
+              {/* ========================================================================= */}
+              {/* TAHAP 3: SYARAT & KETENTUAN (MoU) & PEMBAYARAN                            */}
+              {/* ========================================================================= */}
+              {modalStep === 'mou' && (
                 <div className="space-y-6 animate-in fade-in duration-300">
                   
                   {/* Order & Property Summary Card */}
@@ -1490,7 +1633,7 @@ const KostManagerLanding: React.FC<KostManagerLandingProps> = ({ user, onBack, i
                     </label>
                   </div>
 
-                  {/* Sticky Footer */}
+                  {/* Sticky Footer Tahap 3 */}
                   <div className="flex items-center justify-between gap-3 pt-3 border-t border-slate-100 bg-white sticky bottom-0">
                     <button
                       type="button"

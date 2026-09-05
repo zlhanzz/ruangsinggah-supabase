@@ -1,36 +1,39 @@
-# Walkthrough: Modernisasi & Responsivitas Form Pendaftaran KostManager (Standar Industri & Preview Foto Properti)
+# Walkthrough: Pemisahan Tahap Awal Pemilihan Metode Pendaftaran KostManager (Dedicated Step)
 
 ## Ringkasan Perubahan
-Pembaruan komprehensif pada antarmuka formulir pendaftaran KostManager (`functions/public/pages/KostManagerLanding.tsx`) untuk menciptakan pengalaman onboarding calon mitra yang modern, elegan, berstandar industri, dan 100% responsif pada perangkat mobile maupun desktop.
+Memisahkan alur pendaftaran KostManager (`functions/public/pages/KostManagerLanding.tsx`) menjadi **3 Tahapan Multi-Step Mandiri**, di mana calon mitra disajikan layar khusus untuk memilih metode pendaftaran terlebih dahulu di awal sebelum masuk ke tahapan pengisian / pemilihan data properti.
 
 ---
 
 ## Daftar Perubahan Spesifik
 
-### 1. Visual Property Selector & Showcase Preview Properti Eksisting
-- **Penarikan Data Lengkap**: Memperluas query database Supabase `properties` untuk mengambil kolom foto (`images`, `image_urls`, `image_url`) dan detail tambahan (`price`, `status`).
-- **Fungsi Pembantu Resolusi Foto**: Menambahkan `getKostCoverImage` untuk mengekstrak URL foto utama secara handal dengan fallback placeholder yang elegan.
-- **Selectable Property Cards**: Mengganti `<select>` dropdown teks polos dengan kartu pemilih kost visual interaktif yang menampilkan:
-  - Foto thumbnail properti.
-  - Judul kost, badge tipe (*Putra / Putri / Campur*), badge lokasi (*Kota/Area*).
-  - Jumlah kamar dan badge status KostManager.
-  - Checkmark indicator aktif dan styling *active ring* oranye.
-- **Selected Property Showcase Banner**: Menampilkan preview banner beresolusi tinggi ketika properti dipilih, lengkap dengan badge sinkronisasi otomatis dan mini-map lokasi interaktif.
+### 1. Layar Khusus Pemilihan Metode Pendaftaran (Dedicated Step 1: `modalStep = 'method'`)
+- Menampilkan antarmuka awal yang fokus dan eksklusif dengan 2 kartu pilihan besar:
+  - **Opsi A: Pilih dari Listing Kost Saya (Listing Terdaftar)**
+    - Ikon besar `<Building2 />`, badge ketersediaan `{userKosts.length} Properti Tersedia`.
+    - Deskripsi kemudahan sinkronisasi foto, spesifikasi kamar, dan lokasi GPS tanpa input ulang.
+  - **Opsi B: Daftar Kost Baru Eksklusif (Input Manual)**
+    - Ikon besar `<PlusCircle />`, badge `Kost Baru`.
+    - Deskripsi panduan pengisian formulir data properti baru, GPS, dan pinpoint peta Google Maps dari awal.
+- Tombol aksi *"Lanjut ke Data Properti →"* yang mengarahkan mitra ke Tahap 2 sesuai opsi yang dipilih.
 
-### 2. Arsitektur Modal Responsif & Progress Bar Multi-Step
-- **Adaptive Modal Shell**: Menggunakan layout `max-h-[92vh] sm:max-h-[88vh]` dengan rounded corners modern, shadow halus, dan backdrop blur.
-- **Sticky Header & Footer**: Memastikan judul, step indicator, dan tombol navigasi (*Batal*, *Lanjut: Syarat & Ketentuan*, *Setuju & Lanjut Pembayaran*) selalu terlihat dan tidak pernah terpotong pada layar smartphone sempit.
-- **Multi-Step Indicator Bar**: Menampilkan pill progress visual antara Langkah 1 (*Data Properti*) dan Langkah 2 (*Syarat & Ketentuan / Pembayaran*).
+### 2. Penyelarasan Tahap 2 Data Properti (`modalStep = 'form'`)
+- **Navigasi Kembali Fleksibel**: Menyediakan tombol *"← Ganti Pilihan Metode"* dan *"Kembali ke Pilihan Metode"* agar mitra dapat kembali ke layar pemilihan metode dengan mudah.
+- **Sub-flow Opsi A (Pilih dari Kost Saya)**:
+  - Menampilkan grid kartu pemilih properti visual dengan foto thumbnail, tipe, kota, kamar, dan status KostManager.
+  - Menampilkan banner preview foto cover resolusi tinggi dan mini-map lokasi koordinat.
+  - Menampilkan konfirmasi data formulir yang tersinkronisasi otomatis.
+- **Sub-flow Opsi B (Daftar Kost Baru Manual)**:
+  - Menampilkan formulir input data kost baru lengkap (Nama Kost, Jenis Kost, Jumlah Kamar, Kamar Kosong, Link Maps, Ambil GPS, Pilih di Peta, dan Alamat).
 
-### 3. Segmented Control & Polishing Form Input
-- **Segmented Radio Cards**: Pilihan metode (*Pilih dari Kost Saya* vs *Daftar Kost Baru*) dengan ikon `<Building2 />` dan `<PlusCircle />` serta indikator active pulse.
-- **Modern Input Fields**: Input Nama Kost, Jenis Kost, Jumlah Kamar, Kamar Kosong, Link Google Maps, dan Alamat didesain dengan visual border focus ring yang bersih dan ikon pendukung.
-- **GPS & Google Maps Integration**: Tombol deteksi lokasi GPS dan pinpoint Google Maps Location Picker yang responsif dan rapi.
+### 3. Multi-Step Indicator Bar 3 Tahap
+- Header modal diperbarui dengan indikator progres 3 langkah:
+  1. `1. Pilih Metode`
+  2. `2. Data Properti`
+  3. `3. Syarat & MoU`
 
-### 4. Step 2 (Syarat & Ketentuan / MoU) Berstandar Industri
-- **Order & Property Summary Card**: Ringkasan properti kost yang dipilih, durasi paket langganan, dan nominal biaya langganan yang transparan sebelum checkout.
-- **Structured Terms Box**: Menata klausul Syarat & Ketentuan ke dalam 4 poin terstruktur dengan icon badge.
-- **Interactive Consent Card**: Checkbox persetujuan interaktif dengan highlight border aktif saat dicentang.
+### 4. Tahap 3: Syarat & Ketentuan (MoU) & Pembayaran (`modalStep = 'mou'`)
+- Menampilkan ringkasan data properti & paket langganan yang dipilih, Syarat & Ketentuan berformat dokumen resmi, checkbox persetujuan interaktif, dan tombol checkout pembayaran.
 
 ---
 
@@ -40,7 +43,7 @@ Pembaruan komprehensif pada antarmuka formulir pendaftaran KostManager (`functio
   vite v6.4.1 building for production...
   transforming...
   ✓ 2511 modules transformed.
-  ✓ built in 41.80s
+  ✓ built in 42.01s
   ```
   **Hasil**: 0 Error, 100% Lulus.
 
@@ -48,7 +51,8 @@ Pembaruan komprehensif pada antarmuka formulir pendaftaran KostManager (`functio
 
 ## Panduan Pengujian User
 1. Buka halaman **KostManager** (atau klik tombol **"Langganan KostManager Sekarang"**).
-2. Perhatikan modal pendaftaran yang kini tampil elegan dengan Multi-Step Indicator.
-3. Pada opsi *"Pilih dari Kost Saya"*, perhatikan kartu-kartu properti kost Anda yang kini menampilkan **foto thumbnail**, tipe kost, dan kota.
-4. Klik salah satu kartu properti dan perhatikan **Showcase Preview Properti Terpilih** dengan cover foto besar dan data tersinkronisasi otomatis.
-5. Tekan tombol **"Lanjut: Syarat & Ketentuan"** untuk melihat ringkasan pesanan dan persetujuan MoU yang elegan sebelum melanjutkan ke pembayaran.
+2. Perhatikan bahwa modal kini **langsung menampilkan layar pemilihan metode yang bersih** dengan 2 kartu pilihan (*Pilih dari Listing Kost Saya* vs *Daftar Kost Baru Eksklusif*).
+3. Klik salah satu kartu pilihan metode, lalu tekan tombol **"Lanjut ke Data Properti"**.
+4. Jika memilih *Pilih dari Listing Kost Saya*, pilih properti dari kartu visual untuk melihat preview foto dan sinkronisasi datanya.
+5. Anda dapat menekan tombol **"← Ganti Pilihan Metode"** kapan saja untuk kembali ke layar pemilihan awal.
+6. Tekan **"Lanjut: Syarat & Ketentuan"** untuk menyetujui MoU dan melanjutkan ke pembayaran.

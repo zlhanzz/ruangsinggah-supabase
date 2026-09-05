@@ -2,6 +2,31 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 370. Pemisahan Tahap Awal Pemilihan Metode Pendaftaran KostManager (Dedicated Step) & Penyelarasan Alur Multi-Step (`KostManagerLanding.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna meminta agar sebelum seluruh kolom input data properti muncul, dibuat alur terpisah di awal untuk memilih metode pendaftaran (*"sebelum semua input data ini muncul, buat agar alurnya memilih dulu apakah memilih listing kost yang sudah ada untuk didaftarkan atau mendaftarkan kost baru secara exclusif, supaya mitra sadar bahwa dia punya dua pilihan. setelah pilihan itu baru deh lanjut untuk ke setiap tahan lanjutan inputan data sesuai dengan pilihannya"*).
+  2. Penggabungan pilihan metode dan form input dalam satu layar panjang sebelumnya membuat mitra kurang menyadari adanya 2 opsi jalur registrasi yang berbeda.
+- **Implementasi Solusi**:
+  1. **Layar Khusus Pemilihan Metode di Awal (Dedicated Step 1: `modalStep = 'method'`)**:
+     - Menampilkan layar awal eksklusif yang memuat 2 kartu pilihan besar:
+       - **Opsi A: Pilih dari Listing Kost Saya (Listing Terdaftar)** $\rightarrow$ Memanfaatkan listing yang sudah aktif di akun mitra; foto, data kamar, dan koordinat GPS disinkronkan otomatis.
+       - **Opsi B: Daftar Kost Baru Eksklusif (Input Manual)** $\rightarrow$ Mendaftarkan unit kost baru yang belum pernah diunggah dengan panduan formulir lengkap dari awal.
+     - Setiap kartu dilengkapi icon besar (`<Building2 />` & `<PlusCircle />`), badge ketersediaan properti, deskripsi manfaat, pill keunggulan, serta selection radio checkmark.
+  2. **Penyelarasan Tahap 2 (Data Properti Sesuai Pilihan: `modalStep = 'form'`)**:
+     - Jika Opsi A dipilih: Menampilkan pemilih visual properti kost eksisting, showcase preview cover foto beresolusi tinggi, mini-map, dan tinjauan formulir yang tersinkronisasi.
+     - Jika Opsi B dipilih: Menampilkan formulir input data kost baru (Nama, Jenis Kost, Jumlah Kamar, Link Maps, GPS Geolocation, Pinpoint Peta Google Maps, dan Alamat).
+     - Menambahkan tombol *"← Ganti Pilihan Metode"* dan *"Kembali ke Pilihan Metode"* agar mitra dapat beralih opsi kapan saja.
+  3. **Multi-Step Indicator Bar 3 Tahap**:
+     - Menyelaraskan indikator progres header menjadi 3 langkah visual: `1. Pilih Metode` $\rightarrow$ `2. Data Properti` $\rightarrow$ `3. Syarat & MoU`.
+  4. **Tahap 3 (MoU & Pembayaran: `modalStep = 'mou'`)**:
+     - Ringkasan pesanan, 4 poin Syarat & Ketentuan, checkbox persetujuan, dan tombol checkout pembayaran.
+- **File Tersentuh**:
+  - `functions/public/pages/KostManagerLanding.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi build frontend Vite (`cmd /c npm run build` di `functions/public`) lulus 100% (`✓ 2511 modules transformed, built in 42.01s`, 0 error).
+
 ### 369. Modernisasi UI/UX Formulir Pendaftaran KostManager, Responsivitas Mobile, Visual Property Selector, dan Preview Foto Cover Properti (`KostManagerLanding.tsx`) (September 2026)
 - **Permintaan & Masalah**:
   1. Pengguna menilai tampilan form pendaftaran KostManager sebelumnya kurang responsif pada perangkat mobile (tombol aksi berisiko terpotong pada layar kecil), tampilan visual kurang modern dan belum berstandar industri.
