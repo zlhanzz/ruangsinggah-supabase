@@ -2,6 +2,27 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 350. Penyesuaian Responsivitas Header Navbar: Fit Presisi Tombol Masuk & Daftar pada Tampilan Mobile (`Navbar.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  1. Tombol "Masuk" dan tombol oranye "Daftar" di header navbar tampak terlalu mepet ke batas tepi kanan layar dan sebagian terpotong (*overflow / edge clipping*) pada layar smartphone (resolusi < 400px).
+  2. Penyebabnya adalah ukuran teks nama brand yang memakan ruang terlalu lebar (`text-2xl`), logo image `h-10`, serta gap dan padding tombol auth mobile yang terlalu besar (`gap-3`, `px-5 py-2`).
+- **Implementasi Solusi**:
+  1. **Optimasi Ukuran Logo & Brand Text Responsif (`Navbar.tsx`)**:
+     - Menyesuaikan gambar icon logo menjadi `h-8 sm:h-10 md:h-12 w-auto mr-1 sm:mr-1.5`.
+     - Menyesuaikan ukuran teks brand menjadi `text-xl sm:text-2xl font-extrabold tracking-tight` ("RuangSinggah") dan `text-xl sm:text-2xl font-bold` (".id") agar lebih hemat ruang horizontal pada layar mobile tanpa mengurangi keterbacaan (*readability*).
+  2. **Optimasi Container Header & Padding (`Navbar.tsx`)**:
+     - Mengubah tinggi container navbar utama menjadi `h-16 sm:h-20` dengan padding samping `px-3 sm:px-6 lg:px-8`.
+  3. **Penyelarasan Presisi Tombol Masuk & Daftar (`Navbar.tsx`)**:
+     - Mengubah jarak antar-tombol auth mobile menjadi `gap-1.5 sm:gap-3`.
+     - Mengoptimalkan tombol **Masuk**: `text-xs sm:text-sm font-bold text-gray-800 hover:text-orange-500 px-2 sm:px-3 py-1.5 sm:py-2 transition-colors cursor-pointer`.
+     - Mengoptimalkan tombol oranye **Daftar**: `text-xs sm:text-sm font-bold bg-[#ff7a00] hover:bg-orange-600 text-white px-3.5 sm:px-5 py-1.5 sm:py-2 rounded-full shadow-xs hover:shadow active:scale-95 transition-all cursor-pointer whitespace-nowrap`.
+- **File Tersentuh**:
+  - `functions/public/components/Navbar.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi build frontend Vite (`functions/public`) lulus 100% (`✓ built in 56.08s`, 0 error).
+
 ### 349. Penyaringan Murni Riwayat Kost Selesai & Penghapusan Filter Tabs (`userService.ts`, `Profile.tsx`) (September 2026)
 - **Permintaan & Masalah**:
   1. Pengguna meminta agar sub-view **"Riwayat Sewa Kost"** hanya menampilkan riwayat hunian/kost yang **sudah pernah disewa sebelumnya (selesai/masa lalu)** dan tidak menampilkan unit yang masih aktif (karena unit aktif dikelola terpisah di modul *Kost Saya / Orders*).

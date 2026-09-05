@@ -96,15 +96,15 @@ const Navbar: React.FC<NavbarProps> = ({ activePage, onPageChange, user, onLogou
       {/* Top Navbar: Sembunyikan saat di halaman login agar layout bersih dan terpusat presisi */}
       {!activePage.startsWith('/login') && activePage !== Page.LOGIN && (
         <nav className="sticky top-0 z-50 bg-white/90 backdrop-blur-md border-b border-gray-100">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between h-20 items-center">
+          <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
+          <div className="flex justify-between h-16 sm:h-20 items-center">
             <div 
-              className="flex-shrink-0 flex items-center cursor-pointer" 
+              className="flex-shrink-0 flex items-center cursor-pointer select-none" 
               onClick={() => onPageChange(isOwner ? Page.DASHBOARD_MITRA : Page.HOME)}
             >
-              <img src="/logo.png" alt="RuangSinggah.id" className="h-10 sm:h-12 w-auto mr-1.5" width="48" height="48" fetchPriority="high" />
-              <span className="text-[#ff7a00] font-extrabold text-2xl tracking-tight">RuangSinggah</span>
-              <span className="text-[#0b1c30] font-bold text-2xl">.id</span>
+              <img src="/logo.png" alt="RuangSinggah.id" className="h-8 sm:h-10 md:h-12 w-auto mr-1 sm:mr-1.5" width="48" height="48" fetchPriority="high" />
+              <span className="text-[#ff7a00] font-extrabold text-xl sm:text-2xl tracking-tight">RuangSinggah</span>
+              <span className="text-[#0b1c30] font-bold text-xl sm:text-2xl">.id</span>
             </div>
 
             <div className="hidden md:flex items-center space-x-6">
@@ -439,16 +439,16 @@ const Navbar: React.FC<NavbarProps> = ({ activePage, onPageChange, user, onLogou
                   )}
                 </div>
               ) : (
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-1.5 sm:gap-3">
                   <button
                     onClick={() => onPageChange(Page.LOGIN)}
-                    className="text-gray-800 font-bold text-sm hover:text-orange-500 transition-colors px-3 py-2 cursor-pointer"
+                    className="text-gray-800 font-bold text-xs sm:text-sm hover:text-orange-500 transition-colors px-2 sm:px-3 py-1.5 sm:py-2 cursor-pointer"
                   >
                     Masuk
                   </button>
                   <button
                     onClick={() => onPageChange(Page.LOGIN)}
-                    className="bg-[#ff7a00] hover:bg-orange-600 text-white font-bold text-sm px-5 py-2 rounded-full shadow-sm hover:shadow transition-all cursor-pointer"
+                    className="bg-[#ff7a00] hover:bg-orange-600 text-white font-bold text-xs sm:text-sm px-3.5 sm:px-5 py-1.5 sm:py-2 rounded-full shadow-xs hover:shadow transition-all cursor-pointer whitespace-nowrap active:scale-95"
                   >
                     Daftar
                   </button>

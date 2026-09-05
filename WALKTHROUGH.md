@@ -1,70 +1,34 @@
-# WALKTHROUGH - Integrasi Riwayat Transaksi & Tagihan (5 Kategori) pada Profile Hub Dashboard
+# Walkthrough: Penyesuaian Responsivitas Header Navbar (Tombol Masuk & Daftar Fit di Layar Mobile)
 
-Dokumen ini menjelaskan implementasi dan hasil verifikasi fitur **"Riwayat Transaksi & Tagihan"** yang kini aktif dan lengkap pada Profile Hub Dashboard (`/profile`), merangkum seluruh transaksi yang telah dilakukan pengguna dari 5 kategori produk dan layanan di database Supabase `public.transactions`.
-
----
-
-## 📋 Ringkasan Perubahan
-
-### 1. Fungsi Penarikan & Normalisasi Transaksi (`functions/public/userService.ts`)
-- Menambahkan interface `NormalizedTransaction` dan helper `getUserAllTransactionsHistory(userId: string)`.
-- Mengambil seluruh transaksi dari tabel `public.transactions` untuk user yang aktif.
-- Menormalisasi data ke dalam **5 Kategori Baku**:
-  1. 🗄️ **Database Kontak Kost** (`database`, `database_access`, `product`)
-  2. 📍 **Jasa Survey Lokasi** (`survey`, `survey_order`, `survey_booking`)
-  3. 🏠 **Sewa Kost Baru / DP** (`kost_booking`, `rent`, `kost`, `sewa`)
-  4. 🔄 **Perpanjangan Sewa** (`perpanjangan_sewa`, `extension`, `rent_extension`)
-  5. ⚡ **Tagihan Fasilitas Khusus** (`tagihan_ekstra`, `facility_bill`, `extra_occupant`, `billPayment`)
-- Menghubungkan metadata properti terkait (foto listing, nama kost, nomor kamar, periode sewa, durasi, dan biaya ekstra).
-
-### 2. Sub-View Riwayat Transaksi & Tagihan di Profile Hub (`functions/public/pages/Profile.tsx`)
-- **Live Counter Badge**: Menampilkan jumlah transaksi (misal: `4 Transaksi`) langsung pada baris menu *"Riwayat Transaksi & Tagihan"* di Profile Hub.
-- **Sub-View Terpadu**:
-  - Tombol navigasi responsif `← Kembali ke Menu Profil` dan tombol `Muat Ulang Data`.
-  - **Banner Statistik Dark Theme**: Menampilkan total transaksi berstatus lunas dan total akumulasi rupiah yang telah dibayarkan.
-  - **Filter Tabs Horisontal**:
-    - *Semua Transaksi*
-    - *Sewa Kost Baru*
-    - *Perpanjangan Sewa*
-    - *Tagihan Fasilitas*
-    - *Jasa Survey*
-    - *Database Kost*
-  - **Daftar Kartu Transaksi**:
-    - Kode Invoice resmi (misal: `INV-A1B2C3D4`)
-    - Lencana kategori dengan ikon pure bundled vector SVG `lucide-react`
-    - Lencana status pembayaran (`Lunas / Selesai`, `Menunggu Pembayaran`, `Kedaluwarsa`, `Dibatalkan`)
-    - Judul & subjudul transaksi yang deskriptif
-    - Tanggal & waktu transaksi lengkap dengan metode pembayaran
-    - Total nominal harga berformat rupiah tegas
-    - **Aksi Cepat**:
-      - Tombol **"Kwitansi"** untuk mencetak/melihat kwitansi resmi (`DigitalReceiptModal`).
-      - Tombol **"Bayar Sekarang"** jika pesanan masih pending.
-      - Tombol cepat **"Akses Kontak"** atau **"Lacak Survey"**.
-  - **Skeleton Loading & Empty State**: Tampilan loading pulse yang halus dan empty state informatif dengan tombol CTA sesuai kategori yang dipilih.
+## 1. Ringkasan Pekerjaan
+Telah berhasil dilakukan penyesuaian tata letak responsif pada komponen header navigasi atas ([`functions/public/components/Navbar.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/components/Navbar.tsx)) agar logo brand `RuangSinggah.id` serta tombol autentikasi **"Masuk"** dan tombol oranye **"Daftar"** tampil pas (*fit*), proporsional, rapi, dan tidak mepet ataupun terpotong pada semua ukuran layar smartphone.
 
 ---
 
-## 🧪 Hasil Pengujian & Kompilasi
-
-```bash
-✓ built in 33.55s
-Kompilasi Frontend Vite: 0 Error / 0 Warning Fatal
-Transformasi: 2511 modul sukses dibundle ke /dist
-```
+## 2. Rincian Perubahan Kode
+- **File**: [`functions/public/components/Navbar.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/components/Navbar.tsx)
+  1. **Logo Brand Responsif**:
+     - Mengubah ukuran gambar logo menjadi `h-8 sm:h-10 md:h-12 w-auto mr-1 sm:mr-1.5`.
+     - Mengubah ukuran teks "RuangSinggah" dan ".id" menjadi `text-xl sm:text-2xl font-extrabold tracking-tight` sehingga menghemat ruang horizontal pada mobile (~30px lebih hemat).
+  2. **Tinggi & Padding Navbar**:
+     - Mengubah tinggi container navbar utama menjadi `h-16 sm:h-20` dengan padding `px-3 sm:px-6 lg:px-8` yang lebih fleksibel.
+  3. **Tombol Autentikasi Mobile (Masuk & Daftar)**:
+     - Mengubah jarak antar-tombol menjadi `gap-1.5 sm:gap-3`.
+     - Mengoptimalkan tombol **"Masuk"**: `text-xs sm:text-sm font-bold text-gray-800 hover:text-orange-500 px-2 sm:px-3 py-1.5 sm:py-2 transition-colors cursor-pointer`.
+     - Mengoptimalkan tombol **"Daftar"**: `text-xs sm:text-sm font-bold bg-[#ff7a00] hover:bg-orange-600 text-white px-3.5 sm:px-5 py-1.5 sm:py-2 rounded-full shadow-xs hover:shadow active:scale-95 transition-all cursor-pointer whitespace-nowrap`.
 
 ---
 
-## 📱 Panduan Pengujian untuk Pengguna (User Testing Guide)
+## 3. Hasil Pengujian & Verifikasi
+1. **Uji Kompilasi Vite (`npm run build`)**:
+   - Berhasil lulus kompilasi 100% tanpa error (`✓ built in 56.08s`, exit code 0).
+2. **Verifikasi Tampilan UI**:
+   - Pada layar mobile 320px, 360px, 375px, 390px, dan 414px, logo dan kedua tombol auth muat dengan sempurna dengan margin samping yang bersih tanpa menyebabkan *horizontal overflow* ataupun terpotong di tepi kanan.
 
-1. **Melihat Riwayat Transaksi dari Menu Profil**:
-   - Buka menu **Profil** (`/profile`).
-   - Perhatikan lencana badge jumlah transaksi (misal: `4 Transaksi`) pada baris menu **"Riwayat Transaksi & Tagihan"**.
-   - Klik baris **"Riwayat Transaksi & Tagihan"**.
-2. **Menggunakan Filter Kategori**:
-   - Klik salah satu tab filter (misal: *Sewa Kost Baru*, *Perpanjangan Sewa*, *Tagihan Fasilitas*, *Jasa Survey*, atau *Database Kost*).
-   - Daftar transaksi akan langsung disaring sesuai kategori dengan counter yang akurat.
-3. **Melihat & Mencetak Kwitansi Digital**:
-   - Klik tombol hitam **"Kwitansi"** pada transaksi yang berstatus lunas.
-   - Popup **Kwitansi Digital Resmi RuangSinggah** akan muncul dengan rincian lengkap pembayaran, periode tinggal, dan tombol cetak/bagikan.
-4. **Navigasi Kembali**:
-   - Klik tombol **`← Kembali ke Menu Profil`** untuk kembali ke halaman Profile Hub utama.
+---
+
+## 4. Panduan Pengujian oleh Pengguna
+1. Buka halaman utama web (`/`) pada browser HP atau gunakan Device Toolbar di Inspect Element browser (ukuran resolusi layar HP 360px - 390px).
+2. Amati header bar di bagian atas:
+   - Logo `RuangSinggah.id` berada di sisi kiri.
+   - Tombol teks **"Masuk"** dan tombol oranye **"Daftar"** berada di sisi kanan dengan jarak dan batas samping yang pas, rapi, dan simetris (*fit*).

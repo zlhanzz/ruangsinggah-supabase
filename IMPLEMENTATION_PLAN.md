@@ -1,81 +1,39 @@
-# IMPLEMENTATION PLAN: Integrasi Lengkap Riwayat Transaksi & Tagihan (5 Kategori) pada Profile Hub & MyKost
-
-Dokumen ini adalah rencana implementasi komprehensif untuk menampilkan seluruh riwayat transaksi dan tagihan yang telah dilakukan pengguna pada sistem **RuangSinggah**.
-
----
+# Rencana Implementasi: Penyesuaian Responsivitas Header Navbar (Tombol Masuk & Daftar Fit di Layar Mobile)
 
 ## 1. Analisis Masalah & Kebutuhan
-
-### A. Masalah Saat Ini
-1. Pada menu Profile Hub Dashboard (`/profile`), opsi **"Riwayat Transaksi & Tagihan"** sebelumnya diarahkan ke `${Page.MY_BOOKINGS}/riwayat`, di mana tab tersebut hanya memfilter beberapa data sewa berstatus kedaluwarsa/selesai dan tidak merangkum seluruh transaksi multi-produk secara lengkap.
-2. Pengguna yang telah melakukan berbagai jenis transaksi (membeli database kontak kost, memesan jasa survey lapangan, membayar DP sewa kamar baru, melakukan perpanjangan sewa bulanan, atau membayar tagihan fasilitas khusus/ekstra penghuni) belum dapat melihat rekapitulasi seluruh transaksi tersebut secara terstruktur dalam satu tempat dengan rincian invoice dan kwitansi digital.
-
-### B. Ruang Lingkup 5 Kategori Transaksi yang Wajib Ditampilkan
-1. 🗄️ **Beli Database Kost** (`database`, `database_access`, `product`): Pembelian paket kontak pemilik kost / database hunian.
-2. 📍 **Jasa Survey Lokasi** (`survey`, `survey_order`, `survey_requests`): Pemesanan jasa survey fisik kamar & lingkungan kost oleh surveyor resmi.
-3. 🏠 **Penyewaan Kost / DP Sewa** (`kost_booking`, `rent`, `kost`, `sewa`): Pembayaran booking kamar baru / DP sewa pertama.
-4. 🔄 **Perpanjangan Sewa Kost** (`perpanjangan_sewa`, `extension`, `rent_extension`): Pembayaran perpanjangan masa sewa kamar kost aktif (bulanan/tahunan).
-5. ⚡ **Tagihan Fasilitas Khusus & Ekstra** (`tagihan_ekstra`, `facility_bill`, `extra_occupant`, `billPayment`): Pembayaran tagihan listrik, AC, iuran kebersihan, ekstra penghuni, atau fasilitas tambahan kamar.
+- **Masalah**:
+  - Pada tampilan perangkat mobile (khususnya lebar layar < 400px seperti iPhone, Samsung Galaxy, dll.), tombol **"Masuk"** dan tombol oranye **"Daftar"** di bagian header navigasi atas tampak terlalu mepet ke tepi kanan layar dan sebagian terpotong / *overflow*.
+- **Penyebab Utama**:
+  1. Ukuran teks logo `RuangSinggah.id` pada mobile berukuran tetap `text-2xl` (24px) dan tinggi gambar `h-10` sehingga memakan porsi lebar horizontal yang terlalu besar (sekitar ~236px).
+  2. Jarak (*gap*) dan *padding* tombol autentikasi mobile berukuran lebar (`gap-3`, tombol "Masuk" `px-3 py-2`, tombol "Daftar" `px-5 py-2` font `text-sm`), memakan ruang horizontal ~166px.
+  3. Total lebar yang dibutuhkan mencapai > 430px, melebihi lebar layar mobile rata-rata (360px - 390px), sehingga tombol "Daftar" terdorong keluar batas viewport.
 
 ---
 
-## 2. Dampak Perubahan (Files to Modify)
-
-1. **`functions/public/userService.ts`**:
-   - Menambahkan helper `getUserAllTransactionsHistory(userId: string)` untuk mengambil, menggabungkan, dan menormalisasi seluruh data transaksi dari tabel Supabase `transactions`, `resident_status`, dan `survey_requests` lengkap dengan rincian metadata produk.
-2. **`functions/public/pages/Profile.tsx`**:
-   - Memperluas state `viewMode: 'hub' | 'edit_personal_data' | 'favorites' | 'transactions'`.
-   - Mengubah baris menu *"Riwayat Transaksi & Tagihan"* pada Profile Hub agar membuka Sub-view Transaksi (`viewMode === 'transactions'`).
-   - Menyusun Sub-view **"Riwayat Transaksi & Tagihan"** yang kaya fitur:
-     - Tombol navigasi `← Kembali ke Menu Profil`.
-     - Tab filter kategori: *Semua Transaksi*, *Sewa Kost*, *Perpanjangan Sewa*, *Tagihan Fasilitas*, *Jasa Survey*, *Database Kost*.
-     - Ringkasan statistik (Total Pengeluaran, Transaksi Lunas, Menunggu).
-     - Kartu transaksi informatif: Nomor Invoice, Lencana Kategori berwarna, Status Pembayaran, Rincian Unit/Layanan, Tanggal, Metode Pembayaran, dan Tombol **"Kwitansi Digital"** (`DigitalReceiptModal`).
-3. **`functions/public/pages/MyKost.tsx`**:
-   - Menyempurnakan tab `'riwayat'` agar juga mendukung penampilan seluruh 5 kategori transaksi secara konsisten.
-4. **`functions/PROGRESS.md`**:
-   - Mencatat progres fitur #345.
-5. **`WALKTHROUGH.md`**:
-   - Membuat laporan hasil pengujian dan panduan user testing.
+## 2. Dampak Perubahan
+File yang akan disentuh:
+- [`functions/public/components/Navbar.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/components/Navbar.tsx): Penyesuaian tata letak responsif pada header navbar, logo brand, dan tombol autentikasi (Masuk & Daftar).
 
 ---
 
-## 3. Langkah-Langkah Eksekusi Bertahap (Setelah Persetujuan User)
-
-```mermaid
-graph TD
-    A[FASE 1: Approval User pada IMPLEMENTATION_PLAN.md] --> B[FASE 2: Pembuatan Helper getUserAllTransactionsHistory di userService.ts]
-    B --> C[Implementasi Sub-View Riwayat Transaksi & Filter Kategori di Profile.tsx]
-    C --> D[Penyelarasan Tab Riwayat Transaksi di MyKost.tsx]
-    D --> E[Integrasi Kwitansi Digital Modal & Aksi Bayar Ulang]
-    E --> F[Kompilasi & Pengujian Build npm run build]
-    F --> G[Pencatatan PROGRESS.md & Penerbitan WALKTHROUGH.md]
-    G --> H[Git Commit & Push ke branch bukan-productions]
-```
-
-### Langkah Rinci:
-1. **Langkah 1**: Buat fungsi `getUserAllTransactionsHistory(userId)` di `userService.ts` yang mengambil seluruh baris dari `transactions` (`user_id = userId`), memetakan `product_type` ke dalam 5 kategori standar, mengurai JSON `metadata`, dan melengkapinya dengan nama properti / nomor kamar.
-2. **Langkah 2**: Modifikasi `Profile.tsx`:
-   - Tambahkan state `userTransactions`, `loadingTransactions`, `selectedCategoryFilter`, dan `selectedReceipt`.
-   - Tampilkan kartu ringkasan transaksi dan filter pill tabs 5 kategori.
-   - Sediakan empty state yang ramah jika belum ada transaksi di kategori yang dipilih.
-   - Integrasikan `DigitalReceiptModal` untuk mencetak / melihat kwitansi resmi.
-3. **Langkah 3**: Sinkronisasi tab `'riwayat'` di `MyKost.tsx` untuk memastikan konsistensi data.
-4. **Langkah 4**: Jalankan `npm.cmd run build` di `functions/public` untuk memastikan kompilasi 0 error.
-5. **Langkah 5**: Perbarui `functions/PROGRESS.md` (#345), buat `WALKTHROUGH.md`, serta lakukan commit & push ke branch `bukan-productions`.
+## 3. Rencana Langkah-Langkah Eksekusi
+1. **Optimasi Logo Responsif**:
+   - Skala gambar logo: `h-8 sm:h-10 md:h-12 w-auto mr-1 sm:mr-1.5`.
+   - Ukuran teks nama brand: `text-xl sm:text-2xl font-extrabold` untuk "RuangSinggah" dan `text-xl sm:text-2xl font-bold` untuk ".id" dengan properti `tracking-tight shrink-0`.
+2. **Optimasi Tinggi & Padding Navbar**:
+   - Container navbar utama: `h-16 sm:h-20` dengan padding `px-3 sm:px-6 lg:px-8` agar pas dan tidak terbuang sia-sia di layar sempit.
+3. **Penyelarasan Tombol Masuk & Daftar**:
+   - Container tombol auth: `gap-1.5 sm:gap-3`.
+   - Tombol **Masuk**: `text-xs sm:text-sm font-bold text-gray-800 hover:text-orange-500 px-2 sm:px-3 py-1.5 sm:py-2 transition-colors cursor-pointer`.
+   - Tombol **Daftar**: `text-xs sm:text-sm font-bold bg-[#ff7a00] hover:bg-orange-600 text-white px-3.5 sm:px-5 py-1.5 sm:py-2 rounded-full shadow-sm hover:shadow active:scale-95 transition-all cursor-pointer whitespace-nowrap`.
+4. **Pemeriksaan Status Login / Mobile Avatar**:
+   - Pastikan avatar dan bell notifikasi mobile tetap rapi dan proporsional.
 
 ---
 
 ## 4. Rencana Verifikasi
-
-1. **Uji Kompilasi**: Menjalankan `npm.cmd run build` di `functions/public` untuk memastikan tidak ada error TypeScript maupun bundling.
-2. **Uji Fungsionalitas UI**:
-   - Klik menu *"Riwayat Transaksi & Tagihan"* pada Profile Hub ➔ Tampilan langsung membuka Sub-view riwayat transaksi.
-   - Filter tab kategori (Semua, Sewa Kost, Perpanjangan, Tagihan Fasilitas, Survey, Database) ➔ Menyaring transaksi secara akurat.
-   - Klik *"Kwitansi Digital"* pada salah satu transaksi lunas ➔ Membuka modal kwitansi resmi RuangSinggah dengan rincian harga, tanggal, dan metode bayar.
-   - Klik *"← Kembali ke Menu Profil"* ➔ Mengembalikan tampilan ke Profile Hub Dashboard.
-
----
-
-> [!IMPORTANT]
-> Sesuai protokol baku workspace, implementasi kode pada Fase 2 baru akan dieksekusi setelah Anda meninjau dan menyetujui (*Proceed / ACC*) rencana di atas.
+1. **Verifikasi Kompilasi**:
+   - Menjalankan `npm run build` di direktori `functions/public` untuk memastikan 0 error TypeScript dan JSX.
+2. **Verifikasi Responsivitas Layout**:
+   - Memastikan tidak ada *horizontal overflow* pada resolusi layar mobile kecil (320px - 414px) maupun tablet dan desktop.
+   - Tombol "Masuk" dan "Daftar" tampak fit, simetris, presisi, dan nyaman disentuh (*touch-friendly*).
