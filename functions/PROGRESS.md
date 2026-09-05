@@ -2,6 +2,29 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 347. Penghapusan Title/Stats Box & Penyederhanaan Murni Riwayat Transaksi (`Profile.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna meminta agar kotak ringkasan atas (title *"Riwayat Transaksi & Tagihan"*, deskripsi, dan stat box Lunas / Total Pengeluaran) dihapus sepenuhnya.
+  2. Pengguna meminta agar kartu riwayat transaksi hanya menampilkan informasi esensial (Jenis Transaksi, Nominal Transaksi, Status Transaksi, Tanggal, Invoice) tanpa adanya tombol Kwitansi.
+- **Implementasi Solusi**:
+  1. **Penghapusan Kotak Ringkasan Atas**:
+     - Menghapus container title bar dan stat pills box di bagian atas sub-view `transactions`.
+     - Tampilan atas kini langsung menampilkan navigasi kembali yang rapi dan filter kategori horizontal.
+  2. **Penyederhanaan Murni Kartu Riwayat Transaksi**:
+     - Menghapus tombol `Kwitansi` dari kartu transaksi.
+     - Menyajikan kartu yang bersih dan proporsional dengan informasi utama:
+       - **Jenis Transaksi**: Kategori badge (Sewa Kost, Fasilitas, Survey, Database, Perpanjangan) dan judul transaksi.
+       - **Nominal Transaksi**: Nominal harga tebal yang jelas.
+       - **Status Transaksi**: Status badge (Lunas/Selesai, Menunggu Pembayaran, dsb.).
+       - Informasi pelengkap ringkas (nomor invoice mono, tanggal transaksi, metode pembayaran).
+       - Tombol bayar khusus jika transaksi berstatus `PENDING`.
+- **File Tersentuh**:
+  - `functions/public/pages/Profile.tsx`
+  - `functions/PROGRESS.md`
+  - `walkthrough.md`
+- **Verifikasi**:
+  - Kompilasi build frontend Vite (`functions/public`) lulus 100% (`✓ built in 32.70s`, 0 error).
+
 ### 346. Penyederhanaan & Redesain Minimalis UI Riwayat Transaksi & Tagihan (`Profile.tsx`) (September 2026)
 - **Permintaan & Masalah**:
   1. Pengguna meminta agar tampilan antarmuka (UI/UX) sub-view **"Riwayat Transaksi & Tagihan"** pada menu Profil (`/profile`) dibuat simpel, ringkas, dan minimalis.

@@ -952,67 +952,27 @@ const Profile: React.FC<ProfileProps> = ({ user, onLogout, onSaveSuccess, forceE
           )}
         </div>
       ) : viewMode === 'transactions' ? (
-        /* ── SUB-VIEW: RIWAYAT TRANSAKSI & TAGIHAN (5 KATEGORI - MINIMALIS) ─── */
+        /* ── SUB-VIEW: RIWAYAT TRANSAKSI & TAGIHAN (MINIMALIS MURNI) ───────── */
         <div className="max-w-4xl mx-auto px-4 sm:px-6">
-          {/* Header Navigation & Title */}
-          <div className="mb-5">
-            <div className="flex items-center justify-between gap-3 mb-3">
-              <button
-                onClick={() => setViewMode('hub')}
-                className="px-3.5 py-1.5 bg-white border border-gray-200 text-gray-700 rounded-xl text-xs font-bold hover:bg-gray-50 hover:border-gray-300 transition-all shadow-2xs active:scale-95 flex items-center gap-1.5 cursor-pointer group"
-              >
-                <ArrowLeft className="w-3.5 h-3.5 text-gray-500 group-hover:-translate-x-0.5 transition-transform" />
-                <span>Kembali ke Menu Profil</span>
-              </button>
+          {/* Header Navigation */}
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <button
+              onClick={() => setViewMode('hub')}
+              className="px-3.5 py-1.5 bg-white border border-gray-200 text-gray-700 rounded-xl text-xs font-bold hover:bg-gray-50 hover:border-gray-300 transition-all shadow-2xs active:scale-95 flex items-center gap-1.5 cursor-pointer group"
+            >
+              <ArrowLeft className="w-3.5 h-3.5 text-gray-500 group-hover:-translate-x-0.5 transition-transform" />
+              <span>Kembali ke Menu Profil</span>
+            </button>
 
-              <button
-                onClick={loadUserTransactions}
-                disabled={transactionsLoading}
-                className="p-2 sm:px-3 sm:py-1.5 bg-white border border-gray-200 text-gray-700 rounded-xl text-xs font-bold hover:bg-gray-50 hover:border-gray-300 transition-all shadow-2xs active:scale-95 flex items-center gap-1.5 cursor-pointer"
-                title="Muat Ulang Data"
-              >
-                <RefreshCw className={`w-3.5 h-3.5 text-gray-500 ${transactionsLoading ? 'animate-spin' : ''}`} />
-                <span className="hidden sm:inline">Muat Ulang</span>
-              </button>
-            </div>
-
-            {/* Clean Minimalist Title Bar */}
-            <div className="bg-white border border-gray-100 rounded-2xl p-4 sm:p-5 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-orange-50 text-[#ff7a00] border border-orange-100 flex items-center justify-center shrink-0 shadow-2xs">
-                  <Receipt className="w-5 h-5 stroke-[2]" />
-                </div>
-                <div>
-                  <div className="flex items-center gap-2">
-                    <h1 className="text-base sm:text-lg font-black text-gray-900 tracking-tight">
-                      Riwayat Transaksi & Tagihan
-                    </h1>
-                    <span className="px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 text-[11px] font-black">
-                      {userTransactions.length}
-                    </span>
-                  </div>
-                  <p className="text-xs text-gray-500 font-medium mt-0.5">
-                    Catatan pembayaran sewa, perpanjangan, fasilitas, survey, dan database.
-                  </p>
-                </div>
-              </div>
-
-              {/* Compact Stats Pill Bar */}
-              <div className="flex items-center gap-2 pt-3 sm:pt-0 border-t sm:border-t-0 border-gray-100 shrink-0">
-                <div className="px-3 py-1.5 bg-emerald-50 border border-emerald-100/80 rounded-xl text-center">
-                  <span className="text-[10px] font-bold text-emerald-700 uppercase tracking-wider block">Lunas</span>
-                  <span className="text-xs sm:text-sm font-black text-emerald-800">
-                    {userTransactions.filter(t => t.status === 'PAID').length} Trx
-                  </span>
-                </div>
-                <div className="px-3 py-1.5 bg-orange-50 border border-orange-100/80 rounded-xl text-center">
-                  <span className="text-[10px] font-bold text-orange-700 uppercase tracking-wider block">Total Pengeluaran</span>
-                  <span className="text-xs sm:text-sm font-black text-[#ff7a00]">
-                    {FORMAT_CURRENCY(userTransactions.filter(t => t.status === 'PAID').reduce((acc, t) => acc + (t.amount || 0), 0))}
-                  </span>
-                </div>
-              </div>
-            </div>
+            <button
+              onClick={loadUserTransactions}
+              disabled={transactionsLoading}
+              className="p-2 sm:px-3 sm:py-1.5 bg-white border border-gray-200 text-gray-700 rounded-xl text-xs font-bold hover:bg-gray-50 hover:border-gray-300 transition-all shadow-2xs active:scale-95 flex items-center gap-1.5 cursor-pointer"
+              title="Muat Ulang Data"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 text-gray-500 ${transactionsLoading ? 'animate-spin' : ''}`} />
+              <span className="hidden sm:inline">Muat Ulang</span>
+            </button>
           </div>
 
           {/* Category Tabs Filter */}
@@ -1062,7 +1022,7 @@ const Profile: React.FC<ProfileProps> = ({ user, onLogout, onSaveSuccess, forceE
                       <div className="h-3 bg-slate-200 rounded w-1/2"></div>
                     </div>
                   </div>
-                  <div className="h-8 bg-slate-200 rounded-xl w-24 shrink-0"></div>
+                  <div className="h-6 bg-slate-200 rounded w-20 shrink-0"></div>
                 </div>
               ))}
             </div>
@@ -1105,7 +1065,7 @@ const Profile: React.FC<ProfileProps> = ({ user, onLogout, onSaveSuccess, forceE
                     key={trx.id}
                     className="bg-white rounded-2xl p-3.5 sm:p-4 border border-gray-100 hover:border-gray-200 shadow-2xs hover:shadow-xs transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3"
                   >
-                    {/* Left: Icon & Core Details */}
+                    {/* Left: Icon & Details (Jenis Transaksi, Title, Info) */}
                     <div className="flex items-start sm:items-center gap-3 min-w-0 flex-1">
                       {/* Category Icon / Compact Thumbnail */}
                       <div className="w-10 h-10 rounded-xl bg-gray-50 border border-gray-100 flex items-center justify-center shrink-0 overflow-hidden text-gray-600">
@@ -1169,7 +1129,7 @@ const Profile: React.FC<ProfileProps> = ({ user, onLogout, onSaveSuccess, forceE
                       </div>
                     </div>
 
-                    {/* Right: Nominal & Action Button */}
+                    {/* Right: Nominal & Pending Action */}
                     <div className="flex sm:flex-col items-center sm:items-end justify-between gap-2 pt-2 sm:pt-0 border-t sm:border-t-0 border-gray-50 shrink-0">
                       <div className="text-left sm:text-right">
                         <p className="text-sm sm:text-base font-black text-gray-900">
@@ -1177,50 +1137,16 @@ const Profile: React.FC<ProfileProps> = ({ user, onLogout, onSaveSuccess, forceE
                         </p>
                       </div>
 
-                      <div className="flex items-center gap-1.5">
-                        {trx.status === 'PAID' && (
-                          <button
-                            type="button"
-                            onClick={() => handleOpenReceiptFromTransaction(trx)}
-                            className="px-2.5 py-1.5 rounded-lg bg-gray-900 hover:bg-orange-600 text-white text-[11px] font-bold transition-colors shadow-2xs active:scale-95 flex items-center gap-1 cursor-pointer"
-                            title="Buka Kwitansi Resmi"
-                          >
-                            <Receipt className="w-3 h-3" />
-                            <span>Kwitansi</span>
-                          </button>
-                        )}
-
-                        {trx.status === 'PENDING' && (
-                          <button
-                            type="button"
-                            onClick={() => navigate(`/order-status/${trx.id}`)}
-                            className="px-3 py-1.5 rounded-lg bg-orange-500 hover:bg-orange-600 text-white text-[11px] font-bold transition-all shadow-2xs active:scale-95 flex items-center gap-1 cursor-pointer"
-                          >
-                            <CreditCard className="w-3 h-3" />
-                            <span>Bayar</span>
-                          </button>
-                        )}
-
-                        {trx.category === 'survey' && (
-                          <button
-                            type="button"
-                            onClick={() => navigate(`${Page.MY_BOOKINGS}/aktif`)}
-                            className="px-2.5 py-1.5 rounded-lg bg-purple-50 hover:bg-purple-100 text-purple-700 text-[11px] font-bold border border-purple-200 transition-colors active:scale-95 cursor-pointer"
-                          >
-                            <span>Lacak</span>
-                          </button>
-                        )}
-
-                        {trx.category === 'database' && trx.status === 'PAID' && (
-                          <button
-                            type="button"
-                            onClick={() => navigate(Page.PRODUCTS)}
-                            className="px-2.5 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-[11px] font-bold border border-emerald-200 transition-colors active:scale-95 cursor-pointer"
-                          >
-                            <span>Kontak</span>
-                          </button>
-                        )}
-                      </div>
+                      {trx.status === 'PENDING' && (
+                        <button
+                          type="button"
+                          onClick={() => navigate(`/order-status/${trx.id}`)}
+                          className="px-3 py-1.5 rounded-lg bg-orange-500 hover:bg-orange-600 text-white text-[11px] font-bold transition-all shadow-2xs active:scale-95 flex items-center gap-1 cursor-pointer"
+                        >
+                          <CreditCard className="w-3 h-3" />
+                          <span>Bayar Sekarang</span>
+                        </button>
+                      )}
                     </div>
                   </div>
                 ))}
