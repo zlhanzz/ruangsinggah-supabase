@@ -2,6 +2,24 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 359. Rollback Tampilan Pengaturan Desktop ke Versi Terpadu (Commit `6cf21b27`) (`Profile.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna meminta untuk mengembalikan tampilan halaman Pengaturan / Profil ke versi sebelumnya (*"kembalikan aja ke versi sebelumnnya deh"*).
+  2. Membatalkan rancangan 2-kolom sidebar navigasi kiri pada menu Pengaturan Desktop, dan mengembalikan antarmuka terpadu sesuai commit `6cf21b27`.
+- **Implementasi Solusi**:
+  1. **Pemulihan Kode `Profile.tsx`**:
+     - Mengembalikan file `functions/public/pages/Profile.tsx` ke kondisi commit `6cf21b27`.
+     - Dropdown desktop *"Profil Saya"* tetap mempertahankan mode peninjauan default (*read-only overview*), tombol *"Edit Data Profil"*, penyimpanan data tanpa redirect ke beranda, dan navigasi tombol kembali kontekstual.
+     - Dropdown desktop *"Pengaturan"* dan menu profil mobile tetap menampilkan dashboard profil terpadu yang stabil.
+  2. **Build & Bundling Frontend**:
+     - Mengompilasi ulang bundel aset frontend Vite (`npm run build`) dengan sukses tanpa error.
+- **File Tersentuh**:
+  - `functions/public/pages/Profile.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi build frontend Vite (`cmd /c npm run build` di `functions/public`) lulus 100% (`✓ 2511 modules transformed, built in 32.87s`, 0 error).
+
 ### 358. Redesain Halaman Pengaturan Desktop: Navigasi Sidebar Kiri Sticky & Panel Konten Responsif Split Layout (`Profile.tsx`) (September 2026)
 - **Permintaan & Masalah**:
   1. Pada tampilan Desktop (`≥ 1024px`), menu Pengaturan (`/settings` dan `/profile`) sebelumnya menggunakan tata letak mobile card stack single-column bertumpuk yang kurang mencerminkan standar UI/UX desktop modern.
