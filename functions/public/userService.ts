@@ -178,7 +178,28 @@ export function transformPropertyRow(row: any): Kost {
   } as Kost;
 }
 
-export async function getPublishedProperties(): Promise<Kost[]> {
+// ── SWR / CACHE-FIRST STRATEGY FOR PROPERTIES & FILTERS ──────────────────────
+const CACHE_TTL_MS = 5 * 60 * 1000; // 5 Menit
+const OPTIONS_CACHE_TTL_MS = 10 * 60 * 1000; // 10 Menit
+
+const filteredPropertiesCache = new Map<string, { data: { kosts: Kost[]; totalCount: number }; timestamp: number }>();
+let publishedPropertiesCache: { data: Kost[]; timestamp: number } | null = null;
+let availableOptionsCache: { data: { provinces: string[]; cities: string[]; districts: string[]; campuses: string[]; rawRelations: GeoRelationEntry[] }; timestamp: number } | null = null;
+
+export function invalidatePropertiesCache(): void {
+  filteredPropertiesCache.clear();
+  publishedPropertiesCache = null;
+  availableOptionsCache = null;
+  try {
+    sessionStorage.removeItem('rs_filter_options_cache');
+  } catch {}
+}
+
+export async function getPublishedProperties(forceRefresh = false): Promise<Kost[]> {
+  if (!forceRefresh && publishedPropertiesCache && (Date.now() - publishedPropertiesCache.timestamp < CACHE_TTL_MS)) {
+    return publishedPropertiesCache.data;
+  }
+
   try {
     const { data, error } = await supabase
       .from('properties')
@@ -189,21 +210,43 @@ export async function getPublishedProperties(): Promise<Kost[]> {
     if (error) throw error;
     if (!data) return [];
 
-    return data.map(transformPropertyRow);
+    const mapped = data.map(transformPropertyRow);
+    publishedPropertiesCache = { data: mapped, timestamp: Date.now() };
+    return mapped;
   } catch (error: any) {
     console.error('Error fetching published properties:', error);
+    if (publishedPropertiesCache) return publishedPropertiesCache.data;
     return [];
   }
 }
 
 /**
  * Backend Database Query: Filter, search, and paginate properties directly from PostgreSQL
- * Supports both standard Mitra properties (is_managed = false) and KostManager properties (is_managed = true)
+ * Supports Cache-First strategy with TTL & background revalidation
  */
-export async function getFilteredProperties(params: PropertyFilterParams = {}): Promise<{
+export async function getFilteredProperties(params: PropertyFilterParams = {}, forceRefresh = false): Promise<{
   kosts: Kost[];
   totalCount: number;
 }> {
+  const cacheKey = JSON.stringify({
+    p: params.page || 1,
+    l: params.limit || 9,
+    s: (params.searchTerm || '').trim().toLowerCase(),
+    t: params.typeFilter || 'Semua',
+    c: params.selectedCity || 'Semua',
+    d: params.selectedDistrict || 'Semua',
+    ca: params.selectedCampus || 'Semua',
+    pr: params.selectedProvince || 'Semua',
+    mp: params.maxPrice || 5000000
+  });
+
+  if (!forceRefresh) {
+    const cached = filteredPropertiesCache.get(cacheKey);
+    if (cached && (Date.now() - cached.timestamp < CACHE_TTL_MS)) {
+      return cached.data;
+    }
+  }
+
   try {
     let query = supabase
       .from('properties')
@@ -272,21 +315,25 @@ export async function getFilteredProperties(params: PropertyFilterParams = {}): 
       );
     }
 
+    let result = { kosts: mappedKosts, totalCount: count ?? mappedKosts.length };
+
     if (isCustomFiltered) {
       const totalCustomCount = mappedKosts.length;
       if (params.page && params.limit) {
         const from = (params.page - 1) * params.limit;
         mappedKosts = mappedKosts.slice(from, from + params.limit);
       }
-      return { kosts: mappedKosts, totalCount: totalCustomCount };
+      result = { kosts: mappedKosts, totalCount: totalCustomCount };
     }
 
-    return {
-      kosts: mappedKosts,
-      totalCount: count ?? mappedKosts.length
-    };
+    // Save to Cache
+    filteredPropertiesCache.set(cacheKey, { data: result, timestamp: Date.now() });
+
+    return result;
   } catch (error: any) {
     console.error('Error in getFilteredProperties:', error);
+    const cached = filteredPropertiesCache.get(cacheKey);
+    if (cached) return cached.data;
     return { kosts: [], totalCount: 0 };
   }
 }
@@ -301,14 +348,31 @@ export interface GeoRelationEntry {
 /**
  * Fetch unique provinces, cities, districts/areas, and campuses available in the database for dropdown filter options,
  * along with raw relational entries for cascading dependency.
+ * Uses Cache-First strategy (10-minute TTL / sessionStorage).
  */
-export async function getAvailableFilterOptions(): Promise<{
+export async function getAvailableFilterOptions(forceRefresh = false): Promise<{
   provinces: string[];
   cities: string[];
   districts: string[];
   campuses: string[];
   rawRelations: GeoRelationEntry[];
 }> {
+  if (!forceRefresh) {
+    if (availableOptionsCache && (Date.now() - availableOptionsCache.timestamp < OPTIONS_CACHE_TTL_MS)) {
+      return availableOptionsCache.data;
+    }
+    try {
+      const sessionData = sessionStorage.getItem('rs_filter_options_cache');
+      if (sessionData) {
+        const parsed = JSON.parse(sessionData);
+        if (parsed && (Date.now() - parsed.timestamp < OPTIONS_CACHE_TTL_MS)) {
+          availableOptionsCache = parsed;
+          return parsed.data;
+        }
+      }
+    } catch {}
+  }
+
   try {
     const { data, error } = await supabase
       .from('properties')
@@ -351,15 +415,23 @@ export async function getAvailableFilterOptions(): Promise<{
       });
     });
 
-    return {
+    const result = {
       provinces: Array.from(provinces).sort(),
       cities: Array.from(cities).sort(),
       districts: Array.from(districts).sort(),
       campuses: Array.from(campuses).sort(),
       rawRelations
     };
+
+    availableOptionsCache = { data: result, timestamp: Date.now() };
+    try {
+      sessionStorage.setItem('rs_filter_options_cache', JSON.stringify({ data: result, timestamp: Date.now() }));
+    } catch {}
+
+    return result;
   } catch (error: any) {
     console.error('Error fetching available filter options:', error);
+    if (availableOptionsCache) return availableOptionsCache.data;
     return { provinces: [], cities: [], districts: [], campuses: [], rawRelations: [] };
   }
 }

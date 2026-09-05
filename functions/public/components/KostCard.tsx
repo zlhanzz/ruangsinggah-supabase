@@ -11,7 +11,6 @@ interface KostCardProps {
 }
 
 const KostCard: React.FC<KostCardProps> = ({ kost, onClick, onDelete }) => {
-  const [imageLoaded, setImageLoaded] = useState(false);
   const [imageError, setImageError] = useState(false);
 
   const variantCount = kost.isManaged 
@@ -82,12 +81,7 @@ const KostCard: React.FC<KostCardProps> = ({ kost, onClick, onDelete }) => {
       className="group bg-white rounded-2xl border border-gray-100/90 overflow-hidden shadow-[0_4px_20px_rgba(0,0,0,0.05)] hover:shadow-[0_8px_24px_rgba(0,0,0,0.08)] transition-all duration-300 flex flex-col h-full cursor-pointer"
     >
       <div className="relative h-48 sm:h-52 w-full overflow-hidden bg-slate-100">
-        {/* Lazy Shimmer Skeleton Loader */}
-        {!imageLoaded && !imageError && (
-          <div className="absolute inset-0 bg-gradient-to-r from-slate-100 via-slate-200 to-slate-100 animate-pulse" />
-        )}
-
-        {/* Fallback Image */}
+        {/* Fallback Image or Direct Eager Loaded Photo */}
         {imageError || !primaryImageUrl ? (
           <div className="w-full h-full flex flex-col items-center justify-center bg-slate-100 text-slate-400">
             <ImageOff className="w-8 h-8 stroke-1 mb-1" />
@@ -97,13 +91,10 @@ const KostCard: React.FC<KostCardProps> = ({ kost, onClick, onDelete }) => {
           <img 
             src={primaryImageUrl} 
             alt={kost.title}
-            loading="lazy"
+            loading="eager"
             decoding="async"
-            onLoad={() => setImageLoaded(true)}
             onError={() => setImageError(true)}
-            className={`w-full h-full object-cover group-hover:scale-105 transition-all duration-500 ${
-              imageLoaded ? 'opacity-100' : 'opacity-0'
-            }`}
+            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300 bg-slate-100"
           />
         )}
         
