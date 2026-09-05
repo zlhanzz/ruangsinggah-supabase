@@ -2,6 +2,42 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 339. Arsitektur Gerbang Sakral Murni (Sacred Multi-Role Gateways) & Isolasi Total Konteks Peran/Aktivitas (`App.tsx`, `Login.tsx`, `Navbar.tsx`, `MitraDashboard.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna menginginkan kedua gerbang login (**Pencari Kost (USER)** vs **Pemilik Kost (MITRA)**) bersifat mutlak dan sakral.
+  2. Sebelumnya, pengguna dengan akun mitra yang login secara otomatis ditimpa `portal_view = 'owner'` dan dipaksa redirect dari seluruh halaman publik (`/`, `/listings`, `/products`, dll.) ke Dashboard Mitra (`/mitra-dashboard`). Hal ini menghalangi pemilik kost untuk mencari/menyewa kost lain menggunakan akun yang sama sebagai pencari kost.
+  3. Pengguna menegaskan:
+     - Jika masuk via gerbang **Pencari Kost**, antarmuka terkunci murni sebagai Pencari Kost (dapat melihat beranda, katalog, sewa kamar, chat pencari) dan **TIDAK DI-REDIRECT PAKSA** ke Dashboard Mitra.
+     - Jika ingin mengelola kost sebagai Pemilik Kost, pengguna **wajib masuk via gerbang Pemilik Kost**.
+     - Tidak ada tombol switcher/pintas antar peran di navbar atau dropdown profil (kesakralan gerbang murni).
+     - Seluruh data aktivitas dan pesan harus terisolasi 100%: pesan chat saat menjadi user di `/chat` tidak boleh tercampur/muncul di tab Pesan Dashboard Mitra, dan sebaliknya.
+- **Implementasi Solusi**:
+  1. **Konsep Context-Aware Sacred Role Gateways (`App.tsx` & `Login.tsx`)**:
+     - Menghapus penimpaan paksa `localStorage.setItem('portal_view', 'owner')` di `App.tsx`. Nilai `portal_view` (`'user'` atau `'owner'`) sepenuhnya ditentukan oleh gerbang masuk yang dipilih di `Login.tsx`.
+     - Memperbarui route guard di `App.tsx` agar halaman publik (`Page.HOME`, `Page.LISTINGS`, `Page.PRODUCTS`, `Page.OWNER`, `Page.SURVEY_SERVICE`, dll.) terbuka penuh saat `portal_view === 'user'`, bahkan untuk akun dengan peran `role: 'owner'`.
+     - Pengalihan otomatis ke Dashboard Mitra hanya terjadi jika `portal_view === 'owner'`.
+  2. **Penyelarasan Gerbang Pemilihan Peran (`Login.tsx`)**:
+     - Memastikan klik pada kartu "Pencari Kost (USER)" dan "Pemilik Kost (MITRA)" secara instan mengunci `portal_view` yang sesuai di `localStorage` dan mengalirkan sesi ke halaman target yang tepat pasca-login.
+  3. **Pembersihan Navigasi & Peniadaan Switcher (`Navbar.tsx`)**:
+     - Menyesuaikan conditional `isOwner` di `Navbar.tsx` agar hanya aktif jika `portal_view === 'owner'`.
+     - Menghapus tombol switcher "Dashboard Mitra" dari navbar atas dan mobile dropdown saat user berada dalam mode Pencari Kost.
+  4. **Penetapan Mode Konteks Mitra (`MitraDashboard.tsx`)**:
+     - Menyimpan `localStorage.setItem('portal_view', 'owner')` saat Dashboard Mitra aktif untuk menjamin isolasi internal dashboard tetap aman.
+  5. **Isolasi Total Data Pesan & Aktivitas (`chatService.ts`, `Chat.tsx`, `MitraDashboard.tsx`, `MyKost.tsx`)**:
+     - Halaman `/chat` (Pencari Kost) strictly memfilter query percakapan sebagai pencari/penyewa (`roleFilter: 'user'`).
+     - Tab Pesan di `/mitra-dashboard` strictly memfilter query percakapan masuk dari calon penyewa untuk properti milik mitra (`roleFilter: 'owner'`).
+     - Halaman `/my-kost` strictly memuat kamar sewa milik pengguna sebagai penyewa.
+- **File Tersentuh**:
+  - `functions/public/App.tsx`
+  - `functions/public/pages/Login.tsx`
+  - `functions/public/components/Navbar.tsx`
+  - `functions/public/pages/MitraDashboard.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi build frontend Vite (`functions/public`) lulus 100% (`✓ built in 48.43s`, 0 error).
+  - Kompilasi backend Cloud Functions TypeScript (`functions/`) lulus 100% (`tsc`, 0 error).
+
 ### 338. Integrasi Ekosistem Resmi WhatsApp Cloud API (Meta Developer): Verifikasi OTP Anti-Bobol pada Identitas Akun (Mitra & Agen), Notifikasi Keluhan Penghuni KostManager, dan Otomasi Penagihan Sewa (`whatsappService.ts`, `MitraProfile.tsx`, `AgentProfile.tsx`, `MyKost.tsx`, `rentBillingService.ts`) (September 2026)
 - **Permintaan & Masalah**:
   1. Pengguna telah mengonfigurasi dan mendaftarkan nomor WhatsApp Bisnis resmi di portal Meta for Developers (`Terdaftar` & `Metode Pembayaran Ditambahkan`).

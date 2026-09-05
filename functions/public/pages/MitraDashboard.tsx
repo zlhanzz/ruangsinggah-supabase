@@ -700,6 +700,7 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
     };
 
     useEffect(() => {
+        localStorage.setItem('portal_view', 'owner');
         if (user) {
             setWithdrawalAccount({
                 bank_name: user.bank_name || 'BCA',

@@ -847,6 +847,7 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
             <button
               type="button"
               onClick={() => {
+                localStorage.setItem('portal_view', 'user');
                 setActiveRole('user');
                 setIsRoleSelected(true);
                 resetForm();
@@ -881,6 +882,7 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
             <button
               type="button"
               onClick={() => {
+                localStorage.setItem('portal_view', 'owner');
                 setActiveRole('owner');
                 setIsRoleSelected(true);
                 resetForm();

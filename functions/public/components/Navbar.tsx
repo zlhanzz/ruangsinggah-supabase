@@ -22,7 +22,7 @@ const Navbar: React.FC<NavbarProps> = ({ activePage, onPageChange, user, onLogou
   const mobileProfileRef = useRef<HTMLDivElement>(null);
   const notificationsRef = useRef<HTMLDivElement>(null);
 
-  const isOwner = user?.role === 'owner' || user?.role === 'mitra';
+  const isOwner = (user?.role === 'owner' || user?.role === 'mitra') && localStorage.getItem('portal_view') === 'owner';
   const isAdmin = user?.role === 'admin';
   const isAgent = user?.role === 'survey_agent';
 
@@ -126,19 +126,19 @@ const Navbar: React.FC<NavbarProps> = ({ activePage, onPageChange, user, onLogou
 
               {user ? (
                 <div className="flex items-center gap-4">
-                  {['admin', 'survey_agent', 'owner', 'mitra'].includes(user.role) && (
+                  {['admin', 'survey_agent'].includes(user.role) && (
                     <button
                       onClick={() => {
                         const targetPage = user.role === 'admin' 
                           ? (isAdminPage ? Page.HOME : Page.DASHBOARD_ADMIN) 
-                          : (user.role === 'survey_agent' ? Page.DASHBOARD_AGENT : Page.DASHBOARD_MITRA);
+                          : Page.DASHBOARD_AGENT;
                         onPageChange(targetPage);
                       }}
                       className="bg-gray-900 text-white px-4 py-2 rounded-full text-xs font-black uppercase tracking-widest hover:bg-orange-500 transition-colors"
                     >
                       {user.role === 'admin' 
                         ? (isAdminPage ? 'Mode User' : 'Admin Panel') 
-                        : (user.role === 'survey_agent' ? 'Agent Panel' : 'Dashboard Mitra')}
+                        : 'Agent Panel'}
                     </button>
                   )}
 
@@ -410,12 +410,12 @@ const Navbar: React.FC<NavbarProps> = ({ activePage, onPageChange, user, onLogou
                       >
                         Kost Saya
                       </button>
-                      {['admin', 'survey_agent', 'owner', 'mitra'].includes(user.role) && (
+                      {['admin', 'survey_agent'].includes(user.role) && (
                         <button
                           onClick={() => {
                             const targetPage = user.role === 'admin' 
                               ? (isAdminPage ? Page.HOME : Page.DASHBOARD_ADMIN) 
-                              : (user.role === 'survey_agent' ? Page.DASHBOARD_AGENT : Page.DASHBOARD_MITRA);
+                              : Page.DASHBOARD_AGENT;
                             onPageChange(targetPage);
                             setIsProfileOpen(false);
                           }}
@@ -423,7 +423,7 @@ const Navbar: React.FC<NavbarProps> = ({ activePage, onPageChange, user, onLogou
                         >
                           {user.role === 'admin' 
                             ? (isAdminPage ? 'Tampilan User' : 'Dashboard Admin') 
-                            : (user.role === 'survey_agent' ? 'Dashboard Agen' : 'Dashboard Pemilik')}
+                            : 'Dashboard Agen'}
                         </button>
                       )}
                       <button

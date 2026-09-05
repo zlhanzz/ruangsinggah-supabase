@@ -179,10 +179,11 @@ const App: React.FC = () => {
     if (window.history.length > 2) {
       navigate(-1);
     } else {
+      const currentPortal = localStorage.getItem('portal_view') || 'user';
       navigate(
-        user?.role === 'admin' ? Page.DASHBOARD_ADMIN : 
-        user?.role === 'survey_agent' ? Page.DASHBOARD_AGENT : 
-        user?.role === 'owner' ? Page.DASHBOARD_MITRA : 
+        user?.role === 'admin' && currentPortal !== 'user' ? Page.DASHBOARD_ADMIN : 
+        user?.role === 'survey_agent' && currentPortal !== 'user' ? Page.DASHBOARD_AGENT : 
+        (user?.role === 'owner' || user?.role === 'mitra') && currentPortal === 'owner' ? Page.DASHBOARD_MITRA : 
         Page.HOME
       );
     }
@@ -279,7 +280,7 @@ const App: React.FC = () => {
         else if (normalizedRole === 'survey_agent') role = 'survey_agent';
         else role = 'user';
 
-        // --- AKURASI PORTAL LOGIN PER ROLE ---
+        // --- AKURASI PORTAL LOGIN PER ROLE (GERBANG SAKRAL) ---
         const portalView = localStorage.getItem('portal_view') || 'user';
         if (portalView === 'owner' && role !== 'owner' && role !== 'admin') {
           console.warn("Regular user attempted to log in to owner portal.");
@@ -290,11 +291,7 @@ const App: React.FC = () => {
           return;
         }
 
-        if (role === 'owner') {
-          localStorage.setItem('portal_view', 'owner');
-        }
-
-        console.log("Determined role:", role);
+        console.log("Determined role:", role, "Portal view:", portalView);
 
 
         const safeUser = {
@@ -323,15 +320,15 @@ const App: React.FC = () => {
 
         const isRecovery = new URLSearchParams(window.location.search).get('mode') === 'recovery';
         if (!isRecovery) {
-          if (role === 'owner') {
-            // Isolasi Pemilik Kost: Langsung arahkan ke Dashboard Mitra jika berada di login atau halaman user publik
+          if (portalView === 'owner' && (role === 'owner' || role === 'admin')) {
+            // Isolasi Pemilik Kost: Langsung arahkan ke Dashboard Mitra jika berada di login atau halaman user publik saat di portal owner
             const publicUserPages = [Page.LOGIN, Page.HOME, Page.LISTINGS, Page.PRODUCTS, Page.OWNER, Page.SURVEY_SERVICE, Page.ABOUT, Page.CONTACT];
             if (publicUserPages.includes(location.pathname as Page) || location.pathname === '/') {
               navigate(Page.DASHBOARD_MITRA, { replace: true });
             }
           } else if (location.pathname === Page.LOGIN) {
-            if (role === 'admin') navigate(Page.DASHBOARD_ADMIN, { replace: true });
-            else if (role === 'survey_agent') navigate(Page.DASHBOARD_AGENT, { replace: true });
+            if (role === 'admin' && portalView !== 'user') navigate(Page.DASHBOARD_ADMIN, { replace: true });
+            else if (role === 'survey_agent' && portalView !== 'user') navigate(Page.DASHBOARD_AGENT, { replace: true });
             else navigate(Page.HOME, { replace: true });
           }
         }
@@ -546,11 +543,12 @@ const App: React.FC = () => {
       }
       setPendingTransaction(null);
     } else {
-      if (user?.role === 'admin') {
+      const currentPortal = localStorage.getItem('portal_view') || 'user';
+      if (user?.role === 'admin' && currentPortal !== 'user') {
         navigate(Page.DASHBOARD_ADMIN);
-      } else if (user?.role === 'survey_agent') {
+      } else if (user?.role === 'survey_agent' && currentPortal !== 'user') {
         navigate(Page.DASHBOARD_AGENT);
-      } else if (user?.role === 'owner') {
+      } else if ((user?.role === 'owner' || user?.role === 'mitra') && currentPortal === 'owner') {
         navigate(Page.DASHBOARD_MITRA);
       } else {
         navigate(Page.HOME);
@@ -679,23 +677,23 @@ const App: React.FC = () => {
            <Routes>
              <Route path="/payment-status/:orderId" element={<OrderPaymentStatus user={user} />} />
               <Route path={Page.HOME} element={
-                user?.role === 'owner' ? <Navigate to={Page.DASHBOARD_MITRA} replace /> :
+                (user?.role === 'owner' && localStorage.getItem('portal_view') === 'owner') ? <Navigate to={Page.DASHBOARD_MITRA} replace /> :
                 <Home onPageChange={(p: Page | string) => navigate(p)} onKostSelect={handleKostSelect} user={user} listings={listings} loading={loadingListings} />
               } />
               <Route path={Page.LISTINGS} element={
-                user?.role === 'owner' ? <Navigate to={Page.DASHBOARD_MITRA} replace /> :
+                (user?.role === 'owner' && localStorage.getItem('portal_view') === 'owner') ? <Navigate to={Page.DASHBOARD_MITRA} replace /> :
                 <Listings onKostClick={handleKostSelect} listings={listings} loading={loadingListings} user={user} onFilterToggle={setHideNavbar} />
               } />
               <Route path="/kost-dekat/:campusSlug" element={
-                user?.role === 'owner' ? <Navigate to={Page.DASHBOARD_MITRA} replace /> :
+                (user?.role === 'owner' && localStorage.getItem('portal_view') === 'owner') ? <Navigate to={Page.DASHBOARD_MITRA} replace /> :
                 <Listings onKostClick={handleKostSelect} listings={listings} loading={loadingListings} user={user} onFilterToggle={setHideNavbar} />
               } />
               <Route path="/kost-area/:areaSlug" element={
-                user?.role === 'owner' ? <Navigate to={Page.DASHBOARD_MITRA} replace /> :
+                (user?.role === 'owner' && localStorage.getItem('portal_view') === 'owner') ? <Navigate to={Page.DASHBOARD_MITRA} replace /> :
                 <Listings onKostClick={handleKostSelect} listings={listings} loading={loadingListings} user={user} onFilterToggle={setHideNavbar} />
               } />
             <Route path="/products/*" element={
-              user?.role === 'owner' ? <Navigate to={Page.DASHBOARD_MITRA} replace /> :
+              (user?.role === 'owner' && localStorage.getItem('portal_view') === 'owner') ? <Navigate to={Page.DASHBOARD_MITRA} replace /> :
               <Products
                 user={user}
                 onLoginRedirect={() => navigate(Page.LOGIN)}
@@ -718,13 +716,13 @@ const App: React.FC = () => {
               />
             } />
             <Route path={Page.OWNER} element={
-              user?.role === 'owner' ? <Navigate to={Page.DASHBOARD_MITRA} replace /> :
+              (user?.role === 'owner' && localStorage.getItem('portal_view') === 'owner') ? <Navigate to={Page.DASHBOARD_MITRA} replace /> :
               <Owner user={user} />
             } />
             <Route path={Page.ABOUT} element={<About />} />
             <Route path={Page.CONTACT} element={<Contact />} />
             <Route path={Page.SURVEY_SERVICE} element={
-              user?.role === 'owner' ? <Navigate to={Page.DASHBOARD_MITRA} replace /> :
+              (user?.role === 'owner' && localStorage.getItem('portal_view') === 'owner') ? <Navigate to={Page.DASHBOARD_MITRA} replace /> :
               <SurveyService 
                 user={user} 
                 onPageChange={(p: Page) => navigate(p)} 
@@ -748,7 +746,10 @@ const App: React.FC = () => {
             <Route path={Page.KOSTMANAGER} element={
               <KostManagerLanding 
                 user={user} 
-                onBack={() => navigate(user?.role === 'owner' ? Page.DASHBOARD_MITRA : Page.HOME)} 
+                onBack={() => {
+                  const currentPortal = localStorage.getItem('portal_view') || 'user';
+                  navigate((user?.role === 'owner' || user?.role === 'mitra') && currentPortal === 'owner' ? Page.DASHBOARD_MITRA : Page.HOME);
+                }} 
               />
             } />
             <Route path="/kost-manager" element={<Navigate to={Page.KOSTMANAGER} replace />} />
@@ -790,9 +791,9 @@ const App: React.FC = () => {
             <Route path={Page.LOGIN} element={
               (user && !location.search.includes('mode=recovery')) ? (
                 <Navigate to={
-                  user.role === 'admin' ? Page.DASHBOARD_ADMIN : 
-                  user.role === 'survey_agent' ? Page.DASHBOARD_AGENT : 
-                  user.role === 'owner' ? Page.DASHBOARD_MITRA : 
+                  (user.role === 'admin' && localStorage.getItem('portal_view') !== 'user') ? Page.DASHBOARD_ADMIN : 
+                  (user.role === 'survey_agent' && localStorage.getItem('portal_view') !== 'user') ? Page.DASHBOARD_AGENT : 
+                  ((user.role === 'owner' || user.role === 'mitra') && localStorage.getItem('portal_view') === 'owner') ? Page.DASHBOARD_MITRA : 
                   Page.HOME
                 } replace />
               ) : (
