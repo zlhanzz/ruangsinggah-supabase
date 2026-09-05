@@ -2,6 +2,29 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 377. Perbaikan Alur Status Pendataan KostManager Listing Eksisting (Tab Permintaan vs Riwayat) (`adminService.ts`) (September 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna melaporkan bahwa saat mendaftarkan properti yang sudah listing di RuangSinggah ke program KostManager, pesanan pendataan survei baru langsung masuk ke tab **Riwayat** dengan banner *"SELESAI (SUDAH LISTING KOSTMANAGER)"*, padahal seharusnya masuk sebagai pesanan baru di tab **Permintaan** (*"pada alur kostmanager, kost yang awalnya sudah listing dan diajukan dan didftarkan ke kostmanager, kemudian masuk ke pendataan agen, seharusnya masuk nya sebagai pesanan baru dari agen, masuknya di kolom permintaan dulu, kenapa langsung masuk ke riwayat?"*).
+  2. Akar masalah terjadi di `functions/public/adminService.ts` pada fungsi `getAdminSurveyRequests()` yang mengambil properti dengan filter `.or('is_managed.eq.true,status.eq.published')`. Karena properti eksisting berstatus `published`, sistem salah mengasumsikan pendataan survei telah selesai dan memaksa statusnya menjadi `COMPLETED`, sehingga disaring masuk ke tab Riwayat.
+  3. Selain itu, fungsi `repairSurveyRequestStatuses()` memaksakan status `COMPLETED` untuk tiket yang memiliki tanggal lampau (`isPastDate`).
+- **Implementasi Solusi**:
+  1. **Koreksi Filter Pengambilan Properti Terkelola di `getAdminSurveyRequests`**:
+     - Mengubah filter properti menjadi eksklusif `.eq('is_managed', true)` dan menghapus ketergantungan pada `status.eq.published`.
+     - Memastikan status tayang listing reguler tidak lagi dicampuradukkan dengan status survei pendataan KostManager.
+  2. **Penyelarasan Logika Status `mappedSurveys` & `mappedKmSurveys`**:
+     - Status tiket pendataan KostManager murni mengikuti status aslinya dari database (`PENDING_ASSIGNMENT`, `AGENT_ASSIGNED`, `SURVEYING`, `SUBMITTED`, `REVISION_REQUIRED`).
+     - Status `COMPLETED` hanya diterapkan jika tiket atau request KostManager memang telah secara resmi diaktifkan / diselesaikan oleh Admin (`ACTIVE`, `APPROVED`, `COMPLETED`).
+  3. **Penyempurnaan `repairSurveyRequestStatuses`**:
+     - Menghapus pemaksaan status `COMPLETED` berbasis tanggal lampau (`isPastDate`), sehingga status tiket tetap terjaga konsisten dan akurat.
+  4. **Hasil Tampilan Dashboard Agen**:
+     - Pesanan baru KostManager dari listing eksisting kini muncul di tab **Permintaan** dengan status *"MENUNGGU AGEN"*, lengkap dengan tombol *"⚡ Terima Pendataan"* dan rincian komisi pendapatan.
+- **File Tersentuh**:
+  - `functions/public/adminService.ts`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi build frontend Vite (`cmd /c npm run build`) lulus 100% (`✓ 2511 modules transformed, built in 31.70s`, 0 error).
+
 ### 376. Otomatisasi Notifikasi Email Penugasan Surveyor KostManager via Brevo REST API Langsung (`emailService.ts`, `adminService.ts`, `KostManagerManagement.tsx`) (September 2026)
 - **Permintaan & Masalah**:
   1. Pengguna memberikan masukan bahwa belum ada email otomatis yang terkirim ke agen surveyor ketika ditugaskan oleh admin untuk melakukan pendataan KostManager (*"belum ada email otomatis yang terkirim ke agen survey juka ditugaskan oleh admin untuk melakukan pendataan kostmanager. email yang menggunakan sistem pengiriman email brevo yang ada di sistem kita"*).

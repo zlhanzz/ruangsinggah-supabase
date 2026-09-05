@@ -3182,11 +3182,8 @@ export async function repairSurveyRequestStatuses() {
       ) || list[0];
 
       if (hasEvidence) {
-        const sDate = primaryRow.survey_date ? String(primaryRow.survey_date).split('T')[0] : '';
-        const cDate = primaryRow.created_at ? String(primaryRow.created_at).split('T')[0] : '';
-        const isPastDate = (sDate && sDate < todayStr) || (cDate && cDate < todayStr);
-
-        const targetStatus = (isPastDate || bestSummary || bestDrive || isProcessed) ? 'COMPLETED' : 'PENDING_ASSIGNMENT';
+        // Pertahankan status asli tiket survei (jangan otomatis COMPLETED hanya karena tanggal lampau)
+        const targetStatus = primaryRow.status || (bestSummary ? 'SUBMITTED' : 'PENDING_ASSIGNMENT');
 
         const updatePayload: any = {
           status: targetStatus,
@@ -3262,7 +3259,7 @@ export async function getAdminSurveyRequests(): Promise<SurveyRequest[]> {
     supabase
       .from('properties')
       .select('id, title, is_managed, status')
-      .or('is_managed.eq.true,status.eq.published'),
+      .eq('is_managed', true),
     supabase
       .from('kostmanager_requests')
       .select('id, kost_name, property_id, status, transaction_id')
@@ -3271,14 +3268,14 @@ export async function getAdminSurveyRequests(): Promise<SurveyRequest[]> {
 
   const managedPropTitles = new Set(
     (propsRes.data || [])
-      .filter(p => p.is_managed || p.status === 'published' || p.status === 'active')
+      .filter(p => p.is_managed)
       .map(p => (p.title || '').trim().toLowerCase())
       .filter(Boolean)
   );
 
   const managedPropIds = new Set(
     (propsRes.data || [])
-      .filter(p => p.is_managed || p.status === 'published' || p.status === 'active')
+      .filter(p => p.is_managed)
       .map(p => p.id)
       .filter(Boolean)
   );
@@ -3375,21 +3372,26 @@ export async function getAdminSurveyRequests(): Promise<SurveyRequest[]> {
     if (!kmErr && kmSurveys) {
       mappedKmSurveys = kmSurveys.map((ks: any) => {
         const kmTitle = (ks.request?.kost_name || '').trim().toLowerCase();
+        const rawStatus = ks.status || ks.request?.status || 'PENDING_ASSIGNMENT';
         const isKmManagedAndActive =
           ks.request?.status === 'ACTIVE' ||
           ks.status === 'COMPLETED' ||
           ks.status === 'APPROVED' ||
-          (ks.request?.property_id && managedPropIds.has(ks.request?.property_id)) ||
-          (kmTitle && managedPropTitles.has(kmTitle));
+          (ks.request?.property_id && managedPropIds.has(ks.request?.property_id) && ['SUBMITTED', 'ACTIVE', 'APPROVED', 'COMPLETED'].includes(rawStatus)) ||
+          (kmTitle && managedPropTitles.has(kmTitle) && ['SUBMITTED', 'ACTIVE', 'APPROVED', 'COMPLETED'].includes(rawStatus));
 
-        let computedStatus = ks.status;
-        if (isKmManagedAndActive) {
+        let computedStatus = rawStatus;
+        if (isKmManagedAndActive && ['SUBMITTED', 'ACTIVE', 'APPROVED', 'COMPLETED'].includes(rawStatus)) {
           computedStatus = 'COMPLETED';
         } else if (ks.status === 'REVISION_REQUIRED' || ks.request?.status === 'REVISION_REQUIRED') {
           computedStatus = 'REVISION_REQUIRED';
         } else if (ks.status === 'SUBMITTED' || ks.request?.status === 'PENDING_ONBOARDING') {
           computedStatus = 'SUBMITTED';
-        } else if (ks.status === 'SURVEYING' && ks.request?.status === 'AGENT_ASSIGNED') {
+        } else if (ks.status === 'SURVEYING' || ks.request?.status === 'SURVEYING') {
+          computedStatus = 'SURVEYING';
+        } else if (ks.status === 'AGENT_ASSIGNED' || ks.request?.status === 'AGENT_ASSIGNED') {
+          computedStatus = 'AGENT_ASSIGNED';
+        } else if (ks.status === 'PENDING_ASSIGNMENT' || ks.request?.status === 'PENDING_ASSIGNMENT') {
           computedStatus = 'PENDING_ASSIGNMENT';
         }
 
