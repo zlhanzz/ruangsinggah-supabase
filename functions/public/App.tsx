@@ -180,11 +180,12 @@ const App: React.FC = () => {
     if (window.history.length > 2) {
       navigate(-1);
     } else {
+      const isMitra = user?.role === 'owner' || user?.role === 'mitra';
       const currentPortal = localStorage.getItem('portal_view') || 'user';
       navigate(
         user?.role === 'admin' && currentPortal !== 'user' ? Page.DASHBOARD_ADMIN : 
         user?.role === 'survey_agent' && currentPortal !== 'user' ? Page.DASHBOARD_AGENT : 
-        (user?.role === 'owner' || user?.role === 'mitra') && currentPortal === 'owner' ? Page.DASHBOARD_MITRA : 
+        isMitra ? Page.DASHBOARD_MITRA : 
         Page.HOME
       );
     }
@@ -282,7 +283,10 @@ const App: React.FC = () => {
         else role = 'user';
 
         // --- AKURASI PORTAL LOGIN PER ROLE (GERBANG SAKRAL) ---
-        const portalView = localStorage.getItem('portal_view') || 'user';
+        if (role === 'owner') {
+          localStorage.setItem('portal_view', 'owner');
+        }
+        const portalView = localStorage.getItem('portal_view') || (role === 'owner' ? 'owner' : 'user');
         if (portalView === 'owner' && role !== 'owner' && role !== 'admin') {
           console.warn("Regular user attempted to log in to owner portal.");
           await supabase.auth.signOut();
@@ -324,10 +328,20 @@ const App: React.FC = () => {
 
         const isRecovery = new URLSearchParams(window.location.search).get('mode') === 'recovery';
         if (!isRecovery) {
-          if (portalView === 'owner' && (role === 'owner' || role === 'admin')) {
-            // Isolasi Pemilik Kost: Langsung arahkan ke Dashboard Mitra jika berada di login atau halaman user publik saat di portal owner
-            const publicUserPages = [Page.LOGIN, Page.HOME, Page.LISTINGS, Page.PRODUCTS, Page.OWNER, Page.SURVEY_SERVICE, Page.ABOUT, Page.CONTACT];
-            if (publicUserPages.includes(location.pathname as Page) || location.pathname === '/') {
+          if (role === 'owner') {
+            // Isolasi Pemilik Kost: Langsung arahkan ke Dashboard Mitra jika berada di login atau halaman user publik
+            const publicUserPages = [
+              Page.LOGIN, Page.HOME, Page.LISTINGS, Page.PRODUCTS, Page.OWNER, 
+              Page.SURVEY_SERVICE, Page.ABOUT, Page.CONTACT, Page.PROFILE, 
+              Page.SETTINGS, Page.MY_BOOKINGS, Page.TERMS, Page.ARTICLES
+            ];
+            if (
+              publicUserPages.includes(location.pathname as Page) || 
+              location.pathname === '/' || 
+              location.pathname.startsWith('/kost-') || 
+              location.pathname.startsWith('/products') || 
+              location.pathname.startsWith('/my-bookings')
+            ) {
               navigate(Page.DASHBOARD_MITRA, { replace: true });
             }
           } else if (location.pathname === Page.LOGIN) {
@@ -673,23 +687,23 @@ const App: React.FC = () => {
            <Routes>
              <Route path="/payment-status/:orderId" element={<OrderPaymentStatus user={user} />} />
               <Route path={Page.HOME} element={
-                (user?.role === 'owner' && localStorage.getItem('portal_view') === 'owner') ? <Navigate to={Page.DASHBOARD_MITRA} replace /> :
+                (user?.role === 'owner' || user?.role === 'mitra') ? <Navigate to={Page.DASHBOARD_MITRA} replace /> :
                 <Home onPageChange={(p: Page | string) => navigate(p)} onKostSelect={handleKostSelect} user={user} listings={listings} loading={loadingListings} />
               } />
               <Route path={Page.LISTINGS} element={
-                (user?.role === 'owner' && localStorage.getItem('portal_view') === 'owner') ? <Navigate to={Page.DASHBOARD_MITRA} replace /> :
+                (user?.role === 'owner' || user?.role === 'mitra') ? <Navigate to={Page.DASHBOARD_MITRA} replace /> :
                 <Listings onKostClick={handleKostSelect} listings={listings} loading={loadingListings} user={user} onFilterToggle={setHideNavbar} />
               } />
               <Route path="/kost-dekat/:campusSlug" element={
-                (user?.role === 'owner' && localStorage.getItem('portal_view') === 'owner') ? <Navigate to={Page.DASHBOARD_MITRA} replace /> :
+                (user?.role === 'owner' || user?.role === 'mitra') ? <Navigate to={Page.DASHBOARD_MITRA} replace /> :
                 <Listings onKostClick={handleKostSelect} listings={listings} loading={loadingListings} user={user} onFilterToggle={setHideNavbar} />
               } />
               <Route path="/kost-area/:areaSlug" element={
-                (user?.role === 'owner' && localStorage.getItem('portal_view') === 'owner') ? <Navigate to={Page.DASHBOARD_MITRA} replace /> :
+                (user?.role === 'owner' || user?.role === 'mitra') ? <Navigate to={Page.DASHBOARD_MITRA} replace /> :
                 <Listings onKostClick={handleKostSelect} listings={listings} loading={loadingListings} user={user} onFilterToggle={setHideNavbar} />
               } />
             <Route path="/products/*" element={
-              (user?.role === 'owner' && localStorage.getItem('portal_view') === 'owner') ? <Navigate to={Page.DASHBOARD_MITRA} replace /> :
+              (user?.role === 'owner' || user?.role === 'mitra') ? <Navigate to={Page.DASHBOARD_MITRA} replace /> :
               <Products
                 user={user}
                 onLoginRedirect={() => navigate(Page.LOGIN)}
@@ -712,13 +726,13 @@ const App: React.FC = () => {
               />
             } />
             <Route path={Page.OWNER} element={
-              (user?.role === 'owner' && localStorage.getItem('portal_view') === 'owner') ? <Navigate to={Page.DASHBOARD_MITRA} replace /> :
+              (user?.role === 'owner' || user?.role === 'mitra') ? <Navigate to={Page.DASHBOARD_MITRA} replace /> :
               <Owner user={user} />
             } />
             <Route path={Page.ABOUT} element={<About />} />
             <Route path={Page.CONTACT} element={<Contact />} />
             <Route path={Page.SURVEY_SERVICE} element={
-              (user?.role === 'owner' && localStorage.getItem('portal_view') === 'owner') ? <Navigate to={Page.DASHBOARD_MITRA} replace /> :
+              (user?.role === 'owner' || user?.role === 'mitra') ? <Navigate to={Page.DASHBOARD_MITRA} replace /> :
               <SurveyService 
                 user={user} 
                 onPageChange={(p: Page) => navigate(p)} 
@@ -743,8 +757,7 @@ const App: React.FC = () => {
               <KostManagerLanding 
                 user={user} 
                 onBack={() => {
-                  const currentPortal = localStorage.getItem('portal_view') || 'user';
-                  navigate((user?.role === 'owner' || user?.role === 'mitra') && currentPortal === 'owner' ? Page.DASHBOARD_MITRA : Page.HOME);
+                  navigate((user?.role === 'owner' || user?.role === 'mitra') ? Page.DASHBOARD_MITRA : Page.HOME);
                 }} 
               />
             } />
@@ -753,27 +766,35 @@ const App: React.FC = () => {
             <Route path={Page.ARTICLE_DETAIL} element={<Articles />} />
             <Route path={Page.SURVEY_CHECKOUT} element={
               <ProtectedRoute user={user} loadingAuth={loadingAuth}>
-                <SurveyCheckout
-                  user={user}
-                  onPageChange={(p: Page) => navigate(p)}
-                  validateProfile={() => {
-                    if (!isProfileComplete(user)) {
-                      alert('Silahkan lengkapi profile sebelum menggunakan layanan survey.');
-                      navigate(Page.PROFILE);
-                      return false;
-                    }
-                    if (calculateAge(user.birth_date) < 17) {
-                      alert('Mohon maaf, usia minimal untuk menggunakan layanan survey adalah 17 tahun.');
-                      return false;
-                    }
-                    return true;
-                  }}
-                />
+                {(user?.role === 'owner' || user?.role === 'mitra') ? (
+                  <Navigate to={Page.DASHBOARD_MITRA} replace />
+                ) : (
+                  <SurveyCheckout
+                    user={user}
+                    onPageChange={(p: Page) => navigate(p)}
+                    validateProfile={() => {
+                      if (!isProfileComplete(user)) {
+                        alert('Silahkan lengkapi profile sebelum menggunakan layanan survey.');
+                        navigate(Page.PROFILE);
+                        return false;
+                      }
+                      if (calculateAge(user.birth_date) < 17) {
+                        alert('Mohon maaf, usia minimal untuk menggunakan layanan survey adalah 17 tahun.');
+                        return false;
+                      }
+                      return true;
+                    }}
+                  />
+                )}
               </ProtectedRoute>
             } />
             <Route path={`${Page.MY_BOOKINGS}/*`} element={
               <ProtectedRoute user={user} loadingAuth={loadingAuth}>
-                <MyKost user={user} />
+                {(user?.role === 'owner' || user?.role === 'mitra') ? (
+                  <Navigate to={Page.DASHBOARD_MITRA} replace />
+                ) : (
+                  <MyKost user={user} />
+                )}
               </ProtectedRoute>
             } />
             <Route path={Page.CHAT} element={
@@ -789,7 +810,7 @@ const App: React.FC = () => {
                 <Navigate to={
                   (user.role === 'admin' && localStorage.getItem('portal_view') !== 'user') ? Page.DASHBOARD_ADMIN : 
                   (user.role === 'survey_agent' && localStorage.getItem('portal_view') !== 'user') ? Page.DASHBOARD_AGENT : 
-                  ((user.role === 'owner' || user.role === 'mitra') && localStorage.getItem('portal_view') === 'owner') ? Page.DASHBOARD_MITRA : 
+                  ((user.role === 'owner' || user.role === 'mitra')) ? Page.DASHBOARD_MITRA : 
                   Page.HOME
                 } replace />
               ) : (
@@ -805,26 +826,34 @@ const App: React.FC = () => {
             
             <Route path={Page.PROFILE} element={
               <ProtectedRoute user={user} loadingAuth={loadingAuth}>
-                <Profile
-                  user={user}
-                  onLogout={handleLogout}
-                  onSaveSuccess={handleProfileSaveSuccess}
-                  forceEdit={!!pendingTransaction}
-                  onBack={handleBackNavigation}
-                />
+                {(user?.role === 'owner' || user?.role === 'mitra') ? (
+                  <Navigate to={`${Page.DASHBOARD_MITRA}/profile`} replace />
+                ) : (
+                  <Profile
+                    user={user}
+                    onLogout={handleLogout}
+                    onSaveSuccess={handleProfileSaveSuccess}
+                    forceEdit={!!pendingTransaction}
+                    onBack={handleBackNavigation}
+                  />
+                )}
               </ProtectedRoute>
             } />
 
             <Route path={Page.SETTINGS} element={
               <ProtectedRoute user={user} loadingAuth={loadingAuth}>
-                <Profile
-                  user={user}
-                  onLogout={handleLogout}
-                  onSaveSuccess={handleProfileSaveSuccess}
-                  forceEdit={false}
-                  initialMode="hub"
-                  onBack={handleBackNavigation}
-                />
+                {(user?.role === 'owner' || user?.role === 'mitra') ? (
+                  <Navigate to={`${Page.DASHBOARD_MITRA}/profile`} replace />
+                ) : (
+                  <Profile
+                    user={user}
+                    onLogout={handleLogout}
+                    onSaveSuccess={handleProfileSaveSuccess}
+                    forceEdit={false}
+                    initialMode="hub"
+                    onBack={handleBackNavigation}
+                  />
+                )}
               </ProtectedRoute>
             } />
             

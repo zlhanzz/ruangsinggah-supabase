@@ -2,6 +2,31 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 368. Penguncian Isolasi Mutlak Akun Mitra (Owner) Berbasis Role Database Anti-Leak pada Sesi Offline / Reload (`App.tsx`, `Navbar.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna melaporkan bahwa saat koneksi internet sempat terputus/mati dan halaman browser ter-reload kembali, akun Mitra (`role: 'owner'` / `'mitra'`) yang sebelumnya berada di Dashboard Mitra tiba-tiba muncul di antarmuka User biasa (menampilkan Bottom Navigation Bar User: *Home, Search, Chat, Orders, Profile*, serta halaman Profile Hub User dengan badge *"Owner Mitra"*).
+  2. **Akar Masalah**:
+     - Status `isOwner` di `Navbar.tsx` dan seluruh Route Guard di `App.tsx` sebelumnya bergantung pada kondisi `localStorage.getItem('portal_view') === 'owner'`.
+     - Saat reload atau gangguan koneksi internet, nilai `portal_view` sempat bernilai `null` atau ter-reset ke default `'user'`, sehingga `isOwner` menjadi `false` dan seluruh guard redirect rute publik di `App.tsx` tidak aktif.
+     - Rute `Page.PROFILE`, `Page.SETTINGS`, dan `Page.MY_BOOKINGS` sebelumnya tidak memiliki guard redirect khusus untuk akun Mitra.
+- **Implementasi Solusi**:
+  1. **Isolasi Mutlak Berbasis Role Database (`Navbar.tsx`)**:
+     - Mengubah penentuan `isOwner` menjadi murni berbasis peran akun database: `const isOwner = user?.role === 'owner' || user?.role === 'mitra';` tanpa bergantung pada flag localStorage yang rentan hilang saat reload/offline.
+     - Menyelaraskan tab *Profil Mitra* pada Bottom Navigation Bar mobile dan tombol avatar mobile agar mengarah langsung ke `${Page.DASHBOARD_MITRA}/profile`.
+  2. **Penguncian Sesi & Auto-Redirect pada `fetchUserData` (`App.tsx`)**:
+     - Saat peran akun teridentifikasi sebagai `owner`, sistem langsung mengunci `localStorage.setItem('portal_view', 'owner')`.
+     - Menjalankan proteksi auto-redirect paksa ke `Page.DASHBOARD_MITRA` jika akun Mitra membuka halaman publik User.
+  3. **Guard Redirect Komprehensif pada Seluruh Rute User (`App.tsx`)**:
+     - Mengondisikan seluruh rute publik (`Page.HOME`, `Page.LISTINGS`, `/kost-dekat/*`, `/kost-area/*`, `/products/*`, `Page.OWNER`, `Page.SURVEY_SERVICE`, `Page.SURVEY_CHECKOUT`, `Page.MY_BOOKINGS`, `Page.LOGIN`) agar secara tegas me-redirect akun Mitra (`user.role === 'owner' || user.role === 'mitra'`) ke `Page.DASHBOARD_MITRA`.
+     - Mengondisikan rute `Page.PROFILE` dan `Page.SETTINGS` agar secara instan me-redirect akun Mitra ke `${Page.DASHBOARD_MITRA}/profile`.
+- **File Tersentuh**:
+  - `functions/public/components/Navbar.tsx`
+  - `functions/public/App.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi build frontend Vite (`cmd /c npm run build` di `functions/public`) lulus 100% (0 error).
+
 ### 367. Pemulihan Profile Hub pada Menu Profil Mobile & Penyelarasan Navigasi Desktop (`Profile.tsx`, `Navbar.tsx`) (September 2026)
 - **Permintaan & Masalah**:
   1. Pada antarmuka Mobile, saat pengguna menekan tab menu **Profil** (di Bottom Navigation Bar) atau menekan ikon Avatar di header, aplikasi langsung menampilkan formulir / tinjauan Data Kontak Pribadi (`edit_personal_data`), sehingga seluruh fitur dan menu Profile Hub (Riwayat Sewa Kost, Kost Favorit Saya, Riwayat Transaksi & Tagihan, Keamanan & Kata Sandi, Preferensi Notifikasi, Pusat Bantuan 24/7, Syarat & Ketentuan Sewa, Keluar Akun) terlewat dan tidak muncul.

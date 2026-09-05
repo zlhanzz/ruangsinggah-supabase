@@ -1,30 +1,34 @@
-# Walkthrough: Pemulihan Profile Hub pada Menu Profil Mobile & Penyelarasan Navigasi Desktop
+# Walkthrough: Penguncian Isolasi Mutlak Akun Mitra (Owner) Berbasis Role Database Anti-Leak pada Sesi Offline / Reload
 
 ## Ringkasan Perubahan
-Menu **Profile Hub Dashboard** (yang memuat Kartu User, Data Kontak Pribadi, Riwayat Sewa Kost, Kost Favorit Saya, Riwayat Transaksi & Tagihan, Keamanan & Kata Sandi, Preferensi Notifikasi, Pusat Bantuan 24/7, Syarat & Ketentuan Sewa, Kebijakan Privasi, dan Tombol Keluar Akun) kini telah dipulihkan secara penuh pada antarmuka **Mobile** ketika pengguna menekan tab **"Profil"** di Bottom Navigation Bar atau menekan ikon **Avatar** di Header Navbar.
+Sistem otentikasi dan navigasi kini telah dikunci secara mutlak (*Role-Based Pure Isolation*) untuk akun **Mitra (Owner)** (`role: 'owner'` / `'mitra'`). Seluruh ketergantungan pada flag sementara `localStorage.getItem('portal_view')` telah dihapus dan digantikan oleh validasi langsung terhadap peran akun di database.
+
+Akun Mitra dipastikan **100% terlindungi dan terisolasi** di dalam lingkungan Dashboard Mitra (`/dashboard-mitra`), dan tidak akan pernah bocor ke tampilan atau bottom navigation bar User umum, bahkan saat terjadi pemutusan koneksi internet, refresh browser, maupun reload halaman secara tiba-tiba.
 
 ---
 
 ## 1. Detail Implementasi
 
-### A. Pemulihan Default Route ke Profile Hub ([`Profile.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/Profile.tsx))
-1. **Pembaruan `determineInitialMode()` & `useEffect()`**:
-   - Menghapus aturan lama yang memaksa `/profile` selalu membuka `edit_personal_data`.
-   - Mengatur rute `/profile` tanpa query parameter agar secara default memuat `viewMode = 'hub'` (Profile Hub).
-   - Mode `edit_personal_data` hanya aktif jika ada query parameter eksplisit (`?view=edit`, `?view=personal_data`, `?edit=true`) atau `forceEdit === true`.
-   - Sub-view lainnya (`?view=favorites`, `?view=transactions`, `?view=rental_history`) tetap diarahkan ke layar modul masing-masing.
+### A. Isolasi Mutlak Navigasi Navbar & Bottom Nav ([`Navbar.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/components/Navbar.tsx))
+1. **Penentuan Peran Murni Berbasis Role**:
+   ```ts
+   const isOwner = user?.role === 'owner' || user?.role === 'mitra';
+   ```
+   Menghapus syarat lama `localStorage.getItem('portal_view') === 'owner'` yang rentan hilang saat session reload atau offline.
+2. **Penguncian Mobile Header Avatar & Bottom Nav Profil**:
+   - Jika `isOwner === true`:
+     - Klik tombol avatar mobile $\rightarrow$ langsung mengarah ke `${Page.DASHBOARD_MITRA}/profile` (Profil Mitra).
+     - Klik tab *Profil* di Bottom Navigation Bar $\rightarrow$ langsung mengarah ke `${Page.DASHBOARD_MITRA}/profile`.
+     - Mobile Bottom Navigation Bar hanya menampilkan menu Mitra: **Dashboard**, **Chat**, dan **Profil Mitra**.
 
-### B. Penyempurnaan Navigasi Kembali ([`Profile.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/Profile.tsx))
-1. **Fungsi `handleBackNavigationFromData()`**:
-   - Ketika pengguna membuka Data Kontak Pribadi dari Hub, tombol **"Kembali"** (di header atas, tombol bawah, dan breadcrumb desktop) akan membawa pengguna kembali ke Profile Hub secara mulus (`setViewMode('hub')`).
-   - Jika pengguna sedang dalam mode edit (`isEditing === true`), tombol berfungsi sebagai **"Batal Edit"** (`handleCancel()`).
-
-### C. Penyelarasan Dropdown Desktop ([`Navbar.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/components/Navbar.tsx))
-1. **Menu Dropdown Desktop**:
-   - **"Profil Saya"**: Mengarahkan ke `/profile?view=personal_data` (langsung membuka Data Kontak Pribadi).
-   - **"Pengaturan"**: Mengarahkan ke `Page.SETTINGS` (`/settings`, mode Profile Hub).
-2. **Menu Mobile**:
-   - Tab **"Profil"** Bottom Navigation Bar & Avatar Header: Langsung membuka `/profile` (mode Profile Hub Dashboard).
+### B. Penguncian Sesi & Guard Komprehensif pada [`App.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/App.tsx)
+1. **Penyimpanan Sesi Permanen pada `fetchUserData`**:
+   - Saat `role === 'owner'`, sistem langsung mengeksekusi `localStorage.setItem('portal_view', 'owner')`.
+   - Mengaktifkan proteksi navigasi paksa otomatis ke `Page.DASHBOARD_MITRA` jika akun Mitra membuka halaman publik User.
+2. **Pemasangan Guard Ketat pada Seluruh Rute User**:
+   - Rute Beranda (`Page.HOME`), Katalog (`Page.LISTINGS`), Filter Kampus/Area (`/kost-dekat/*`, `/kost-area/*`), Produk (`/products/*`), Mitra Landing (`Page.OWNER`), Layanan Survey (`Page.SURVEY_SERVICE`, `Page.SURVEY_CHECKOUT`), dan Sewa Kost (`Page.MY_BOOKINGS`) secara mutlak me-redirect akun Mitra ke `Page.DASHBOARD_MITRA`.
+   - Rute Profil (`Page.PROFILE`) dan Pengaturan (`Page.SETTINGS`) secara instan me-redirect akun Mitra ke `${Page.DASHBOARD_MITRA}/profile`.
+   - Rute Login (`Page.LOGIN`) secara otomatis mengalihkan akun Mitra yang sudah login ke `Page.DASHBOARD_MITRA`.
 
 ---
 
@@ -34,27 +38,18 @@ Menu **Profile Hub Dashboard** (yang memuat Kartu User, Data Kontak Pribadi, Riw
   ```bash
   cmd /c npm run build (di functions/public)
   ```
-  **Status**: `✓ 2511 modules transformed. ✓ built in 30.22s` (**0 Error, 0 Warning Kritis**).
+  **Status**: `✓ 2511 modules transformed. ✓ built in 36.14s` (**0 Error, 0 Warning Kritis**).
 
 ---
 
 ## 3. Panduan Pengujian untuk Pengguna (User Testing Steps)
 
-1. **Uji Tampilan Mobile (`< 768px`)**:
-   - Buka website pada resolusi mobile / smartphone.
-   - Login dengan akun pengguna.
-   - Tekan tab **"Profil"** di Bottom Navigation Bar (atau tekan foto avatar di kanan atas header).
-   - **Hasil**: Tampilan langsung menampilkan **Profile Hub Dashboard** lengkap dengan:
-     - Kartu Profil Utama (Avatar, Nama, Email, Badge Role).
-     - Tombol Banner: *Data Kontak Pribadi*.
-     - Grup 1: *Aktivitas Sewa & Transaksi* (*Riwayat Sewa Kost*, *Kost Favorit Saya*, *Riwayat Transaksi & Tagihan*).
-     - Grup 2: *Pengaturan Akun & Keamanan* (*Keamanan & Kata Sandi*, *Preferensi Notifikasi*).
-     - Grup 3: *Bantuan & Informasi Legal* (*Pusat Bantuan 24/7*, *Syarat & Ketentuan Sewa*, *Kebijakan Privasi*).
-     - Tombol *Keluar Akun*.
-   - Klik kartu **"Data Kontak Pribadi"** $\rightarrow$ Form Data Pribadi terbuka.
-   - Klik tombol **"Kembali"** $\rightarrow$ Kembali ke Profile Hub.
-
-2. **Uji Tampilan Desktop (`≥ 1024px`)**:
-   - Klik avatar di kanan atas navbar $\rightarrow$ dropdown menu terbuka.
-   - Klik **"Profil Saya"** $\rightarrow$ Data Kontak Pribadi terbuka.
-   - Klik **"Pengaturan"** $\rightarrow$ Profile Hub Dashboard terbuka.
+1. **Simulasi Reload / Offline pada Akun Mitra**:
+   - Login dengan akun Mitra (`tipexpesta@gmail.com`).
+   - Buka Console DevTools dan hapus local storage (atau matikan/nyalakan koneksi internet dan tekan `F5` / Refresh).
+   - Akses URL apa pun: `/`, `/listings`, `/profile`, `/settings`, `/my-bookings`.
+   - **Hasil**: Sistem secara 100% konsisten langsung mengalihkan ke **Dashboard Mitra** (`/dashboard-mitra`).
+2. **Cek Tampilan Mobile**:
+   - Pada resolusi mobile, perhatikan bilah navigasi bawah (Bottom Nav).
+   - **Hasil**: Hanya menampilkan bilah navigasi Mitra (**Dashboard**, **Chat**, **Profil Mitra**) dan tidak pernah menampilkan menu User (*Home, Search, Orders*).
+   - Klik tab **Profil** di Bottom Nav atau klik Avatar di Header $\rightarrow$ langsung membuka **Profil Mitra** (`/dashboard-mitra/profile`).

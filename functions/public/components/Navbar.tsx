@@ -22,14 +22,14 @@ const Navbar: React.FC<NavbarProps> = ({ activePage, onPageChange, user, onLogou
   const mobileProfileRef = useRef<HTMLDivElement>(null);
   const notificationsRef = useRef<HTMLDivElement>(null);
 
-  const isOwner = (user?.role === 'owner' || user?.role === 'mitra') && localStorage.getItem('portal_view') === 'owner';
+  const isOwner = user?.role === 'owner' || user?.role === 'mitra';
   const isAdmin = user?.role === 'admin';
   const isAgent = user?.role === 'survey_agent';
 
   const navItems = isOwner ? [
     { label: 'Dashboard Mitra', id: Page.DASHBOARD_MITRA },
     { label: 'Chat Penyewa', id: Page.CHAT },
-    { label: 'Profil Mitra', id: Page.PROFILE },
+    { label: 'Profil Mitra', id: `${Page.DASHBOARD_MITRA}/profile` },
   ] : [
     { label: 'Cari Kost', id: Page.LISTINGS },
     { label: 'Data Kost', id: Page.PRODUCTS },
@@ -366,12 +366,12 @@ const Navbar: React.FC<NavbarProps> = ({ activePage, onPageChange, user, onLogou
                 </div>
               )}
 
-              {/* Mobile User Profile (Avatar only) - Direct tap navigates to Profile Hub */}
+              {/* Mobile User Profile (Avatar only) - Direct tap navigates to Profile Hub / Mitra Profile */}
               {user ? (
                 <button 
-                  onClick={() => onPageChange(Page.PROFILE)} 
+                  onClick={() => onPageChange(isOwner ? `${Page.DASHBOARD_MITRA}/profile` : Page.PROFILE)} 
                   className="relative w-8 h-8 rounded-full bg-orange-100 text-orange-600 flex items-center justify-center text-xs font-black border border-orange-200 focus:outline-none overflow-hidden active:scale-95 transition-transform cursor-pointer"
-                  title="Menu Profil"
+                  title={isOwner ? "Profil Mitra" : "Menu Profil"}
                 >
                   {/* Layer 1: Initials */}
                   <div className="absolute inset-0 flex items-center justify-center bg-gray-100 text-gray-500 z-0">
@@ -459,17 +459,17 @@ const Navbar: React.FC<NavbarProps> = ({ activePage, onPageChange, user, onLogou
 
                 {/* 3. Profil Mitra */}
                 <button
-                  onClick={() => onPageChange(Page.PROFILE)}
+                  onClick={() => onPageChange(`${Page.DASHBOARD_MITRA}/profile`)}
                   className={`flex-1 flex flex-col items-center justify-center gap-1 py-1 transition-all active:scale-95 cursor-pointer ${
-                    activePage.startsWith(Page.PROFILE) || activePage.startsWith(Page.MITRA_PROFILE) ? 'text-[#ff7a00]' : 'text-[#334155] hover:text-[#0b1c30]'
+                    activePage.startsWith(`${Page.DASHBOARD_MITRA}/profile`) || activePage.startsWith(Page.MITRA_PROFILE) ? 'text-[#ff7a00]' : 'text-[#334155] hover:text-[#0b1c30]'
                   }`}
                 >
                   <User 
                     size={23} 
-                    strokeWidth={activePage.startsWith(Page.PROFILE) || activePage.startsWith(Page.MITRA_PROFILE) ? 2.6 : 2.2} 
-                    className={activePage.startsWith(Page.PROFILE) || activePage.startsWith(Page.MITRA_PROFILE) ? 'text-[#ff7a00] fill-[#ff7a00]/10' : 'text-[#334155]'} 
+                    strokeWidth={activePage.startsWith(`${Page.DASHBOARD_MITRA}/profile`) || activePage.startsWith(Page.MITRA_PROFILE) ? 2.6 : 2.2} 
+                    className={activePage.startsWith(`${Page.DASHBOARD_MITRA}/profile`) || activePage.startsWith(Page.MITRA_PROFILE) ? 'text-[#ff7a00] fill-[#ff7a00]/10' : 'text-[#334155]'} 
                   />
-                  <span className={`text-[11px] tracking-tight ${activePage.startsWith(Page.PROFILE) || activePage.startsWith(Page.MITRA_PROFILE) ? 'font-extrabold text-[#ff7a00]' : 'font-bold text-[#334155]'}`}>
+                  <span className={`text-[11px] tracking-tight ${activePage.startsWith(`${Page.DASHBOARD_MITRA}/profile`) || activePage.startsWith(Page.MITRA_PROFILE) ? 'font-extrabold text-[#ff7a00]' : 'font-bold text-[#334155]'}`}>
                     Profil
                   </span>
                 </button>
