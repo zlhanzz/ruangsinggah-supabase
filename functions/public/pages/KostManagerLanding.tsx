@@ -2,13 +2,28 @@ import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../supabase';
 import { 
     CheckCircle2, ShieldCheck, Video, MapPin, FileText, ArrowRight, ArrowLeft,
-    Briefcase, Sparkles, TrendingUp, Wallet, Zap, Play, X, Star, Users, Menu
+    Briefcase, Sparkles, TrendingUp, Wallet, Zap, Play, X, Star, Users, Menu,
+    Building, Building2, PlusCircle, DoorOpen, Bed, Check, ExternalLink,
+    Layers, Shield, Info, Navigation, Calendar, Image as ImageIcon, ChevronRight,
+    Compass, CheckCircle, RefreshCw
 } from 'lucide-react';
 import { Page, KostManagerPackage } from '../types';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import PaymentGateway from '../components/PaymentGateway';
 import { getKostManagerPackages } from '../adminService';
 import { FORMAT_CURRENCY } from '../constants';
+
+const getKostCoverImage = (kost: any): string => {
+  if (!kost) return '';
+  const rawImages = kost.image_urls || kost.images || [];
+  if (Array.isArray(rawImages) && rawImages.length > 0) {
+    const first = rawImages[0];
+    if (typeof first === 'string') return first;
+    if (first && typeof first === 'object') return first.url || first.original || first.src || '';
+  }
+  if (kost.image_url) return kost.image_url;
+  return '';
+};
 
 // Google Maps LocationPicker Component
 const LocationPicker: React.FC<{ lat: number; lng: number; onLocationChange: (lat: number, lng: number, address: string) => void }> = ({ lat, lng, onLocationChange }) => {
@@ -215,7 +230,7 @@ const KostManagerLanding: React.FC<KostManagerLandingProps> = ({ user, onBack, i
       try {
         const { data, error } = await supabase
           .from('properties')
-          .select('id, title, type, room_types, address, city, location, is_managed')
+          .select('id, title, type, room_types, address, city, area, location, is_managed, images, image_urls, image_url, price, price_monthly, price_yearly, status')
           .eq('owner_uid', user.uid || user.id);
         if (!error && data) {
           setUserKosts(data);
@@ -823,270 +838,540 @@ const KostManagerLanding: React.FC<KostManagerLandingProps> = ({ user, onBack, i
 
       {/* Modal Formulir Pendaftaran */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6" style={{ width: '100vw', height: '100vh', position: 'fixed', top: 0, left: 0 }}>
-          <div className="absolute inset-0 bg-gray-900/80 backdrop-blur-sm" onClick={() => !isSubmitting && setIsModalOpen(false)}></div>
+        <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-0 sm:p-4 md:p-6" style={{ width: '100vw', height: '100vh', position: 'fixed', top: 0, left: 0 }}>
+          {/* Backdrop */}
+          <div 
+            className="absolute inset-0 bg-slate-950/80 backdrop-blur-sm transition-opacity" 
+            onClick={() => !isSubmitting && setIsModalOpen(false)}
+          />
 
-          <div className="bg-white border border-gray-200 text-gray-900 w-full max-w-2xl rounded-3xl shadow-2xl relative z-10 animate-in zoom-in-95 duration-300 max-h-[90vh] flex flex-col overflow-hidden">
+          {/* Modal Card */}
+          <div className="bg-white border border-slate-200/80 text-slate-900 w-full sm:max-w-2xl max-h-[92vh] sm:max-h-[88vh] rounded-t-3xl sm:rounded-3xl shadow-2xl relative z-10 animate-in slide-in-from-bottom-6 sm:zoom-in-95 duration-300 flex flex-col overflow-hidden">
+            
+            {/* Top Accent Gradient Bar */}
+            <div className="h-1.5 w-full bg-gradient-to-r from-orange-500 via-amber-500 to-orange-600 flex-shrink-0" />
+
             {/* Header */}
-            <div className="px-6 py-5 border-b border-gray-100 flex justify-between items-center bg-gray-50">
-              <div>
-                <h3 className="text-xl font-black leading-tight text-gray-900">Langganan KostManager</h3>
-                <p className="text-xs text-gray-500 mt-1 font-bold">
-                  {modalStep === 'form' 
-                    ? 'Langkah 1 dari 2: Lengkapi data properti kost Anda' 
-                    : 'Langkah 2 dari 2: Persetujuan Syarat & Ketentuan'}
-                </p>
+            <div className="px-5 sm:px-7 py-4 border-b border-slate-100 bg-slate-50/90 backdrop-blur-md flex-shrink-0">
+              <div className="flex justify-between items-center">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-xl bg-orange-500/10 border border-orange-500/20 text-orange-600 flex items-center justify-center flex-shrink-0 shadow-sm">
+                    <Sparkles size={18} className="stroke-[2.5]" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg sm:text-xl font-black leading-tight text-slate-900">Langganan KostManager</h3>
+                    <p className="text-[11px] sm:text-xs text-slate-500 font-medium">Layanan autopilot kelola properti kost eksklusif</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setIsModalOpen(false)}
+                  disabled={isSubmitting}
+                  aria-label="Tutup formulir"
+                  className="w-8 h-8 flex items-center justify-center rounded-full bg-slate-200/70 text-slate-600 hover:bg-rose-500 hover:text-white transition-colors cursor-pointer"
+                >
+                  <X size={16} />
+                </button>
               </div>
-              <button
-                onClick={() => setIsModalOpen(false)}
-                disabled={isSubmitting}
-                className="w-8 h-8 flex items-center justify-center rounded-full bg-gray-200 text-gray-600 hover:bg-rose-500 hover:text-white transition-colors cursor-pointer"
-              >
-                <X size={16} />
-              </button>
+
+              {/* Progress Step Indicator */}
+              <div className="mt-4 pt-3 border-t border-slate-200/60 flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2 flex-1">
+                  <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-black transition-all ${
+                    modalStep === 'form' 
+                      ? 'bg-orange-500 text-white ring-4 ring-orange-500/20' 
+                      : 'bg-emerald-500 text-white'
+                  }`}>
+                    {modalStep === 'mou' ? <Check size={12} className="stroke-[3]" /> : '1'}
+                  </div>
+                  <div className="flex flex-col">
+                    <span className={`text-xs font-bold ${modalStep === 'form' ? 'text-orange-600' : 'text-slate-700'}`}>
+                      Data Properti
+                    </span>
+                    <span className="text-[9px] text-slate-400 font-medium hidden sm:inline">Pilih atau input kost</span>
+                  </div>
+                </div>
+
+                {/* Divider bar */}
+                <div className={`h-1 flex-1 max-w-[60px] sm:max-w-[100px] rounded-full transition-all ${
+                  modalStep === 'mou' ? 'bg-orange-500' : 'bg-slate-200'
+                }`} />
+
+                <div className="flex items-center gap-2 flex-1 justify-end">
+                  <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-black transition-all ${
+                    modalStep === 'mou' 
+                      ? 'bg-orange-500 text-white ring-4 ring-orange-500/20' 
+                      : 'bg-slate-200 text-slate-500'
+                  }`}>
+                    2
+                  </div>
+                  <div className="flex flex-col text-right">
+                    <span className={`text-xs font-bold ${modalStep === 'mou' ? 'text-orange-600' : 'text-slate-400'}`}>
+                      Syarat & Ketentuan
+                    </span>
+                    <span className="text-[9px] text-slate-400 font-medium hidden sm:inline">MoU & Pembayaran</span>
+                  </div>
+                </div>
+              </div>
             </div>
 
-            {/* Body */}
-            <div className="p-6 sm:p-8 overflow-y-auto bg-white">
+            {/* Scrollable Body */}
+            <div className="flex-1 overflow-y-auto p-5 sm:p-7 bg-white space-y-6">
               {modalStep === 'form' ? (
-                /* Langkah 1: Formulir Data Kost Terlebih Dahulu */
+                /* Langkah 1: Formulir Data Kost */
                 <form onSubmit={handleProceedToMoU} className="space-y-6">
-                  {/* Selector Metode (Case 1 vs Case 2) */}
+                  
+                  {/* Selector Metode (Pilih dari Kost Saya vs Daftar Kost Baru) */}
                   {userKosts.length > 0 && (
-                    <div className="bg-orange-50/50 border border-orange-100 p-4 rounded-2xl space-y-3">
-                      <label className="block text-[10px] font-black text-orange-800 uppercase tracking-widest">
-                        Metode Pendaftaran Kost
+                    <div className="space-y-2">
+                      <label className="block text-[11px] font-black text-slate-500 uppercase tracking-widest">
+                        Pilih Metode Pendaftaran
                       </label>
-                      <div className="grid grid-cols-2 gap-3">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        {/* Option 1: Kost Saya */}
                         <button
                           type="button"
                           onClick={() => {
                             setIsManualInput(false);
-                            if (userKosts.length > 0) {
+                            if (userKosts.length > 0 && !selectedKostId) {
+                              handleKostSelection(userKosts[0].id);
+                            } else if (selectedKostId && selectedKostId !== 'NEW') {
+                              handleKostSelection(selectedKostId);
+                            } else if (userKosts.length > 0) {
                               handleKostSelection(userKosts[0].id);
                             }
                           }}
-                          className={`px-4 py-3 rounded-xl text-xs font-bold transition-all border cursor-pointer ${
+                          className={`p-3.5 rounded-2xl text-left transition-all border flex items-center gap-3 cursor-pointer ${
                             !isManualInput 
-                              ? 'bg-orange-500 text-white border-orange-500 shadow-md shadow-orange-500/10' 
-                              : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
+                              ? 'bg-orange-50/60 border-orange-500 ring-2 ring-orange-500/20 shadow-sm' 
+                              : 'bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-50/50'
                           }`}
                         >
-                          Pilih dari Kost Saya
+                          <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 transition-colors ${
+                            !isManualInput ? 'bg-orange-500 text-white' : 'bg-slate-100 text-slate-600'
+                          }`}>
+                            <Building2 size={20} />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center justify-between">
+                              <span className="text-xs font-black text-slate-900 block truncate">
+                                Pilih dari Kost Saya
+                              </span>
+                              {!isManualInput && (
+                                <span className="w-2 h-2 rounded-full bg-orange-500 animate-pulse" />
+                              )}
+                            </div>
+                            <span className="text-[11px] text-slate-500 font-medium block truncate mt-0.5">
+                              {userKosts.length} listing terdaftar
+                            </span>
+                          </div>
                         </button>
+
+                        {/* Option 2: Manual / Kost Baru */}
                         <button
                           type="button"
                           onClick={() => handleKostSelection('NEW')}
-                          className={`px-4 py-3 rounded-xl text-xs font-bold transition-all border cursor-pointer ${
+                          className={`p-3.5 rounded-2xl text-left transition-all border flex items-center gap-3 cursor-pointer ${
                             isManualInput 
-                              ? 'bg-orange-500 text-white border-orange-500 shadow-md shadow-orange-500/10' 
-                              : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
+                              ? 'bg-orange-50/60 border-orange-500 ring-2 ring-orange-500/20 shadow-sm' 
+                              : 'bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-50/50'
                           }`}
                         >
-                          Daftar Kost Baru (Manual)
+                          <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 transition-colors ${
+                            isManualInput ? 'bg-orange-500 text-white' : 'bg-slate-100 text-slate-600'
+                          }`}>
+                            <PlusCircle size={20} />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center justify-between">
+                              <span className="text-xs font-black text-slate-900 block truncate">
+                                Daftar Kost Baru
+                              </span>
+                              {isManualInput && (
+                                <span className="w-2 h-2 rounded-full bg-orange-500 animate-pulse" />
+                              )}
+                            </div>
+                            <span className="text-[11px] text-slate-500 font-medium block truncate mt-0.5">
+                              Input data kost baru manual
+                            </span>
+                          </div>
                         </button>
                       </div>
                     </div>
                   )}
 
-                  {/* Dropdown pilihan kost jika ada */}
+                  {/* Visual Card Selector & Showcase Preview untuk Kost Eksisting */}
                   {!isManualInput && userKosts.length > 0 && (
-                    <div className="animate-in fade-in duration-300 space-y-4">
-                      <div>
-                        <label className="block text-xs font-bold text-gray-500 mb-2 font-sans">Pilih Kost Yang Ingin Didaftarkan</label>
-                        <select
-                          value={selectedKostId}
-                          onChange={(e) => handleKostSelection(e.target.value)}
-                          className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white text-gray-900 focus:border-orange-500 outline-none text-sm appearance-none cursor-pointer font-bold"
-                        >
-                          {userKosts.map((kost) => (
-                            <option key={kost.id} value={kost.id}>
-                              {kost.title} ({kost.city || kost.address || 'Tanpa Alamat'}){kost.is_managed ? ' [KostManager]' : ''}
-                            </option>
-                          ))}
-                        </select>
+                    <div className="space-y-4 animate-in fade-in duration-300">
+                      
+                      {/* Daftar Pilihan Kost Card Grid / Horizontal List */}
+                      <div className="space-y-2">
+                        <div className="flex justify-between items-center">
+                          <label className="text-[11px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-1.5">
+                            <Building size={13} className="text-orange-500" />
+                            Pilih Properti Kost ({userKosts.length})
+                          </label>
+                          <span className="text-[10px] text-orange-600 font-bold bg-orange-50 px-2 py-0.5 rounded-md border border-orange-200">
+                            Klik kartu untuk memilih
+                          </span>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-56 overflow-y-auto p-1 border border-slate-100 rounded-2xl bg-slate-50/50">
+                          {userKosts.map((kost) => {
+                            const isSelected = kost.id === selectedKostId;
+                            const coverImg = getKostCoverImage(kost);
+                            let roomsCount = 0;
+                            if (kost.room_types && Array.isArray(kost.room_types)) {
+                              roomsCount = kost.room_types.reduce((acc: number, rt: any) => acc + (parseInt(rt.availableRoomCount) || 1), 0);
+                            }
+
+                            return (
+                              <div
+                                key={kost.id}
+                                onClick={() => handleKostSelection(kost.id)}
+                                className={`relative p-3 rounded-2xl border transition-all cursor-pointer flex gap-3 items-center text-left ${
+                                  isSelected
+                                    ? 'bg-orange-50/70 border-orange-500 shadow-md shadow-orange-500/10 ring-2 ring-orange-500/20'
+                                    : 'bg-white border-slate-200/90 hover:border-orange-300 hover:shadow-sm'
+                                }`}
+                              >
+                                {/* Thumbnail Image */}
+                                <div className="w-16 h-16 rounded-xl overflow-hidden bg-slate-100 border border-slate-200 flex-shrink-0 relative">
+                                  {coverImg ? (
+                                    <img
+                                      src={coverImg}
+                                      alt={kost.title}
+                                      className="w-full h-full object-cover"
+                                      onError={(e) => {
+                                        // Fallback if image fails to load
+                                        (e.target as HTMLElement).style.display = 'none';
+                                      }}
+                                    />
+                                  ) : (
+                                    <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-orange-100 to-amber-100 text-orange-500">
+                                      <Building2 size={20} />
+                                    </div>
+                                  )}
+                                  {kost.is_managed && (
+                                    <div className="absolute top-1 left-1 bg-emerald-600 text-white text-[8px] font-black px-1 rounded shadow-xs">
+                                      KM
+                                    </div>
+                                  )}
+                                </div>
+
+                                {/* Details */}
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-1 mb-0.5">
+                                    <span className="text-xs font-black text-slate-900 truncate block">
+                                      {kost.title}
+                                    </span>
+                                  </div>
+                                  <div className="flex items-center gap-1.5 text-[10px] text-slate-500 font-medium truncate mb-1">
+                                    <MapPin size={10} className="text-slate-400 flex-shrink-0" />
+                                    <span className="truncate">{kost.city || kost.address || 'Tanpa Alamat'}</span>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 border border-slate-200">
+                                      {kost.type || 'Campur'}
+                                    </span>
+                                    {roomsCount > 0 && (
+                                      <span className="text-[9px] font-bold text-slate-500 flex items-center gap-0.5">
+                                        <DoorOpen size={10} /> {roomsCount} Kamar
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+
+                                {/* Active Selection Badge */}
+                                <div className="flex-shrink-0 ml-1">
+                                  {isSelected ? (
+                                    <div className="w-5 h-5 rounded-full bg-orange-500 text-white flex items-center justify-center shadow-sm">
+                                      <Check size={12} className="stroke-[3]" />
+                                    </div>
+                                  ) : (
+                                    <div className="w-5 h-5 rounded-full border border-slate-300 bg-white" />
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
                       </div>
 
-                      {/* Tampilkan Peta Titik Lokasi Eksisting */}
+                      {/* Showcase Preview Properti Terpilih */}
                       {(() => {
-                        const selected = userKosts.find(k => k.id === selectedKostId);
-                        const hasLocation = selected?.location && (selected.location.lat !== 0 || selected.location.lng !== 0);
-                        if (hasLocation) {
-                          const embedUrl = `https://maps.google.com/maps?q=${selected.location.lat},${selected.location.lng}&z=16&output=embed`;
-                          return (
-                            <div className="space-y-2 animate-in slide-in-from-top-4 duration-300">
-                              <label className="block text-xs font-bold text-orange-600 font-sans uppercase tracking-wider flex items-center gap-1.5">
-                                📍 Titik Lokasi Terdaftar
-                              </label>
-                              <div className="rounded-2xl overflow-hidden border border-gray-200 bg-gray-50 shadow-inner">
-                                <iframe
-                                  title="Kost Location Map"
-                                  width="100%"
-                                  height="180"
-                                  style={{ border: 0 }}
-                                  loading="lazy"
-                                  src={embedUrl}
-                                ></iframe>
+                        const selectedKost = userKosts.find(k => k.id === selectedKostId);
+                        if (!selectedKost) return null;
+
+                        const coverImg = getKostCoverImage(selectedKost);
+                        const hasLocation = selectedKost.location && (Number(selectedKost.location.lat) !== 0 || Number(selectedKost.location.lng) !== 0);
+                        const embedUrl = hasLocation ? `https://maps.google.com/maps?q=${selectedKost.location.lat},${selectedKost.location.lng}&z=16&output=embed` : '';
+
+                        return (
+                          <div className="rounded-2xl border border-orange-200/90 bg-gradient-to-br from-orange-50/50 via-white to-amber-50/40 p-4 space-y-3.5 shadow-sm">
+                            <div className="flex items-center justify-between border-b border-orange-100 pb-2.5">
+                              <span className="text-[11px] font-black text-orange-800 uppercase tracking-wider flex items-center gap-1.5">
+                                <Sparkles size={13} className="text-orange-500" />
+                                Preview Properti Terpilih
+                              </span>
+                              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200 flex items-center gap-1">
+                                <CheckCircle2 size={11} className="stroke-[2.5]" />
+                                Data Tersinkronisasi
+                              </span>
+                            </div>
+
+                            <div className="flex flex-col sm:flex-row gap-4">
+                              {/* Big Cover Photo */}
+                              <div className="w-full sm:w-44 h-28 sm:h-32 rounded-xl overflow-hidden bg-slate-100 border border-slate-200 flex-shrink-0 relative group shadow-sm">
+                                {coverImg ? (
+                                  <img
+                                    src={coverImg}
+                                    alt={selectedKost.title}
+                                    className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                                  />
+                                ) : (
+                                  <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-orange-100 via-amber-50 to-orange-100 text-orange-400">
+                                    <ImageIcon size={28} className="mb-1 opacity-70" />
+                                    <span className="text-[10px] font-bold text-slate-400">Foto Listing</span>
+                                  </div>
+                                )}
+                                <div className="absolute inset-0 bg-gradient-to-t from-slate-950/70 via-transparent to-transparent flex items-end p-2">
+                                  <span className="text-[10px] font-black text-white px-2 py-0.5 rounded-md bg-orange-600/90 backdrop-blur-xs">
+                                    {selectedKost.type || 'Kost'}
+                                  </span>
+                                </div>
+                              </div>
+
+                              {/* Info Box */}
+                              <div className="flex-1 min-w-0 flex flex-col justify-between space-y-2">
+                                <div>
+                                  <h4 className="text-sm font-black text-slate-900 leading-tight line-clamp-1 mb-1">
+                                    {selectedKost.title}
+                                  </h4>
+                                  <p className="text-xs text-slate-500 font-medium line-clamp-2 leading-relaxed">
+                                    {selectedKost.address || 'Alamat lengkap properti'}
+                                  </p>
+                                </div>
+
+                                <div className="flex flex-wrap items-center gap-2 pt-1 text-[11px] font-bold text-slate-700">
+                                  <span className="px-2 py-0.5 rounded-md bg-white border border-slate-200 shadow-2xs">
+                                    Kota: <strong className="text-slate-900">{selectedKost.city || 'Makassar'}</strong>
+                                  </span>
+                                  <span className="px-2 py-0.5 rounded-md bg-white border border-slate-200 shadow-2xs">
+                                    Kamar: <strong className="text-slate-900">{formData.totalRooms} Unit</strong>
+                                  </span>
+                                  {selectedKost.is_managed && (
+                                    <span className="px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                      KostManager Aktif
+                                    </span>
+                                  )}
+                                </div>
                               </div>
                             </div>
-                          );
-                        }
-                        return null;
+
+                            {/* Collapsible Mini Map */}
+                            {hasLocation && (
+                              <div className="pt-2 border-t border-orange-100/70">
+                                <div className="rounded-xl overflow-hidden border border-slate-200 bg-slate-100 shadow-inner">
+                                  <iframe
+                                    title="Kost Location Map"
+                                    width="100%"
+                                    height="140"
+                                    style={{ border: 0 }}
+                                    loading="lazy"
+                                    src={embedUrl}
+                                  />
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        );
                       })()}
                     </div>
                   )}
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-xs font-bold text-gray-500 mb-2">Nama Kost</label>
-                      <input
-                        type="text"
-                        name="kostName"
-                        required
-                        value={formData.kostName}
-                        onChange={handleChange}
-                        className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white text-gray-900 focus:border-orange-500 outline-none text-sm font-medium"
-                        placeholder="Kost Orange Premium"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-bold text-gray-500 mb-2">Jenis Kost</label>
-                      <select
-                        name="kostType"
-                        required
-                        value={formData.kostType}
-                        onChange={handleChange}
-                        className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white text-gray-900 focus:border-orange-500 outline-none text-sm appearance-none cursor-pointer font-medium"
-                      >
-                        <option value="" disabled>Pilih Jenis Kost</option>
-                        <option value="Putra">Putra</option>
-                        <option value="Putri">Putri</option>
-                        <option value="Campur Biasa">Campur Biasa</option>
-                        <option value="Campur/Pasutri">Campur/Pasutri</option>
-                      </select>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-xs font-bold text-gray-500 mb-2">Jumlah Total Kamar</label>
-                      <input
-                        type="number"
-                        name="totalRooms"
-                        min="1"
-                        required
-                        value={formData.totalRooms}
-                        onChange={handleChange}
-                        className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white text-gray-900 focus:border-orange-500 outline-none text-sm font-medium"
-                        placeholder="10"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-bold text-gray-500 mb-2">Jumlah Kamar Kosong</label>
-                      <input
-                        type="number"
-                        name="emptyRooms"
-                        min="0"
-                        required
-                        value={formData.emptyRooms}
-                        onChange={handleChange}
-                        className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white text-gray-900 focus:border-orange-500 outline-none text-sm font-medium"
-                        placeholder="5"
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-bold text-gray-500 mb-2">Link Google Maps (Opsional)</label>
-                    <input
-                      type="url"
-                      name="googleMapsLink"
-                      value={formData.googleMapsLink}
-                      onChange={handleChange}
-                      readOnly={!isManualInput}
-                      className={`w-full px-4 py-3 rounded-xl border outline-none text-sm font-medium animate-all ${
-                        !isManualInput 
-                          ? 'bg-gray-50 text-gray-400 border-gray-200 cursor-not-allowed font-semibold' 
-                          : 'bg-white text-gray-900 focus:border-orange-500 border-gray-200'
-                      }`}
-                      placeholder={!isManualInput ? "Link lokasi terisi otomatis dari data titik koordinat listing" : "https://maps.app.goo.gl/... atau https://google.com/maps/..."}
-                    />
-                  </div>
-
-                  <div>
-                    <div className="flex justify-between items-center mb-2">
-                      <label className="block text-xs font-bold text-gray-500">Alamat Lengkap Kost</label>
-                      <div className="flex gap-2">
-                        {isManualInput && (
-                          <button
-                            type="button"
-                            onClick={() => setShowMapPicker(!showMapPicker)}
-                            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all border cursor-pointer ${
-                              showMapPicker 
-                                ? 'bg-orange-500 text-white border-orange-500 shadow-sm' 
-                                : 'bg-orange-50 hover:bg-orange-100 text-orange-600 border-orange-200'
-                            }`}
-                          >
-                            🗺️ {showMapPicker ? 'Tutup Peta' : 'Pilih di Peta'}
-                          </button>
-                        )}
-                        <button
-                          type="button"
-                          onClick={handleGetLocation}
-                          disabled={isDetectingLocation}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-orange-50 hover:bg-orange-100 text-orange-600 text-[10px] font-black uppercase tracking-wider transition-all border border-orange-200 disabled:opacity-50 cursor-pointer"
-                        >
-                          <MapPin size={12} className="stroke-[2.5]" />
-                          <span>{isDetectingLocation ? 'Mencari GPS...' : 'Ambil GPS'}</span>
-                        </button>
-                      </div>
+                  {/* Section: Detail Informasi Properti */}
+                  <div className="space-y-4 pt-2">
+                    <div className="flex items-center gap-2 border-b border-slate-100 pb-2">
+                      <span className="text-[11px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-1.5">
+                        <FileText size={13} className="text-orange-500" />
+                        Detail Formulir Properti
+                      </span>
                     </div>
 
-                    {isManualInput && showMapPicker && (
-                      <div className="mb-4 space-y-2 animate-in slide-in-from-top-4 duration-300">
-                        <span className="block text-[9px] font-black text-orange-600 uppercase tracking-widest leading-none mb-1">
-                          Geser marker merah atau klik di peta untuk menentukan koordinat kost Anda
-                        </span>
-                        <div className="rounded-2xl overflow-hidden border border-slate-200 shadow-inner bg-slate-50 relative z-0">
-                          <LocationPicker 
-                            lat={mapCoords.lat}
-                            lng={mapCoords.lng}
-                            onLocationChange={(lat, lng, address) => {
-                              setMapCoords({ lat, lng });
-                              setFormData(prev => ({
-                                ...prev,
-                                googleMapsLink: `https://www.google.com/maps?q=${lat},${lng}`,
-                                address: address || prev.address
-                              }));
-                            }}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                          Nama Kost <span className="text-rose-500">*</span>
+                        </label>
+                        <div className="relative">
+                          <input
+                            type="text"
+                            name="kostName"
+                            required
+                            value={formData.kostName}
+                            onChange={handleChange}
+                            className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-900 focus:border-orange-500 focus:ring-2 focus:ring-orange-200 outline-none text-sm font-medium transition-all"
+                            placeholder="Contoh: Kost Orange Residence"
                           />
                         </div>
                       </div>
-                    )}
+                      <div>
+                        <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                          Jenis Kost <span className="text-rose-500">*</span>
+                        </label>
+                        <select
+                          name="kostType"
+                          required
+                          value={formData.kostType}
+                          onChange={handleChange}
+                          className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-900 focus:border-orange-500 focus:ring-2 focus:ring-orange-200 outline-none text-sm appearance-none cursor-pointer font-medium transition-all"
+                        >
+                          <option value="" disabled>Pilih Jenis Kost</option>
+                          <option value="Putra">Putra</option>
+                          <option value="Putri">Putri</option>
+                          <option value="Campur Biasa">Campur Biasa</option>
+                          <option value="Campur/Pasutri">Campur/Pasutri</option>
+                        </select>
+                      </div>
+                    </div>
 
-                    <textarea
-                      name="address"
-                      required
-                      rows={3}
-                      value={formData.address}
-                      onChange={handleChange}
-                      className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white text-gray-900 focus:border-orange-500 outline-none text-sm resize-none font-medium"
-                     ></textarea>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                          Jumlah Total Kamar <span className="text-rose-500">*</span>
+                        </label>
+                        <input
+                          type="number"
+                          name="totalRooms"
+                          min="1"
+                          required
+                          value={formData.totalRooms}
+                          onChange={handleChange}
+                          className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-900 focus:border-orange-500 focus:ring-2 focus:ring-orange-200 outline-none text-sm font-medium transition-all"
+                          placeholder="10"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                          Jumlah Kamar Kosong <span className="text-rose-500">*</span>
+                        </label>
+                        <input
+                          type="number"
+                          name="emptyRooms"
+                          min="0"
+                          required
+                          value={formData.emptyRooms}
+                          onChange={handleChange}
+                          className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-900 focus:border-orange-500 focus:ring-2 focus:ring-orange-200 outline-none text-sm font-medium transition-all"
+                          placeholder="2"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                        Link Google Maps Lokasi
+                      </label>
+                      <input
+                        type="url"
+                        name="googleMapsLink"
+                        value={formData.googleMapsLink}
+                        onChange={handleChange}
+                        readOnly={!isManualInput}
+                        className={`w-full px-3.5 py-2.5 rounded-xl border outline-none text-sm font-medium transition-all ${
+                          !isManualInput 
+                            ? 'bg-slate-50 text-slate-500 border-slate-200 cursor-not-allowed font-medium' 
+                            : 'bg-white text-slate-900 focus:border-orange-500 focus:ring-2 focus:ring-orange-200 border-slate-200'
+                        }`}
+                        placeholder={!isManualInput ? "Link lokasi tersinkronisasi otomatis dari titik koordinat listing" : "https://maps.app.goo.gl/... atau https://google.com/maps/..."}
+                      />
+                      {!isManualInput && (
+                        <p className="text-[10px] text-slate-400 mt-1 italic">
+                          * Titik koordinat peta diambil langsung dari data listing properti Anda.
+                        </p>
+                      )}
+                    </div>
+
+                    <div>
+                      <div className="flex justify-between items-center mb-1.5">
+                        <label className="block text-xs font-bold text-slate-700">
+                          Alamat Lengkap Kost <span className="text-rose-500">*</span>
+                        </label>
+                        <div className="flex gap-2">
+                          {isManualInput && (
+                            <button
+                              type="button"
+                              onClick={() => setShowMapPicker(!showMapPicker)}
+                              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all border cursor-pointer ${
+                                showMapPicker 
+                                  ? 'bg-orange-500 text-white border-orange-500 shadow-xs' 
+                                  : 'bg-orange-50 hover:bg-orange-100 text-orange-600 border-orange-200'
+                              }`}
+                            >
+                              <Compass size={12} />
+                              <span>{showMapPicker ? 'Tutup Peta' : 'Pilih di Peta'}</span>
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            onClick={handleGetLocation}
+                            disabled={isDetectingLocation}
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-orange-50 hover:bg-orange-100 text-orange-600 text-[10px] font-black uppercase tracking-wider transition-all border border-orange-200 disabled:opacity-50 cursor-pointer"
+                          >
+                            <MapPin size={11} className="stroke-[2.5]" />
+                            <span>{isDetectingLocation ? 'Mencari GPS...' : 'Ambil GPS'}</span>
+                          </button>
+                        </div>
+                      </div>
+
+                      {isManualInput && showMapPicker && (
+                        <div className="mb-3 space-y-2 animate-in slide-in-from-top-4 duration-300">
+                          <span className="block text-[10px] font-black text-orange-600 uppercase tracking-widest leading-none">
+                            Geser marker merah atau klik di peta untuk menentukan titik koordinat
+                          </span>
+                          <div className="rounded-2xl overflow-hidden border border-slate-200 shadow-inner bg-slate-50 relative z-0">
+                            <LocationPicker 
+                              lat={mapCoords.lat}
+                              lng={mapCoords.lng}
+                              onLocationChange={(lat, lng, address) => {
+                                setMapCoords({ lat, lng });
+                                setFormData(prev => ({
+                                  ...prev,
+                                  googleMapsLink: `https://www.google.com/maps?q=${lat},${lng}`,
+                                  address: address || prev.address
+                                }));
+                              }}
+                            />
+                          </div>
+                        </div>
+                      )}
+
+                      <textarea
+                        name="address"
+                        required
+                        rows={3}
+                        value={formData.address}
+                        onChange={handleChange}
+                        placeholder="Contoh: Jl. Perintis Kemerdekaan KM 9, No. 12, Tamalanrea, Makassar"
+                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-900 focus:border-orange-500 focus:ring-2 focus:ring-orange-200 outline-none text-sm resize-none font-medium transition-all"
+                      />
+                    </div>
                   </div>
 
-                  <div className="pt-4 border-t border-gray-100 flex justify-end gap-3 bg-white sticky bottom-0">
+                  {/* Sticky Footer */}
+                  <div className="pt-4 border-t border-slate-100 flex items-center justify-between gap-3 bg-white sticky bottom-0">
                     <button
                       type="button"
                       disabled={isSubmitting}
                       onClick={() => setIsModalOpen(false)}
-                      className="px-6 py-3 text-gray-500 hover:text-gray-900 text-sm font-bold transition-colors disabled:opacity-50 cursor-pointer"
+                      className="px-5 py-2.5 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 text-xs sm:text-sm font-bold transition-all disabled:opacity-50 cursor-pointer"
                     >
                       Batal
                     </button>
                     <button
                       type="submit"
                       disabled={isSubmitting}
-                      className="px-8 py-3 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-sm font-black uppercase tracking-widest flex items-center justify-center gap-2 active:scale-95 shadow-lg shadow-orange-500/20 cursor-pointer"
+                      className="px-6 sm:px-8 py-3 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white rounded-xl text-xs sm:text-sm font-black uppercase tracking-wider flex items-center justify-center gap-2 active:scale-95 shadow-lg shadow-orange-500/25 transition-all cursor-pointer"
                     >
                       <span>Lanjut: Syarat & Ketentuan</span>
                       <ArrowRight size={16} />
@@ -1096,48 +1381,132 @@ const KostManagerLanding: React.FC<KostManagerLandingProps> = ({ user, onBack, i
               ) : (
                 /* Langkah 2: Syarat & Ketentuan KostManager (MoU di Akhir) */
                 <div className="space-y-6 animate-in fade-in duration-300">
-                  <div className="flex flex-col items-center text-center mb-4">
-                    <div className="w-12 h-12 bg-orange-100 text-orange-600 rounded-full flex items-center justify-center mb-4 border border-orange-200">
-                      <FileText size={22} />
+                  
+                  {/* Order & Property Summary Card */}
+                  <div className="rounded-2xl border border-orange-200/90 bg-gradient-to-br from-orange-50/70 via-white to-amber-50/50 p-4 sm:p-5 space-y-3 shadow-xs">
+                    <div className="flex items-center justify-between border-b border-orange-100 pb-2.5">
+                      <span className="text-[11px] font-black text-orange-800 uppercase tracking-wider flex items-center gap-1.5">
+                        <Sparkles size={13} className="text-orange-500" />
+                        Ringkasan Pendaftaran
+                      </span>
+                      <span className="text-xs font-black text-orange-600 bg-orange-100/70 px-2.5 py-0.5 rounded-full border border-orange-200">
+                        {packageLabel} ({packageDuration === 12 ? '1 Tahun' : `${packageDuration} Bulan`})
+                      </span>
                     </div>
-                    <h4 className="text-lg font-bold text-gray-900">Syarat & Ketentuan KostManager</h4>
-                    <p className="text-gray-500 text-xs mt-1 font-semibold">Harap baca lingkup kerja sama premium berikut sebelum mendaftar.</p>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                      <div className="bg-white/90 rounded-xl p-3 border border-orange-100/80 shadow-2xs">
+                        <span className="text-[10px] font-bold text-slate-400 block mb-0.5">Properti Kost:</span>
+                        <strong className="text-slate-900 block truncate text-sm">{formData.kostName || 'Kost Anda'}</strong>
+                        <span className="text-[11px] text-slate-500 font-medium block truncate mt-0.5">
+                          Tipe: {formData.kostType} • {formData.totalRooms} Kamar
+                        </span>
+                      </div>
+                      <div className="bg-white/90 rounded-xl p-3 border border-orange-100/80 shadow-2xs">
+                        <span className="text-[10px] font-bold text-slate-400 block mb-0.5">Biaya Berlangganan:</span>
+                        <strong className="text-orange-600 block text-base font-black">
+                          {FORMAT_CURRENCY(packagePrice)}
+                        </strong>
+                        <span className="text-[10px] text-slate-500 font-medium block">
+                          Termasuk survey & foto profesional
+                        </span>
+                      </div>
+                    </div>
                   </div>
 
-                  <div className="bg-gray-50 border border-gray-100 rounded-2xl p-5 max-h-60 overflow-y-auto text-xs space-y-4 text-gray-600 font-medium">
-                    <p><strong>1. Biaya Berlangganan:</strong> Berlangganan KostManager dikenakan biaya sesuai paket yang dipilih yaitu {FORMAT_CURRENCY(packagePrice)} per {packageDuration === 12 ? 'tahun' : `${packageDuration} bulan`} untuk setiap properti kost yang didaftarkan.</p>
-                    <p><strong>2. Kunjungan Surveyor:</strong> Setelah pembayaran/pendaftaran diajukan, tim surveyor dari RuangSinggah.id akan menjadwalkan survey lokasi untuk dokumentasi visual profesional.</p>
-                    <p><strong>3. Media & Pemasaran:</strong> Seluruh hak cipta dokumentasi foto/video menjadi hak milik RuangSinggah.id dan akan dipublikasikan ke channel promosi kami.</p>
-                    <p><strong>4. Penagihan Otomatis:</strong> Tagihan sewa bulanan penghuni diproses secara otomatis melalui payment gateway RuangSinggah.id dan dicairkan berkala ke dompet pemilik.</p>
+                  {/* Document Terms Box */}
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2">
+                      <FileText size={15} className="text-orange-500" />
+                      <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest">
+                        Syarat & Ketentuan Layanan KostManager
+                      </h4>
+                    </div>
+
+                    <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-4 sm:p-5 max-h-56 overflow-y-auto text-xs space-y-3.5 text-slate-600 font-medium leading-relaxed">
+                      <div className="flex gap-2.5">
+                        <div className="w-5 h-5 rounded-full bg-orange-100 text-orange-600 flex items-center justify-center flex-shrink-0 text-[10px] font-bold">
+                          1
+                        </div>
+                        <div>
+                          <strong className="text-slate-900 block mb-0.5">Biaya Berlangganan & Aktivasi:</strong>
+                          Berlangganan KostManager dikenakan tarif resmi {FORMAT_CURRENCY(packagePrice)} per {packageDuration === 12 ? 'tahun' : `${packageDuration} bulan`} per properti kost. Layanan aktif setelah pembayaran terverifikasi.
+                        </div>
+                      </div>
+
+                      <div className="flex gap-2.5">
+                        <div className="w-5 h-5 rounded-full bg-orange-100 text-orange-600 flex items-center justify-center flex-shrink-0 text-[10px] font-bold">
+                          2
+                        </div>
+                        <div>
+                          <strong className="text-slate-900 block mb-0.5">Kunjungan Surveyor & Foto Profesional:</strong>
+                          Tim surveyor resmi RuangSinggah.id akan menjadwalkan kunjungan langsung ke lokasi properti untuk pengambilan foto/video berkualitas tinggi dan pembuatan denah/katalog visual kamar.
+                        </div>
+                      </div>
+
+                      <div className="flex gap-2.5">
+                        <div className="w-5 h-5 rounded-full bg-orange-100 text-orange-600 flex items-center justify-center flex-shrink-0 text-[10px] font-bold">
+                          3
+                        </div>
+                        <div>
+                          <strong className="text-slate-900 block mb-0.5">Media Promosi Eksklusif:</strong>
+                          Seluruh materi visual akan dipromosikan melalui channel prioritas RuangSinggah.id (Instagram, TikTok, Website, dan Banner Prioritas) untuk mempercepat keterisian kamar.
+                        </div>
+                      </div>
+
+                      <div className="flex gap-2.5">
+                        <div className="w-5 h-5 rounded-full bg-orange-100 text-orange-600 flex items-center justify-center flex-shrink-0 text-[10px] font-bold">
+                          4
+                        </div>
+                        <div>
+                          <strong className="text-slate-900 block mb-0.5">Sistem Penagihan & Pembayaran Terpadu:</strong>
+                          Tagihan sewa bulanan penghuni dikelola otomatis oleh sistem digital RuangSinggah.id dan dicairkan berkala langsung ke rekening/dompet pemilik.
+                        </div>
+                      </div>
+                    </div>
                   </div>
 
-                  <div className="flex items-start gap-3 p-4 bg-orange-50 rounded-2xl border border-orange-200">
-                    <input
-                      type="checkbox"
-                      id="agree-cb-landing"
-                      checked={hasAgreedMoU}
-                      onChange={(e) => setHasAgreedMoU(e.target.checked)}
-                      className="mt-1 w-5 h-5 text-orange-500 rounded focus:ring-orange-500 border-gray-300 cursor-pointer bg-white"
-                    />
-                    <label htmlFor="agree-cb-landing" className="text-xs text-gray-700 font-bold cursor-pointer select-none flex-1 leading-relaxed">
-                      Saya menyatakan setuju dengan seluruh Ketentuan Berlangganan program KostManager dan bersedia dikunjungi surveyor.
+                  {/* Interactive Agreement Checkbox */}
+                  <div 
+                    onClick={() => setHasAgreedMoU(!hasAgreedMoU)}
+                    className={`flex items-start gap-3 p-4 rounded-2xl border transition-all cursor-pointer ${
+                      hasAgreedMoU 
+                        ? 'bg-orange-50/80 border-orange-500 ring-2 ring-orange-500/20 shadow-xs' 
+                        : 'bg-white border-slate-200 hover:border-slate-300'
+                    }`}
+                  >
+                    <div className="mt-0.5">
+                      <input
+                        type="checkbox"
+                        id="agree-cb-landing"
+                        checked={hasAgreedMoU}
+                        onChange={(e) => setHasAgreedMoU(e.target.checked)}
+                        onClick={(e) => e.stopPropagation()}
+                        className="w-4 h-4 text-orange-500 rounded focus:ring-orange-500 border-slate-300 cursor-pointer bg-white"
+                      />
+                    </div>
+                    <label htmlFor="agree-cb-landing" className="text-xs text-slate-800 font-bold cursor-pointer select-none flex-1 leading-relaxed">
+                      Saya menyatakan telah membaca, memahami, dan menyetujui seluruh Ketentuan Berlangganan KostManager serta bersedia menerima kunjungan tim surveyor lokasi.
                     </label>
                   </div>
 
-                  <div className="flex gap-3 pt-2 border-t border-gray-100">
+                  {/* Sticky Footer */}
+                  <div className="flex items-center justify-between gap-3 pt-3 border-t border-slate-100 bg-white sticky bottom-0">
                     <button
                       type="button"
                       onClick={() => setModalStep('form')}
-                      className="w-full sm:w-auto px-6 py-3 text-gray-500 hover:text-gray-900 text-sm font-bold transition-colors cursor-pointer"
+                      className="px-5 py-2.5 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 text-xs sm:text-sm font-bold transition-all cursor-pointer"
                     >
                       Kembali ke Formulir
                     </button>
                     <button
                       type="button"
-                      className="w-full sm:flex-1 bg-orange-500 hover:bg-orange-600 text-white py-3 rounded-xl text-sm font-black uppercase tracking-widest flex items-center justify-center gap-2 active:scale-95 shadow-lg shadow-orange-500/20 cursor-pointer disabled:opacity-50"
+                      disabled={!hasAgreedMoU}
                       onClick={handleSubmitPayment}
+                      className="px-6 sm:px-8 py-3 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white rounded-xl text-xs sm:text-sm font-black uppercase tracking-wider flex items-center justify-center gap-2 active:scale-95 shadow-lg shadow-orange-500/25 transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                     >
-                      Setuju & Lanjut Pembayaran
+                      <ShieldCheck size={17} className="stroke-[2.5]" />
+                      <span>Setuju & Lanjut Pembayaran</span>
                     </button>
                   </div>
                 </div>

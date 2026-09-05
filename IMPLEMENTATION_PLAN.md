@@ -1,83 +1,60 @@
-# IMPLEMENTATION PLAN: Perbaikan Alur Listing & Prioritas Foto Kamar Termahal Sebagai Cover Preview Properti
-
-Dokumen ini berisi rencana komprehensif untuk memperbaiki penentuan foto sampul (*cover/preview*) properti pada alur listing Mitra Dashboard dan KostManager/Surveyor Portal.
-
----
+# Rencana Implementasi: Modernisasi & Responsivitas Form Pendaftaran KostManager (Standar Industri & Preview Foto Properti)
 
 ## 1. Analisis Masalah & Kebutuhan
-
-### A. Kondisi Saat Ini (Problem)
-1. **Cover Properti Keliru (Menampilkan Bangunan Depan/Fasad)**:
-   - Pada alur pendaftaran kost Mitra (`KostFormMitra.tsx`), logika pengurutan foto secara eksplisit memaksa kategori `'Bangunan Depan'` berada di urutan terdepan (`index 0`).
-   - Pada alur pendaftaran KostManager / Surveyor (`KostManagerPropertyFormModal.tsx` & `AgentDashboard.tsx`), foto yang disimpan di `image_urls` didominasi oleh foto area publik (dimulai dari Bangunan Depan), sementara foto interior kamar disimpan terpisah di dalam array `room_types[i].images`.
-   - Akibatnya, pada katalog pencarian publik, kartu properti (`KostCard`), dashboard mitra, dan simulasi preview mobile, foto pertama (`imageUrls[0]`) yang tampil sebagai representasi utama kost adalah tampak depan gedung luar/fasad, bukan kamar tidur.
-2. **Kebutuhan Logika Multi Tipe Kamar**:
-   - Calon penyewa mencari kost terutama berdasarkan kondisi dan kenyamanan interior kamar tidur.
-   - Sesuai instruksi User, foto utama yang ditampilkan sebagai preview listing **HARUS Foto Kamar**.
-   - Jika suatu properti memiliki lebih dari 1 tipe kamar (misal: Standard Rp 800rb, Deluxe Rp 1,5jt, VIP Rp 2,2jt), sistem **WAJIB memilih foto kamar dari tipe kamar dengan harga paling mahal (tertinggi)** sebagai cover utama (`imageUrls[0]`).
+- **Masalah Saat Ini**:
+  1. **Tampilan Kurang Responsif & Modern**: Modal formulir pendaftaran KostManager terasa kaku pada perangkat mobile. Tombol navigasi/aksi bawah berisiko terpotong pada layar sempit, dan hierarki visual antar elemen input belum memenuhi standar UI/UX industri modern (seperti Airbnb / Traveloka / Mamikos).
+  2. **Ketiadaan Preview Foto Properti**: Saat memilih opsi *"Pilih dari Kost Saya"*, sistem saat ini hanya menyediakan `<select>` dropdown teks polos dan peta mentah, tanpa menampilkan thumbnail/foto utama properti, kartu ringkasan visual, maupun badge status properti yang jelas.
+  3. **Visual Hierarchy & Multi-Step**: Indikator langkah (Step 1 Data Properti, Step 2 Syarat & Ketentuan) masih berupa teks polos dan belum memiliki *step progress indicator* yang interaktif dan mewah.
+- **Tujuan Pengembangan**:
+  1. Merombak desain modal pendaftaran KostManager menjadi *responsive dialog / mobile-friendly bottom sheet* yang adaptif, bersih, dan modern.
+  2. Mengimplementasikan **Visual Property Selector Card & High-Resolution Preview Banner** lengkap dengan foto properti (diambil dari kolom `image_urls`/`images`), badge jenis kost, jumlah kamar, lokasi, dan status langganan.
+  3. Menyediakan navigasi multi-step yang intuitif (*Progress Bar / Step Pills*), form input dengan *icon prefix* & *micro-animations*, serta *order summary card* pada tahap Syarat & Ketentuan (MoU).
 
 ---
 
-## 2. Dampak Perubahan (File yang Disentuh)
-
-1. `functions/public/components/KostFormMitra.tsx`:
-   - Penyesuaian logika penyusunan & pengurutan foto sebelum submit (`allImagesList` & `newPhotoItems`).
-   - Implementasi helper pemilih foto kamar dari tipe kamar berharga tertinggi.
-   - Pembaruan teks label & badge panduan di UI Step 4 Media (menunjukkan foto kamar termahal sebagai Cover Utama preview).
-
-2. `functions/public/components/admin/KostManagerPropertyFormModal.tsx`:
-   - Penyesuaian logika `handleDirectSave` agar menyatukan foto kamar dari tipe kamar berharga termahal ke urutan terdepan (`index 0`) pada array `image_urls`.
-   - Penyesuaian tampilan simulasi mobile preview di Step 3 agar mencerminkan cover foto kamar termahal.
-
-3. `functions/public/pages/AgentDashboard.tsx`:
-   - Penyesuaian pembentukan payload `propertyPayload.image_urls` saat onboarding / survey KostManager disimpan, dengan memprioritaskan foto kamar dari tipe kamar termahal ke `index 0`.
-
-4. `functions/public/adminService.ts`:
-   - Integrasi helper pengurutan cover photo pada `addPropertyWithMedia` dan `updatePropertyWithMedia` agar memastikan integritas `image_urls[0]` selalu mengutamakan foto kamar termahal jika data kamar tersedia.
-
-5. `functions/public/userService.ts`:
-   - Pembaruan fungsi `transformPropertyRow` untuk menjamin konsistensi pengambilan `imageUrls[0]` pada saat properti dimuat dari database jika terdapat foto kamar pada `room_types`.
+## 2. Dampak Perubahan
+File yang akan disentuh:
+- `functions/public/pages/KostManagerLanding.tsx`
+  - Memperluas query database Supabase `properties` agar mengambil data gambar (`images`, `image_urls`, `price`, `status`).
+  - Menambahkan utilitas resolusi cover image properti yang aman dan anti-broken link.
+  - Merombak arsitektur markup modal menjadi modern responsive container (sticky blurred header & footer, smooth scrolling body).
+  - Mengganti dropdown teks biasa dengan **Visual Property Selector Cards** (grid/carousel kartu properti dengan foto thumbnail, nama kost, tipe, kota, kamar) dan **Selected Property Preview Banner**.
+  - Memperbarui styling seluruh field formulir (input Nama Kost, Jenis Kost, Jumlah Kamar, Kamar Kosong, Link Google Maps, dan Alamat) dengan visual design sistem modern.
+  - Mempercantik Step 2 (MoU / Syarat & Ketentuan) dengan *Subscription & Property Summary Card* sebelum checkout pembayaran.
 
 ---
 
-## 3. Langkah-Langkah Eksekusi (Secara Bertahap)
-
-### Langkah 1: Pembuatan Helper Standar Penentu Foto Kamar Termahal
-- Membuat fungsi utilitas `resolveListingPhotosWithRoomCover`:
-  1. Menerima data daftar foto area publik dan daftar `roomTypes` (beserta foto masing-masing tipe kamar).
-  2. Menemukan tipe kamar dengan harga tertinggi berdasarkan tarif bulanan efektif (`getRoomEffectivePrice` / `pricing.find(bulanan)` / `price`).
-  3. Mengambil foto pertama dari tipe kamar termahal tersebut.
-  4. Menyusun array gambar dengan urutan:
-     - **Index 0**: Foto Utama Kamar Termahal (Cover Preview Utama).
-     - **Index 1..n**: Foto-foto kamar lainnya dari seluruh tipe kamar.
-     - **Index n+1..dst**: Foto-foto area publik (Bangunan Depan, Koridor, Area Parkir, Dapur Bersama, Fasilitas, dll.).
-  5. *Fallback Graceful*: Jika tipe kamar termahal belum memiliki foto, ambil foto kamar dari tipe kamar lain yang memiliki foto. Jika belum ada foto kamar sama sekali, gunakan foto area umum yang tersedia.
-
-### Langkah 2: Refactor Alur Form Listing Mitra (`KostFormMitra.tsx`)
-- Mengganti logika pengurutan lama yang memprioritaskan `'Bangunan Depan'` dengan logika baru yang menaruh foto tipe kamar termahal di `index 0`.
-- Memperbarui teks panduan di Step 4 Media agar Mitra memahami bahwa foto kamar terbaik/termahal akan menjadi cover utama listing di halaman pencarian.
-
-### Langkah 3: Refactor Alur Listing KostManager (`KostManagerPropertyFormModal.tsx` & `AgentDashboard.tsx`)
-- Memperbaiki pembentukan `image_urls` pada proses penyimpanan properti KostManager agar menggabungkan foto-foto kamar ke dalam `image_urls` dengan foto kamar tipe termahal di posisi terdepan.
-- Memperbarui widget Mobile Simulator di Step 3 agar menampilkan foto kamar termahal sebagai cover.
-
-### Langkah 4: Sinkronisasi di Backend Layer (`adminService.ts` & `userService.ts`)
-- Memastikan `addPropertyWithMedia` dan `updatePropertyWithMedia` di `adminService.ts` menerapkan urutan foto yang benar sebelum insert/update ke tabel `properties`.
-- Memastikan `transformPropertyRow` di `userService.ts` secara cerdas mengembalikan `imageUrls` dengan cover kamar termahal saat dibaca dari database.
+## 3. Langkah-Langkah Eksekusi (Fase 2 Setelah di-ACC)
+1. **Langkah 1: Optimasi Fetching Data Properti Pemilik**:
+   - Perbarui query Supabase pada `loadUserKosts` untuk mengambil `id, title, type, room_types, address, city, area, location, is_managed, images, image_urls, price, status`.
+   - Implementasikan fungsi helper `getKostPhoto(kost)` untuk mengekstrak foto utama dari berbagai format JSON Supabase.
+2. **Langkah 2: Modernisasi Modal Container & Progress Header**:
+   - Buat kontainer modal responsif dengan `max-h-[90vh] sm:max-h-[85vh]`, backdrop blur, rounded corners modern, dan sticky header/footer.
+   - Tambahkan *Multi-Step Indicator Bar* (Langkah 1: Data Properti, Langkah 2: Syarat & Ketentuan).
+3. **Langkah 3: Implementasi Visual Property Selector & Rich Preview**:
+   - Buat kartu pilihan kost interaktif dengan foto thumbnail, label status, jenis kost, dan checkmark badge.
+   - Buat card preview properti terpilih dengan cover banner besar, ringkasan data, dan peta mini terintegrasi.
+4. **Langkah 4: Polishing Input Form & Micro-Interactions**:
+   - Tambahkan icon pendukung (`Building`, `Users`, `DoorOpen`, `MapPin`, `Sparkles`) pada setiap field.
+   - Optimalkan integrasi geolocation GPS dan pinpoint Google Maps agar rapi dan responsif di mobile.
+5. **Langkah 5: Penyempurnaan Step 2 Syarat & Ketentuan (MoU)**:
+   - Tampilkan ringkasan pesanan paket langganan dan properti terpilih.
+   - Desain ulang kotak Syarat & Ketentuan berformat dokumen profesional dengan checkmark persetujuan interaktif.
+6. **Langkah 6: Kompilasi, Verifikasi, dan Git Push**:
+   - Jalankan `npm run build` di `functions/public` untuk memastikan 0 error kompilasi.
+   - Catat progres ke `functions/PROGRESS.md` dan terbitkan `WALKTHROUGH.md`.
+   - Lakukan commit dan push ke GitHub branch `bukan-productions`.
 
 ---
 
 ## 4. Rencana Verifikasi
-
-1. **Uji Kompilasi Build**:
-   - Menjalankan `npm.cmd run build` di direktori `functions/public` untuk memastikan 0 error tipe TypeScript dan bundle lulus 100%.
-2. **Verifikasi Skenario Listing Mitra**:
-   - Tambah/edit kost dengan 1 tipe kamar -> pastikan foto kamar berada di cover `imageUrls[0]`.
-   - Tambah/edit kost dengan multiple tipe kamar (misal: Tipe A @ Rp 1.000.000 dan Tipe B VIP @ Rp 2.500.000) -> pastikan foto kamar Tipe B VIP otomatis menjadi cover utama di `imageUrls[0]` dan muncul di katalog pencarian.
-3. **Verifikasi Skenario KostManager**:
-   - Pengisian properti di modal KostManager -> pastikan Step 3 Mobile Preview dan data tersimpan di database menempatkan foto kamar termahal di cover.
-
----
-
-> [!IMPORTANT]
-> **Menunggu Persetujuan**: Sesuai protokol siklus 2-fase pada `AGENTS.md` dan `GEMINI.md`, AI Agent berhenti di sini untuk meminta persetujuan / masukan dari User sebelum mengeksekusi modifikasi file kode.
+1. **Verifikasi Kompilasi**:
+   - Menjalankan `npm run build` di `functions/public` hingga lulus tanpa error TypeScript.
+2. **Verifikasi Tampilan Responsif (Mobile & Desktop)**:
+   - Memastikan modal terbuka rapi di layar HP (lebar < 640px) dan desktop tanpa ada tombol yang terpotong.
+3. **Verifikasi Visual Selector & Preview Foto**:
+   - Memastikan saat memilih *"Pilih dari Kost Saya"*, foto kost muncul dengan jelas, thumbnail kartu dapat diklik untuk berganti properti, dan preview banner menampilkan detail kost terpilih secara instan.
+4. **Verifikasi Alur Daftar Kost Baru (Manual)**:
+   - Memastikan peralihan ke *"Daftar Kost Baru (Manual)"* mengosongkan form dan memungkinkan input manual serta pemilihan peta koordinat tanpa kendala.
+5. **Verifikasi Syarat & Ketentuan**:
+   - Memastikan validasi form bekerja sebelum lanjut ke Step 2, ringkasan paket muncul, dan checkbox persetujuan mengaktifkan tombol pembayaran.

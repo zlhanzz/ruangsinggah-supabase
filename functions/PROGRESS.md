@@ -2,6 +2,34 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 369. Modernisasi UI/UX Formulir Pendaftaran KostManager, Responsivitas Mobile, Visual Property Selector, dan Preview Foto Cover Properti (`KostManagerLanding.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna menilai tampilan form pendaftaran KostManager sebelumnya kurang responsif pada perangkat mobile (tombol aksi berisiko terpotong pada layar kecil), tampilan visual kurang modern dan belum berstandar industri.
+  2. Saat calon mitra memilih properti yang sudah ada di akunnya (*"Pilih dari Kost Saya"*), sistem sebelumnya hanya menyediakan `<select>` dropdown teks polos tanpa thumbnail foto properti, badge status, maupun kartu ringkasan visual.
+- **Implementasi Solusi**:
+  1. **Visual Property Selector & Preview Foto Cover Properti**:
+     - Memperluas query database Supabase `properties` untuk mengambil `images, image_urls, image_url, price, price_monthly, price_yearly, status`.
+     - Menyediakan fungsi utilitas `getKostCoverImage` untuk mengekstrak foto cover utama properti secara aman dan anti-broken link.
+     - Mengganti dropdown teks biasa dengan **Visual Selectable Property Cards**: setiap kartu properti menampilkan foto thumbnail, judul properti, badge jenis kost (Putra/Putri/Campur), badge lokasi (Kota/Area), jumlah kamar, badge status KostManager, dan checkmark aktif.
+     - Mengimplementasikan **Showcase Preview Properti Terpilih**: menampilkan banner foto beresolusi tinggi, badge jenis properti, chip ringkasan (Kota, Jumlah Kamar, Status), alert konfirmasi sinkronisasi data otomatis, dan mini-map lokasi interaktif/collapsible.
+  2. **Modern Responsive Modal Architecture**:
+     - Merombak struktur modal menjadi *responsive dialog / bottom-sheet* adaptif (`max-h-[92vh] sm:max-h-[88vh]`, rounded corners modern, dan backdrop blur).
+     - Menambahkan **Multi-Step Progress Indicator Bar** di header (Langkah 1: Data Properti, Langkah 2: Syarat & Ketentuan) lengkap dengan status pill dan bar penghubung.
+     - Menerapkan *Sticky Header* dan *Sticky Footer* ber-backdrop blur sehingga tombol navigasi (*Batal*, *Lanjut: Syarat & Ketentuan*, *Setuju & Lanjut Pembayaran*) selalu tampil prima dan tidak pernah terpotong di layar mobile maupun desktop.
+  3. **Polishing Segmented Control & Form Input Fields**:
+     - Menyajikan pemilih metode (*Pilih dari Kost Saya* vs *Daftar Kost Baru*) dalam format Segmented Radio Cards dengan ikon vector `<Building2 />` & `<PlusCircle />` serta efek active pulse.
+     - Mempercantik input field (Nama Kost, Jenis Kost, Jumlah Kamar, Kamar Kosong, Link Google Maps, dan Alamat) dengan border focus ring halus dan tipografi modern.
+     - Mengoptimalkan integrasi GPS Geolocation dan pinpoint Google Maps Location Picker.
+  4. **Penyempurnaan Step 2 (MoU / Syarat & Ketentuan)**:
+     - Menambahkan **Ringkasan Pendaftaran (Order & Property Summary Card)** yang menampilkan nama kost, tipe, jumlah kamar, paket yang dipilih, dan nominal biaya langganan secara transparan sebelum checkout.
+     - Menata kotak Syarat & Ketentuan dengan 4 poin kebijakan berikon dan kartu persetujuan interaktif dengan *active ring highlight*.
+- **File Tersentuh**:
+  - `functions/public/pages/KostManagerLanding.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi build frontend Vite (`cmd /c npm run build` di `functions/public`) lulus 100% (`✓ 2511 modules transformed, built in 41.80s`, 0 error).
+
 ### 368. Penguncian Isolasi Mutlak Akun Mitra (Owner) Berbasis Role Database Anti-Leak pada Sesi Offline / Reload (`App.tsx`, `Navbar.tsx`) (September 2026)
 - **Permintaan & Masalah**:
   1. Pengguna melaporkan bahwa saat koneksi internet sempat terputus/mati dan halaman browser ter-reload kembali, akun Mitra (`role: 'owner'` / `'mitra'`) yang sebelumnya berada di Dashboard Mitra tiba-tiba muncul di antarmuka User biasa (menampilkan Bottom Navigation Bar User: *Home, Search, Chat, Orders, Profile*, serta halaman Profile Hub User dengan badge *"Owner Mitra"*).
