@@ -2,6 +2,35 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 355. Pemisahan Responsif Alur Navigasi Desktop & Mobile: Menu Baru "Pengaturan" (Profile Hub) & Direct Edit "Profil Saya" (`types.ts`, `Navbar.tsx`, `Profile.tsx`, `App.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna meminta arsitektur navigasi yang berbeda dan teroptimasi untuk Desktop vs Mobile:
+     - **Tampilan Mobile**: Tetap terpusat pada Bottom Navigation Bar (tab *Profile*), di mana tab *Profile* langsung membuka Profile Hub Dashboard tanpa perlu menu "Pengaturan" terpisah.
+     - **Tampilan Desktop**: Pada dropdown avatar kanan atas navbar, menu *"Profil Saya"* harus langsung mengarah ke seluruh data pribadi dan formulir edit data diri (`/profile?view=edit`).
+     - Pengguna meminta penambahan menu baru **"Pengaturan"** pada dropdown desktop yang membuka seluruh fitur Profile Hub Dashboard yang sama persis seperti di mobile (Riwayat Sewa, Favorit, Riwayat Transaksi & Tagihan, Ganti Password, Notifikasi, Pusat Bantuan, dll.).
+- **Implementasi Solusi**:
+  1. **Penambahan Route & Enum Page (`types.ts` & `App.tsx`)**:
+     - Menambahkan `Page.SETTINGS = '/settings'` pada enum `Page`.
+     - Mendaftarkan route `<Route path={Page.SETTINGS} ... />` di `App.tsx` yang merender komponen `<Profile initialMode="hub" />`.
+  2. **Penyempurnaan Dropdown Avatar Desktop (`Navbar.tsx`)**:
+     - Memperbarui menu **"Profil Saya"** pada dropdown desktop agar memanggil navigasi ke `/profile?view=edit` (langsung membuka form edit data pribadi & kontak).
+     - Menyisipkan menu baru **"Pengaturan"** pada dropdown desktop yang mengarah ke `Page.SETTINGS` (`/settings`) untuk membuka Profile Hub Dashboard lengkap.
+     - Mempertahankan kesederhanaan mobile bottom navigation bar (5 tab esensial).
+  3. **Penyelarasan Reaktif Sub-View (`Profile.tsx`)**:
+     - Mengintegrasikan `useLocation()` untuk membaca URL pathname dan query params (`?view=edit`, `?tab=edit`, `?view=favorites`, `?view=transactions`, `?view=rental_history`).
+     - Jika route adalah `/profile?view=edit` atau `forceEdit === true` $\rightarrow$ memuat `viewMode = 'edit_personal_data'` (Formulir Data Pribadi siap edit).
+     - Jika route adalah `/settings` atau `/profile` (mobile default) $\rightarrow$ memuat `viewMode = 'hub'` (Profile Hub Dashboard).
+     - Memastikan tombol kembali (*Back button*) pada form data pribadi mengalirkan navigasi secara mulus ke Hub atau halaman sebelumnya.
+- **File Tersentuh**:
+  - `functions/public/types.ts`
+  - `functions/public/components/Navbar.tsx`
+  - `functions/public/pages/Profile.tsx`
+  - `functions/public/App.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi build frontend Vite (`cmd /c npm run build` di `functions/public`) lulus 100% (`✓ 2511 modules transformed, built in 23.03s`, 0 error).
+
 ### 354. Penyesuaian Otomatis Cover Thumbnail Foto Kamar Termahal untuk Seluruh Listing Lama & Baru tanpa Perlu Edit Manual (`userService.ts`, `adminService.ts`) (September 2026)
 - **Permintaan & Masalah**:
   1. Pengguna menanyakan apakah untuk listing yang sudah ada sebelumnya (seperti pada screenshot di mana "KOST" dan "KOST APALAH DAYA" masih menampilkan foto Bangunan Depan) harus dilakukan pengeditan manual satu per satu, ataukah bisa berubah dan tersesuaikan secara otomatis karena seluruh foto sudah terdata dan dikelompokkan sudut/kategorinya di database.

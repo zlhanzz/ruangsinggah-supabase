@@ -198,6 +198,7 @@ export enum Page {
   CHAT = '/chat',
   MY_BOOKINGS = '/my-bookings',
   PROFILE = '/profile',
+  SETTINGS = '/settings',
   MITRA_PROFILE = '/mitra-profile',
   SURVEY_SERVICE = '/survey-service',
   SURVEY_CHECKOUT = '/survey-checkout',

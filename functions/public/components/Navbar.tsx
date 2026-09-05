@@ -235,19 +235,28 @@ const Navbar: React.FC<NavbarProps> = ({ activePage, onPageChange, user, onLogou
                             </button>
                             <button
                               onClick={() => {
-                                onPageChange(Page.PROFILE);
+                                onPageChange(Page.MITRA_PROFILE);
                                 setIsProfileOpen(false);
                               }}
                               className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-orange-50 hover:text-orange-600 border-t border-gray-50"
                             >
                               Profil Mitra
                             </button>
+                            <button
+                              onClick={() => {
+                                onPageChange(Page.SETTINGS);
+                                setIsProfileOpen(false);
+                              }}
+                              className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-orange-50 hover:text-orange-600 border-t border-gray-50"
+                            >
+                              Pengaturan
+                            </button>
                           </>
                         ) : (
                           <>
                             <button
                               onClick={() => {
-                                onPageChange(Page.PROFILE);
+                                onPageChange(`${Page.PROFILE}?view=edit` as any);
                                 setIsProfileOpen(false);
                               }}
                               className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-orange-50 hover:text-orange-600"
@@ -271,6 +280,15 @@ const Navbar: React.FC<NavbarProps> = ({ activePage, onPageChange, user, onLogou
                               className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-orange-50 hover:text-orange-600 border-t border-gray-50"
                             >
                               Kost Saya
+                            </button>
+                            <button
+                              onClick={() => {
+                                onPageChange(Page.SETTINGS);
+                                setIsProfileOpen(false);
+                              }}
+                              className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-orange-50 hover:text-orange-600 border-t border-gray-50"
+                            >
+                              Pengaturan
                             </button>
                             {['admin', 'survey_agent'].includes(user.role) && (
                               <button
@@ -385,7 +403,7 @@ const Navbar: React.FC<NavbarProps> = ({ activePage, onPageChange, user, onLogou
                       </div>
                       <button
                         onClick={() => {
-                          onPageChange(Page.PROFILE);
+                          onPageChange(`${Page.PROFILE}?view=edit` as any);
                           setIsProfileOpen(false);
                         }}
                         className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-orange-50 hover:text-orange-600"
@@ -409,6 +427,15 @@ const Navbar: React.FC<NavbarProps> = ({ activePage, onPageChange, user, onLogou
                         className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-orange-50 hover:text-orange-600 border-t border-gray-50"
                       >
                         Kost Saya
+                      </button>
+                      <button
+                        onClick={() => {
+                          onPageChange(Page.SETTINGS);
+                          setIsProfileOpen(false);
+                        }}
+                        className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-orange-50 hover:text-orange-600 border-t border-gray-50"
+                      >
+                        Pengaturan
                       </button>
                       {['admin', 'survey_agent'].includes(user.role) && (
                         <button

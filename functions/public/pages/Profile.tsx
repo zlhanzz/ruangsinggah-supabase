@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { supabase } from '../supabase';
 import { notifyAdminIdentityVerification } from '../emailService';
 import { Page, Kost } from '../types';
@@ -24,7 +24,8 @@ import {
   Briefcase, Building2, User, Users, MapPin, Sparkles, Heart, 
   Phone, MessageSquare, MessageCircle, Check, X, Shield, Key, Camera, Trash2, 
   Mail, RefreshCw, AlertCircle, Eye, EyeOff, ChevronRight, CreditCard,
-  Bell, HelpCircle, FileText, LogOut, ExternalLink, Receipt, Layers, RotateCcw, Zap
+  Bell, HelpCircle, FileText, LogOut, ExternalLink, Receipt, Layers, RotateCcw, Zap,
+  Settings
 } from 'lucide-react';
 
 interface ProfileProps {
@@ -32,12 +33,29 @@ interface ProfileProps {
   onLogout: () => void;
   onSaveSuccess?: () => void;
   forceEdit?: boolean;
+  initialMode?: 'hub' | 'edit_personal_data' | 'favorites' | 'transactions' | 'rental_history';
   onBack?: () => void;
 }
 
-const Profile: React.FC<ProfileProps> = ({ user, onLogout, onSaveSuccess, forceEdit, onBack }) => {
+const Profile: React.FC<ProfileProps> = ({ user, onLogout, onSaveSuccess, forceEdit, initialMode, onBack }) => {
   const navigate = useNavigate();
-  const [viewMode, setViewMode] = useState<'hub' | 'edit_personal_data' | 'favorites' | 'transactions' | 'rental_history'>(forceEdit ? 'edit_personal_data' : 'hub');
+  const location = useLocation();
+
+  const determineInitialMode = (): 'hub' | 'edit_personal_data' | 'favorites' | 'transactions' | 'rental_history' => {
+    if (forceEdit) return 'edit_personal_data';
+    if (initialMode) return initialMode;
+    const searchParams = new URLSearchParams(location.search);
+    const viewParam = searchParams.get('view') || searchParams.get('tab');
+    if (viewParam === 'edit' || viewParam === 'personal_data' || searchParams.get('edit') === 'true') {
+      return 'edit_personal_data';
+    }
+    if (viewParam === 'favorites') return 'favorites';
+    if (viewParam === 'transactions') return 'transactions';
+    if (viewParam === 'rental_history') return 'rental_history';
+    return 'hub';
+  };
+
+  const [viewMode, setViewMode] = useState<'hub' | 'edit_personal_data' | 'favorites' | 'transactions' | 'rental_history'>(determineInitialMode);
   const [isEditing, setIsEditing] = useState(forceEdit || false);
   const [loading, setLoading] = useState(false);
   const [activeKostCount, setActiveKostCount] = useState<number>(0);
@@ -118,8 +136,25 @@ const Profile: React.FC<ProfileProps> = ({ user, onLogout, onSaveSuccess, forceE
     if (forceEdit) {
       setIsEditing(true);
       setViewMode('edit_personal_data');
+      return;
     }
-  }, [forceEdit]);
+    const searchParams = new URLSearchParams(location.search);
+    const viewParam = searchParams.get('view') || searchParams.get('tab');
+    if (viewParam === 'edit' || viewParam === 'personal_data' || searchParams.get('edit') === 'true') {
+      setIsEditing(true);
+      setViewMode('edit_personal_data');
+    } else if (location.pathname === Page.SETTINGS || location.pathname === '/settings') {
+      setViewMode('hub');
+    } else if (viewParam === 'favorites') {
+      setViewMode('favorites');
+    } else if (viewParam === 'transactions') {
+      setViewMode('transactions');
+    } else if (viewParam === 'rental_history') {
+      setViewMode('rental_history');
+    } else if (!viewParam && location.pathname === Page.PROFILE) {
+      setViewMode(initialMode || 'hub');
+    }
+  }, [location.pathname, location.search, forceEdit, initialMode]);
 
   useEffect(() => {
     if (!user?.uid) return;

@@ -822,6 +822,19 @@ const App: React.FC = () => {
                 />
               </ProtectedRoute>
             } />
+
+            <Route path={Page.SETTINGS} element={
+              <ProtectedRoute user={user} loadingAuth={loadingAuth}>
+                <Profile
+                  user={user}
+                  onLogout={handleLogout}
+                  onSaveSuccess={handleProfileSaveSuccess}
+                  forceEdit={false}
+                  initialMode="hub"
+                  onBack={handleBackNavigation}
+                />
+              </ProtectedRoute>
+            } />
             
             <Route path={`${Page.DASHBOARD_ADMIN}/*`} element={
               <ProtectedRoute user={user} loadingAuth={loadingAuth} requiredRole="admin">
