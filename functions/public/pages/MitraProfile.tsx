@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../supabase';
 import { User, ShieldCheck, MapPin, Phone, ChevronRight, LogOut, Upload, BadgeCheck, AlertCircle, Clock, Search, X, Mail, Calendar, Gift } from 'lucide-react';
-import { sendWhatsAppTemplate } from '../whatsappService';
+import { sendWhatsAppTemplate, sendWaOtpVerification } from '../whatsappService';
 import { notifyAdminIdentityVerification } from '../emailService';
 
 interface MitraProfileProps {
@@ -211,6 +211,10 @@ const MitraProfile: React.FC<MitraProfileProps> = ({ uid, user: initialUser, onB
     };
 
     const saveStep1Draft = async () => {
+        if (!waOtpVerified && !initialUser?.whatsapp_verified) {
+            alert('Nomor WhatsApp wajib diverifikasi dengan kode OTP sebelum melanjutkan ke tahap berikutnya.');
+            return;
+        }
         setIsSubmitting(true);
         try {
             const updates: any = {
@@ -255,11 +259,9 @@ const MitraProfile: React.FC<MitraProfileProps> = ({ uid, user: initialUser, onB
         }
     };
 
-
-
     const handleSendWaOtp = async () => {
-        if (!formData.phone) {
-            alert('Silakan isi nomor WhatsApp terlebih dahulu.');
+        if (!formData.phone || formData.phone.trim() === '') {
+            alert('Silakan isi nomor WhatsApp Anda terlebih dahulu.');
             return;
         }
         setIsSubmitting(true);
@@ -267,41 +269,18 @@ const MitraProfile: React.FC<MitraProfileProps> = ({ uid, user: initialUser, onB
             const generatedOtp = Math.floor(100000 + Math.random() * 900000).toString();
             setWaOtpCode(generatedOtp);
 
-            let cleanPhone = formData.phone.replace(/\D/g, '');
-            if (cleanPhone.startsWith('0')) {
-                cleanPhone = '62' + cleanPhone.substring(1);
-            } else if (!cleanPhone.startsWith('62')) {
-                cleanPhone = '62' + cleanPhone;
-            }
-
-            const res = await sendWhatsAppTemplate({
-                to: cleanPhone,
-                templateName: 'otp_verification',
-                languageCode: 'id',
-                components: [
-                    {
-                        type: 'body',
-                        parameters: [
-                            { type: 'text', text: generatedOtp }
-                        ]
-                    }
-                ]
-            });
+            const res = await sendWaOtpVerification(formData.phone, generatedOtp);
 
             if (!res.success) {
-                console.warn('Gagal mengirim template otp_verification, menggunakan hello_world fallback...', res.error);
-                await sendWhatsAppTemplate({
-                    to: cleanPhone,
-                    templateName: 'hello_world',
-                    languageCode: 'en_US'
-                });
+                alert(`Gagal mengirim kode OTP ke WhatsApp: ${res.error || 'Terjadi kesalahan sistem'}. Mohon pastikan nomor WhatsApp aktif dan formatnya benar.`);
+                return;
             }
 
             setIsVerifyingWaOtp(true);
             setWaResendTimer(60);
             setOtpDigits(['', '', '', '', '', '']);
             setWaOtpInput('');
-            alert('Kode OTP telah dikirim ke WhatsApp Anda.');
+            alert('Kode OTP 6 digit telah berhasil dikirim ke WhatsApp Anda. Silakan masukkan kode untuk menyelesaikan verifikasi.');
         } catch (error: any) {
             alert(`Gagal mengirim OTP: ${error.message}`);
         } finally {
@@ -309,13 +288,23 @@ const MitraProfile: React.FC<MitraProfileProps> = ({ uid, user: initialUser, onB
         }
     };
 
-    const handleVerifyWaOtp = () => {
-        if (waOtpInput.trim() === waOtpCode) {
+    const handleVerifyWaOtp = async () => {
+        const enteredOtp = (waOtpInput || otpDigits.join('')).trim();
+        if (enteredOtp && enteredOtp === waOtpCode && waOtpCode !== '') {
             setWaOtpVerified(true);
             setIsVerifyingWaOtp(false);
-            alert('Nomor WhatsApp berhasil diverifikasi!');
+            try {
+                await supabase.from('users').update({
+                    phone: formData.phone,
+                    whatsapp_verified: true,
+                    updated_at: new Date().toISOString()
+                }).eq('id', uid);
+            } catch (dbErr) {
+                console.warn('Gagal update whatsapp_verified ke database:', dbErr);
+            }
+            alert('Nomor WhatsApp berhasil diverifikasi resmi! Anda sekarang dapat melanjutkan ke pengisian data identitas KTP.');
         } else {
-            alert('Kode OTP salah. Silakan coba lagi.');
+            alert('Kode OTP salah atau tidak sesuai. Silakan periksa kembali pesan WhatsApp Anda atau klik Kirim Ulang.');
         }
     };
 
@@ -420,7 +409,7 @@ const MitraProfile: React.FC<MitraProfileProps> = ({ uid, user: initialUser, onB
     };
 
     const handleSendNewWaOtp = async () => {
-        if (!tempPhone) {
+        if (!tempPhone || tempPhone.trim() === '') {
             alert('Silakan masukkan nomor WhatsApp baru terlebih dahulu.');
             return;
         }
@@ -429,41 +418,18 @@ const MitraProfile: React.FC<MitraProfileProps> = ({ uid, user: initialUser, onB
             const generatedOtp = Math.floor(100000 + Math.random() * 900000).toString();
             setWaOtpCode(generatedOtp);
 
-            let cleanPhone = tempPhone.replace(/\D/g, '');
-            if (cleanPhone.startsWith('0')) {
-                cleanPhone = '62' + cleanPhone.substring(1);
-            } else if (!cleanPhone.startsWith('62')) {
-                cleanPhone = '62' + cleanPhone;
-            }
-
-            const res = await sendWhatsAppTemplate({
-                to: cleanPhone,
-                templateName: 'otp_verification',
-                languageCode: 'id',
-                components: [
-                    {
-                        type: 'body',
-                        parameters: [
-                            { type: 'text', text: generatedOtp }
-                        ]
-                    }
-                ]
-            });
+            const res = await sendWaOtpVerification(tempPhone, generatedOtp);
 
             if (!res.success) {
-                console.warn('Gagal mengirim template otp_verification, menggunakan hello_world fallback...', res.error);
-                await sendWhatsAppTemplate({
-                    to: cleanPhone,
-                    templateName: 'hello_world',
-                    languageCode: 'en_US'
-                });
+                alert(`Gagal mengirim kode OTP ke WhatsApp baru: ${res.error || 'Terjadi kesalahan'}.`);
+                return;
             }
 
             setPhoneEditStep('new_phone_otp');
             setWaResendTimer(60);
             setOtpDigits(['', '', '', '', '', '']);
             setWaOtpInput('');
-            alert('Kode OTP telah dikirim ke nomor WhatsApp baru Anda.');
+            alert('Kode OTP 6 digit telah dikirim ke nomor WhatsApp baru Anda.');
         } catch (error: any) {
             alert(`Gagal mengirim OTP WhatsApp: ${error.message}`);
         } finally {
@@ -472,13 +438,23 @@ const MitraProfile: React.FC<MitraProfileProps> = ({ uid, user: initialUser, onB
     };
 
     const handleVerifyNewWaOtp = async () => {
-        if (waOtpInput.trim() === waOtpCode) {
+        const enteredOtp = (waOtpInput || otpDigits.join('')).trim();
+        if (enteredOtp && enteredOtp === waOtpCode && waOtpCode !== '') {
             setFormData(prev => ({ ...prev, phone: tempPhone }));
             setWaOtpVerified(true);
             setPhoneEditStep('none');
+            try {
+                await supabase.from('users').update({
+                    phone: tempPhone,
+                    whatsapp_verified: true,
+                    updated_at: new Date().toISOString()
+                }).eq('id', uid);
+            } catch (dbErr) {
+                console.warn('Gagal update phone baru ke database:', dbErr);
+            }
             alert('Nomor WhatsApp baru berhasil diverifikasi!');
         } else {
-            alert('Kode OTP salah. Silakan coba lagi.');
+            alert('Kode OTP salah atau tidak sesuai. Silakan coba lagi.');
         }
     };
 
@@ -670,7 +646,14 @@ const MitraProfile: React.FC<MitraProfileProps> = ({ uid, user: initialUser, onB
     };
 
     const handleSave = async () => {
-        if (!formData.phone) { alert('Nomor WhatsApp wajib diisi'); return; }
+        if (!formData.phone || formData.phone.trim() === '') { 
+            alert('Nomor WhatsApp wajib diisi'); 
+            return; 
+        }
+        if (!waOtpVerified && !initialUser?.whatsapp_verified) {
+            alert('Nomor WhatsApp wajib diverifikasi dengan kode OTP sebelum menyimpan dan mengajukan verifikasi identitas.');
+            return;
+        }
         setIsSubmitting(true);
         try {
             const updates: any = {
@@ -1104,6 +1087,23 @@ const MitraProfile: React.FC<MitraProfileProps> = ({ uid, user: initialUser, onB
                                 <div className="p-8 text-center text-red-500 font-bold uppercase tracking-widest bg-red-50 border border-red-100 rounded-3xl">
                                     Akses Ditolak: Akun Anda sudah terverifikasi.
                                 </div>
+                            ) : (!waOtpVerified && !initialUser?.whatsapp_verified) ? (
+                                <div className="p-8 text-center space-y-4 bg-orange-50 border border-orange-200 rounded-3xl">
+                                    <div className="w-16 h-16 bg-orange-100 text-orange-600 rounded-full flex items-center justify-center mx-auto">
+                                        <AlertCircle size={32} />
+                                    </div>
+                                    <h4 className="text-base font-black text-orange-950 uppercase tracking-tight">Nomor WhatsApp Belum Terverifikasi</h4>
+                                    <p className="text-xs font-bold text-orange-800/80 max-w-md mx-auto leading-relaxed">
+                                        Untuk keamanan akun dan kelancaran notifikasi KostManager, Anda wajib memverifikasi nomor WhatsApp dengan kode OTP di Langkah 1 sebelum dapat mengunggah KTP dan mengajukan verifikasi identitas.
+                                    </p>
+                                    <button 
+                                        type="button" 
+                                        onClick={() => { setSearchParams({ edit: 'true', step: '1' }); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+                                        className="px-8 py-3 bg-orange-500 hover:bg-orange-600 text-white font-black text-xs uppercase tracking-widest rounded-xl shadow-lg shadow-orange-500/20 transition-all active:scale-95"
+                                    >
+                                        Kembali ke Langkah 1 (Verifikasi WhatsApp)
+                                    </button>
+                                </div>
                             ) : (
                                 <div>
                                     <h4 className="text-xs font-black uppercase tracking-widest text-green-600 mb-6 flex items-center gap-2">
@@ -1258,7 +1258,12 @@ const MitraProfile: React.FC<MitraProfileProps> = ({ uid, user: initialUser, onB
                                         <button type="button" onClick={() => { setSearchParams({ edit: 'true', step: '1' }); window.scrollTo({ top: 0, behavior: 'smooth' }); }} className="w-full sm:w-auto px-8 py-4 bg-gray-100 text-gray-600 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-gray-200 active:scale-95 transition-all text-center">
                                             KEMBALI KE DATA PROFIL
                                         </button>
-                                        <button type="button" onClick={handleSave} disabled={isSubmitting} className="w-full sm:w-auto px-10 py-4 bg-orange-500 text-white rounded-xl text-xs font-black uppercase tracking-widest hover:bg-orange-600 active:scale-95 disabled:opacity-50 disabled:active:scale-100 transition-all shadow-lg shadow-orange-500/20 text-center">
+                                        <button 
+                                            type="button" 
+                                            onClick={handleSave} 
+                                            disabled={isSubmitting || (!waOtpVerified && !initialUser?.whatsapp_verified)} 
+                                            className="w-full sm:w-auto px-10 py-4 bg-orange-500 text-white rounded-xl text-xs font-black uppercase tracking-widest hover:bg-orange-600 active:scale-95 disabled:opacity-50 disabled:active:scale-100 transition-all shadow-lg shadow-orange-500/20 text-center"
+                                        >
                                             {isSubmitting ? 'MEMPROSES...' : 'SIMPAN & AJUKAN VERIFIKASI'}
                                         </button>
                                     </>

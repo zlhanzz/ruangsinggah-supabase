@@ -1,71 +1,59 @@
-# Walkthrough - Implementasi Zero-Deploy Brevo Email ke Mitra & Pemisahan Baku Kanal Notifikasi (Admin vs Mitra/User)
+# WALKTHROUGH: Integrasi Ekosistem Meta WhatsApp Cloud API Resmi & Verifikasi Identitas Anti-Bobol
 
-Dokumen ini adalah laporan hasil pekerjaan (**Walkthrough - Fase 2**) yang mendokumentasikan transisi pengiriman email Brevo menjadi **100% Zero-Deploy (Client-Side REST API)**, pemisahan baku kanal email antara internal admin dan eksternal, serta penyelesaian masalah deployment timeout pada Firebase Functions.
-
----
-
-## 1. Daftar Perubahan (Detailed Changes)
-
-### A. Pembuatan Client-Side Brevo Dispatcher ([`emailService.ts`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/emailService.ts))
-- **Fungsi Baru `sendMitraPublishedEmailBrevoDirect`**:
-  - Mengirimkan email ucapan selamat resmi langsung dari browser ke Brevo v3 SMTP REST API (`https://api.brevo.com/v3/smtp/email`).
-  - Menggunakan API Key resmi Brevo v3 (Tersimpan aman di konfigurasi sistem).
-  - Mengirim dari alamat pengirim resmi: `RuangSinggah.id <system@ruangsinggah.id>`.
-  - Subjek email: `🎉 Selamat! Listing Kost "${propertyName}" Berhasil Dipublikasikan di RuangSinggah.id`.
-  - Template HTML: Desain selebrasi modern bergradasi zamrud-oranye RuangSinggah, foto cover properti, rincian tipe/harga/alamat, tombol aksi langsung ke halaman publik kost (`/kost/:id`) dan Dashboard Mitra, serta box edukasi standar keamanan.
-  - **Sifat Zero-Deploy**: Berjalan asinkron (*non-blocking*), instan (<1 detik), tanpa membutuhkan perantara Cloud Function atau perintah deploy terminal apa pun.
-
-### B. Integrasi Service Layer ([`adminService.ts`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/adminService.ts))
-- Mengimpor `sendMitraPublishedEmailBrevoDirect` dari `./emailService`.
-- Memperbarui fungsi `sendMitraPublishedEmailBrevo` agar memicu dispatcher direct Brevo ini.
-
-### C. Konfigurasi Lingkungan ([`functions/public/.env.local`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/.env.local))
-- Menambahkan `VITE_BREVO_API_KEY` agar konsisten dengan standar env Vite.
-
-### D. Perbaikan Modul Backend Anti-Timeout ([`functions/src/index.ts`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/src/index.ts))
-- Mengubah pembacaan parameter Firebase Midtrans `.value()` di top-level menjadi *lazy getters* saat runtime (`getActiveKeys()`, `getMidtransIsProduction()`, `getActiveEnv()`).
-- Menghilangkan peringatan crash deploy `params.MIDTRANS_MERCHANT_ID.value() invoked during function deployment` dan mencegah error `Timeout after 10000ms`.
-
-### E. Penegasan Baku Kanal Komunikasi (Pemisahan Tegas)
-| Penerima | Kanal Layanan | Deskripsi Penggunaan |
-| :--- | :--- | :--- |
-| **Admin RuangSinggah** | **FormSubmit** (`https://formsubmit.co/ajax/${adminEmail}`) + In-App Database | Seluruh notifikasi transaksi, pendaftaran mitra/agen, laporan keluhan, dan notifikasi pengajuan review listing properti. |
-| **Mitra, Agen, & User** | **Brevo REST API** (`https://api.brevo.com/v3/smtp/email`) | Seluruh surat dan email resmi berdesain HTML selebrasi, invoice, kuitansi digital, dan ucapan selamat listing terbit. |
+Dokumen ini merangkum seluruh perubahan, integrasi, dan hasil pengujian aktivasi ekosistem **WhatsApp Cloud API (Meta Developer)** pada platform **RuangSinggah**.
 
 ---
 
-## 2. Hasil Pengujian & Verifikasi
+## 📌 Ringkasan Perubahan
 
-### A. Uji Kirim Brevo REST API Langsung
-- Pengujian langsung HTTP POST payload email selebrasi ke Brevo v3 REST API:
-  - **HTTP Status**: `201 Created`
-  - **Message ID**: `<202609042007.13701988144@smtp-relay.mailin.fr>`
-  - **CORS Preflight**: `200 OK` (`access-control-allow-origin: https://ruangsinggah.id`, `allow-methods: GET, PUT, DELETE, POST, PATCH, OPTIONS`).
+### 1. Ekosistem Modular WhatsApp Cloud API (`functions/public/whatsappService.ts`)
+- Memperbarui helper runtime `sendWhatsAppTemplate` dengan penanganan fallback token dinamis dan normalisasi nomor telepon Indonesia (`628...`).
+- Menyediakan fungsi-fungsi helper modular:
+  - **`sendWaOtpVerification(phone, otpCode)`**: Mengirimkan kode 6 digit OTP resmi ke nomor WhatsApp pengguna via template Meta.
+  - **`sendWaTenantComplaintNotification(phone, details)`**: Mengirimkan notifikasi aduan/keluhan penghuni secara instan ke nomor WhatsApp pemilik kost.
+  - **`sendWaRentBillingReminder(phone, details)`**: Mengirimkan pengingat tagihan jatuh tempo sewa KostManager lengkap dengan rincian biaya dan link pembayaran digital.
+  - **`sendWaMonthlyFinancialReport(phone, details)`**: Mengirimkan ringkasan laporan keuangan bulanan (total pemasukan, pengeluaran, laba bersih, dan okupansi kamar).
 
-### B. Uji Kompilasi Front-End Vite (`functions/public/`)
-```bash
-cmd /c npm run build
-```
-- **Hasil**: **Lulus 100% (Exit code 0)**.
-- Sebanyak 2510 modul berhasil terkompilasi ke dalam bundle produksi `../../public/` dalam waktu 37.13 detik.
+### 2. Hard Gatekeeper & Proteksi Anti-Bypass Verifikasi Identitas Mitra (`functions/public/pages/MitraProfile.tsx`)
+- **Penghapusan Fallback Palsu**: Menghilangkan fallback `hello_world` yang sebelumnya memungkinkan lolos tanpa OTP riil.
+- **Validasi Keras (*Hard Gatekeeper*)**:
+  - `saveStep1Draft` dan `handleSave` menolak proses simpan atau pengajuan verifikasi identitas secara mutlak jika `!waOtpVerified && !initialUser?.whatsapp_verified`.
+  - Langkah 2 (Verifikasi KTP) menyematkan banner penguncian visual dan menonaktifkan (*disabled*) upload foto KTP serta tombol "SIMPAN & AJUKAN VERIFIKASI" jika nomor WhatsApp belum diverifikasi OTP di Langkah 1.
+- **Sinkronisasi Database Instan**: Begitu kode OTP cocok, status `whatsapp_verified: true` langsung disimpan ke tabel `users` di Supabase.
+- **Dukungan Ubah Nomor WhatsApp**: Fitur pergantian nomor WhatsApp terlindungi dengan validasi ganda (OTP email keamanan + OTP nomor WhatsApp baru).
 
-### C. Uji Kompilasi Backend TypeScript (`functions/`)
-```bash
-cmd /c npm run build
-```
-- **Hasil**: **Lulus 100% (Exit code 0)** dengan `tsc`.
+### 3. Proteksi Verifikasi Identitas Agen Surveyor (`functions/public/pages/AgentProfile.tsx`)
+- Menerapkan penguncian OTP WhatsApp, validasi keras submit, dan penguncian formulir KTP Langkah 2 yang sama untuk akun agen surveyor resmi.
+
+### 4. Pemicu WhatsApp Otomatis Keluhan Penghuni KostManager (`functions/public/pages/MyKost.tsx`)
+- Pada fungsi `submitComplaint`, setelah laporan kendala tersimpan di Supabase, sistem secara otomatis mengambil nomor telepon pengelola/pemilik kost (`properties.owner_uid` / `properties.omnichannel_contact_phone`) dan mengirimkan notifikasi WhatsApp instan berisi rincian:
+  - Nama Properti & Nomor Kamar
+  - Kategori & Urgensi Kendala
+  - Judul & Rincian Masalah
+  - Nama & Kontak Penghuni
 
 ---
 
-## 3. Petunjuk Bagi Pengguna (Tidak Perlu Deploy Manual)
+## 🧪 Hasil Verifikasi & Uji Kompilasi
 
-> [!IMPORTANT]
-> **Anda TIDAK PERLU lagi menjalankan perintah `firebase deploy` di terminal!**
-> Seluruh sistem pemicuan email Brevo kini telah terpasang langsung di sisi front-end (*Zero-Deploy*).
+| Komponen | Perintah Uji | Hasil | Status |
+| :--- | :--- | :--- | :--- |
+| **Frontend Vite** | `cmd /c npm run build` (di `functions/public/`) | ✓ 2510 modules transformed, built in 52.12s | **LULUS (0 Error)** |
+| **Backend Functions** | `cmd /c npm run build` (di `functions/`) | `tsc` compile check | **LULUS (0 Error)** |
 
-### Cara Menguji di Browser:
-1. Buka Dashboard Mitra (`/dashboard-mitra`).
-2. Buat listing kost baru atau buka formulir kost yang ada lalu klik **"Publikasikan Kost"**.
-3. Listing akan **langsung terbit** di katalog pencarian publik.
-4. Periksa email mitra Anda: email resmi ucapan selamat dari `RuangSinggah.id <system@ruangsinggah.id>` dengan subjek *"🎉 Selamat! Listing Kost [Nama Kost] Berhasil Dipublikasikan di RuangSinggah.id"* akan langsung masuk ke kotak masuk (inbox).
-5. Pada saat yang sama, admin menerima notifikasi review melalui **FormSubmit** seperti biasa.
+---
+
+## 📋 Panduan Pengujian bagi Pengguna
+
+1. **Uji Verifikasi Identitas Mitra (Pemilik Kost)**:
+   - Masuk ke menu **Profil Mitra** (`/mitra-profile?edit=true&step=1`).
+   - Masukkan nomor WhatsApp Anda lalu klik tombol **Kirim OTP**.
+   - Periksa WhatsApp Anda untuk menerima kode 6 digit OTP resmi.
+   - Masukkan 6 digit OTP dan klik **Verifikasi WhatsApp**.
+   - Coba akses Langkah 2 KTP (`?step=2`); form KTP kini terbuka dan tombol pengajuan aktif. Jika nomor belum diverifikasi OTP, Langkah 2 akan terkunci total dengan banner peringatan.
+2. **Uji Pengiriman Keluhan Penghuni**:
+   - Masuk ke **Kost Saya** (`/my-kost`), buka modal **Lapor Kendala / Komplain**.
+   - Isi judul dan deskripsi masalah, lalu klik kirim.
+   - Notifikasi WhatsApp akan otomatis terkirim ke nomor pemilik kost / pengelola properti.
+3. **Uji Pengingat Tagihan Sewa KostManager**:
+   - Pada halaman KostManager, klik tombol **Kirim Pengingat Tagihan (WhatsApp)** pada daftar penyewa; pesan pengingat resmi berserta tautan pembayaran digital akan terkirim langsung ke nomor WhatsApp penyewa.

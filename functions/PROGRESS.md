@@ -2,6 +2,44 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 338. Integrasi Ekosistem Resmi WhatsApp Cloud API (Meta Developer): Verifikasi OTP Anti-Bobol pada Identitas Akun (Mitra & Agen), Notifikasi Keluhan Penghuni KostManager, dan Otomasi Penagihan Sewa (`whatsappService.ts`, `MitraProfile.tsx`, `AgentProfile.tsx`, `MyKost.tsx`, `rentBillingService.ts`) (September 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna telah mengonfigurasi dan mendaftarkan nomor WhatsApp Bisnis resmi di portal Meta for Developers (`Terdaftar` & `Metode Pembayaran Ditambahkan`).
+  2. Verifikasi nomor WhatsApp pada formulir verifikasi identitas (Mitra Pemilik Kost & Agen Surveyor) sebelumnya memiliki kerentanan dapat dibobol (*bypass*) dengan klik tombol submit berulang-ulang tanpa memasukkan kode OTP riil dari WhatsApp, atau melompat langsung ke URL Langkah 2 (`?edit=true&step=2`) dan menekan "SIMPAN & AJUKAN VERIFIKASI".
+  3. Nomor WhatsApp bisnis resmi ingin diaktifkan secara komprehensif untuk:
+     - **Verifikasi OTP WhatsApp Anti-Bobol**: Khusus pada proses Verifikasi Identitas Akun (KTP), BUKAN saat pendaftaran awal/login biasa.
+     - **Penagihan & Pengingat Sewa KostManager** (Reminder jatuh tempo H-3, Hari-H, dan denda keterlambatan).
+     - **Notifikasi Keluhan / Aduan Penghuni KostManager** langsung ke nomor WhatsApp pemilik/pengelola kost saat aduan dikirim.
+     - **Pengiriman Rekap Laporan Keuangan Bulanan & Kwitansi Resmi Lunas KostManager**.
+- **Implementasi Solusi**:
+  1. **Ekosistem Modular Meta WhatsApp Cloud API (`whatsappService.ts`)**:
+     - Memperbarui helper runtime `sendWhatsAppTemplate` dengan fallback token dinamis dan normalisasi nomor telepon Indonesia (`628...`).
+     - Menyediakan fungsi modular siap pakai:
+       - `sendWaOtpVerification(phone, otpCode)`: Mengirimkan template 6 digit OTP resmi.
+       - `sendWaTenantComplaintNotification(phone, details)`: Mengirimkan notifikasi aduan penghuni dengan detail kategori, urgensi, nama penyewa, no. kamar, dan deskripsi masalah.
+       - `sendWaRentBillingReminder(phone, details)`: Mengirimkan pengingat tagihan sewa berformat rapi dan tautan klaim/pembayaran digital.
+       - `sendWaMonthlyFinancialReport(phone, details)`: Mengirimkan rekapitulasi pemasukan, pengeluaran, laba bersih, dan okupansi kamar.
+  2. **Hard Gatekeeper & Proteksi Anti-Bypass pada Verifikasi Identitas Mitra (`MitraProfile.tsx`)**:
+     - Menghapus fallback palsu `hello_world` dan menggantinya dengan integrasi `sendWaOtpVerification` resmi.
+     - Menambahkan validasi keras (*Hard Gatekeeper*) pada `saveStep1Draft` dan `handleSave`: form akan menolak proses submit secara mutlak jika `!waOtpVerified && !initialUser?.whatsapp_verified`.
+     - Menyematkan banner penguncian di UI Langkah 2 (Verifikasi KTP) dan menonaktifkan (*disabled*) upload foto KTP serta tombol "SIMPAN & AJUKAN VERIFIKASI" jika nomor WhatsApp belum terverifikasi OTP di Langkah 1.
+     - Saat OTP berhasil dicocokkan, sistem langsung memperbarui field `whatsapp_verified: true` ke tabel `users` di Supabase.
+  3. **Proteksi Anti-Bypass pada Verifikasi Identitas Agen Surveyor (`AgentProfile.tsx`)**:
+     - Menerapkan penguncian OTP WhatsApp dan proteksi formulir KTP Langkah 2 yang sama untuk akun agen surveyor resmi.
+  4. **Pemicu Notifikasi WhatsApp Keluhan Penghuni (`MyKost.tsx`)**:
+     - Pada fungsi `submitComplaint`, begitu aduan berhasil disimpan ke tabel `complaints`, sistem secara otomatis mengambil nomor telepon pemilik kost (`properties.owner_uid` / `omnichannel_contact_phone`) dan mengirimkan notifikasi instan via `sendWaTenantComplaintNotification`.
+- **File Tersentuh**:
+  - `functions/public/whatsappService.ts`
+  - `functions/public/pages/MitraProfile.tsx`
+  - `functions/public/pages/AgentProfile.tsx`
+  - `functions/public/pages/MyKost.tsx`
+  - `functions/public/rentBillingService.ts`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi build frontend Vite `cmd /c npm run build` di `functions/public/` lulus 100% (✓ 2510 modules transformed, built in 52.12s, 0 error).
+  - Kompilasi backend Cloud Functions TypeScript (`functions/`) `tsc` lulus 100% (0 error).
+
 ### 337. Transisi Pengiriman Email Brevo ke Zero-Deploy Client-Side REST API, Pemisahan Baku Kanal Email (Admin FormSubmit vs Mitra Brevo), dan Resolusi Deployment Timeout (`emailService.ts`, `adminService.ts`, `functions/src/index.ts`) (September 2026)
 - **Permintaan & Masalah**:
   - Pengguna mengonfirmasi bahwa pemicuan email Brevo sebelumnya tidak memerlukan perintah `firebase deploy` di terminal.

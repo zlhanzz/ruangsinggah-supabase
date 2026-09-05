@@ -1659,6 +1659,43 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
 
             if (dbError) throw dbError;
 
+            // Pemicu Notifikasi WhatsApp Otomatis ke Pemilik / Pengelola Kost via Meta WhatsApp Cloud API
+            (async () => {
+                try {
+                    const kostId = selectedKost.kostId || selectedKost.id;
+                    const { data: propData } = await supabase
+                        .from('properties')
+                        .select('owner_uid, omnichannel_contact_phone, name, title')
+                        .eq('id', kostId)
+                        .maybeSingle();
+
+                    let targetPhone = propData?.omnichannel_contact_phone;
+                    if (!targetPhone && propData?.owner_uid) {
+                        const { data: ownerUser } = await supabase
+                            .from('users')
+                            .select('phone')
+                            .eq('id', propData.owner_uid)
+                            .maybeSingle();
+                        targetPhone = ownerUser?.phone;
+                    }
+
+                    if (targetPhone) {
+                        const { sendWaTenantComplaintNotification } = await import('../whatsappService');
+                        await sendWaTenantComplaintNotification(targetPhone, {
+                            kostName: selectedKost.kostName || propData?.title || propData?.name || 'Properti Kost',
+                            roomNumber: selectedKost.roomNumber || selectedKost.room_number || selectedKost.roomType || '-',
+                            tenantName: user.name || user.displayName || 'Penyewa',
+                            category: complaintCategory,
+                            urgency: complaintUrgency,
+                            title: complaintTitle.trim(),
+                            description: complaintDesc.trim()
+                        });
+                    }
+                } catch (waErr) {
+                    console.warn('[submitComplaint WhatsApp notify error]', waErr);
+                }
+            })();
+
             alert('Laporan kendala berhasil dikirim! Pengelola kost dan tim teknis akan segera menindaklanjuti.');
             setComplaintPhotos([]);
             setComplaintPhotoPreviews([]);
