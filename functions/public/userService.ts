@@ -1638,3 +1638,174 @@ export async function getUserAllTransactionsHistory(userId: string): Promise<Nor
   }
 }
 
+export interface UserRentalHistoryItem {
+  id: string;
+  kostId: string;
+  kostTitle: string;
+  kostSlug?: string;
+  kostAddress: string;
+  kostCity: string;
+  kostImage: string;
+  roomNumber: string;
+  roomType: string;
+  startDate: string | null;
+  endDate: string | null;
+  rentPackage: string;
+  price: number;
+  status: 'ACTIVE' | 'COMPLETED' | 'CHECKED_OUT' | 'PENDING';
+  statusLabel: string;
+  statusBadgeClass: string;
+  isCurrentlyActive: boolean;
+  createdAt: string;
+  notes?: string;
+}
+
+export async function getUserRentalHistory(userId: string): Promise<UserRentalHistoryItem[]> {
+  try {
+    if (!userId) return [];
+
+    // 1. Fetch Resident Status
+    const { data: statusData, error: statusErr } = await supabase
+      .from('resident_status')
+      .select('*')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false });
+
+    if (statusErr) console.error('[userService] getUserRentalHistory status error:', statusErr);
+
+    // 2. Fetch rent transactions for any booking not yet linked to resident_status
+    const { data: rentTrxData, error: trxErr } = await supabase
+      .from('transactions')
+      .select('*')
+      .eq('user_id', userId)
+      .in('status', ['PAID', 'PENDING', 'SETTLEMENT', 'SUCCESS'])
+      .order('created_at', { ascending: false });
+
+    if (trxErr) console.error('[userService] getUserRentalHistory trx error:', trxErr);
+
+    const residentList = statusData || [];
+    const validRentTrxs = (rentTrxData || []).filter((t: any) => {
+      const pType = (t.product_type || t.type || '').toLowerCase();
+      return ['rent', 'kost_booking', 'kost', 'sewa', 'dp'].includes(pType) || t.category === 'kost';
+    });
+
+    // 3. Collect unique property IDs
+    const propIdSet = new Set<string>();
+    residentList.forEach((r: any) => {
+      if (r.kost_id) propIdSet.add(r.kost_id);
+    });
+    validRentTrxs.forEach((t: any) => {
+      const meta = typeof t.metadata === 'object' && t.metadata !== null ? t.metadata : {};
+      const kId = t.product_id || t.kost_id || meta.kostId || meta.propertyId;
+      if (kId) propIdSet.add(kId);
+    });
+
+    // 4. Fetch property details
+    const propMap: Record<string, any> = {};
+    if (propIdSet.size > 0) {
+      const { data: props, error: propErr } = await supabase
+        .from('properties')
+        .select('id, title, slug, address, city, area, image_urls, price, room_types')
+        .in('id', Array.from(propIdSet));
+
+      if (!propErr && props) {
+        props.forEach((p: any) => {
+          propMap[p.id] = p;
+        });
+      }
+    }
+
+    const items: UserRentalHistoryItem[] = [];
+    const now = new Date();
+
+    // Process resident_status records first
+    residentList.forEach((r: any) => {
+      const prop = r.kost_id ? propMap[r.kost_id] : null;
+      const meta = typeof r.metadata === 'object' && r.metadata !== null ? r.metadata : {};
+      const endDate = r.end_date ? new Date(r.end_date) : null;
+      const rawStatus = (r.status || 'ACTIVE').toUpperCase();
+      
+      const isCurrentlyActive = (rawStatus === 'ACTIVE' || rawStatus === 'PAID') && (!endDate || endDate >= now);
+      
+      let status: 'ACTIVE' | 'COMPLETED' | 'CHECKED_OUT' | 'PENDING' = isCurrentlyActive ? 'ACTIVE' : 'COMPLETED';
+      let statusLabel = isCurrentlyActive ? 'Aktif Dihuni' : 'Selesai / Pernah Dihuni';
+      let statusBadgeClass = isCurrentlyActive 
+        ? 'bg-emerald-50 text-emerald-700 border-emerald-200' 
+        : 'bg-gray-100 text-gray-700 border-gray-200';
+
+      if (rawStatus === 'CHECKED_OUT' || rawStatus === 'COMPLETED') {
+        status = 'COMPLETED';
+        statusLabel = 'Selesai / Pernah Dihuni';
+        statusBadgeClass = 'bg-gray-100 text-gray-700 border-gray-200';
+      }
+
+      const img = prop?.image_urls?.[0] ? getDisplayImageUrl(prop.image_urls[0]) : '';
+      const roomNum = r.room_number || meta.roomNumber || meta.room_number || (meta.roomCategory ? `Kamar ${meta.roomCategory}` : '1');
+      const roomType = r.room_type || meta.roomType || meta.room_type || prop?.room_types?.[0]?.name || 'Standar';
+
+      items.push({
+        id: r.id,
+        kostId: r.kost_id,
+        kostTitle: prop?.title || meta.kostName || meta.propertyTitle || 'Kost RuangSinggah',
+        kostSlug: prop?.slug || '',
+        kostAddress: prop?.address || meta.address || '',
+        kostCity: prop?.city || meta.city || 'Makassar',
+        kostImage: img,
+        roomNumber: String(roomNum),
+        roomType: String(roomType),
+        startDate: r.start_date || meta.startDate || null,
+        endDate: r.end_date || meta.endDate || null,
+        rentPackage: meta.paketSewa || meta.period || meta.periodLabel || 'Bulanan',
+        price: Number(meta.price || meta.monthlyPrice || prop?.price || 0),
+        status,
+        statusLabel,
+        statusBadgeClass,
+        isCurrentlyActive,
+        createdAt: r.created_at || new Date().toISOString(),
+        notes: r.notes || meta.notes
+      });
+    });
+
+    // Process standalone booking transactions not in resident_status
+    const existingResidentKostIds = new Set(residentList.map((r: any) => r.kost_id));
+    validRentTrxs.forEach((t: any) => {
+      const meta = typeof t.metadata === 'object' && t.metadata !== null ? t.metadata : {};
+      const kId = t.product_id || t.kost_id || meta.kostId || meta.propertyId;
+      if (!kId || existingResidentKostIds.has(kId)) return; // Avoid duplication
+
+      const prop = propMap[kId];
+      const img = prop?.image_urls?.[0] ? getDisplayImageUrl(prop.image_urls[0]) : '';
+      const isPaid = ['PAID', 'SETTLEMENT', 'SUCCESS'].includes((t.status || '').toUpperCase());
+      const roomNum = meta.roomNumber || meta.roomCategory || '1';
+      const roomType = meta.roomType || prop?.room_types?.[0]?.name || 'Standar';
+
+      items.push({
+        id: t.id,
+        kostId: kId,
+        kostTitle: prop?.title || meta.propertyTitle || meta.kostName || 'Kost RuangSinggah',
+        kostSlug: prop?.slug || '',
+        kostAddress: prop?.address || meta.address || '',
+        kostCity: prop?.city || meta.city || 'Makassar',
+        kostImage: img,
+        roomNumber: String(roomNum),
+        roomType: String(roomType),
+        startDate: meta.startDate || meta.moveInDate || null,
+        endDate: meta.endDate || null,
+        rentPackage: meta.periodLabel || meta.period || 'Bulanan',
+        price: Number(t.amount || prop?.price || 0),
+        status: isPaid ? 'COMPLETED' : 'PENDING',
+        statusLabel: isPaid ? 'Pernah Disewa (Selesai)' : 'Menunggu Pembayaran',
+        statusBadgeClass: isPaid ? 'bg-gray-100 text-gray-700 border-gray-200' : 'bg-amber-50 text-amber-700 border-amber-200',
+        isCurrentlyActive: false,
+        createdAt: t.created_at || new Date().toISOString()
+      });
+    });
+
+    return items;
+  } catch (err) {
+    console.error('[userService] Exception in getUserRentalHistory:', err);
+    return [];
+  }
+}
+
+

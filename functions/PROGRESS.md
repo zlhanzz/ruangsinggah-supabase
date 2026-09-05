@@ -2,6 +2,33 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 348. Sub-View Mandiri "Riwayat Sewa Kost" pada Profile Hub Dashboard (`userService.ts`, `Profile.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna meminta agar opsi **"Riwayat Sewa & Kontrak"** pada Profile Hub (`/profile`) tidak sekadar redirect ke menu operasional Kost Saya / Orders (`/my-bookings/aktif`).
+  2. Pengguna membutuhkan tampilan menu khusus untuk melihat seluruh **kartu kost yang pernah disewa sebelumnya** (riwayat hunian), terpisah dari modul operasional penyewa aktif.
+- **Implementasi Solusi**:
+  1. **Helper Riwayat Sewa Terpadu (`userService.ts`)**:
+     - Menambahkan fungsi `getUserRentalHistory(userId: string)` yang mengambil riwayat hunian dari tabel `public.resident_status` dan transaksi sewa kost (`transactions`) yang berelasi dengan tabel `public.properties`.
+     - Menormalisasi status sewa menjadi `ACTIVE` (*Aktif Dihuni*) dan `COMPLETED` (*Selesai / Pernah Dihuni*), nomor kamar, tipe kamar, rentang tanggal periode sewa, paket sewa, nominal tarif, dan foto utama kost.
+  2. **Sub-View Mandiri "Riwayat Sewa Kost" (`Profile.tsx`)**:
+     - Mengubah menu di Profile Hub menjadi *"Riwayat Sewa Kost"* dengan subtitle *"Daftar kost yang pernah Anda sewa & riwayat hunian"* dan membuka `viewMode === 'rental_history'`.
+     - Menyematkan live badge counter jumlah kost (misal: `1 Kost`).
+     - Menyajikan Filter Tabs: `Semua Kost`, `Aktif Dihuni`, `Pernah Disewa (Selesai)`.
+     - Menyajikan kartu kost riwayat sewa yang ramping, modern, dan informatif:
+       - Thumbnail foto kost (`w-16 h-16` / `w-20 h-20`).
+       - Status badge (`Aktif Dihuni` hijau / `Selesai / Pernah Dihuni` abu-abu) + info kamar.
+       - Judul kost & alamat/kota.
+       - Periode tanggal sewa (Mulai s/d Selesai).
+       - Tarif sewa per paket.
+       - Tombol aksi: *"Sewa Lagi"* / *"Detail Kost"* (menuju detail listing) dan tombol *"Buka Kost Saya"* khusus kost yang masih aktif.
+- **File Tersentuh**:
+  - `functions/public/userService.ts`
+  - `functions/public/pages/Profile.tsx`
+  - `functions/PROGRESS.md`
+  - `walkthrough.md`
+- **Verifikasi**:
+  - Kompilasi build frontend Vite (`functions/public`) lulus 100% (`✓ built in 36.69s`, 0 error).
+
 ### 347. Penghapusan Title/Stats Box & Penyederhanaan Murni Riwayat Transaksi (`Profile.tsx`) (September 2026)
 - **Permintaan & Masalah**:
   1. Pengguna meminta agar kotak ringkasan atas (title *"Riwayat Transaksi & Tagihan"*, deskripsi, dan stat box Lunas / Total Pengeluaran) dihapus sepenuhnya.

@@ -11,7 +11,12 @@ import {
   FAVORITES_UPDATED_EVENT 
 } from '../favoriteService';
 import { createKostSlug } from '../utils/slugUtils';
-import { getUserAllTransactionsHistory, NormalizedTransaction } from '../userService';
+import { 
+  getUserAllTransactionsHistory, 
+  NormalizedTransaction,
+  getUserRentalHistory,
+  UserRentalHistoryItem
+} from '../userService';
 import DigitalReceiptModal, { ReceiptData } from '../components/DigitalReceiptModal';
 import { FORMAT_CURRENCY } from '../constants';
 import { 
@@ -32,7 +37,7 @@ interface ProfileProps {
 
 const Profile: React.FC<ProfileProps> = ({ user, onLogout, onSaveSuccess, forceEdit, onBack }) => {
   const navigate = useNavigate();
-  const [viewMode, setViewMode] = useState<'hub' | 'edit_personal_data' | 'favorites' | 'transactions'>(forceEdit ? 'edit_personal_data' : 'hub');
+  const [viewMode, setViewMode] = useState<'hub' | 'edit_personal_data' | 'favorites' | 'transactions' | 'rental_history'>(forceEdit ? 'edit_personal_data' : 'hub');
   const [isEditing, setIsEditing] = useState(forceEdit || false);
   const [loading, setLoading] = useState(false);
   const [activeKostCount, setActiveKostCount] = useState<number>(0);
@@ -42,6 +47,9 @@ const Profile: React.FC<ProfileProps> = ({ user, onLogout, onSaveSuccess, forceE
   const [userTransactions, setUserTransactions] = useState<NormalizedTransaction[]>([]);
   const [transactionsLoading, setTransactionsLoading] = useState<boolean>(false);
   const [selectedTrxCategory, setSelectedTrxCategory] = useState<string>('all');
+  const [rentalHistoryList, setRentalHistoryList] = useState<UserRentalHistoryItem[]>([]);
+  const [rentalHistoryLoading, setRentalHistoryLoading] = useState<boolean>(false);
+  const [selectedRentalFilter, setSelectedRentalFilter] = useState<'all' | 'active' | 'completed'>('all');
   const [selectedReceipt, setSelectedReceipt] = useState<ReceiptData | null>(null);
   const [showDigitalReceiptModal, setShowDigitalReceiptModal] = useState<boolean>(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -156,6 +164,21 @@ const Profile: React.FC<ProfileProps> = ({ user, onLogout, onSaveSuccess, forceE
     }
   };
 
+  const loadRentalHistory = async () => {
+    if (!user?.uid) return;
+    setRentalHistoryLoading(true);
+    try {
+      const list = await getUserRentalHistory(user.uid);
+      setRentalHistoryList(list);
+      const active = list.filter(r => r.isCurrentlyActive).length;
+      setActiveKostCount(active);
+    } catch (err) {
+      console.error('Error fetching rental history in Profile:', err);
+    } finally {
+      setRentalHistoryLoading(false);
+    }
+  };
+
   useEffect(() => {
     getUserFavoriteIds(user?.uid || user?.id).then((ids) => {
       setFavoriteCount(ids.length);
@@ -163,6 +186,7 @@ const Profile: React.FC<ProfileProps> = ({ user, onLogout, onSaveSuccess, forceE
 
     if (user?.uid) {
       loadUserTransactions();
+      loadRentalHistory();
     }
   }, [user]);
 
@@ -171,6 +195,8 @@ const Profile: React.FC<ProfileProps> = ({ user, onLogout, onSaveSuccess, forceE
       loadFavoriteList();
     } else if (viewMode === 'transactions') {
       loadUserTransactions();
+    } else if (viewMode === 'rental_history') {
+      loadRentalHistory();
     }
   }, [viewMode, user?.uid, user?.id]);
 
@@ -594,28 +620,28 @@ const Profile: React.FC<ProfileProps> = ({ user, onLogout, onSaveSuccess, forceE
             </h3>
             <div className="bg-white rounded-3xl border border-gray-100 shadow-xs divide-y divide-gray-50 overflow-hidden">
               
-              {/* Riwayat Sewa & Kontrak */}
+              {/* Riwayat Sewa Kost */}
               <button
-                onClick={() => navigate(`${Page.MY_BOOKINGS}/aktif`)}
+                onClick={() => setViewMode('rental_history')}
                 className="w-full p-4 flex items-center justify-between text-left hover:bg-orange-50/40 transition-colors group cursor-pointer"
               >
                 <div className="flex items-center gap-3.5 min-w-0">
                   <div className="w-10 h-10 rounded-2xl bg-orange-50 text-orange-600 flex items-center justify-center shrink-0">
-                    <User className="w-5 h-5" />
+                    <Building2 className="w-5 h-5" />
                   </div>
                   <div className="min-w-0">
                     <h4 className="text-sm font-black text-gray-900 group-hover:text-orange-600 transition-colors">
-                      Riwayat Sewa & Kontrak
+                      Riwayat Sewa Kost
                     </h4>
                     <p className="text-xs text-gray-400 font-medium truncate mt-0.5">
-                      Unit kost aktif & masa berakhir sewa
+                      Daftar kost yang pernah Anda sewa & riwayat hunian
                     </p>
                   </div>
                 </div>
                 <div className="flex items-center gap-2 shrink-0 ml-2">
-                  {activeKostCount > 0 && (
-                    <span className="px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-[10px] font-black border border-emerald-200">
-                      {activeKostCount} Aktif
+                  {rentalHistoryList.length > 0 && (
+                    <span className="px-2.5 py-0.5 rounded-full bg-orange-50 text-orange-700 text-[10px] font-black border border-orange-200">
+                      {rentalHistoryList.length} Kost
                     </span>
                   )}
                   <ChevronRight className="w-4 h-4 text-gray-400 group-hover:text-orange-500 group-hover:translate-x-0.5 transition-all" />
@@ -1147,6 +1173,207 @@ const Profile: React.FC<ProfileProps> = ({ user, onLogout, onSaveSuccess, forceE
                           <span>Bayar Sekarang</span>
                         </button>
                       )}
+                    </div>
+                  </div>
+                ))}
+            </div>
+          )}
+        </div>
+      ) : viewMode === 'rental_history' ? (
+        /* ── SUB-VIEW: RIWAYAT SEWA KOST (HUNIAN YANG PERNAH DISEWA) ────────── */
+        <div className="max-w-4xl mx-auto px-4 sm:px-6">
+          {/* Header Navigation */}
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <button
+              onClick={() => setViewMode('hub')}
+              className="px-3.5 py-1.5 bg-white border border-gray-200 text-gray-700 rounded-xl text-xs font-bold hover:bg-gray-50 hover:border-gray-300 transition-all shadow-2xs active:scale-95 flex items-center gap-1.5 cursor-pointer group"
+            >
+              <ArrowLeft className="w-3.5 h-3.5 text-gray-500 group-hover:-translate-x-0.5 transition-transform" />
+              <span>Kembali ke Menu Profil</span>
+            </button>
+
+            <button
+              onClick={loadRentalHistory}
+              disabled={rentalHistoryLoading}
+              className="p-2 sm:px-3 sm:py-1.5 bg-white border border-gray-200 text-gray-700 rounded-xl text-xs font-bold hover:bg-gray-50 hover:border-gray-300 transition-all shadow-2xs active:scale-95 flex items-center gap-1.5 cursor-pointer"
+              title="Muat Ulang Data"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 text-gray-500 ${rentalHistoryLoading ? 'animate-spin' : ''}`} />
+              <span className="hidden sm:inline">Muat Ulang</span>
+            </button>
+          </div>
+
+          {/* Filter Tabs */}
+          <div className="mb-4 overflow-x-auto pb-1 scrollbar-none">
+            <div className="flex items-center gap-1.5 min-w-max">
+              {[
+                { id: 'all', label: 'Semua Kost', count: rentalHistoryList.length },
+                { id: 'active', label: 'Aktif Dihuni', count: rentalHistoryList.filter(r => r.isCurrentlyActive).length },
+                { id: 'completed', label: 'Pernah Disewa (Selesai)', count: rentalHistoryList.filter(r => !r.isCurrentlyActive).length },
+              ].map((tab) => {
+                const isActive = selectedRentalFilter === tab.id;
+                return (
+                  <button
+                    key={tab.id}
+                    onClick={() => setSelectedRentalFilter(tab.id as any)}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer border ${
+                      isActive
+                        ? 'bg-gray-900 text-white border-gray-900 shadow-xs'
+                        : 'bg-white text-gray-600 hover:bg-gray-50 border-gray-200'
+                    }`}
+                  >
+                    <span>{tab.label}</span>
+                    <span className={`px-1.5 py-0.2 rounded-md text-[10px] font-black ${
+                      isActive ? 'bg-white/20 text-white' : 'bg-gray-100 text-gray-500'
+                    }`}>
+                      {tab.count}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Rental Cards List */}
+          {rentalHistoryLoading ? (
+            <div className="space-y-3 animate-pulse">
+              {[1, 2, 3].map((n) => (
+                <div key={n} className="bg-white rounded-2xl p-4 border border-gray-100 shadow-2xs flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
+                  <div className="flex items-center gap-3.5 w-full sm:w-2/3">
+                    <div className="w-16 h-16 sm:w-20 sm:h-20 bg-slate-200 rounded-xl shrink-0"></div>
+                    <div className="space-y-2 flex-1">
+                      <div className="h-3.5 bg-slate-200 rounded w-1/3"></div>
+                      <div className="h-4 bg-slate-200 rounded w-2/3"></div>
+                      <div className="h-3 bg-slate-200 rounded w-1/2"></div>
+                    </div>
+                  </div>
+                  <div className="h-8 bg-slate-200 rounded-xl w-28 shrink-0"></div>
+                </div>
+              ))}
+            </div>
+          ) : rentalHistoryList.filter(r => 
+              selectedRentalFilter === 'all' ? true :
+              selectedRentalFilter === 'active' ? r.isCurrentlyActive :
+              !r.isCurrentlyActive
+            ).length === 0 ? (
+            /* Empty State */
+            <div className="bg-white rounded-2xl p-8 text-center border border-gray-100 shadow-2xs max-w-sm mx-auto my-6">
+              <div className="w-12 h-12 rounded-2xl bg-orange-50 text-[#ff7a00] border border-orange-100 flex items-center justify-center mx-auto mb-3">
+                <Building2 className="w-6 h-6 stroke-[1.5]" />
+              </div>
+              <h3 className="text-sm font-bold text-gray-900 mb-1">
+                Belum Ada Riwayat Sewa
+              </h3>
+              <p className="text-xs text-gray-500 font-medium leading-relaxed mb-4">
+                {selectedRentalFilter === 'all'
+                  ? 'Anda belum memiliki riwayat kost yang pernah disewa sebelumnya.'
+                  : `Belum ada riwayat kost pada filter ${selectedRentalFilter === 'active' ? 'aktif' : 'selesai'}.`
+                }
+              </p>
+              <button
+                onClick={() => navigate(Page.LISTINGS)}
+                className="w-full py-2.5 px-4 bg-[#ff7a00] hover:bg-orange-600 text-white rounded-xl text-xs font-bold transition-all shadow-xs active:scale-95 cursor-pointer flex items-center justify-center gap-1.5"
+              >
+                <Sparkles className="w-3.5 h-3.5" />
+                <span>Jelajahi Listing Kost</span>
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {rentalHistoryList
+                .filter(r => 
+                  selectedRentalFilter === 'all' ? true :
+                  selectedRentalFilter === 'active' ? r.isCurrentlyActive :
+                  !r.isCurrentlyActive
+                )
+                .map((item) => (
+                  <div
+                    key={item.id}
+                    className="bg-white rounded-2xl p-3.5 sm:p-4 border border-gray-100 hover:border-gray-200 shadow-2xs hover:shadow-xs transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3.5"
+                  >
+                    {/* Left: Image & Details */}
+                    <div className="flex items-start sm:items-center gap-3.5 min-w-0 flex-1">
+                      {/* Thumbnail */}
+                      <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-xl bg-gray-100 border border-gray-100 flex items-center justify-center shrink-0 overflow-hidden text-gray-400">
+                        {item.kostImage ? (
+                          <img
+                            src={item.kostImage}
+                            alt={item.kostTitle}
+                            className="w-full h-full object-cover"
+                            onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                          />
+                        ) : (
+                          <Building2 className="w-8 h-8 text-orange-400" />
+                        )}
+                      </div>
+
+                      {/* Info Text */}
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-1.5 flex-wrap mb-1">
+                          <span className={`px-2 py-0.2 rounded-full text-[9px] font-bold border ${item.statusBadgeClass}`}>
+                            {item.statusLabel}
+                          </span>
+                          <span className="px-2 py-0.2 rounded-full text-[9px] font-bold bg-gray-100 text-gray-700 border border-gray-200">
+                            Kamar {item.roomNumber} • {item.roomType}
+                          </span>
+                        </div>
+
+                        <h3 className="text-sm sm:text-base font-bold text-gray-900 truncate">
+                          {item.kostTitle}
+                        </h3>
+
+                        <div className="flex items-center gap-1.5 text-xs text-gray-500 font-medium truncate mt-0.5">
+                          <MapPin className="w-3 h-3 text-gray-400 shrink-0" />
+                          <span className="truncate">{item.kostAddress || item.kostCity || 'Makassar'}</span>
+                        </div>
+
+                        {/* Period Dates */}
+                        <div className="flex items-center gap-2 text-[11px] text-gray-400 font-medium mt-1 flex-wrap">
+                          <div className="flex items-center gap-1">
+                            <Calendar className="w-3 h-3 text-gray-400" />
+                            <span>
+                              {item.startDate ? new Date(item.startDate).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }) : 'Mulai -'}
+                              {' s/d '}
+                              {item.endDate ? new Date(item.endDate).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }) : 'Fleksibel'}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Right: Pricing & Actions */}
+                    <div className="flex sm:flex-col items-center sm:items-end justify-between gap-2.5 pt-2.5 sm:pt-0 border-t sm:border-t-0 border-gray-50 shrink-0">
+                      <div className="text-left sm:text-right">
+                        <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block">Tarif Sewa</span>
+                        <p className="text-sm sm:text-base font-black text-gray-900">
+                          {item.price > 0 ? FORMAT_CURRENCY(item.price) : 'Sesuai Kontrak'}
+                          <span className="text-[10px] font-semibold text-gray-400 ml-1">/{item.rentPackage}</span>
+                        </p>
+                      </div>
+
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        {item.isCurrentlyActive && (
+                          <button
+                            type="button"
+                            onClick={() => navigate(`${Page.MY_BOOKINGS}/aktif`)}
+                            className="px-3 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-xs font-bold border border-emerald-200 transition-all active:scale-95 cursor-pointer flex items-center gap-1"
+                          >
+                            <span>Buka Kost Saya</span>
+                          </button>
+                        )}
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (item.kostSlug) navigate(`/kost/${item.kostSlug}`);
+                            else if (item.kostId) navigate(`/kost/${item.kostId}`);
+                            else navigate(Page.LISTINGS);
+                          }}
+                          className="px-3.5 py-1.5 rounded-xl bg-gray-900 hover:bg-[#ff7a00] text-white text-xs font-bold transition-all shadow-2xs active:scale-95 cursor-pointer flex items-center gap-1.5"
+                        >
+                          <span>{item.isCurrentlyActive ? 'Detail Kost' : 'Sewa Lagi'}</span>
+                        </button>
+                      </div>
                     </div>
                   </div>
                 ))}
