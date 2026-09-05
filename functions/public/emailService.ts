@@ -425,6 +425,165 @@ export async function sendMitraPublishedEmailBrevoDirect(details: MitraPublished
   }
 }
 
+export interface AgentKostManagerAssignmentEmailDetails {
+  agentEmail: string;
+  agentName: string;
+  kostName: string;
+  kostType?: string;
+  kostAddress: string;
+  ownerName?: string;
+  ownerPhone?: string;
+  surveyDate?: string;
+  surveyTime?: string;
+  notes?: string;
+  requestId?: string;
+}
+
+/**
+ * sendAgentKostManagerAssignmentEmailBrevoDirect: Mengirimkan email notifikasi penugasan surveyor KostManager
+ * secara langsung ke email Agen via Brevo REST API (Zero-Deploy).
+ */
+export async function sendAgentKostManagerAssignmentEmailBrevoDirect(details: AgentKostManagerAssignmentEmailDetails): Promise<boolean> {
+  if (!details.agentEmail || !details.kostName) {
+    console.warn('[BREVO_AGENT_KM] Missing agentEmail or kostName, skip sending.');
+    return false;
+  }
+
+  try {
+    const dashboardUrl = typeof window !== 'undefined' && window.location?.origin 
+      ? `${window.location.origin}/dashboard-agent` 
+      : 'https://ruangsinggah.id/dashboard-agent';
+
+    const formattedDate = details.surveyDate || 'Segera / Sesuai Kesepakatan';
+    const formattedTime = details.surveyTime ? `${details.surveyTime} WITA/WIB` : 'Fleksibel';
+
+    const contentHtml = `
+      <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #0f172a; padding: 40px 15px; text-align: center;">
+        <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 24px; overflow: hidden; box-shadow: 0 20px 40px rgba(0,0,0,0.25); text-align: left;">
+          
+          <!-- Header Banner Gradien Oranye RuangSinggah -->
+          <div style="background: linear-gradient(135deg, #ea580c 0%, #f97316 60%, #fb923c 100%); padding: 38px 30px; text-align: center;">
+            <div style="display: inline-block; background-color: rgba(255, 255, 255, 0.22); padding: 7px 18px; border-radius: 50px; margin-bottom: 14px; backdrop-filter: blur(4px);">
+              <span style="color: #ffffff; font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: 1.5px;">📋 Penugasan Surveyor KostManager</span>
+            </div>
+            <h1 style="color: #ffffff; font-size: 24px; font-weight: 900; margin: 0; line-height: 1.3; text-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+              Tugas Baru: Survei & Pendataan Kost
+            </h1>
+            <p style="color: #ffedd5; font-size: 13px; margin: 8px 0 0 0; font-weight: 500;">
+              Admin telah menugaskan Anda untuk melakukan pendataan properti mitra
+            </p>
+          </div>
+
+          <!-- Body Content -->
+          <div style="padding: 32px 28px;">
+            
+            <p style="font-size: 15px; color: #1e293b; margin: 0 0 16px 0; line-height: 1.6;">
+              Halo <strong>${details.agentName || 'Rekan Surveyor'}</strong>,
+            </p>
+            
+            <p style="font-size: 14px; color: #475569; margin: 0 0 24px 0; line-height: 1.6;">
+              Anda telah ditugaskan secara resmi oleh Tim Operasional RuangSinggah untuk melakukan inspeksi, verifikasi data, dan pengambilan materi visual kamar untuk properti <strong>KostManager</strong> berikut:
+            </p>
+
+            <!-- Card Rincian Penugasan -->
+            <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 18px; padding: 22px; margin-bottom: 24px;">
+              <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+                <tr>
+                  <td style="padding: 7px 0; color: #64748b; width: 38%; font-weight: 600;">Properti Kost</td>
+                  <td style="padding: 7px 0; color: #0f172a; font-weight: 800; font-size: 14px;">: ${details.kostName}</td>
+                </tr>
+                ${details.kostType ? `
+                <tr>
+                  <td style="padding: 7px 0; color: #64748b; font-weight: 600;">Tipe Hunian</td>
+                  <td style="padding: 7px 0; color: #0f172a; font-weight: 700;">: ${details.kostType}</td>
+                </tr>
+                ` : ''}
+                <tr>
+                  <td style="padding: 7px 0; color: #64748b; font-weight: 600;">Alamat Lokasi</td>
+                  <td style="padding: 7px 0; color: #0f172a; font-weight: 600; line-height: 1.4;">: ${details.kostAddress || '-'}</td>
+                </tr>
+                ${details.ownerName ? `
+                <tr>
+                  <td style="padding: 7px 0; color: #64748b; font-weight: 600;">Pemilik / Mitra</td>
+                  <td style="padding: 7px 0; color: #0f172a; font-weight: 700;">: ${details.ownerName} ${details.ownerPhone ? `(${details.ownerPhone})` : ''}</td>
+                </tr>
+                ` : ''}
+                <tr>
+                  <td style="padding: 7px 0; color: #64748b; font-weight: 600;">Rencana Survei</td>
+                  <td style="padding: 7px 0; color: #ea580c; font-weight: 800;">: ${formattedDate} (${formattedTime})</td>
+                </tr>
+                ${details.notes ? `
+                <tr>
+                  <td style="padding: 7px 0; color: #64748b; font-weight: 600;">Catatan Tambahan</td>
+                  <td style="padding: 7px 0; color: #475569; font-style: italic;">: "${details.notes}"</td>
+                </tr>
+                ` : ''}
+              </table>
+            </div>
+
+            <!-- Panduan SOP Tugas Surveyor -->
+            <div style="background: linear-gradient(135deg, #fff7ed 0%, #ffedd5 100%); border: 1px solid #fed7aa; border-radius: 16px; padding: 18px 20px; margin-bottom: 28px;">
+              <h4 style="margin: 0 0 10px 0; font-size: 13px; font-weight: 800; color: #9a3412; text-transform: uppercase; letter-spacing: 0.5px;">
+                ⚡ Instruksi Pelaksanaan Tugas:
+              </h4>
+              <ul style="margin: 0; padding-left: 20px; font-size: 12px; color: #7c2d12; line-height: 1.6;">
+                <li style="margin-bottom: 4px;"><strong>Hubungi Pemilik:</strong> Konfirmasi estimasi waktu kedatangan Anda sebelum berangkat ke lokasi.</li>
+                <li style="margin-bottom: 4px;"><strong>Pengambilan Visual:</strong> Ambil foto lanskap 4:3 berkualitas tinggi (tampak depan gedung, tiap tipe kamar, kamar mandi, dan fasilitas bersama).</li>
+                <li style="margin-bottom: 4px;"><strong>Pendataan Lengkap:</strong> Catat ukuran kamar, ketersediaan listrik/air, peraturan kost, dan fasilitas detail.</li>
+                <li><strong>Submit Data:</strong> Masukkan hasil foto dan data survei langsung melalui formulir pendataan di Dashboard Agen.</li>
+              </ul>
+            </div>
+
+            <!-- Tombol CTA -->
+            <div style="text-align: center; margin-bottom: 12px;">
+              <a href="${dashboardUrl}" style="display: inline-block; background: linear-gradient(135deg, #ea580c 0%, #f97316 100%); color: #ffffff; text-decoration: none; font-size: 14px; font-weight: 800; padding: 14px 34px; border-radius: 14px; box-shadow: 0 8px 20px rgba(234, 88, 12, 0.35); text-transform: uppercase; letter-spacing: 0.5px;">
+                Buka Dashboard Agen &rarr;
+              </a>
+            </div>
+
+          </div>
+
+          <!-- Footer Resmi -->
+          <div style="background-color: #f8fafc; border-top: 1px solid #e2e8f0; padding: 22px 28px; text-align: center;">
+            <p style="font-size: 12px; font-weight: 700; color: #475569; margin: 0 0 4px 0;">RuangSinggah.id — Operasional KostManager</p>
+            <p style="font-size: 11px; color: #94a3b8; margin: 0;">&copy; ${new Date().getFullYear()} RuangSinggah.id. Seluruh hak cipta dilindungi undang-undang.</p>
+          </div>
+
+        </div>
+      </div>
+    `;
+
+    const response = await fetch('https://api.brevo.com/v3/smtp/email', {
+      method: 'POST',
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+        'api-key': getBrevoKey()
+      },
+      body: JSON.stringify({
+        sender: { name: "RuangSinggah Operasional", email: "system@ruangsinggah.id" },
+        to: [{ email: details.agentEmail, name: details.agentName || undefined }],
+        subject: `📋 Penugasan Survei & Pendataan KostManager: ${details.kostName}`,
+        htmlContent: contentHtml
+      })
+    });
+
+    if (!response.ok) {
+      const errText = await response.text();
+      console.warn('[BREVO_AGENT_KM] Gagal mengirim email penugasan Brevo ke agen:', response.status, errText);
+      return false;
+    }
+
+    const data = await response.json();
+    console.log('[BREVO_AGENT_KM] Email penugasan Brevo berhasil terkirim ke agen:', details.agentEmail, data);
+    return true;
+  } catch (err) {
+    console.warn('[BREVO_AGENT_KM] Exception saat mengirim email Brevo ke agen:', err);
+    return false;
+  }
+}
+
+
 
 
 

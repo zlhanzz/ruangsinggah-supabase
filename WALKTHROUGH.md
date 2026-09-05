@@ -1,56 +1,49 @@
-# WALKTHROUGH - Pemisahan Syarat & Ketentuan (MoU) dan Ringkasan Pembayaran KostManager
+# WALKTHROUGH - Otomatisasi Email Notifikasi Penugasan Surveyor KostManager via Brevo API
 
 ## Ringkasan Pekerjaan
-Pemisahan alur pendaftaran dan aktivasi KostManager pada [KostManagerLanding.tsx](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/KostManagerLanding.tsx) telah selesai diimplementasikan. Sebelumnya, Tahap 3 menggabungkan Syarat & Ketentuan Layanan (MoU) dan Ringkasan Biaya Pendaftaran dalam satu tampilan. Sekarang, alur telah dipisahkan menjadi 4 langkah berurutan yang terstruktur, rapi, dan mudah dipahami oleh mitra pemilik kost.
+Otomatisasi pengiriman email notifikasi penugasan surveyor KostManager telah berhasil diimplementasikan menggunakan sistem pengiriman **Brevo REST API langsung (*Zero-Deploy*)**.
+
+Ketika admin menetapkan surveyor untuk suatu properti KostManager (baik melalui dropdown tabel cepat maupun modal edit kelola di Dashboard Admin), sistem secara instan mengirimkan email penugasan resmi ke alamat email terdaftar agen surveyor, disertai notifikasi in-app.
 
 ---
 
 ## 1. Daftar Perubahan Kode
 
-### A. Struktur Alur 4 Tahap Terpisah (`KostManagerLanding.tsx`)
-1. **Tahap 1: Pilih Metode (`method`)**:
-   - Pemilihan sumber data: *"Pilih dari Kost Saya"* vs *"Daftar Kost Baru (Manual)"*.
-2. **Tahap 2: Data Properti (`form`)**:
-   - Pemilihan kartu properti eksisting (tanpa form input redundan) atau formulir input data kost baru.
-   - Tombol navigasi: *"Lanjut: Syarat & Ketentuan"*.
-3. **Tahap 3: Syarat & Ketentuan / MoU (`mou`)**:
-   - Menampilkan dokumen kesepakatan kemitraan KostManager secara eksklusif (poin 1-4).
-   - Checkbox persetujuan interaktif: *"Saya menyatakan telah membaca, memahami, dan menyetujui seluruh Ketentuan Berlangganan KostManager serta bersedia menerima kunjungan tim surveyor lokasi."*.
-   - Tombol Kiri: *"Kembali ke Data Properti"*.
-   - Tombol Kanan: *"Lanjut: Ringkasan Biaya"* (terkunci otomatis jika checkbox belum dicentang).
-4. **Tahap 4: Ringkasan Pendaftaran & Pembayaran (`summary`)**:
-   - Kartu Rincian Properti Kost: Nama properti, tipe (Putra/Putri/Campur), total kamar, dan alamat.
-   - Kartu Paket Langganan: Nama paket (Tahunan/Bulanan) dan durasi.
-   - Kartu Transparansi Biaya: Total biaya langganan, info survey & foto profesional gratis (Rp 0).
-   - Badge status: *"Syarat & Ketentuan Layanan telah disetujui"*.
-   - Tombol Kiri: *"Kembali ke Syarat & MoU"*.
-   - Tombol Kanan: *"Bayar & Aktifkan Langganan"* (memicu pembukaan modal `PaymentGateway`).
+### A. Dispatcher Brevo Email Baru (`emailService.ts`)
+- Menambahkan interface `AgentKostManagerAssignmentEmailDetails` dan fungsi `sendAgentKostManagerAssignmentEmailBrevoDirect`.
+- **Desain Template Email Premium**:
+  - Banner Header: Oranye RuangSinggah (`#ea580c` ke `#f97316`) dengan badge *"📋 PENUGASAN SURVEYOR KOSTMANAGER"*.
+  - Sapaan hangat personal ke nama agen surveyor.
+  - Kartu Rincian Properti: Nama Kost, Tipe Hunian, Alamat Lokasi Lengkap, Kontak Pemilik/Mitra (Nama & Nomor WhatsApp), serta Rencana Jadwal Survei.
+  - Kartu SOP Tugas: Panduan menghubungi pemilik, pemotretan 4:3, kelengkapan data fasilitas, dan instruksi submit ke dashboard.
+  - Tombol Call-to-Action (CTA): Tombol langsung menuju `Dashboard Agen` (`/dashboard-agent`).
+  - Pengiriman langsung ke `https://api.brevo.com/v3/smtp/email` dengan API key resmi.
 
-### B. Pembaruan Header Progress Stepper Indicator
-- Header indikator tahapan diperbarui menjadi 4 langkah:
-  `Metode (1)` ➔ `Properti (2)` ➔ `Syarat & MoU (3)` ➔ `Ringkasan (4)`
-- Menggunakan ikon SVG bundel murni (`<Check />` dari `lucide-react`) untuk tahapan yang sudah selesai, lingkaran aktif dengan efek ring oranye menyala, dan garis pembatas dinamis.
+### B. Helper & Failsafe di Service Backend (`adminService.ts`)
+- Membuat fungsi `triggerKostManagerAgentAssignmentEmail(requestId, agentId)`:
+  - Mengambil data detail request dari tabel `kostmanager_requests` dan data profil agen dari tabel `users`.
+  - Mengirim in-app notification ke tabel `notifications`.
+  - Memicu pengiriman email Brevo via `sendAgentKostManagerAssignmentEmailBrevoDirect` secara asinkron (*non-blocking*).
+- Menambahkan auto-trigger di `updateKostManagerRequest` sebagai jaring pengaman (*failsafe*) jika `assigned_agent_id` diperbarui dari bagian manapun di sistem.
 
-### C. Pembaruan Anti-Amnesia (`functions/PROGRESS.md`)
-- Catatan entri progres **#375** telah ditambahkan ke `functions/PROGRESS.md`.
+### C. Integrasi Interaksi Admin di UI (`KostManagerManagement.tsx`)
+- Mengintegrasikan pemicu email pada:
+  1. `handleAssignAgentInline`: Saat admin memilih agen langsung dari dropdown tabel pendaftaran KostManager.
+  2. `handleSaveEdit`: Saat admin mengubah/menetapkan agen melalui modal edit penugasan.
 
 ---
 
 ## 2. Hasil Pengujian & Kompilasi
 - **Kompilasi TypeScript (`tsc`)**: `Exit Code 0` (0 error).
-- **Build Frontend Vite**: `Exit Code 0` (`✓ 2511 modules transformed, built in 32.64s`).
+- **Build Frontend Vite**: `Exit Code 0` (`✓ 2511 modules transformed, built in 27.14s`).
 
 ---
 
 ## 3. Panduan Pengujian untuk Pengguna
-1. Buka halaman landing KostManager (klik tombol *"Daftar KostManager"*).
-2. **Tahap 1**: Pilih salah satu metode (*Pilih dari Kost Saya* atau *Daftar Kost Baru*), lalu klik *"Lanjut ke Data Properti"*.
-3. **Tahap 2**: Pilih kost atau lengkapi data properti, lalu klik *"Lanjut: Syarat & Ketentuan"*.
-4. **Tahap 3**: 
-   - Tampilan akan fokus menampilkan **Syarat & Ketentuan Layanan KostManager**.
-   - Tombol *"Lanjut: Ringkasan Biaya"* akan dalam kondisi *disabled* sampai checkbox persetujuan dicentang.
-   - Centang checkbox persetujuan lalu klik *"Lanjut: Ringkasan Biaya"*.
-5. **Tahap 4**:
-   - Tinjau **Ringkasan Pendaftaran & Biaya Langganan** (rincian properti, paket, dan total biaya).
-   - Klik *"Kembali ke Syarat & MoU"* untuk memastikan navigasi mundur bekerja tanpa mereset data.
-   - Klik *"Bayar & Aktifkan Langganan"* untuk membuka dialog pembayaran.
+1. Buka **Dashboard Admin** ➔ Menu **KostManager** (`/dashboard?tab=kostmanager`).
+2. Temukan salah satu permintaan KostManager berstatus *"Menunggu Agen"* (`PENDING_ASSIGNMENT`).
+3. Tetapkan agen surveyor melalui salah satu cara:
+   - **Opsi A (Cepat)**: Pilih nama agen dari dropdown *"Tugaskan Agen"* pada baris tabel.
+   - **Opsi B (Modal)**: Klik tombol *"Kelola"* / *"Edit Penugasan"*, pilih agen, lalu klik simpan.
+4. Muncul notifikasi sukses: *"Agen berhasil ditugaskan & email penugasan resmi telah dikirim ke agen."*.
+5. Buka kotak masuk (*Inbox*) email agen yang ditugaskan: Email resmi penugasan dengan rincian kost dan tombol ke Dashboard Agen akan masuk secara instan.

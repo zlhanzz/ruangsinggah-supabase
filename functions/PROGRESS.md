@@ -2,6 +2,30 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 376. Otomatisasi Notifikasi Email Penugasan Surveyor KostManager via Brevo REST API Langsung (`emailService.ts`, `adminService.ts`, `KostManagerManagement.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna memberikan masukan bahwa belum ada email otomatis yang terkirim ke agen surveyor ketika ditugaskan oleh admin untuk melakukan pendataan KostManager (*"belum ada email otomatis yang terkirim ke agen survey juka ditugaskan oleh admin untuk melakukan pendataan kostmanager. email yang menggunakan sistem pengiriman email brevo yang ada di sistem kita"*).
+  2. Sebelumnya, penugasan surveyor di `KostManagerManagement.tsx` hanya mengubah status di database dan menyinkronkan data tanpa mengirimkan notifikasi resmi via email ke surveyor.
+- **Implementasi Solusi**:
+  1. **Pembuatan Dispatcher Brevo Email di `emailService.ts` (`sendAgentKostManagerAssignmentEmailBrevoDirect`)**:
+     - Merancang template HTML email premium ber-branding RuangSinggah (Gradien Oranye `#ea580c` - `#f97316` & Dark Slate `#0f172a`).
+     - Menyusun rincian lengkap tugas: Nama Kost, Tipe Hunian, Alamat Lokasi, Kontak Pemilik/Mitra (Nama & Nomor WhatsApp), Jadwal Rencana Survei, Catatan Khusus, SOP Tugas Surveyor (Hubungi Pemilik, Pengambilan Visual 4:3, Pendataan Lengkap, Submit Data), dan Tombol CTA (*"Buka Dashboard Agen"*).
+     - Mengirimkan email secara langsung ke endpoint Brevo REST API (`https://api.brevo.com/v3/smtp/email`) dengan arsitektur *zero-deploy*.
+  2. **Helper Penugasan di `adminService.ts` (`triggerKostManagerAgentAssignmentEmail`)**:
+     - Mengambil data detail request KostManager, kontak owner, dan profil email surveyor dari tabel `users`.
+     - Mengirimkan in-app notification ke lonceng notifikasi agen dan memicu `sendAgentKostManagerAssignmentEmailBrevoDirect` secara asinkron (*non-blocking*).
+     - Menanamkan auto-trigger di `updateKostManagerRequest` sebagai failsafe jika `assigned_agent_id` diperbarui.
+  3. **Integrasi Pemicu Penugasan di `KostManagerManagement.tsx`**:
+     - Mengintegrasikan pemanggilan `triggerKostManagerAgentAssignmentEmail` pada `handleAssignAgentInline` (dropdown tabel cepat) dan `handleSaveEdit` (modal edit penugasan).
+- **File Tersentuh**:
+  - `functions/public/emailService.ts`
+  - `functions/public/adminService.ts`
+  - `functions/public/components/admin/KostManagerManagement.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi build frontend Vite (`cmd /c npm run build`) lulus 100% (`✓ 2511 modules transformed, built in 27.14s`, 0 error).
+
 ### 375. Pemisahan Syarat & Ketentuan (MoU) dan Ringkasan Pembayaran Langganan Menjadi 4 Tahap Terpisah (`KostManagerLanding.tsx`) (September 2026)
 - **Permintaan & Masalah**:
   1. Pengguna meminta agar Syarat & Ketentuan (MoU) dipisahkan dari Ringkasan Pembayaran terkait rincian biaya langganan, dan tidak disatukan dalam satu layar (*"syarat dan ketentuan terlebih dahulu baru lanjut ke ringkasan pembayaran langganan terkait ringkasan biayanya, jangan disatukan"*).

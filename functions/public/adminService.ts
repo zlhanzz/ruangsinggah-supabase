@@ -1,6 +1,6 @@
 import { supabase } from './supabase';
 import { Kost, DatabaseProduct, ImageUrlObject, VideoUrlObject, SurveyRequest, Banner, KostManagerPackage, MitraPromoPopupSetting, KostManagerFeeSettings, KostManagerFeeLogEntry } from './types';
-import { notifyAdminStatusUpdate, sendMitraPublishedEmailBrevoDirect } from './emailService';
+import { notifyAdminStatusUpdate, sendMitraPublishedEmailBrevoDirect, sendAgentKostManagerAssignmentEmailBrevoDirect } from './emailService';
 import { ensureAbsoluteUrl, getDisplayImageUrl, getDisplayImageObject, sortPropertyImagesWithRoomCover } from './userService';
 export { sortPropertyImagesWithRoomCover };
 import { getCurrentDate } from './utils/timeUtils';
@@ -3756,8 +3756,111 @@ export async function updateKostManagerRequest(
     }
   }
 
+  // --- AUTOMATED NOTIFICATION & BREVO EMAIL TO ASSIGNED AGENT ---
+  if (updates.assigned_agent_id && updates.assigned_agent_id !== existing?.assigned_agent_id) {
+    triggerKostManagerAgentAssignmentEmail(id, updates.assigned_agent_id).catch(err => {
+      console.warn('[updateKostManagerRequest] Failed to trigger agent email:', err);
+    });
+  }
+
   if (updates.status) {
     notifyAdminStatusUpdate("KostManager Request", id, updates.status);
+  }
+}
+
+/**
+ * triggerKostManagerAgentAssignmentEmail: Mengambil data detail request KostManager dan agen,
+ * lalu mengirimkan notifikasi in-app dan email resmi via Brevo REST API langsung ke surveyor.
+ */
+export async function triggerKostManagerAgentAssignmentEmail(requestId: string, agentId: string): Promise<boolean> {
+  if (!requestId || !agentId) return false;
+
+  try {
+    // 1. Ambil data request KostManager & owner
+    const { data: kmReq, error: reqErr } = await supabase
+      .from('kostmanager_requests')
+      .select(`
+        id,
+        kost_name,
+        kost_type,
+        kost_address,
+        survey_date,
+        survey_time,
+        notes,
+        user_id,
+        user:user_id (
+          name,
+          email,
+          phone
+        )
+      `)
+      .eq('id', requestId)
+      .maybeSingle();
+
+    if (reqErr || !kmReq) {
+      console.warn('[triggerKostManagerAgentAssignmentEmail] Request not found:', reqErr);
+      return false;
+    }
+
+    // 2. Ambil data profil agent
+    const { data: agentUser, error: agentErr } = await supabase
+      .from('users')
+      .select('id, name, email, phone')
+      .eq('id', agentId)
+      .maybeSingle();
+
+    if (agentErr || !agentUser || !agentUser.email) {
+      console.warn('[triggerKostManagerAgentAssignmentEmail] Agent user or email not found:', agentErr, agentUser);
+      return false;
+    }
+
+    const ownerData = (kmReq as any).user || {};
+    const ownerName = ownerData.name || 'Pemilik Kost';
+    const ownerPhone = ownerData.phone || '';
+
+    // 3. Kirim In-App Notification ke Agen
+    try {
+      await supabase.from('notifications').insert([{
+        user_id: agentId,
+        title: '📋 Tugas Pendataan KostManager Baru!',
+        message: `Anda telah ditugaskan untuk melakukan survei & pendataan di "${kmReq.kost_name}". Buka dashboard agen untuk rincian tugas.`,
+        type: 'assignment',
+        data: { requestId: kmReq.id, status: 'AGENT_ASSIGNED', kostName: kmReq.kost_name },
+        link: '/agent-dashboard',
+        is_read: false,
+        created_at: new Date().toISOString()
+      }]);
+    } catch (notifErr) {
+      console.warn('[triggerKostManagerAgentAssignmentEmail] In-app notification warning:', notifErr);
+    }
+
+    // 4. Kirim Email Notifikasi Penugasan via Brevo REST API Langsung
+    sendAgentKostManagerAssignmentEmailBrevoDirect({
+      agentEmail: agentUser.email,
+      agentName: agentUser.name || 'Surveyor',
+      kostName: kmReq.kost_name,
+      kostType: kmReq.kost_type || 'Kost',
+      kostAddress: kmReq.kost_address,
+      ownerName: ownerName,
+      ownerPhone: ownerPhone,
+      surveyDate: kmReq.survey_date,
+      surveyTime: kmReq.survey_time,
+      notes: kmReq.notes,
+      requestId: kmReq.id
+    }).then(sent => {
+      if (sent) {
+        console.log(`[BREVO_AGENT_KM] ✅ Email penugasan berhasil terkirim ke agen ${agentUser.email} untuk kost "${kmReq.kost_name}"`);
+      } else {
+        console.warn(`[BREVO_AGENT_KM] ⚠️ Gagal mengirim email penugasan ke agen ${agentUser.email}`);
+      }
+    }).catch(err => {
+      console.warn('[BREVO_AGENT_KM] Exception triggering agent assignment email:', err);
+    });
+
+    return true;
+  } catch (err) {
+    console.error('[triggerKostManagerAgentAssignmentEmail] Error:', err);
+    return false;
   }
 }
 

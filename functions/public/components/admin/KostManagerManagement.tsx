@@ -23,7 +23,8 @@ import {
     updateKostManagerRequest, 
     deleteKostManagerRequest, 
     getSurveyAgents,
-    generateManualDriveFolder
+    generateManualDriveFolder,
+    triggerKostManagerAgentAssignmentEmail
 } from '../../adminService';
 import { notifySurveyRevisionRequested } from '../../notificationService';
 import { 
@@ -931,8 +932,16 @@ const KostManagerManagement: React.FC<KostManagerManagementProps> = ({
                 updates.agent_phone = null;
             }
 
+            const isNewAgentAssigned = editForm.assigned_agent_id && editForm.assigned_agent_id !== editingRequest.assigned_agent_id;
             await updateKostManagerRequest(editingRequest.id, updates);
-            alert('Permintaan KostManager berhasil diperbarui.');
+            if (isNewAgentAssigned) {
+                triggerKostManagerAgentAssignmentEmail(editingRequest.id, editForm.assigned_agent_id).catch(e => {
+                    console.warn('[KostManagerManagement] Email dispatch notice:', e);
+                });
+            }
+            alert(isNewAgentAssigned 
+                ? 'Permintaan KostManager berhasil diperbarui & notifikasi email resmi telah dikirim ke agen.'
+                : 'Permintaan KostManager berhasil diperbarui.');
             setEditingRequest(null);
             loadData();
             refreshData();
@@ -1009,7 +1018,10 @@ const KostManagerManagement: React.FC<KostManagerManagementProps> = ({
                 agent_phone: selectedAgent.phone
             };
             await updateKostManagerRequest(reqId, updates);
-            alert('Agen berhasil ditugaskan.');
+            triggerKostManagerAgentAssignmentEmail(reqId, agentId).catch(e => {
+                console.warn('[KostManagerManagement] Email dispatch notice:', e);
+            });
+            alert('Agen berhasil ditugaskan & email penugasan resmi telah dikirim ke agen.');
             loadData();
             refreshData();
         } catch (err) {
