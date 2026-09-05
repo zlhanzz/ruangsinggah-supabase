@@ -194,22 +194,25 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
 
     const isVerified = user?.verification_status === 'verified';
 
-    // Cek apakah mitra berstatus KostManager, memiliki properti KostManager, atau sedang berlangganan KostManager
+    // Cek apakah mitra berstatus KostManager, memiliki properti KostManager, atau sedang berlangganan / dalam proses pengajuan KostManager
     const isKostManager = useMemo(() => {
         if (user?.subscription_status === 'kostmanager' || mitraSubscriptionStatus === 'kostmanager' || (user as any)?.is_managed === true || (user as any)?.is_kostmanager === true) {
             return true;
         }
-        if (properties.some((p: any) => p.is_managed === true || p.isManaged === true || p.managed_by === 'kostmanager' || p.kost_manager_status === 'ACTIVE' || p.kostManager?.status === 'ACTIVE')) {
+        if (properties.some((p: any) => p.is_managed === true || p.isManaged === true || p.managed_by === 'kostmanager' || p.kost_manager_status === 'ACTIVE' || p.kostManager?.status === 'ACTIVE' || (p as any)?.is_managed_active === true)) {
             return true;
         }
-        if (kmRequests.some((r: any) => ['COMPLETED', 'APPROVED', 'IN_PROGRESS', 'SURVEY_SCHEDULED', 'ACTIVE'].includes((r.status || '').toUpperCase()))) {
+        if (kmRequests.some((r: any) => {
+            const s = (r.status || '').toUpperCase();
+            return s && !['CANCELLED', 'REJECTED'].includes(s);
+        })) {
             return true;
         }
         return false;
     }, [user, mitraSubscriptionStatus, properties, kmRequests]);
 
     const handleMenuChange = (menu: MenuKey) => {
-        if (!isKostManager && (menu === 'overview' || menu === 'properties')) {
+        if (!loading && !isKostManager && (menu === 'overview' || menu === 'properties')) {
             setShowPromoPopup(true);
         }
         navigate(`${Page.DASHBOARD_MITRA}/${menu}`);
@@ -242,12 +245,14 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
         }).catch(err => console.warn('Could not load KM fee setting:', err));
     }, [isKostManager]);
 
-    // Selalu munculkan pop-up iklan promosi KostManager setiap kali mitra masuk ke menu Beranda atau Kost Saya
+    // Selalu munculkan pop-up iklan promosi KostManager HANYA jika data sudah selesai dimuat dan mitra BUKAN KostManager / tidak sedang mengajukan
     useEffect(() => {
-        if (!isKostManager && (activeMenu === 'overview' || activeMenu === 'properties')) {
+        if (!loading && !isKostManager && (activeMenu === 'overview' || activeMenu === 'properties')) {
             setShowPromoPopup(true);
+        } else if (isKostManager) {
+            setShowPromoPopup(false);
         }
-    }, [activeMenu, isKostManager]);
+    }, [activeMenu, isKostManager, loading]);
 
     // Handle Escape key for popup
     useEffect(() => {
@@ -898,7 +903,10 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
     };
 
     const renderKostManagerBanner = () => {
-        const hasKmActive = isKostManager || properties.some((p: any) => p.isManaged || p.is_managed || p.managed_by === 'kostmanager') || kmRequests.length > 0;
+        const hasKmActive = isKostManager || properties.some((p: any) => p.isManaged || p.is_managed || p.managed_by === 'kostmanager') || kmRequests.some((r: any) => {
+            const s = (r.status || '').toUpperCase();
+            return s && !['CANCELLED', 'REJECTED'].includes(s);
+        });
 
         if (hasKmActive) {
             return (
@@ -3759,7 +3767,7 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
             })()}
 
             {/* ── POP-UP IKLAN GRAFIS PROMO MITRA (KOSTMANAGER) ── */}
-            {showPromoPopup && !isKostManager && (
+            {showPromoPopup && !loading && !isKostManager && (
                 <div 
                     onClick={(e) => {
                         if (e.target === e.currentTarget) {

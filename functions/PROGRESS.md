@@ -2,6 +2,30 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 380. Penonaktifan Pop-up & Banner Promo KostManager untuk Mitra Pengajuan / Terkelola (`MitraDashboard.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna melaporkan bahwa saat mitra sudah berada dalam tahap pengajuan KostManager (misal status `PENDING_ASSIGNMENT` / *"Menunggu survey lokasi"*) atau propertinya sudah resmi listing sebagai KostManager, pop-up modal banner promosi KostManager (*"Capek Kelola Kost Sendiri? Serahkan Operasional ke KostManager!"*) masih tetap muncul di layar Dashboard Mitra (*"seharusnya ketika mitra sudah dalam tahap pengajuan kostmanager, seharusnyaa banner itu tidak lagi muncul, apakagi ketika status kost mitra sudah resmi listing sebagai kostmanager"*).
+  2. Akar masalah:
+     - `isKostManager` di `MitraDashboard.tsx` sebelumnya hanya menyaring status sempit: `['COMPLETED', 'APPROVED', 'IN_PROGRESS', 'SURVEY_SCHEDULED', 'ACTIVE']`. Seluruh status pengajuan awal/berjalan lainnya (`PENDING`, `PENDING_ASSIGNMENT`, `AGENT_ASSIGNED`, `SURVEYING`, `SUBMITTED`, `PENDING_ONBOARDING`, `REVISION_REQUIRED`, dll.) tidak terdeteksi, sehingga `isKostManager` bernilai `false`.
+     - Kondisi balapan render (*race condition*) pada saat komponen pertama kali dibuka di mana `loading` bernilai `true` dan data `kmRequests` masih array kosong `[]`, langsung memicu `setShowPromoPopup(true)` sebelum data selesai di-fetch oleh `loadData()`.
+- **Implementasi Solusi**:
+  1. **Perluasan Deteksi Status `isKostManager` di `MitraDashboard.tsx`**:
+     - Deteksi tiket pengajuan KostManager yang aktif/sedang diproses: `kmRequests.some(r => r.status && !['CANCELLED', 'REJECTED'].includes(r.status.toUpperCase()))`.
+     - Deteksi status properti terkelola: `properties.some(p => p.is_managed === true || p.isManaged === true || p.managed_by === 'kostmanager' || p.kost_manager_status === 'ACTIVE' || p.kostManager?.status === 'ACTIVE' || p.is_managed_active === true)`.
+     - Deteksi langganan akun mitra: `user?.subscription_status === 'kostmanager' || mitraSubscriptionStatus === 'kostmanager' || user?.is_managed === true || user?.is_kostmanager === true`.
+  2. **Proteksi Loading & Navigasi Tab**:
+     - Memastikan `setShowPromoPopup(true)` hanya dijalankan jika `!loading && !isKostManager` pada `useEffect` dan `handleMenuChange`.
+     - Jika `isKostManager === true`, otomatis menutup popup (`setShowPromoPopup(false)`).
+     - Menambahkan proteksi pada kondisi render modal: `{showPromoPopup && !loading && !isKostManager && (`.
+  3. **Penyelarasan Banner Auto-Pilot di `renderKostManagerBanner()`**:
+     - Memastikan status banner hijau auto-pilot aktif/dalam proses muncul konsisten saat mitra memiliki pengajuan berjalan.
+- **File Tersentuh**:
+  - `functions/public/pages/MitraDashboard.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi build frontend Vite (`cmd /c npm run build`) lulus 100% (`✓ 2511 modules transformed, built in 39.86s`, 0 error).
+
 ### 379. Penegakan Kesakralan Gerbang Login Dua Arah (Pencari Kost vs Pemilik Kost) (`App.tsx`, `Login.tsx`) (September 2026)
 - **Permintaan & Masalah**:
   1. Pengguna mempertanyakan hilangnya batasan/isolasi gerbang peran login (*"kesakralan gerbang pencari kost atau pemilik kost hilang ya? soalnya ketika mencoba masuk ke gerbang pencari kost dan login dengan email pemilik koast, yang terjadi adalah login dan langsung masuk ke dashboard mitra"*).

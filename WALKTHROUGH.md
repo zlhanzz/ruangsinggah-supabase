@@ -1,49 +1,49 @@
-# WALKTHROUGH - Otomatisasi Email Notifikasi Penugasan Surveyor KostManager via Brevo API
+# WALKTHROUGH - Penegakan Kesakralan Gerbang Login (Pencari Kost vs Pemilik Kost)
 
 ## Ringkasan Pekerjaan
-Otomatisasi pengiriman email notifikasi penugasan surveyor KostManager telah berhasil diimplementasikan menggunakan sistem pengiriman **Brevo REST API langsung (*Zero-Deploy*)**.
-
-Ketika admin menetapkan surveyor untuk suatu properti KostManager (baik melalui dropdown tabel cepat maupun modal edit kelola di Dashboard Admin), sistem secara instan mengirimkan email penugasan resmi ke alamat email terdaftar agen surveyor, disertai notifikasi in-app.
+Telah berhasil diimplementasikan penguncian dan validasi dua arah (*strict bidirectional role-gateway isolation*) pada sistem autentikasi login RuangSinggah. Perubahan ini memastikan "kesakralan" gerbang masuk (*portal gate*) tetap terjaga 100%:
+1. **Gerbang Pencari Kost**: Hanya akun penyewa / pencari kost biasa (`role === 'user'`) yang diizinkan masuk. Jika akun Pemilik Kost / Mitra (`role === 'owner'` / `'mitra'`) mencoba login di gerbang ini, sistem secara otomatis menolak, melakukan auto-logout, dan mengarahkan ke formulir Pemilik Kost dengan pesan peringatan yang jelas.
+2. **Gerbang Pemilik Kost (Mitra)**: Hanya akun mitra / admin (`role === 'owner'`, `'mitra'`, `'admin'`) yang diizinkan masuk. Jika akun Pencari Kost biasa mencoba login di gerbang ini, sistem menolak dan mengarahkan kembali ke formulir Pencari Kost.
 
 ---
 
 ## 1. Daftar Perubahan Kode
 
-### A. Dispatcher Brevo Email Baru (`emailService.ts`)
-- Menambahkan interface `AgentKostManagerAssignmentEmailDetails` dan fungsi `sendAgentKostManagerAssignmentEmailBrevoDirect`.
-- **Desain Template Email Premium**:
-  - Banner Header: Oranye RuangSinggah (`#ea580c` ke `#f97316`) dengan badge *"📋 PENUGASAN SURVEYOR KOSTMANAGER"*.
-  - Sapaan hangat personal ke nama agen surveyor.
-  - Kartu Rincian Properti: Nama Kost, Tipe Hunian, Alamat Lokasi Lengkap, Kontak Pemilik/Mitra (Nama & Nomor WhatsApp), serta Rencana Jadwal Survei.
-  - Kartu SOP Tugas: Panduan menghubungi pemilik, pemotretan 4:3, kelengkapan data fasilitas, dan instruksi submit ke dashboard.
-  - Tombol Call-to-Action (CTA): Tombol langsung menuju `Dashboard Agen` (`/dashboard-agent`).
-  - Pengiriman langsung ke `https://api.brevo.com/v3/smtp/email` dengan API key resmi.
+### A. Validasi Ketat Dua Arah & Navigasi di `App.tsx` (`functions/public/App.tsx`)
+- **Pembersihan Overwrite Paksa**: Menghapus baris `if (role === 'owner') localStorage.setItem('portal_view', 'owner');` yang sebelumnya membajak pilihan gerbang pengguna dan memaksanya langsung masuk ke dashboard mitra.
+- **Validasi Dua Arah pada `fetchUserData`**:
+  - **Blokir Pemilik di Gerbang Pencari Kost**:
+    Jika `currentPortal === 'user'` dan `role === 'owner'` / `'mitra'`, sistem mengeksekusi `supabase.auth.signOut()` dan redirect ke `/login?error=role_mismatch_owner`.
+  - **Blokir Pencari Kost di Gerbang Pemilik**:
+    Jika `currentPortal === 'owner'` dan `role === 'user'`, sistem mengeksekusi `supabase.auth.signOut()` dan redirect ke `/login?error=role_mismatch`.
+- **Navigasi Post-Login Presisi (`handleNavigationAfterLogin`)**:
+  - Mengubah logika redirect sehingga akun mitra hanya diarahkan ke `Page.DASHBOARD_MITRA` jika `currentPortal === 'owner'`. Jika login melalui gerbang lain atau kondisi tidak valid, diarahkan dengan aman.
 
-### B. Helper & Failsafe di Service Backend (`adminService.ts`)
-- Membuat fungsi `triggerKostManagerAgentAssignmentEmail(requestId, agentId)`:
-  - Mengambil data detail request dari tabel `kostmanager_requests` dan data profil agen dari tabel `users`.
-  - Mengirim in-app notification ke tabel `notifications`.
-  - Memicu pengiriman email Brevo via `sendAgentKostManagerAssignmentEmailBrevoDirect` secara asinkron (*non-blocking*).
-- Menambahkan auto-trigger di `updateKostManagerRequest` sebagai jaring pengaman (*failsafe*) jika `assigned_agent_id` diperbarui dari bagian manapun di sistem.
-
-### C. Integrasi Interaksi Admin di UI (`KostManagerManagement.tsx`)
-- Mengintegrasikan pemicu email pada:
-  1. `handleAssignAgentInline`: Saat admin memilih agen langsung dari dropdown tabel pendaftaran KostManager.
-  2. `handleSaveEdit`: Saat admin mengubah/menetapkan agen melalui modal edit penugasan.
+### B. Penanganan Pesan Error di Halaman Login (`functions/public/pages/Login.tsx`)
+- Menambahkan penanganan parameter query `error === 'role_mismatch_owner'` pada hook `useEffect`.
+- Menampilkan pesan notifikasi:
+  `"Akun Anda terdaftar sebagai Pemilik Kost. Silakan masuk melalui gerbang Pemilik Kost (Mitra)."`
+- Secara otomatis mengalihkan tab/tampilan form login ke mode `'owner'` agar pengguna langsung berada di gerbang yang benar.
 
 ---
 
 ## 2. Hasil Pengujian & Kompilasi
-- **Kompilasi TypeScript (`tsc`)**: `Exit Code 0` (0 error).
-- **Build Frontend Vite**: `Exit Code 0` (`✓ 2511 modules transformed, built in 27.14s`).
+- **Vite Production Build**: `Exit Code 0` (Berhasil 100% tanpa error, `built in 41.45s`).
+- **Validasi Kode**: Struktur data dan otorisasi auth state terjaga konsisten.
 
 ---
 
 ## 3. Panduan Pengujian untuk Pengguna
-1. Buka **Dashboard Admin** ➔ Menu **KostManager** (`/dashboard?tab=kostmanager`).
-2. Temukan salah satu permintaan KostManager berstatus *"Menunggu Agen"* (`PENDING_ASSIGNMENT`).
-3. Tetapkan agen surveyor melalui salah satu cara:
-   - **Opsi A (Cepat)**: Pilih nama agen dari dropdown *"Tugaskan Agen"* pada baris tabel.
-   - **Opsi B (Modal)**: Klik tombol *"Kelola"* / *"Edit Penugasan"*, pilih agen, lalu klik simpan.
-4. Muncul notifikasi sukses: *"Agen berhasil ditugaskan & email penugasan resmi telah dikirim ke agen."*.
-5. Buka kotak masuk (*Inbox*) email agen yang ditugaskan: Email resmi penugasan dengan rincian kost dan tombol ke Dashboard Agen akan masuk secara instan.
+1. **Uji Skenario 1 (Pemilik mencoba masuk lewat Gerbang Pencari Kost)**:
+   - Buka `/login` dan pastikan tab berada di **Pencari Kost**.
+   - Masukkan email dan password akun Pemilik Kost (Mitra).
+   - Klik **Masuk**.
+   - **Hasil**: Login ditolak, sistem otomatis logout, tab berpindah ke **Pemilik Kost**, dan muncul pesan banner: *"Akun Anda terdaftar sebagai Pemilik Kost. Silakan masuk melalui gerbang Pemilik Kost (Mitra)."*
+2. **Uji Skenario 2 (Pencari Kost mencoba masuk lewat Gerbang Pemilik Kost)**:
+   - Buka `/login` dan pilih tab **Pemilik Kost**.
+   - Masukkan email dan password akun Pencari Kost biasa (`role: user`).
+   - Klik **Masuk**.
+   - **Hasil**: Login ditolak, sistem otomatis logout, tab berpindah ke **Pencari Kost**, dan muncul pesan banner: *"Akun Anda tidak terdaftar sebagai Pemilik Kost. Silakan login sebagai Pencari Kost."*
+3. **Uji Skenario 3 (Login Normal Sesuai Gerbang Masing-Masing)**:
+   - Akun Pencari Kost login di tab Pencari Kost ➔ Berhasil masuk ke Beranda / Halaman User.
+   - Akun Pemilik Kost login di tab Pemilik Kost ➔ Berhasil masuk ke Dashboard Mitra.
