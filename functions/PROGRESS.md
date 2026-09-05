@@ -2,6 +2,36 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 345. Integrasi Riwayat Transaksi & Tagihan 5 Kategori pada Profile Hub Dashboard (`userService.ts`, `Profile.tsx`, `DigitalReceiptModal.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna meminta agar opsi **"Riwayat Transaksi & Tagihan"** pada Profile Hub Dashboard (`/profile`) menampilkan seluruh transaksi yang telah dilakukan oleh pengguna secara komprehensif, mencakup 5 kategori:
+     - 🗄️ Beli Database Kontak Kost
+     - 📍 Pemesanan Jasa Survey Lokasi Kost
+     - 🏠 Penyewaan Kamar Kost / DP Booking Baru
+     - 🔄 Perpanjangan Masa Sewa Kost Aktif
+     - ⚡ Tagihan Fasilitas Khusus / Ekstra Penghuni
+  2. Pengguna membutuhkan akses langsung ke invoice resmi, rincian biaya, metode bayar, status transaksi, serta cetak/unduh **Kwitansi Digital** resmi.
+- **Implementasi Solusi**:
+  1. **Helper Penarikan & Normalisasi Transaksi (`userService.ts`)**:
+     - Menambahkan fungsi `getUserAllTransactionsHistory(userId: string)` yang mengambil seluruh transaksi pengguna dari tabel `public.transactions` di Supabase.
+     - Mengelompokkan dan menormalisasi metadata ke dalam 5 kategori standar (`booking`, `extension`, `facility`, `survey`, `database`), lengkap dengan nomor invoice (`INV-XXXXXXXX`), status, tanggal, metode pembayaran, rincian kamar/lokasi, dan relasi foto properti.
+  2. **Sub-view Riwayat Transaksi & Tagihan Terpadu (`Profile.tsx`)**:
+     - Menambahkan sub-view `transactions` (`viewMode === 'transactions'`) dengan tombol navigasi `← Kembali ke Menu Profil`.
+     - Menyematkan live badge counter jumlah transaksi di menu Profile Hub Dashboard (misal: `4 Transaksi`).
+     - Menyajikan Banner Statistik Gelap Modern: Total Transaksi Lunas dan Total Akumulasi Pembayaran.
+     - Menyediakan Filter Tabs Horisontal Interaktif 5 Kategori dengan badge counter per kategori.
+     - Menyajikan Kartu Transaksi Responsif dengan invoice code, status badge, harga nominal tegas, dan tombol aksi:
+       - **Kwitansi Digital**: Membuka popup `DigitalReceiptModal` resmi.
+       - **Bayar Sekarang**: Akses cepat pembayaran pesanan tertunda (`/order-status/:id`).
+       - **Akses Layanan**: Tombol cepat menuju database kontak, pelacakan survey, atau katalog kost.
+- **File Tersentuh**:
+  - `functions/public/userService.ts`
+  - `functions/public/pages/Profile.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi build frontend Vite (`functions/public`) lulus 100% (`✓ built in 33.55s`, 0 error).
+
 ### 344. Integrasi Penuh Fitur Kost Favorit Saya pada Profile Hub Dashboard (`favoriteService.ts`, `Profile.tsx`, `KostDetail.tsx`, `App.tsx`) (September 2026)
 - **Permintaan & Masalah**:
   1. Pengguna meminta agar opsi **"Kost Favorit Saya"** pada Profile Hub Dashboard (`/profile`) berfungsi penuh dan menampung seluruh listing kost yang disimpan/difavoritkan oleh pengguna dari halaman detail kost (`KostDetail.tsx`).

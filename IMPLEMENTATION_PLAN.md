@@ -1,54 +1,81 @@
-# Rencana Implementasi (Implementation Plan): Integrasi Fitur "Kost Favorit Saya" pada Menu Profil
+# IMPLEMENTATION PLAN: Integrasi Lengkap Riwayat Transaksi & Tagihan (5 Kategori) pada Profile Hub & MyKost
 
-## 1. Analisis Kebutuhan & Masalah
-
-### A. Masalah & Konteks
-1. **Fungsi Simpan Sudah Ada**:
-   - Di halaman detail kost (`KostDetail.tsx`), sudah terdapat tombol **"Simpan" / "Tersimpan"** yang menyimpan ID kost ke `localStorage` dengan key `ruangsinggah_saved_kosts`.
-2. **Kebutuhan yang Belum Tersedia**:
-   - Tombol **"Kost Favorit Saya"** pada menu Profil (`/profile`) saat ini belum memiliki halaman atau sub-view untuk menampilkan daftar kost yang telah disimpan oleh pengguna.
-3. **Solusi yang Dibutuhkan**:
-   - Menghubungkan menu "Kost Favorit Saya" di `Profile.tsx` agar membuka **Sub-view Kost Favorit Saya** (`viewMode === 'favorites'`).
-   - Mengambil detail properti dari database/cache berdasarkan ID yang ada di `ruangsinggah_saved_kosts`.
-   - Menampilkan grid kartu properti kost tersimpan, live counter badge pada menu profil ("2 Kost", dsb.), serta *Empty State* jika belum ada kost yang disimpan lengkap dengan tombol navigasi `← Kembali ke Menu Profil`.
+Dokumen ini adalah rencana implementasi komprehensif untuk menampilkan seluruh riwayat transaksi dan tagihan yang telah dilakukan pengguna pada sistem **RuangSinggah**.
 
 ---
 
-## 2. Dampak Perubahan (File yang Terpengaruh)
+## 1. Analisis Masalah & Kebutuhan
 
-| No | File | Perubahan |
-|---|---|---|
-| 1 | `functions/public/favoriteService.ts` | **(File Baru)** Helper modular untuk membaca, menyimpan, menghapus ID favorit dari `ruangsinggah_saved_kosts`, serta query data properti favorit dari Supabase. |
-| 2 | `functions/public/pages/Profile.tsx` | Menambahkan sub-view `favorites` pada halaman Profil, menampilkan grid listing kost favorit, live badge counter jumlah kost tersimpan, empty state, dan tombol navigasi `← Kembali ke Menu Profil`. |
-| 3 | `functions/public/pages/KostDetail.tsx` | Menyelaraskan penyimpanan `ruangsinggah_saved_kosts` melalui `favoriteService.ts` dan memicu event reaktif. |
+### A. Masalah Saat Ini
+1. Pada menu Profile Hub Dashboard (`/profile`), opsi **"Riwayat Transaksi & Tagihan"** sebelumnya diarahkan ke `${Page.MY_BOOKINGS}/riwayat`, di mana tab tersebut hanya memfilter beberapa data sewa berstatus kedaluwarsa/selesai dan tidak merangkum seluruh transaksi multi-produk secara lengkap.
+2. Pengguna yang telah melakukan berbagai jenis transaksi (membeli database kontak kost, memesan jasa survey lapangan, membayar DP sewa kamar baru, melakukan perpanjangan sewa bulanan, atau membayar tagihan fasilitas khusus/ekstra penghuni) belum dapat melihat rekapitulasi seluruh transaksi tersebut secara terstruktur dalam satu tempat dengan rincian invoice dan kwitansi digital.
+
+### B. Ruang Lingkup 5 Kategori Transaksi yang Wajib Ditampilkan
+1. 🗄️ **Beli Database Kost** (`database`, `database_access`, `product`): Pembelian paket kontak pemilik kost / database hunian.
+2. 📍 **Jasa Survey Lokasi** (`survey`, `survey_order`, `survey_requests`): Pemesanan jasa survey fisik kamar & lingkungan kost oleh surveyor resmi.
+3. 🏠 **Penyewaan Kost / DP Sewa** (`kost_booking`, `rent`, `kost`, `sewa`): Pembayaran booking kamar baru / DP sewa pertama.
+4. 🔄 **Perpanjangan Sewa Kost** (`perpanjangan_sewa`, `extension`, `rent_extension`): Pembayaran perpanjangan masa sewa kamar kost aktif (bulanan/tahunan).
+5. ⚡ **Tagihan Fasilitas Khusus & Ekstra** (`tagihan_ekstra`, `facility_bill`, `extra_occupant`, `billPayment`): Pembayaran tagihan listrik, AC, iuran kebersihan, ekstra penghuni, atau fasilitas tambahan kamar.
 
 ---
 
-## 3. Langkah-Langkah Eksekusi (Fase 2 Pasca-Approval)
+## 2. Dampak Perubahan (Files to Modify)
 
-1. **Pembuatan `favoriteService.ts`**:
-   - `getSavedKostIds(): string[]` (membaca dari `ruangsinggah_saved_kosts`).
-   - `toggleSaveKost(kostId: string): boolean` (menambah/menghapus ID dan memancarkan event `rs_favorites_updated`).
-   - `fetchSavedProperties(): Promise<Kost[]>` (mengambil data properti terpublikasi berdasarkan ID dari Supabase / cache).
-2. **Implementasi Sub-view "Kost Favorit Saya" di `Profile.tsx`**:
-   - State `viewMode: 'hub' | 'edit_personal_data' | 'favorites'`.
-   - Live badge counter pada baris menu "Kost Favorit Saya" di hub profil (misal: `<span className="px-2 py-0.5 rounded-full bg-rose-50 text-rose-600 text-xs font-black">2 Kost</span>`).
-   - Render Grid Kartu Kost Favorit menggunakan komponen `KostCard` yang sudah dioptimasi.
-   - Tombol navigasi `← Kembali ke Menu Profil` di bagian atas.
-   - Empty State informatif jika belum ada kost tersimpan dengan tombol CTA menuju `/listings`.
-3. **Penyelarasan `KostDetail.tsx`**:
-   - Memastikan toggle save memancarkan event `rs_favorites_updated` agar badge counter di profil langsung ter-update otomatis.
-4. **Kompilasi & Pengujian**:
-   - Menjalankan `npm run build` di `functions/public` untuk memastikan 0 error kompilasi.
-5. **Pencatatan Progres & Walkthrough**:
-   - Menambahkan catatan ke `functions/PROGRESS.md` dan menerbitkan `WALKTHROUGH.md`.
-   - Commit & push ke branch `bukan-productions`.
+1. **`functions/public/userService.ts`**:
+   - Menambahkan helper `getUserAllTransactionsHistory(userId: string)` untuk mengambil, menggabungkan, dan menormalisasi seluruh data transaksi dari tabel Supabase `transactions`, `resident_status`, dan `survey_requests` lengkap dengan rincian metadata produk.
+2. **`functions/public/pages/Profile.tsx`**:
+   - Memperluas state `viewMode: 'hub' | 'edit_personal_data' | 'favorites' | 'transactions'`.
+   - Mengubah baris menu *"Riwayat Transaksi & Tagihan"* pada Profile Hub agar membuka Sub-view Transaksi (`viewMode === 'transactions'`).
+   - Menyusun Sub-view **"Riwayat Transaksi & Tagihan"** yang kaya fitur:
+     - Tombol navigasi `← Kembali ke Menu Profil`.
+     - Tab filter kategori: *Semua Transaksi*, *Sewa Kost*, *Perpanjangan Sewa*, *Tagihan Fasilitas*, *Jasa Survey*, *Database Kost*.
+     - Ringkasan statistik (Total Pengeluaran, Transaksi Lunas, Menunggu).
+     - Kartu transaksi informatif: Nomor Invoice, Lencana Kategori berwarna, Status Pembayaran, Rincian Unit/Layanan, Tanggal, Metode Pembayaran, dan Tombol **"Kwitansi Digital"** (`DigitalReceiptModal`).
+3. **`functions/public/pages/MyKost.tsx`**:
+   - Menyempurnakan tab `'riwayat'` agar juga mendukung penampilan seluruh 5 kategori transaksi secara konsisten.
+4. **`functions/PROGRESS.md`**:
+   - Mencatat progres fitur #345.
+5. **`WALKTHROUGH.md`**:
+   - Membuat laporan hasil pengujian dan panduan user testing.
+
+---
+
+## 3. Langkah-Langkah Eksekusi Bertahap (Setelah Persetujuan User)
+
+```mermaid
+graph TD
+    A[FASE 1: Approval User pada IMPLEMENTATION_PLAN.md] --> B[FASE 2: Pembuatan Helper getUserAllTransactionsHistory di userService.ts]
+    B --> C[Implementasi Sub-View Riwayat Transaksi & Filter Kategori di Profile.tsx]
+    C --> D[Penyelarasan Tab Riwayat Transaksi di MyKost.tsx]
+    D --> E[Integrasi Kwitansi Digital Modal & Aksi Bayar Ulang]
+    E --> F[Kompilasi & Pengujian Build npm run build]
+    F --> G[Pencatatan PROGRESS.md & Penerbitan WALKTHROUGH.md]
+    G --> H[Git Commit & Push ke branch bukan-productions]
+```
+
+### Langkah Rinci:
+1. **Langkah 1**: Buat fungsi `getUserAllTransactionsHistory(userId)` di `userService.ts` yang mengambil seluruh baris dari `transactions` (`user_id = userId`), memetakan `product_type` ke dalam 5 kategori standar, mengurai JSON `metadata`, dan melengkapinya dengan nama properti / nomor kamar.
+2. **Langkah 2**: Modifikasi `Profile.tsx`:
+   - Tambahkan state `userTransactions`, `loadingTransactions`, `selectedCategoryFilter`, dan `selectedReceipt`.
+   - Tampilkan kartu ringkasan transaksi dan filter pill tabs 5 kategori.
+   - Sediakan empty state yang ramah jika belum ada transaksi di kategori yang dipilih.
+   - Integrasikan `DigitalReceiptModal` untuk mencetak / melihat kwitansi resmi.
+3. **Langkah 3**: Sinkronisasi tab `'riwayat'` di `MyKost.tsx` untuk memastikan konsistensi data.
+4. **Langkah 4**: Jalankan `npm.cmd run build` di `functions/public` untuk memastikan kompilasi 0 error.
+5. **Langkah 5**: Perbarui `functions/PROGRESS.md` (#345), buat `WALKTHROUGH.md`, serta lakukan commit & push ke branch `bukan-productions`.
 
 ---
 
 ## 4. Rencana Verifikasi
 
-- [ ] **Kompilasi**: `npm run build` berhasil 100%.
-- [ ] **Simpan Kost**: Buka salah satu kost di detail `/kost/:id`, klik tombol **Simpan** ➔ kost tersimpan.
-- [ ] **Buka Kost Favorit Saya**: Buka menu **Profil (`/profile`)** ➔ terlihat badge angka jumlah kost favorit ➔ klik **"Kost Favorit Saya"** ➔ terbuka sub-view dengan daftar kost yang tersimpan.
-- [ ] **Navigasi & Interaksi**: Klik salah satu kartu favorit untuk membuka detailnya, atau klik `← Kembali ke Menu Profil`.
+1. **Uji Kompilasi**: Menjalankan `npm.cmd run build` di `functions/public` untuk memastikan tidak ada error TypeScript maupun bundling.
+2. **Uji Fungsionalitas UI**:
+   - Klik menu *"Riwayat Transaksi & Tagihan"* pada Profile Hub ➔ Tampilan langsung membuka Sub-view riwayat transaksi.
+   - Filter tab kategori (Semua, Sewa Kost, Perpanjangan, Tagihan Fasilitas, Survey, Database) ➔ Menyaring transaksi secara akurat.
+   - Klik *"Kwitansi Digital"* pada salah satu transaksi lunas ➔ Membuka modal kwitansi resmi RuangSinggah dengan rincian harga, tanggal, dan metode bayar.
+   - Klik *"← Kembali ke Menu Profil"* ➔ Mengembalikan tampilan ke Profile Hub Dashboard.
+
+---
+
+> [!IMPORTANT]
+> Sesuai protokol baku workspace, implementasi kode pada Fase 2 baru akan dieksekusi setelah Anda meninjau dan menyetujui (*Proceed / ACC*) rencana di atas.

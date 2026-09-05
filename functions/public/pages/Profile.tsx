@@ -11,12 +11,15 @@ import {
   FAVORITES_UPDATED_EVENT 
 } from '../favoriteService';
 import { createKostSlug } from '../utils/slugUtils';
+import { getUserAllTransactionsHistory, NormalizedTransaction } from '../userService';
+import DigitalReceiptModal, { ReceiptData } from '../components/DigitalReceiptModal';
+import { FORMAT_CURRENCY } from '../constants';
 import { 
   ArrowLeft, Edit3, Lock, CheckCircle2, ShieldCheck, Calendar, 
   Briefcase, Building2, User, Users, MapPin, Sparkles, Heart, 
   Phone, MessageSquare, MessageCircle, Check, X, Shield, Key, Camera, Trash2, 
   Mail, RefreshCw, AlertCircle, Eye, EyeOff, ChevronRight, CreditCard,
-  Bell, HelpCircle, FileText, LogOut, ExternalLink
+  Bell, HelpCircle, FileText, LogOut, ExternalLink, Receipt, Layers, RotateCcw, Zap
 } from 'lucide-react';
 
 interface ProfileProps {
@@ -29,13 +32,18 @@ interface ProfileProps {
 
 const Profile: React.FC<ProfileProps> = ({ user, onLogout, onSaveSuccess, forceEdit, onBack }) => {
   const navigate = useNavigate();
-  const [viewMode, setViewMode] = useState<'hub' | 'edit_personal_data' | 'favorites'>(forceEdit ? 'edit_personal_data' : 'hub');
+  const [viewMode, setViewMode] = useState<'hub' | 'edit_personal_data' | 'favorites' | 'transactions'>(forceEdit ? 'edit_personal_data' : 'hub');
   const [isEditing, setIsEditing] = useState(forceEdit || false);
   const [loading, setLoading] = useState(false);
   const [activeKostCount, setActiveKostCount] = useState<number>(0);
   const [favoriteKosts, setFavoriteKosts] = useState<Kost[]>([]);
   const [favoriteCount, setFavoriteCount] = useState<number>(0);
   const [favoriteLoading, setFavoriteLoading] = useState<boolean>(false);
+  const [userTransactions, setUserTransactions] = useState<NormalizedTransaction[]>([]);
+  const [transactionsLoading, setTransactionsLoading] = useState<boolean>(false);
+  const [selectedTrxCategory, setSelectedTrxCategory] = useState<string>('all');
+  const [selectedReceipt, setSelectedReceipt] = useState<ReceiptData | null>(null);
+  const [showDigitalReceiptModal, setShowDigitalReceiptModal] = useState<boolean>(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Modal Ganti Kata Sandi
@@ -135,15 +143,34 @@ const Profile: React.FC<ProfileProps> = ({ user, onLogout, onSaveSuccess, forceE
     }
   };
 
+  const loadUserTransactions = async () => {
+    if (!user?.uid) return;
+    setTransactionsLoading(true);
+    try {
+      const list = await getUserAllTransactionsHistory(user.uid);
+      setUserTransactions(list);
+    } catch (err) {
+      console.error('Error fetching user transactions in Profile:', err);
+    } finally {
+      setTransactionsLoading(false);
+    }
+  };
+
   useEffect(() => {
     getUserFavoriteIds(user?.uid || user?.id).then((ids) => {
       setFavoriteCount(ids.length);
     }).catch(() => {});
+
+    if (user?.uid) {
+      loadUserTransactions();
+    }
   }, [user]);
 
   useEffect(() => {
     if (viewMode === 'favorites') {
       loadFavoriteList();
+    } else if (viewMode === 'transactions') {
+      loadUserTransactions();
     }
   }, [viewMode, user?.uid, user?.id]);
 
@@ -161,6 +188,27 @@ const Profile: React.FC<ProfileProps> = ({ user, onLogout, onSaveSuccess, forceE
       window.removeEventListener(FAVORITES_UPDATED_EVENT, handleFavUpdate);
     };
   }, [viewMode, user?.uid, user?.id]);
+
+  const handleOpenReceiptFromTransaction = (trx: NormalizedTransaction) => {
+    const meta = trx.metadata || {};
+    setSelectedReceipt({
+      receiptNumber: trx.invoiceNumber,
+      paidAt: trx.updatedAt || trx.createdAt || new Date().toISOString(),
+      tenantName: meta.tenantName || meta.userName || user?.displayName || user?.name || 'Pengguna RuangSinggah',
+      tenantPhone: meta.userPhone || meta.phone || user?.phoneNumber || user?.phone || '',
+      propertyTitle: trx.propertyTitle || trx.title || 'Layanan RuangSinggah',
+      roomNumber: trx.roomNumber || meta.roomNumber || (trx.category === 'booking' || trx.category === 'extension' ? '1' : '-'),
+      billingPeriod: trx.billingPeriod || meta.periodLabel || (trx.category === 'extension' ? `${meta.extensionPeriod || 1} Bulan` : 'Bulanan'),
+      newPeriodStart: trx.periodStart || meta.startDate || meta.moveInDate || '',
+      newPeriodEnd: trx.periodEnd || meta.endDate || '',
+      baseRent: Number(meta.basePrice || meta.baseRent || trx.amount - (trx.extraFee || 0)),
+      extraFee: trx.extraFee || Number(meta.extraPersonFee || 0),
+      extraFeeName: trx.extraFeeName || (Number(meta.extraPersonFee || 0) > 0 ? 'Biaya Ekstra Penghuni' : undefined),
+      totalAmount: trx.amount,
+      paymentMethod: trx.paymentMethod
+    });
+    setShowDigitalReceiptModal(true);
+  };
 
   if (!user) return null;
   const isAdmin = user.role === 'admin';
@@ -604,7 +652,7 @@ const Profile: React.FC<ProfileProps> = ({ user, onLogout, onSaveSuccess, forceE
 
               {/* Riwayat Transaksi & Tagihan */}
               <button
-                onClick={() => navigate(`${Page.MY_BOOKINGS}/riwayat`)}
+                onClick={() => setViewMode('transactions')}
                 className="w-full p-4 flex items-center justify-between text-left hover:bg-orange-50/40 transition-colors group cursor-pointer"
               >
                 <div className="flex items-center gap-3.5 min-w-0">
@@ -621,6 +669,11 @@ const Profile: React.FC<ProfileProps> = ({ user, onLogout, onSaveSuccess, forceE
                   </div>
                 </div>
                 <div className="flex items-center gap-2 shrink-0 ml-2">
+                  {userTransactions.length > 0 && (
+                    <span className="px-2.5 py-0.5 rounded-full bg-indigo-50 text-indigo-700 text-[10px] font-black border border-indigo-200">
+                      {userTransactions.length} Transaksi
+                    </span>
+                  )}
                   <ChevronRight className="w-4 h-4 text-gray-400 group-hover:text-orange-500 group-hover:translate-x-0.5 transition-all" />
                 </div>
               </button>
@@ -895,6 +948,284 @@ const Profile: React.FC<ProfileProps> = ({ user, onLogout, onSaveSuccess, forceE
                   </button>
                 </div>
               ))}
+            </div>
+          )}
+        </div>
+      ) : viewMode === 'transactions' ? (
+        /* ── SUB-VIEW: RIWAYAT TRANSAKSI & TAGIHAN (5 KATEGORI) ─────────────── */
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+          {/* Header Navigation */}
+          <div className="mb-6 flex items-center justify-between gap-4">
+            <button
+              onClick={() => setViewMode('hub')}
+              className="px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-xl text-xs font-bold hover:bg-gray-50 hover:border-gray-300 transition-all shadow-xs active:scale-95 flex items-center gap-2 cursor-pointer group"
+            >
+              <ArrowLeft className="w-4 h-4 text-gray-500 group-hover:-translate-x-1 transition-transform" />
+              <span>Kembali ke Menu Profil</span>
+            </button>
+
+            <button
+              onClick={loadUserTransactions}
+              disabled={transactionsLoading}
+              className="px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-xl text-xs font-bold hover:bg-gray-50 hover:border-gray-300 transition-all shadow-2xs active:scale-95 flex items-center gap-2 cursor-pointer"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 text-gray-500 ${transactionsLoading ? 'animate-spin' : ''}`} />
+              <span>Muat Ulang Data</span>
+            </button>
+          </div>
+
+          {/* Banner Summary & Stats */}
+          <div className="bg-gradient-to-r from-slate-900 via-[#0f172a] to-indigo-950 text-white rounded-3xl p-6 sm:p-8 mb-8 shadow-xl shadow-slate-900/10 border border-slate-800 relative overflow-hidden">
+            <div className="absolute -right-10 -bottom-10 w-64 h-64 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
+            <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
+              <div>
+                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 text-orange-400 text-xs font-bold backdrop-blur-xs border border-white/10 mb-3">
+                  <Receipt className="w-3.5 h-3.5" />
+                  <span>Pusat Transaksi & Tagihan</span>
+                </div>
+                <h1 className="text-2xl sm:text-3xl font-black tracking-tight">
+                  Riwayat Transaksi & Tagihan
+                </h1>
+                <p className="text-xs sm:text-sm text-gray-300 font-medium mt-1.5 max-w-xl leading-relaxed">
+                  Catatan lengkap pembayaran sewa kost, perpanjangan sewa, tagihan fasilitas khusus, jasa survey lokasi, dan pembelian database kontak kost.
+                </p>
+              </div>
+
+              {/* Quick Stats */}
+              <div className="flex items-center gap-3 sm:gap-4 shrink-0 flex-wrap">
+                <div className="bg-white/10 backdrop-blur-md rounded-2xl p-4 border border-white/10 min-w-[130px]">
+                  <p className="text-[10px] uppercase font-black text-gray-300 tracking-wider">Transaksi Lunas</p>
+                  <p className="text-lg sm:text-2xl font-black text-emerald-400 mt-0.5">
+                    {userTransactions.filter(t => t.status === 'PAID').length}
+                    <span className="text-xs font-bold text-gray-300 ml-1">Tagihan</span>
+                  </p>
+                </div>
+                <div className="bg-white/10 backdrop-blur-md rounded-2xl p-4 border border-white/10 min-w-[150px]">
+                  <p className="text-[10px] uppercase font-black text-gray-300 tracking-wider">Total Pembayaran</p>
+                  <p className="text-base sm:text-xl font-black text-orange-400 mt-0.5">
+                    {FORMAT_CURRENCY(userTransactions.filter(t => t.status === 'PAID').reduce((acc, t) => acc + (t.amount || 0), 0))}
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Category Tabs Filter */}
+          <div className="mb-6 overflow-x-auto pb-2 scrollbar-none">
+            <div className="flex items-center gap-2 min-w-max">
+              {[
+                { id: 'all', label: 'Semua Transaksi', icon: Layers, count: userTransactions.length },
+                { id: 'booking', label: 'Sewa Kost Baru', icon: Building2, count: userTransactions.filter(t => t.category === 'booking').length },
+                { id: 'extension', label: 'Perpanjangan Sewa', icon: RotateCcw, count: userTransactions.filter(t => t.category === 'extension').length },
+                { id: 'facility', label: 'Tagihan Fasilitas', icon: Zap, count: userTransactions.filter(t => t.category === 'facility').length },
+                { id: 'survey', label: 'Jasa Survey', icon: MapPin, count: userTransactions.filter(t => t.category === 'survey').length },
+                { id: 'database', label: 'Database Kost', icon: FileText, count: userTransactions.filter(t => t.category === 'database').length },
+              ].map((tab) => {
+                const IconComponent = tab.icon;
+                const isActive = selectedTrxCategory === tab.id;
+                return (
+                  <button
+                    key={tab.id}
+                    onClick={() => setSelectedTrxCategory(tab.id)}
+                    className={`px-4 py-2.5 rounded-2xl text-xs font-black transition-all flex items-center gap-2 cursor-pointer border ${
+                      isActive
+                        ? 'bg-gray-900 text-white border-gray-900 shadow-md shadow-gray-900/10'
+                        : 'bg-white text-gray-600 hover:bg-gray-50 border-gray-200'
+                    }`}
+                  >
+                    <IconComponent className={`w-3.5 h-3.5 ${isActive ? 'text-orange-400' : 'text-gray-400'}`} />
+                    <span>{tab.label}</span>
+                    <span className={`px-2 py-0.2 rounded-full text-[10px] font-black ${
+                      isActive ? 'bg-white/20 text-white' : 'bg-gray-100 text-gray-500'
+                    }`}>
+                      {tab.count}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Transaction Cards List */}
+          {transactionsLoading ? (
+            <div className="space-y-4 animate-pulse">
+              {[1, 2, 3].map((n) => (
+                <div key={n} className="bg-white rounded-3xl p-6 border border-gray-100 shadow-xs flex flex-col md:flex-row gap-4 items-start md:items-center justify-between">
+                  <div className="space-y-2.5 w-full md:w-2/3">
+                    <div className="h-4 bg-slate-200 rounded w-1/4"></div>
+                    <div className="h-5 bg-slate-200 rounded w-3/4"></div>
+                    <div className="h-3 bg-slate-200 rounded w-1/2"></div>
+                  </div>
+                  <div className="h-10 bg-slate-200 rounded-xl w-32 shrink-0"></div>
+                </div>
+              ))}
+            </div>
+          ) : userTransactions.filter(t => selectedTrxCategory === 'all' || t.category === selectedTrxCategory).length === 0 ? (
+            /* Empty State */
+            <div className="bg-white rounded-3xl p-8 sm:p-14 text-center border border-gray-100 shadow-sm max-w-md mx-auto my-6">
+              <div className="w-18 h-18 rounded-3xl bg-indigo-50 text-indigo-600 border border-indigo-100 flex items-center justify-center mx-auto mb-5 shadow-xs">
+                <Receipt className="w-9 h-9 stroke-[1.5]" />
+              </div>
+              <h3 className="text-lg font-black text-gray-900 mb-2">
+                Tidak Ada Riwayat Transaksi
+              </h3>
+              <p className="text-xs sm:text-sm text-gray-500 font-medium leading-relaxed mb-6">
+                {selectedTrxCategory === 'all'
+                  ? 'Anda belum memiliki riwayat transaksi atau pembayaran apapun.'
+                  : `Belum ada transaksi pada kategori ${
+                      selectedTrxCategory === 'booking' ? 'Sewa Kost Baru' :
+                      selectedTrxCategory === 'extension' ? 'Perpanjangan Sewa' :
+                      selectedTrxCategory === 'facility' ? 'Tagihan Fasilitas Khusus' :
+                      selectedTrxCategory === 'survey' ? 'Jasa Survey Lokasi' : 'Database Kost'
+                    }.`
+                }
+              </p>
+              <button
+                onClick={() => {
+                  if (selectedTrxCategory === 'database') navigate(Page.PRODUCTS);
+                  else if (selectedTrxCategory === 'survey') navigate(Page.SURVEY_SERVICE);
+                  else navigate(Page.LISTINGS);
+                }}
+                className="w-full py-3.5 px-6 bg-[#ff7a00] hover:bg-orange-600 text-white rounded-2xl text-xs font-black uppercase tracking-wider transition-all shadow-md shadow-orange-500/20 active:scale-95 cursor-pointer flex items-center justify-center gap-2"
+              >
+                <Sparkles className="w-4 h-4" />
+                <span>
+                  {selectedTrxCategory === 'database' ? 'Lihat Database Kost' :
+                   selectedTrxCategory === 'survey' ? 'Pesan Jasa Survey' : 'Jelajahi Listing Kost'}
+                </span>
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {userTransactions
+                .filter(t => selectedTrxCategory === 'all' || t.category === selectedTrxCategory)
+                .map((trx) => (
+                  <div
+                    key={trx.id}
+                    className="bg-white rounded-3xl p-5 sm:p-6 border border-gray-100 shadow-sm hover:shadow-md transition-shadow flex flex-col lg:flex-row gap-5 lg:items-center justify-between"
+                  >
+                    {/* Left: Info & Details */}
+                    <div className="flex items-start gap-4 min-w-0 flex-1">
+                      {/* Thumbnail or Category Icon */}
+                      <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-gray-50 border border-gray-100 flex items-center justify-center shrink-0 overflow-hidden shadow-2xs">
+                        {trx.propertyImage ? (
+                          <img
+                            src={trx.propertyImage}
+                            alt={trx.title}
+                            className="w-full h-full object-cover"
+                            onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                          />
+                        ) : trx.category === 'database' ? (
+                          <FileText className="w-6 h-6 text-emerald-600" />
+                        ) : trx.category === 'survey' ? (
+                          <MapPin className="w-6 h-6 text-purple-600" />
+                        ) : trx.category === 'facility' ? (
+                          <Zap className="w-6 h-6 text-amber-600" />
+                        ) : trx.category === 'extension' ? (
+                          <RotateCcw className="w-6 h-6 text-indigo-600" />
+                        ) : (
+                          <Building2 className="w-6 h-6 text-orange-600" />
+                        )}
+                      </div>
+
+                      {/* Text details */}
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2 flex-wrap mb-1.5">
+                          <span className="font-mono text-[11px] font-black text-gray-800 bg-gray-100 px-2 py-0.5 rounded-md">
+                            {trx.invoiceNumber}
+                          </span>
+                          <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black border ${trx.categoryBadgeClass}`}>
+                            {trx.categoryLabel}
+                          </span>
+                          <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black border ${trx.statusBadgeClass}`}>
+                            {trx.statusLabel}
+                          </span>
+                        </div>
+
+                        <h3 className="text-sm sm:text-base font-black text-gray-900 truncate">
+                          {trx.title}
+                        </h3>
+                        <p className="text-xs text-gray-500 font-medium truncate mt-0.5">
+                          {trx.subtitle}
+                        </p>
+
+                        <div className="flex items-center gap-4 text-[11px] font-semibold text-gray-400 mt-2 flex-wrap">
+                          <div className="flex items-center gap-1">
+                            <Calendar className="w-3.5 h-3.5 text-gray-400" />
+                            <span>
+                              {new Date(trx.createdAt).toLocaleDateString('id-ID', {
+                                day: 'numeric',
+                                month: 'short',
+                                year: 'numeric',
+                                hour: '2-digit',
+                                minute: '2-digit'
+                              })}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <CreditCard className="w-3.5 h-3.5 text-gray-400" />
+                            <span>{trx.paymentMethod}</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Right: Nominal & Action Buttons */}
+                    <div className="flex lg:flex-col items-center lg:items-end justify-between gap-3 pt-3 lg:pt-0 border-t lg:border-t-0 border-gray-50 shrink-0">
+                      <div className="text-left lg:text-right">
+                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Total Nominal</span>
+                        <p className="text-base sm:text-xl font-black text-[#ff7a00]">
+                          {FORMAT_CURRENCY(trx.amount)}
+                        </p>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        {trx.status === 'PAID' && (
+                          <button
+                            type="button"
+                            onClick={() => handleOpenReceiptFromTransaction(trx)}
+                            className="px-3.5 py-2 rounded-xl bg-gray-900 hover:bg-orange-600 text-white text-xs font-bold transition-colors shadow-2xs active:scale-95 flex items-center gap-1.5 cursor-pointer"
+                            title="Buka Kwitansi Resmi"
+                          >
+                            <Receipt className="w-3.5 h-3.5" />
+                            <span>Kwitansi</span>
+                          </button>
+                        )}
+
+                        {trx.status === 'PENDING' && (
+                          <button
+                            type="button"
+                            onClick={() => navigate(`/order-status/${trx.id}`)}
+                            className="px-4 py-2 rounded-xl bg-orange-500 hover:bg-orange-600 text-white text-xs font-bold transition-all shadow-md shadow-orange-500/20 active:scale-95 flex items-center gap-1.5 cursor-pointer"
+                          >
+                            <CreditCard className="w-3.5 h-3.5" />
+                            <span>Bayar Sekarang</span>
+                          </button>
+                        )}
+
+                        {trx.category === 'survey' && (
+                          <button
+                            type="button"
+                            onClick={() => navigate(`${Page.MY_BOOKINGS}/aktif`)}
+                            className="px-3.5 py-2 rounded-xl bg-purple-50 hover:bg-purple-100 text-purple-700 text-xs font-bold border border-purple-200 transition-colors active:scale-95 cursor-pointer"
+                          >
+                            <span>Lacak Survey</span>
+                          </button>
+                        )}
+
+                        {trx.category === 'database' && trx.status === 'PAID' && (
+                          <button
+                            type="button"
+                            onClick={() => navigate(Page.PRODUCTS)}
+                            className="px-3.5 py-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-xs font-bold border border-emerald-200 transition-colors active:scale-95 cursor-pointer"
+                          >
+                            <span>Akses Kontak</span>
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
             </div>
           )}
         </div>
@@ -1751,6 +2082,13 @@ const Profile: React.FC<ProfileProps> = ({ user, onLogout, onSaveSuccess, forceE
           </div>
         </div>
       )}
+
+      {/* ── MODAL KWITANSI DIGITAL RESMI ─────────────────────────────────────── */}
+      <DigitalReceiptModal
+        isOpen={showDigitalReceiptModal}
+        onClose={() => setShowDigitalReceiptModal(false)}
+        receipt={selectedReceipt}
+      />
 
     </div>
   );

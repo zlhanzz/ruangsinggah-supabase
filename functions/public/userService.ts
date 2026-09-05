@@ -1443,3 +1443,198 @@ export async function submitPropertyReport(payload: PropertyReportPayload): Prom
     }
   }
 }
+
+// ── RIWAYAT TRANSAKSI KOMPREHENSIF (5 KATEGORI) ─────────────────────────────
+export interface NormalizedTransaction {
+  id: string;
+  invoiceNumber: string;
+  category: 'booking' | 'extension' | 'facility' | 'survey' | 'database' | 'other';
+  categoryLabel: string;
+  categoryBadgeClass: string;
+  title: string;
+  subtitle: string;
+  description?: string;
+  amount: number;
+  status: 'PAID' | 'PENDING' | 'EXPIRED' | 'CANCELLED' | 'FAILED';
+  statusLabel: string;
+  statusBadgeClass: string;
+  paymentMethod: string;
+  pakasirOrderId?: string;
+  pakasirLink?: string;
+  createdAt: string;
+  updatedAt: string;
+  productId?: string;
+  metadata: any;
+  propertyTitle?: string;
+  roomNumber?: string;
+  billingPeriod?: string;
+  periodStart?: string;
+  periodEnd?: string;
+  extraFee?: number;
+  extraFeeName?: string;
+  propertyImage?: string;
+}
+
+export async function getUserAllTransactionsHistory(userId: string): Promise<NormalizedTransaction[]> {
+  if (!userId) return [];
+
+  try {
+    // 1. Ambil seluruh transaksi milik user ini dari tabel transactions
+    const { data: rawTrxs, error: trxErr } = await supabase
+      .from('transactions')
+      .select('*')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false });
+
+    if (trxErr) {
+      console.error('[userService] Error fetching transactions:', trxErr);
+      throw trxErr;
+    }
+
+    if (!rawTrxs || rawTrxs.length === 0) return [];
+
+    // 2. Kumpulkan product_id untuk fetch detail properti terkait (jika ada)
+    const propertyIds = Array.from(
+      new Set(
+        rawTrxs
+          .map((t: any) => {
+            const meta = typeof t.metadata === 'string' ? JSON.parse(t.metadata || '{}') : (t.metadata || {});
+            return t.product_id || t.kost_id || meta.kostId || meta.propertyId;
+          })
+          .filter(Boolean)
+      )
+    );
+
+    let propMap: Record<string, any> = {};
+    if (propertyIds.length > 0) {
+      const { data: props } = await supabase
+        .from('properties')
+        .select('id, title, address, image_urls, city, area')
+        .in('id', propertyIds);
+
+      if (props) {
+        props.forEach((p: any) => {
+          propMap[p.id] = p;
+        });
+      }
+    }
+
+    // 3. Normalisasi setiap transaksi ke dalam struktur seragam
+    const normalized: NormalizedTransaction[] = rawTrxs.map((t: any) => {
+      const meta = typeof t.metadata === 'string' ? JSON.parse(t.metadata || '{}') : (t.metadata || {});
+      const pType = (t.product_type || t.type || meta.product_type || '').toLowerCase();
+      const rawStatus = (t.status || 'PENDING').toUpperCase();
+
+      // Normalisasi Status
+      let status: 'PAID' | 'PENDING' | 'EXPIRED' | 'CANCELLED' | 'FAILED' = 'PENDING';
+      let statusLabel = 'Menunggu Pembayaran';
+      let statusBadgeClass = 'bg-amber-50 text-amber-700 border-amber-200';
+
+      if (['PAID', 'SUCCESS', 'SETTLEMENT', 'BERHASIL', 'SELESAI', 'APPROVED'].includes(rawStatus)) {
+        status = 'PAID';
+        statusLabel = 'Lunas / Selesai';
+        statusBadgeClass = 'bg-emerald-50 text-emerald-700 border-emerald-200';
+      } else if (rawStatus === 'EXPIRED') {
+        status = 'EXPIRED';
+        statusLabel = 'Kedaluwarsa';
+        statusBadgeClass = 'bg-gray-100 text-gray-600 border-gray-200';
+      } else if (['CANCELLED', 'DIBATALKAN'].includes(rawStatus)) {
+        status = 'CANCELLED';
+        statusLabel = 'Dibatalkan';
+        statusBadgeClass = 'bg-rose-50 text-rose-600 border-rose-200';
+      } else if (['REJECTED', 'FAILED', 'GAGAL'].includes(rawStatus)) {
+        status = 'FAILED';
+        statusLabel = 'Gagal / Ditolak';
+        statusBadgeClass = 'bg-red-50 text-red-600 border-red-200';
+      }
+
+      // Hubungkan info properti
+      const relatedPropId = t.product_id || t.kost_id || meta.kostId || meta.propertyId;
+      const propInfo = relatedPropId ? propMap[relatedPropId] : null;
+      const propTitle = propInfo?.title || meta.propertyTitle || meta.kostName || meta.title || '';
+      const propImg = propInfo?.image_urls?.[0] ? getDisplayImageUrl(propInfo.image_urls[0]) : '';
+
+      // Tentukan Kategori Transaksi dari 5 Kategori Baku
+      let category: 'booking' | 'extension' | 'facility' | 'survey' | 'database' | 'other' = 'other';
+      let categoryLabel = 'Transaksi Lainnya';
+      let categoryBadgeClass = 'bg-gray-50 text-gray-700 border-gray-200';
+      let title = propTitle || 'Transaksi RuangSinggah';
+      let subtitle = 'Pembayaran Layanan';
+
+      if (['database', 'database_access', 'product', 'produk_database'].includes(pType)) {
+        category = 'database';
+        categoryLabel = 'Database Kontak Kost';
+        categoryBadgeClass = 'bg-emerald-50 text-emerald-700 border-emerald-200';
+        title = meta.productName || meta.title || meta.packageName || 'Akses Database Kontak Kost';
+        subtitle = 'Akses Lengkap Kontak Pemilik Kost Terverifikasi';
+      } else if (['survey', 'survey_order', 'survey_booking', 'jasa_survey'].includes(pType) || (Number(t.amount) === 70000 && !pType.includes('kost'))) {
+        category = 'survey';
+        categoryLabel = 'Jasa Survey Lokasi';
+        categoryBadgeClass = 'bg-purple-50 text-purple-700 border-purple-200';
+        title = propTitle || meta.surveyKostName || meta.kost_name || 'Jasa Survey Lapangan Kost';
+        subtitle = `Lokasi: ${meta.location || meta.address || propInfo?.city || 'Makassar'} • Surveyor Resmi`;
+      } else if (['perpanjangan_sewa', 'extension', 'rent_extension', 'renewal'].includes(pType)) {
+        category = 'extension';
+        categoryLabel = 'Perpanjangan Sewa';
+        categoryBadgeClass = 'bg-indigo-50 text-indigo-700 border-indigo-200';
+        title = propTitle || 'Perpanjangan Masa Sewa Kost';
+        const roomName = meta.roomNumber || meta.roomCategory || '1';
+        const period = meta.extensionPeriod || meta.billingPeriod || meta.periodLabel || '1 Bulan';
+        subtitle = `Unit Kamar ${roomName} • Durasi Perpanjangan: ${period}`;
+      } else if (['tagihan_ekstra', 'facility_bill', 'extra_occupant', 'facility', 'bill'].includes(pType) || meta.billPayment === true) {
+        category = 'facility';
+        categoryLabel = 'Tagihan Fasilitas Khusus';
+        categoryBadgeClass = 'bg-amber-50 text-amber-800 border-amber-200';
+        const billName = meta.extraFeeName || meta.billName || meta.facilityName || 'Tagihan Fasilitas / Ekstra Penghuni';
+        title = billName;
+        subtitle = `${propTitle || 'Unit Kost'} • Kamar ${meta.roomNumber || '-'}`;
+      } else if (['kost_booking', 'rent', 'kost', 'sewa', 'booking', 'dp'].includes(pType)) {
+        category = 'booking';
+        categoryLabel = 'Sewa Kost Baru (DP)';
+        categoryBadgeClass = 'bg-orange-50 text-orange-700 border-orange-200';
+        title = propTitle || 'Penyewaan Kamar Kost';
+        const roomName = meta.roomNumber || meta.roomCategory || '1';
+        const period = meta.periodLabel || meta.period || 'Bulanan';
+        subtitle = `Unit Kamar ${roomName} • Periode Sewa: ${period}`;
+      }
+
+      const invoiceNumber = t.id ? `INV-${t.id.substring(0, 8).toUpperCase()}` : `INV-${Date.now().toString().slice(-8)}`;
+
+      return {
+        id: t.id,
+        invoiceNumber,
+        category,
+        categoryLabel,
+        categoryBadgeClass,
+        title,
+        subtitle,
+        description: meta.description || meta.note || '',
+        amount: Number(t.amount || 0),
+        status,
+        statusLabel,
+        statusBadgeClass,
+        paymentMethod: (t.payment_method || meta.payment_method || meta.paymentType || 'QRIS / Payment Gateway').toUpperCase(),
+        pakasirOrderId: t.pakasir_order_id,
+        pakasirLink: t.pakasir_link,
+        createdAt: t.created_at,
+        updatedAt: t.updated_at,
+        productId: relatedPropId,
+        metadata: meta,
+        propertyTitle: propTitle,
+        roomNumber: meta.roomNumber || meta.roomCategory,
+        billingPeriod: meta.periodLabel || meta.billingPeriod,
+        periodStart: meta.startDate || meta.newPeriodStart || meta.moveInDate,
+        periodEnd: meta.endDate || meta.newPeriodEnd,
+        extraFee: Number(meta.extraFee || meta.extraPersonFee || 0),
+        extraFeeName: meta.extraFeeName,
+        propertyImage: propImg
+      };
+    });
+
+    return normalized;
+  } catch (err) {
+    console.error('[userService] Exception in getUserAllTransactionsHistory:', err);
+    return [];
+  }
+}
+

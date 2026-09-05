@@ -1,41 +1,53 @@
-# WALKTHROUGH - Integrasi Fitur Kost Favorit Saya pada Profile Hub Dashboard
+# WALKTHROUGH - Integrasi Riwayat Transaksi & Tagihan (5 Kategori) pada Profile Hub Dashboard
 
-Dokumen ini menjelaskan implementasi dan hasil verifikasi fitur **"Kost Favorit Saya"** yang kini aktif sepenuhnya pada Profile Hub Dashboard (`/profile`), terhubung langsung ke database Supabase tabel `public.user_favorites`, tersinkronisasi dengan tombol *"Simpan"* pada halaman detail kost (`KostDetail.tsx`), serta mendukung mode offline/guest via `localStorage`.
+Dokumen ini menjelaskan implementasi dan hasil verifikasi fitur **"Riwayat Transaksi & Tagihan"** yang kini aktif dan lengkap pada Profile Hub Dashboard (`/profile`), merangkum seluruh transaksi yang telah dilakukan pengguna dari 5 kategori produk dan layanan di database Supabase `public.transactions`.
 
 ---
 
 ## 📋 Ringkasan Perubahan
 
-### 1. Pembuatan Modul Service Favorit Terpusat (`functions/public/favoriteService.ts`)
-- **Fungsi Utama**:
-  - `getUserFavoriteIds(userId)`: Mengambil daftar ID kost favorit pengguna dari Supabase (`user_favorites`) dengan fallback instan ke LocalStorage.
-  - `isPropertyFavoritedLocally(propertyId)`: Pengecekan instan status simpan dari memori lokal (0ms delay).
-  - `toggleFavoriteProperty(propertyId, userId)`: Menyimpan/menghapus relasi favorit di Supabase (`user_favorites`), memperbarui cache lokal, dan memancarkan event `rs_favorites_updated`.
-  - `getFavoritePropertiesDetails(userId)`: Memuat seluruh data listing properti kost yang difavoritkan dari database Supabase (`properties`) dan memetakan datanya ke struktur `Kost`.
-  - `syncGuestFavoritesToUser(userId)`: Mengimpor daftar favorit dari sesi tamu (guest) ke akun pengguna saat login.
+### 1. Fungsi Penarikan & Normalisasi Transaksi (`functions/public/userService.ts`)
+- Menambahkan interface `NormalizedTransaction` dan helper `getUserAllTransactionsHistory(userId: string)`.
+- Mengambil seluruh transaksi dari tabel `public.transactions` untuk user yang aktif.
+- Menormalisasi data ke dalam **5 Kategori Baku**:
+  1. 🗄️ **Database Kontak Kost** (`database`, `database_access`, `product`)
+  2. 📍 **Jasa Survey Lokasi** (`survey`, `survey_order`, `survey_booking`)
+  3. 🏠 **Sewa Kost Baru / DP** (`kost_booking`, `rent`, `kost`, `sewa`)
+  4. 🔄 **Perpanjangan Sewa** (`perpanjangan_sewa`, `extension`, `rent_extension`)
+  5. ⚡ **Tagihan Fasilitas Khusus** (`tagihan_ekstra`, `facility_bill`, `extra_occupant`, `billPayment`)
+- Menghubungkan metadata properti terkait (foto listing, nama kost, nomor kamar, periode sewa, durasi, dan biaya ekstra).
 
-### 2. Sinkronisasi Halaman Detail Kost (`functions/public/pages/KostDetail.tsx`)
-- Menggantikan logika simpan lama dengan pemanggilan `favoriteService.ts`.
-- Menerapkan event listener `rs_favorites_updated` agar tombol *"Simpan"* / *"Tersimpan"* (ikon `Heart` rose) selalu sinkron secara otomatis.
-
-### 3. Pembuatan Sub-View & Live Badge Profile Hub (`functions/public/pages/Profile.tsx`)
-- **Live Badge Counter**: Menampilkan jumlah properti favorit yang tersimpan (misal: `3 Disimpan`) pada baris menu *"Kost Favorit Saya"* di Profile Hub.
-- **Sub-View Kost Favorit**:
-  - Header navigasi dengan tombol `← Kembali ke Menu Profil` dan tombol `Jelajahi Listing`.
-  - Banner header berdesain gradien Rose-Orange dengan ikon `Heart` dan total counter tersimpan.
-  - **Skeleton Loader**: Menampilkan 3 kartu skeleton animasi pulse saat memuat data.
-  - **Empty State**: Tampilan kosong elegan bertema Rose dengan ikon `Heart`, penjelasan ramah, dan tombol aksi *"Cari Kost Sekarang"*.
-  - **Grid Kartu Kost**: Menampilkan daftar `KostCard` lengkap dengan harga, foto eager-loaded, rating, lokasi, serta tombol hapus cepat (*floating heart*) di sudut atas kartu.
-
-### 4. Sinkronisasi Otomatis saat Login (`functions/public/App.tsx`)
-- Menambahkan pemanggilan `syncGuestFavoritesToUser(supabaseUser.id)` saat otentikasi session Supabase berhasil.
+### 2. Sub-View Riwayat Transaksi & Tagihan di Profile Hub (`functions/public/pages/Profile.tsx`)
+- **Live Counter Badge**: Menampilkan jumlah transaksi (misal: `4 Transaksi`) langsung pada baris menu *"Riwayat Transaksi & Tagihan"* di Profile Hub.
+- **Sub-View Terpadu**:
+  - Tombol navigasi responsif `← Kembali ke Menu Profil` dan tombol `Muat Ulang Data`.
+  - **Banner Statistik Dark Theme**: Menampilkan total transaksi berstatus lunas dan total akumulasi rupiah yang telah dibayarkan.
+  - **Filter Tabs Horisontal**:
+    - *Semua Transaksi*
+    - *Sewa Kost Baru*
+    - *Perpanjangan Sewa*
+    - *Tagihan Fasilitas*
+    - *Jasa Survey*
+    - *Database Kost*
+  - **Daftar Kartu Transaksi**:
+    - Kode Invoice resmi (misal: `INV-A1B2C3D4`)
+    - Lencana kategori dengan ikon pure bundled vector SVG `lucide-react`
+    - Lencana status pembayaran (`Lunas / Selesai`, `Menunggu Pembayaran`, `Kedaluwarsa`, `Dibatalkan`)
+    - Judul & subjudul transaksi yang deskriptif
+    - Tanggal & waktu transaksi lengkap dengan metode pembayaran
+    - Total nominal harga berformat rupiah tegas
+    - **Aksi Cepat**:
+      - Tombol **"Kwitansi"** untuk mencetak/melihat kwitansi resmi (`DigitalReceiptModal`).
+      - Tombol **"Bayar Sekarang"** jika pesanan masih pending.
+      - Tombol cepat **"Akses Kontak"** atau **"Lacak Survey"**.
+  - **Skeleton Loading & Empty State**: Tampilan loading pulse yang halus dan empty state informatif dengan tombol CTA sesuai kategori yang dipilih.
 
 ---
 
 ## 🧪 Hasil Pengujian & Kompilasi
 
 ```bash
-✓ built in 44.32s
+✓ built in 33.55s
 Kompilasi Frontend Vite: 0 Error / 0 Warning Fatal
 Transformasi: 2511 modul sukses dibundle ke /dist
 ```
@@ -44,17 +56,15 @@ Transformasi: 2511 modul sukses dibundle ke /dist
 
 ## 📱 Panduan Pengujian untuk Pengguna (User Testing Guide)
 
-1. **Menyimpan Kost dari Halaman Detail**:
-   - Buka salah satu halaman detail kost di [Katalog Kost](/kost).
-   - Klik tombol **"Simpan"** di bagian atas (di samping tombol Bagikan).
-   - Perhatikan tombol berubah menjadi **"Tersimpan"** dengan ikon hati berwarna merah/rose.
-2. **Melihat Kost Favorit di Menu Profil**:
+1. **Melihat Riwayat Transaksi dari Menu Profil**:
    - Buka menu **Profil** (`/profile`).
-   - Perhatikan lencana badge jumlah tersimpan (misal: `1 Disimpan`) pada baris menu **"Kost Favorit Saya"**.
-   - Klik baris **"Kost Favorit Saya"**.
-   - Tampilan akan beralih ke Sub-view Kost Favorit yang menampilkan kartu kost yang telah Anda simpan.
-3. **Menghapus dari Favorit**:
-   - Klik ikon hati di sudut kanan atas kartu kost pada sub-view favorit, atau klik tombol **"Tersimpan"** di halaman detailnya.
-   - Kost akan langsung terhapus dari daftar favorit dan counter otomatis berkurang secara instan.
+   - Perhatikan lencana badge jumlah transaksi (misal: `4 Transaksi`) pada baris menu **"Riwayat Transaksi & Tagihan"**.
+   - Klik baris **"Riwayat Transaksi & Tagihan"**.
+2. **Menggunakan Filter Kategori**:
+   - Klik salah satu tab filter (misal: *Sewa Kost Baru*, *Perpanjangan Sewa*, *Tagihan Fasilitas*, *Jasa Survey*, atau *Database Kost*).
+   - Daftar transaksi akan langsung disaring sesuai kategori dengan counter yang akurat.
+3. **Melihat & Mencetak Kwitansi Digital**:
+   - Klik tombol hitam **"Kwitansi"** pada transaksi yang berstatus lunas.
+   - Popup **Kwitansi Digital Resmi RuangSinggah** akan muncul dengan rincian lengkap pembayaran, periode tinggal, dan tombol cetak/bagikan.
 4. **Navigasi Kembali**:
-   - Klik tombol **`← Kembali ke Menu Profil`** untuk kembali ke Profile Hub utama.
+   - Klik tombol **`← Kembali ke Menu Profil`** untuk kembali ke halaman Profile Hub utama.
