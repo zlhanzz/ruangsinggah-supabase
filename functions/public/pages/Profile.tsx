@@ -2,7 +2,15 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../supabase';
 import { notifyAdminIdentityVerification } from '../emailService';
-import { Page } from '../types';
+import { Page, Kost } from '../types';
+import KostCard from '../components/KostCard';
+import { 
+  getUserFavoriteIds, 
+  getFavoritePropertiesDetails, 
+  toggleFavoriteProperty, 
+  FAVORITES_UPDATED_EVENT 
+} from '../favoriteService';
+import { createKostSlug } from '../utils/slugUtils';
 import { 
   ArrowLeft, Edit3, Lock, CheckCircle2, ShieldCheck, Calendar, 
   Briefcase, Building2, User, Users, MapPin, Sparkles, Heart, 
@@ -21,10 +29,13 @@ interface ProfileProps {
 
 const Profile: React.FC<ProfileProps> = ({ user, onLogout, onSaveSuccess, forceEdit, onBack }) => {
   const navigate = useNavigate();
-  const [viewMode, setViewMode] = useState<'hub' | 'edit_personal_data'>(forceEdit ? 'edit_personal_data' : 'hub');
+  const [viewMode, setViewMode] = useState<'hub' | 'edit_personal_data' | 'favorites'>(forceEdit ? 'edit_personal_data' : 'hub');
   const [isEditing, setIsEditing] = useState(forceEdit || false);
   const [loading, setLoading] = useState(false);
   const [activeKostCount, setActiveKostCount] = useState<number>(0);
+  const [favoriteKosts, setFavoriteKosts] = useState<Kost[]>([]);
+  const [favoriteCount, setFavoriteCount] = useState<number>(0);
+  const [favoriteLoading, setFavoriteLoading] = useState<boolean>(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Modal Ganti Kata Sandi
@@ -110,6 +121,46 @@ const Profile: React.FC<ProfileProps> = ({ user, onLogout, onSaveSuccess, forceE
       })
       .catch(() => {});
   }, [user]);
+
+  const loadFavoriteList = async () => {
+    setFavoriteLoading(true);
+    try {
+      const items = await getFavoritePropertiesDetails(user?.uid || user?.id);
+      setFavoriteKosts(items);
+      setFavoriteCount(items.length);
+    } catch (err) {
+      console.error('Error loading favorite properties:', err);
+    } finally {
+      setFavoriteLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    getUserFavoriteIds(user?.uid || user?.id).then((ids) => {
+      setFavoriteCount(ids.length);
+    }).catch(() => {});
+  }, [user]);
+
+  useEffect(() => {
+    if (viewMode === 'favorites') {
+      loadFavoriteList();
+    }
+  }, [viewMode, user?.uid, user?.id]);
+
+  useEffect(() => {
+    const handleFavUpdate = (e: any) => {
+      if (e.detail?.totalFavorites !== undefined) {
+        setFavoriteCount(e.detail.totalFavorites);
+      }
+      if (viewMode === 'favorites') {
+        loadFavoriteList();
+      }
+    };
+    window.addEventListener(FAVORITES_UPDATED_EVENT, handleFavUpdate);
+    return () => {
+      window.removeEventListener(FAVORITES_UPDATED_EVENT, handleFavUpdate);
+    };
+  }, [viewMode, user?.uid, user?.id]);
 
   if (!user) return null;
   const isAdmin = user.role === 'admin';
@@ -525,7 +576,7 @@ const Profile: React.FC<ProfileProps> = ({ user, onLogout, onSaveSuccess, forceE
 
               {/* Kost Favorit Saya */}
               <button
-                onClick={() => navigate(Page.LISTINGS)}
+                onClick={() => setViewMode('favorites')}
                 className="w-full p-4 flex items-center justify-between text-left hover:bg-orange-50/40 transition-colors group cursor-pointer"
               >
                 <div className="flex items-center gap-3.5 min-w-0">
@@ -542,6 +593,11 @@ const Profile: React.FC<ProfileProps> = ({ user, onLogout, onSaveSuccess, forceE
                   </div>
                 </div>
                 <div className="flex items-center gap-2 shrink-0 ml-2">
+                  {favoriteCount > 0 && (
+                    <span className="px-2.5 py-0.5 rounded-full bg-rose-50 text-rose-600 text-[10px] font-black border border-rose-200">
+                      {favoriteCount} Disimpan
+                    </span>
+                  )}
                   <ChevronRight className="w-4 h-4 text-gray-400 group-hover:text-orange-500 group-hover:translate-x-0.5 transition-all" />
                 </div>
               </button>
@@ -727,6 +783,120 @@ const Profile: React.FC<ProfileProps> = ({ user, onLogout, onSaveSuccess, forceE
               Versi Aplikasi v2.4.1 (Build 2026.2)
             </p>
           </div>
+        </div>
+      ) : viewMode === 'favorites' ? (
+        /* ── SUB-VIEW: KOST FAVORIT SAYA ──────────────────────────────────────── */
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+          {/* Header Navigation */}
+          <div className="mb-6 flex items-center justify-between gap-4">
+            <button
+              onClick={() => setViewMode('hub')}
+              className="px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-xl text-xs font-bold hover:bg-gray-50 hover:border-gray-300 transition-all shadow-xs active:scale-95 flex items-center gap-2 cursor-pointer group"
+            >
+              <ArrowLeft className="w-4 h-4 text-gray-500 group-hover:-translate-x-1 transition-transform" />
+              <span>Kembali ke Menu Profil</span>
+            </button>
+
+            <button
+              onClick={() => navigate(Page.LISTINGS)}
+              className="px-4 py-2 bg-orange-50 hover:bg-orange-100 text-orange-700 border border-orange-200 rounded-xl text-xs font-bold transition-all shadow-2xs active:scale-95 flex items-center gap-1.5 cursor-pointer"
+            >
+              <Sparkles className="w-3.5 h-3.5 text-orange-500" />
+              <span>Jelajahi Listing</span>
+            </button>
+          </div>
+
+          {/* Title Section */}
+          <div className="bg-gradient-to-r from-rose-500/10 via-orange-500/5 to-transparent border border-rose-100 rounded-3xl p-5 sm:p-7 mb-8">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 rounded-2xl bg-rose-500 text-white flex items-center justify-center shadow-md shrink-0">
+                  <Heart className="w-6 h-6 fill-white text-white" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h1 className="text-xl sm:text-2xl font-black text-gray-900 tracking-tight">
+                      Kost Favorit Saya
+                    </h1>
+                    {favoriteCount > 0 && (
+                      <span className="px-2.5 py-0.5 rounded-full bg-rose-100 text-rose-700 text-xs font-black">
+                        {favoriteCount} Tersimpan
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs sm:text-sm text-gray-500 font-medium mt-1">
+                    Daftar hunian kost pilihan yang Anda simpan untuk perbandingan dan pemesanan mudah.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Body Content */}
+          {favoriteLoading ? (
+            /* Skeleton Loading */
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 animate-pulse">
+              {[1, 2, 3].map((n) => (
+                <div key={n} className="bg-white rounded-2xl border border-gray-100 overflow-hidden shadow-xs">
+                  <div className="h-48 bg-slate-200 w-full"></div>
+                  <div className="p-5 space-y-3">
+                    <div className="h-4 bg-slate-200 rounded w-3/4"></div>
+                    <div className="h-3 bg-slate-200 rounded w-1/2"></div>
+                    <div className="h-8 bg-slate-200 rounded w-full mt-4"></div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : favoriteKosts.length === 0 ? (
+            /* Empty State */
+            <div className="bg-white rounded-3xl p-8 sm:p-14 text-center border border-gray-100 shadow-sm max-w-md mx-auto my-6">
+              <div className="w-20 h-20 rounded-3xl bg-rose-50 text-rose-500 border border-rose-100 flex items-center justify-center mx-auto mb-5 shadow-xs">
+                <Heart className="w-10 h-10 stroke-[1.5]" />
+              </div>
+              <h3 className="text-lg font-black text-gray-900 mb-2">
+                Belum Ada Kost Favorit
+              </h3>
+              <p className="text-xs sm:text-sm text-gray-500 font-medium leading-relaxed mb-6">
+                Anda belum menyimpan kost apa pun. Klik tombol <span className="font-bold text-gray-800">"Simpan"</span> di halaman detail kost untuk menambahkan hunian favorit Anda ke daftar ini.
+              </p>
+              <button
+                onClick={() => navigate(Page.LISTINGS)}
+                className="w-full py-3.5 px-6 bg-[#ff7a00] hover:bg-orange-600 text-white rounded-2xl text-xs font-black uppercase tracking-wider transition-all shadow-md shadow-orange-500/20 active:scale-95 cursor-pointer flex items-center justify-center gap-2"
+              >
+                <Sparkles className="w-4 h-4" />
+                <span>Cari Kost Sekarang</span>
+              </button>
+            </div>
+          ) : (
+            /* Listing Cards Grid */
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+              {favoriteKosts.map((kost) => (
+                <div key={kost.id} className="relative group">
+                  <KostCard
+                    kost={kost}
+                    onClick={() => {
+                      const slug = createKostSlug(kost);
+                      navigate(`/kost/${slug || kost.id}`);
+                    }}
+                  />
+                  {/* Floating Remove Button */}
+                  <button
+                    type="button"
+                    onClick={async (e) => {
+                      e.stopPropagation();
+                      await toggleFavoriteProperty(kost.id, user?.uid || user?.id);
+                      setFavoriteKosts(prev => prev.filter(k => k.id !== kost.id));
+                      setFavoriteCount(prev => Math.max(0, prev - 1));
+                    }}
+                    className="absolute top-3 right-3 z-20 w-8 h-8 rounded-full bg-white/95 backdrop-blur-xs hover:bg-rose-50 text-rose-500 shadow-md flex items-center justify-center transition-all hover:scale-110 active:scale-95 cursor-pointer border border-rose-100 group/btn"
+                    title="Hapus dari daftar favorit"
+                  >
+                    <Heart className="w-4 h-4 fill-rose-500 text-rose-500 group-hover/btn:scale-110 transition-transform" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       ) : (
         /* ── SUB-VIEW: EDIT DATA PRIBADI FORM ────────────────────────────────── */

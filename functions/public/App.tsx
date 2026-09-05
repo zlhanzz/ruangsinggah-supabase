@@ -7,6 +7,7 @@ import Footer from './components/Footer';
 import Home from './pages/Home';
 import { getPublishedProperties, getPublishedPropertyDetails, ensureAbsoluteUrl } from './userService';
 import { createKostSlug, extractKostId } from './utils/slugUtils';
+import { syncGuestFavoritesToUser } from './favoriteService';
 
 // Code splitting: semua page selain Home dimuat on-demand (lazy)
 const Listings = lazy(() => import('./pages/Listings'));
@@ -317,6 +318,9 @@ const App: React.FC = () => {
         };
 
         setUser(safeUser);
+
+        // Sinkronisasi otomatis daftar favorit guest ke Supabase
+        syncGuestFavoritesToUser(supabaseUser.id).catch(() => {});
 
         const isRecovery = new URLSearchParams(window.location.search).get('mode') === 'recovery';
         if (!isRecovery) {

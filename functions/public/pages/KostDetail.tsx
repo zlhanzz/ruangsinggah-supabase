@@ -20,6 +20,12 @@ import {
   Dumbbell, CupSoda, ThermometerSun, Waves, Trash2, Zap, Share2, Heart
 } from 'lucide-react';
 import { createKostSlug } from '../utils/slugUtils';
+import { 
+  toggleFavoriteProperty, 
+  getUserFavoriteIds, 
+  isPropertyFavoritedLocally, 
+  FAVORITES_UPDATED_EVENT 
+} from '../favoriteService';
 
 interface KostDetailProps {
   kost: Kost;
@@ -148,16 +154,29 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
 
   // --- FITUR SIMPAN (WISHLIST) & BAGIKAN (SHARE) ---
   const [isSaved, setIsSaved] = useState<boolean>(() => {
-    try {
-      const raw = localStorage.getItem('ruangsinggah_saved_kosts');
-      if (!raw) return false;
-      const ids: string[] = JSON.parse(raw);
-      return Array.isArray(ids) && ids.includes(kost.id);
-    } catch {
-      return false;
-    }
+    return isPropertyFavoritedLocally(kost.id);
   });
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    let isMounted = true;
+    getUserFavoriteIds(user?.uid || user?.id).then((ids) => {
+      if (isMounted) {
+        setIsSaved(ids.includes(kost.id));
+      }
+    });
+
+    const handleFavoritesChange = (e: any) => {
+      if (e.detail?.propertyId === kost.id) {
+        setIsSaved(e.detail.isFavorited);
+      }
+    };
+    window.addEventListener(FAVORITES_UPDATED_EVENT, handleFavoritesChange);
+    return () => {
+      isMounted = false;
+      window.removeEventListener(FAVORITES_UPDATED_EVENT, handleFavoritesChange);
+    };
+  }, [kost.id, user?.uid, user?.id]);
 
   useEffect(() => {
     if (toastMessage) {
@@ -199,24 +218,15 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
     }
   };
 
-  const handleToggleSave = () => {
+  const handleToggleSave = async () => {
     try {
-      const raw = localStorage.getItem('ruangsinggah_saved_kosts');
-      let savedIds: string[] = raw ? JSON.parse(raw) : [];
-      if (!Array.isArray(savedIds)) savedIds = [];
-
-      let nextSaved = false;
-      if (savedIds.includes(kost.id)) {
-        savedIds = savedIds.filter(id => id !== kost.id);
-        nextSaved = false;
-        setToastMessage('Kost dihapus dari daftar simpanan');
-      } else {
-        savedIds.push(kost.id);
-        nextSaved = true;
-        setToastMessage('Kost berhasil disimpan ke favorit!');
-      }
-      localStorage.setItem('ruangsinggah_saved_kosts', JSON.stringify(savedIds));
-      setIsSaved(nextSaved);
+      const result = await toggleFavoriteProperty(kost.id, user?.uid || user?.id);
+      setIsSaved(result.isFavorited);
+      setToastMessage(
+        result.isFavorited
+          ? 'Kost berhasil disimpan ke favorit!'
+          : 'Kost dihapus dari daftar simpanan'
+      );
     } catch (err) {
       console.error('Error toggling saved kost:', err);
     }

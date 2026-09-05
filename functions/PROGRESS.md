@@ -2,6 +2,36 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 344. Integrasi Penuh Fitur Kost Favorit Saya pada Profile Hub Dashboard (`favoriteService.ts`, `Profile.tsx`, `KostDetail.tsx`, `App.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna meminta agar opsi **"Kost Favorit Saya"** pada Profile Hub Dashboard (`/profile`) berfungsi penuh dan menampung seluruh listing kost yang disimpan/difavoritkan oleh pengguna dari halaman detail kost (`KostDetail.tsx`).
+  2. Data properti favorit perlu tersimpan secara unik dan permanen per akun di database Supabase (tabel `public.user_favorites`) serta memiliki sinkronisasi lokal instan (`localStorage`) bagi pengguna tamu (guest) yang akan otomatis diimpor saat login.
+- **Implementasi Solusi**:
+  1. **Modul Manajemen Favorit Supabase & Hybrid Caching (`favoriteService.ts`)**:
+     - `getUserFavoriteIds(userId)`: Mengambil daftar UUID properti favorit dari Supabase dengan fallback instan ke LocalStorage.
+     - `toggleFavoriteProperty(propertyId, userId)`: Menyimpan/menghapus relasi favorit di Supabase (`user_favorites`) secara atomik, memperbarui cache lokal, serta memancarkan CustomEvent `rs_favorites_updated`.
+     - `getFavoritePropertiesDetails(userId)`: Mengambil detail lengkap listing properti favorit yang terpublikasi dari database Supabase (`properties`) dan memetakannya ke objek `Kost`.
+     - `syncGuestFavoritesToUser(userId)`: Mengimpor daftar favorit dari sesi tamu ke tabel Supabase `user_favorites` begitu user berhasil login.
+  2. **Integrasi Halaman Detail Kost (`KostDetail.tsx`)**:
+     - Menghubungkan state `isSaved` dan tombol *"Simpan"* (dengan ikon `Heart` rose) ke `favoriteService.ts`.
+     - Mengaktifkan listener event reaktif `rs_favorites_updated` sehingga perubahan status favorit tersinkronisasi seketika di semua tab/halaman.
+  3. **Penyusunan Sub-view & Live Badge di Profile Hub (`Profile.tsx`)**:
+     - Menambahkan sub-view `favorites` (`viewMode === 'favorites'`) dengan navigasi `← Kembali ke Menu Profil`.
+     - Menyematkan live badge counter jumlah kost tersimpan (misal: `3 Disimpan`) pada baris menu *"Kost Favorit Saya"* di Profile Hub.
+     - Menyajikan tampilan grid interaktif `KostCard` dengan tombol cepat hapus favorit (floating heart) dan deep link langsung ke detail kamar.
+     - Menyediakan state skeleton loading yang rapi serta Empty State elegan bertema Rose dengan tombol *"Cari Kost Sekarang"* jika belum ada properti tersimpan.
+  4. **Sinkronisasi Otomatis pada Root (`App.tsx`)**:
+     - Memanggil `syncGuestFavoritesToUser(user.id)` saat otentikasi session Supabase berhasil.
+- **File Tersentuh**:
+  - `functions/public/favoriteService.ts` (Baru)
+  - `functions/public/pages/Profile.tsx`
+  - `functions/public/pages/KostDetail.tsx`
+  - `functions/public/App.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi build frontend Vite (`functions/public`) lulus 100% (`✓ built in 44.32s`, 0 error).
+
 ### 343. Optimasi Kelancaran Scroll Listing (Penghapusan Lazy Load Kartu) & Maksimalisasi Caching Database SWR (`KostCard.tsx`, `userService.ts`, `Listings.tsx`) (September 2026)
 - **Permintaan & Masalah**:
   1. Pengguna merasakan scrolling pada katalog listing terasa kasar/patah-patah akibat penggunaan `loading="lazy"` pada gambar kartu listing. Karena katalog sudah menerapkan paginasi (9 item per halaman), pemuatan deferred lazy load justru menimbulkan delay decoding dan re-render frame-drop saat scroll.
