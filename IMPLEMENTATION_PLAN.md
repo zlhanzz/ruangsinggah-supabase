@@ -1,13 +1,13 @@
-# Rencana Implementasi (Implementation Plan): Penyelarasan Menu Pusat Bantuan pada Footer & Profile Hub Dashboard
+# Rencana Implementasi (Implementation Plan): Pemulihan Tampilan Klasik Halaman Kontak & Penyelarasan Akses Pusat Bantuan
 
-## 1. Analisis Kebutuhan & Masalah
+## 1. Analisis Masalah & Kebutuhan Pengguna
 
 ### A. Masalah & Konteks
-1. **Footer Navigasi**: Menu pada footer di bawah kolom "PERUSAHAAN" saat ini masih menggunakan label teks **"Kontak"**. Pengguna meminta agar label ini diubah menjadi **"Pusat Bantuan"**.
-2. **Profile Hub Navigasi**: Pada menu Profile Hub (`/profile`), opsi **"Pusat Bantuan 24/7"** sebelumnya langsung membuka tautan eksternal WhatsApp via `window.open()`. Pengguna meminta agar ketika tombol ini diklik, sistem membuka halaman **Pusat Bantuan (`Page.CONTACT` / `/contact`)** yang sama persis dengan yang diakses dari menu Footer.
-3. **Penyempurnaan Halaman Pusat Bantuan (`Contact.tsx`)**:
-   - Memastikan header dan konten di halaman `/contact` menyajikan representasi **Pusat Bantuan** yang lengkap (WhatsApp CS resmi, Email Bantuan, Informasi Kantor, Media Sosial, serta Formulir Kirim Pesan Cepat).
-   - Memastikan seluruh ikon menggunakan pure bundled vector SVG dari package **`lucide-react`** sesuai aturan baku workspace (mencegah FOUT).
+1. **Preferensi Desain**: Pengguna secara eksplisit menyatakan lebih menyukai desain lama/klasik dari halaman `Contact.tsx` (yang menampilkan Card tunggal elegan dengan panel kiri hitam/dark "Informasi Kontak" dan panel kanan putih "Kirim Pesan Cepat").
+2. **Kebutuhan Inti**: Pengguna hanya menginginkan **kesamaan akses/target**:
+   - Menu **"Pusat Bantuan"** di Footer membuka halaman kontak tersebut.
+   - Tombol **"Pusat Bantuan 24/7"** di Profile Hub membuka halaman kontak yang sama tersebut.
+3. **Penyelarasan**: Mengembalikan markup dan styling `Contact.tsx` 100% ke bentuk desain klasik aslinya (clean split-card layout), namun menggunakan pure bundled SVG icon `lucide-react` untuk mencegah FOUT.
 
 ---
 
@@ -15,32 +15,30 @@
 
 | No | File | Perubahan |
 |---|---|---|
-| 1 | `functions/public/components/Footer.tsx` | Mengubah label menu `Kontak` menjadi `Pusat Bantuan`. |
-| 2 | `functions/public/pages/Profile.tsx` | Mengubah event click pada menu "Pusat Bantuan 24/7" agar memanggil `navigate(Page.CONTACT)`. |
-| 3 | `functions/public/pages/Contact.tsx` | Menyelaraskan heading menjadi "Pusat Bantuan" / "Pusat Bantuan & Kontak", mengoptimalkan styling modern, serta mengganti SVG mentah dengan icon `lucide-react`. |
+| 1 | `functions/public/pages/Contact.tsx` | Memulihkan tampilan klasik/lama (Hero title "Hubungi Kami" & Single split-card: Dark Left Info Panel + Clean White Right Form Panel) dan memastikan tombol kembali & ikon `lucide-react` terpasang rapi. |
+| 2 | `functions/public/components/Footer.tsx` | Memastikan menu navigasi footer tetap mengarah ke `Page.CONTACT`. |
+| 3 | `functions/public/pages/Profile.tsx` | Memastikan menu "Pusat Bantuan 24/7" tetap mengarah ke `Page.CONTACT`. |
 
 ---
 
 ## 3. Langkah-Langkah Eksekusi (Fase 2 Pasca-Approval)
 
-1. **Modifikasi `Footer.tsx`**:
-   - Mengganti teks `Kontak` menjadi `Pusat Bantuan` pada baris menu navigasi footer.
-2. **Modifikasi `Profile.tsx`**:
-   - Memperbarui tombol "Pusat Bantuan 24/7" agar menavigasikan pengguna ke rute `Page.CONTACT` menggunakan `navigate(Page.CONTACT)`.
-3. **Penyempurnaan `Contact.tsx`**:
-   - Mengimpor icon dari `lucide-react` (`Phone`, `Mail`, `MapPin`, `Send`, `MessageSquare`, `Clock`, `ArrowLeft`, dll.).
-   - Menghubungkan tombol WhatsApp CS dengan nomor WhatsApp resmi RuangSinggah.
-4. **Verifikasi Kompilasi & Standar Baku**:
-   - Menjalankan `npm run build` di `functions/public` untuk memastikan 0 error TypeScript/Vite.
-5. **Pencatatan Progres & Walkthrough**:
-   - Menambahkan catatan progres di `functions/PROGRESS.md` dan menerbitkan `WALKTHROUGH.md`.
-   - Melakukan commit dan push ke branch `bukan-productions`.
+1. **Pemulihan `Contact.tsx` ke Tampilan Klasik**:
+   - Mengembalikan layout `min-h-screen bg-white py-24` dengan grid 2 kolom di dalam card `bg-white rounded-3xl shadow-2xl border border-gray-50 overflow-hidden`.
+   - Panel kiri: `p-10 bg-gray-900 text-white flex flex-col justify-between` (WhatsApp CS, Email, Headquarters, icon media sosial).
+   - Panel kanan: `p-10 bg-white` (Kirim Pesan Cepat: Nama Lengkap, Nomor WhatsApp, Keperluan, Pesan, Tombol Oranye Kirim Pesan).
+   - Menambahkan tombol navigasi kembali `← Kembali` yang ringkas di bagian atas.
+   - Menggunakan icon pure vector `lucide-react` (`Phone`, `Mail`, `MapPin`, `ArrowLeft`).
+2. **Kompilasi & Verifikasi Build**:
+   - Menjalankan `npm run build` di `functions/public` untuk memastikan kompilasi 100% lulus.
+3. **Pencatatan Progres & Walkthrough**:
+   - Menambahkan catatan di `functions/PROGRESS.md` dan memperbarui `WALKTHROUGH.md`.
+   - Commit & push ke branch `bukan-productions`.
 
 ---
 
 ## 4. Rencana Verifikasi
 
-- [ ] **Kompilasi**: Menjalankan `npm run build` dan memastikan build sukses 100%.
-- [ ] **Uji Navigasi Footer**: Mengklik menu "Pusat Bantuan" di footer dan memastikan halaman `/contact` terbuka.
-- [ ] **Uji Navigasi Profile**: Mengklik menu "Pusat Bantuan 24/7" di Profile Hub dan memastikan halaman `/contact` terbuka dengan tampilan yang sama.
-- [ ] **Uji Responsif & Ikon**: Memastikan tampilan mobile dan desktop tidak mengalami FOUT/glitch.
+- [ ] **Kompilasi**: `npm run build` lulus tanpa error.
+- [ ] **Verifikasi Visual**: Tampilan `/contact` kembali ke desain klasik split card (dark panel + white form) persis seperti tangkapan layar referensi pengguna.
+- [ ] **Verifikasi Akses Terpadu**: Baik klik dari footer maupun klik dari menu profil membuka halaman klasik yang sama.

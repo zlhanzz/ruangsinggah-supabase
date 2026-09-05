@@ -2,24 +2,23 @@
 
 ## Fitur Selesai (Completed Features)
 
-### 341. Penyelarasan Menu Pusat Bantuan Terpadu pada Footer Navigasi, Profile Hub Dashboard, dan Redesain Modern Halaman Pusat Bantuan (`Footer.tsx`, `Profile.tsx`, `Contact.tsx`) (September 2026)
+### 341. Penyelarasan Akses Menu Pusat Bantuan pada Footer & Profile Hub serta Pemulihan Desain Klasik Halaman Kontak (`Footer.tsx`, `Profile.tsx`, `Contact.tsx`) (September 2026)
 - **Permintaan & Masalah**:
-  1. Pengguna meminta perubahan teks menu pada footer pengguna dari *"Kontak"* menjadi *"Pusat Bantuan"*.
-  2. Pengguna meminta agar tombol *"Pusat Bantuan 24/7"* pada menu Profil (`/profile`) menampilkan halaman yang sama persis dengan yang ada di footer (tidak lagi langsung membuka tautan WhatsApp mentah di tab baru, melainkan membuka halaman Pusat Bantuan terpadu).
+  1. Pengguna meminta keselarasan akses: menu *"Pusat Bantuan"* di footer dan tombol *"Pusat Bantuan 24/7"* di menu Profil (`/profile`) mengarah ke halaman yang sama persis.
+  2. Pengguna secara tegas menginginkan **desain klasik/lama** dari halaman `Contact.tsx` (desain split card tunggal yang elegan: panel kiri hitam "Informasi Kontak" dan panel kanan putih "Kirim Pesan Cepat") tetap dipertahankan tanpa perubahan tata letak yang berlebihan.
 - **Implementasi Solusi**:
-  1. **Penyelarasan Menu Footer (`Footer.tsx`)**:
-     - Mengubah label menu di bawah kolom "PERUSAHAAN" dari `Kontak` menjadi `Pusat Bantuan` yang memanggil `onPageChange(Page.CONTACT)`.
+  1. **Penyelarasan Menu Navigasi Footer (`Footer.tsx`)**:
+     - Memastikan menu *"Pusat Bantuan"* pada footer memanggil `onPageChange(Page.CONTACT)`.
   2. **Penyelarasan Menu Profile Hub (`Profile.tsx`)**:
-     - Memperbarui event `onClick` pada tombol menu *"Pusat Bantuan 24/7"* agar mengeksekusi `navigate(Page.CONTACT)`.
-  3. **Penyempurnaan Halaman Pusat Bantuan (`Contact.tsx`)**:
-     - Merombak antarmuka `/contact` menjadi **Pusat Bantuan & Layanan Pelanggan** modern dan berkelas.
-     - Mengganti seluruh icon HTML/SVG mentah dengan pure vector bundled SVG dari package **`lucide-react`** (`Headphones`, `MessageCircle`, `Mail`, `MapPin`, `Clock`, `ShieldCheck`, `Send`, `ArrowLeft`, `CheckCircle2`, `ExternalLink`).
-     - Menyediakan 3 kartu kanal utama:
-       - **WhatsApp CS 24/7**: Terhubung langsung ke WhatsApp resmi RuangSinggah (+62 815-2708-0656) dengan template chat otomatis.
-       - **Email Resmi**: Dukungan formal & legalitas di `bantuan@ruangsinggah.id`.
-       - **Kantor Operasional**: Informasi jam kerja & lokasi kantor Makassar.
-     - Menyediakan formulir pesan & pertanyaan cepat interaktif dengan auto-forward ke WhatsApp CS resmi.
-     - Menyematkan tombol navigasi `← Kembali` responsif untuk kenyamanan pengguna mobile & desktop.
+     - Memastikan tombol *"Pusat Bantuan 24/7"* pada menu Profil memanggil `navigate(Page.CONTACT)`.
+  3. **Pemulihan Desain Klasik Halaman Kontak (`Contact.tsx`)**:
+     - Mengembalikan antarmuka `Contact.tsx` 100% ke bentuk desain klasik/lama:
+       - Header ringkas: *"Hubungi Kami"* dan deskripsi konsultasi kost.
+       - Split Card elegan (`rounded-3xl shadow-2xl`):
+         - **Panel Kiri Gelap (`bg-[#0f172a]`)**: Informasi Kontak (WhatsApp CS `+62 813-5632-6260`, Email `bantuan@ruangsinggah.id`, Headquarters Makassar) dan tombol media sosial.
+         - **Panel Kanan Putih (`bg-white`)**: Formulir *"Kirim Pesan Cepat"* (Nama, No. WhatsApp, Keperluan, Pesan, Tombol Oranye Kirim Pesan).
+       - Menambahkan tombol navigasi `← Kembali` responsif di sudut atas.
+       - Menggunakan pure bundled vector SVG `lucide-react` (`Phone`, `Mail`, `MapPin`, `ArrowLeft`) untuk menjamin 0 delay dan bebas FOUT.
 - **File Tersentuh**:
   - `functions/public/components/Footer.tsx`
   - `functions/public/pages/Profile.tsx`
@@ -27,7 +26,7 @@
   - `functions/PROGRESS.md`
   - `WALKTHROUGH.md`
 - **Verifikasi**:
-  - Kompilasi build frontend Vite (`functions/public`) lulus 100% (`✓ built in 43.42s`, 0 error).
+  - Kompilasi build frontend Vite (`functions/public`) lulus 100% (`✓ built in 34.29s`, 0 error).
 
 ### 340. Redesain Profile Hub Dashboard Interaktif, Sub-view Edit Data Pribadi, dan Modal Preferensi Keamanan (`Profile.tsx`, `Navbar.tsx`) (September 2026)
 - **Permintaan & Masalah**:

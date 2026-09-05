@@ -1,30 +1,28 @@
-# Walkthrough: Penyelarasan Menu Pusat Bantuan Terpadu pada Footer & Profile Hub
+# Walkthrough: Pemulihan Desain Klasik Halaman Kontak & Penyelarasan Akses Menu Pusat Bantuan
 
 ## Ringkasan Pekerjaan
-Penyelarasan navigasi menu **Pusat Bantuan** pada Footer dan Profile Hub Dashboard (`/profile`), serta penyempurnaan antarmuka halaman **Pusat Bantuan (`/contact`)** agar konsisten, modern, responsif, dan 100% menggunakan pure bundled SVG icon (`lucide-react`).
+Mengembalikan desain halaman **Kontak/Bantuan (`/contact`)** 100% ke tampilan klasiknya yang bersih, minimalis, dan elegan (Single Card: Left Dark Panel + Right White Form) sesuai preferensi pengguna, sekaligus memastikan keselarasan akses dari menu **Pusat Bantuan** di footer maupun tombol **Pusat Bantuan 24/7** di Profile Hub.
 
 ---
 
-## 📸 Detail Perubahan Navigasi & Tampilan
+## 📸 Detail Tampilan & Akses Terpadu
 
-### 1. Perubahan Menu Footer (`Footer.tsx`)
-- Teks menu di bawah kolom **PERUSAHAAN** yang sebelumnya bernama **"Kontak"** kini telah diubah menjadi **"Pusat Bantuan"**.
-- Mengklik menu ini akan membuka halaman Pusat Bantuan (`/contact`).
+### 1. Tampilan Klasik Bersih `Contact.tsx`
+- **Header**: Judul ringkas *"Hubungi Kami"* dan subjudul *"Ada pertanyaan atau mau konsultasi kost? Kami siap membantu kamu!"*.
+- **Tombol Navigasi `← Kembali`**: Terpasang di sudut atas untuk navigasi cepat kembali ke halaman sebelumnya.
+- **Card Split 2 Kolom**:
+  - **Panel Kiri Gelap (`bg-[#0f172a]`)**:
+    - WhatsApp CS: `+62 813-5632-6260` (klik langsung membuka chat WhatsApp).
+    - Email: `bantuan@ruangsinggah.id`.
+    - Headquarters: `Makassar, Sulawesi Selatan`.
+    - Ikon Media Sosial: Instagram, TikTok, Facebook.
+  - **Panel Kanan Putih (`bg-white`)**:
+    - Formulir *"Kirim Pesan Cepat"* (Nama Lengkap, Nomor WhatsApp, Pilihan Keperluan, Pesan, dan Tombol Oranye `Kirim Pesan`).
+- **100% Vector SVG `lucide-react`**: Menggunakan `Phone`, `Mail`, `MapPin`, `ArrowLeft` (0 delay & bebas FOUT).
 
-### 2. Penyelarasan Menu Profile Hub (`Profile.tsx`)
-- Tombol **"Pusat Bantuan 24/7"** di dalam Profile Hub yang sebelumnya langsung melakukan `window.open` ke WhatsApp eksternal, kini diarahkan menggunakan `navigate(Page.CONTACT)`.
-- Dengan ini, pengguna yang mengklik "Pusat Bantuan 24/7" di profil akan melihat tampilan Pusat Bantuan yang sama persis seperti yang dibuka dari footer web.
-
-### 3. Redesain Modern Halaman Pusat Bantuan (`Contact.tsx`)
-- **Header Pusat Bantuan**: Dilengkapi badge layanan pelanggan, judul terpadu, dan tombol `← Kembali` responsif.
-- **3 Kanal Layanan Terpadu**:
-  1. **WhatsApp CS 24/7**: Live chat langsung ke nomor WhatsApp resmi (+62 815-2708-0656).
-  2. **Email Resmi**: Dukungan formal di `bantuan@ruangsinggah.id`.
-  3. **Kantor Operasional**: Lokasi kantor Makassar & jam operasional.
-- **Formulir Kirim Pesan & Pertanyaan**:
-  - Pilihan kategori keperluan (Info Kost, Beli Database, Jasa Survey, Daftar Mitra, Kendala Transaksi, dll.).
-  - Pesan yang diisi akan otomatis diteruskan secara rapi ke WhatsApp CS resmi.
-- **100% Pure Bundled SVG (`lucide-react`)**: Bebas kedipan teks (FOUT), 0 network overhead.
+### 2. Akses Terpadu
+- **Footer**: Menu *"Pusat Bantuan"* di bawah kolom *Perusahaan* mengarahkan ke halaman `/contact`.
+- **Profile Hub**: Tombol *"Pusat Bantuan 24/7"* di menu Profil mengarahkan ke halaman `/contact` yang sama persis.
 
 ---
 
@@ -35,24 +33,16 @@ Penyelarasan navigasi menu **Pusat Bantuan** pada Footer dan Profile Hub Dashboa
 - **Hasil Rollup/Vite**:
   ```text
   ✓ 2510 modules transformed.
-  ../../public/assets/Contact-B-J4z-4v.js    16.93 kB │ gzip: 4.71 kB
-  ✓ built in 43.42s
+  ../../public/assets/Contact-C-Hyg8sF.js     9.38 kB │ gzip: 2.98 kB
+  ✓ built in 34.29s
   ```
 - **0 Error Kompilasi, 0 Warning Syntax**.
 
 ---
 
-## 🚀 Panduan Pengujian oleh Pengguna (User Testing Guide)
+## 🚀 Panduan Pengujian oleh Pengguna
 
-1. Buka aplikasi web (mobile atau desktop).
-2. **Uji dari Footer**:
-   - Gulir ke bagian footer web.
-   - Lihat kolom **PERUSAHAAN** ➔ pastikan menu tertulis **"Pusat Bantuan"**.
-   - Klik menu tersebut ➔ pastikan halaman Pusat Bantuan (`/contact`) terbuka.
-3. **Uji dari Profile Hub**:
-   - Buka halaman **Profil** (`/profile`).
-   - Pada section *Bantuan & Informasi Legal*, klik **"Pusat Bantuan 24/7"**.
-   - Pastikan diarahkan ke halaman Pusat Bantuan (`/contact`) yang sama persis.
-4. **Uji Fitur Pusat Bantuan**:
-   - Coba klik tombol *Chat WhatsApp Sekarang* atau isi form pesan cepat untuk memastikan pesan terformat dengan rapi.
-   - Klik tombol `← Kembali` di sudut atas untuk kembali ke halaman sebelumnya secara mulus.
+1. Buka web aplikasi di browser.
+2. Klik menu **"Pusat Bantuan"** di Footer atau tombol **"Pusat Bantuan 24/7"** di halaman **Profil** (`/profile`).
+3. Pastikan halaman yang terbuka adalah desain klasik yang bersih (Card split panel kiri hitam + panel kanan formulir putih) persis seperti tampilan awal.
+4. Klik tombol **`← Kembali`** di kiri atas untuk kembali ke halaman profil/beranda.
