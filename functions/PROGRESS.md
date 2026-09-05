@@ -2,6 +2,31 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 366. Penataan Alur Pendaftaran KostManager: Formulir Data Kost di Awal & Syarat dan Ketentuan (MoU) di Akhir (`KostManagerLanding.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna meminta agar Syarat & Ketentuan (MoU) program KostManager ditampilkan di akhir alur pendaftaran, bukan di awal formulir (*"tampilkan syarat dan ketentuan kostmanager di akhir, bukan diawal form"*).
+  2. Alur sebelumnya menampilkan kotak Syarat & Ketentuan MoU (berserta tombol setuju/tidak setuju) terlebih dahulu sebelum calon mitra mengisi atau memilih data kost yang akan didaftarkan. Hal ini membuat pengalaman pengguna (*onboarding UX*) kurang optimal karena mitra harus membaca klausul legal sebelum menentukan properti mana yang didaftarkan.
+- **Implementasi Solusi**:
+  1. **Struktur Multi-Step Pendaftaran 2 Tahap pada Modal Registrasi (`KostManagerLanding.tsx`)**:
+     - Menambahkan state kendali langkah alur `modalStep: 'form' | 'mou'` (default: `'form'`).
+     - Saat modal registrasi dibuka (`handleOpenRegistration`), sistem selalu memulai pada **Langkah 1: Formulir Data Kost (`modalStep === 'form'`)**.
+  2. **Langkah 1: Formulir Data Properti / Kost**:
+     - Calon mitra memilih properti yang sudah ada atau memasukkan data kost baru (Nama Kost, Tipe Hunian, Jumlah Kamar, Peta Lokasi / GPS, Alamat Lengkap).
+     - Menampilkan indikator langkah interaktif: `Langkah 1 dari 2: Data Kost`.
+     - Tombol navigasi aksi utama: *"Lanjut: Syarat & Ketentuan"* (`handleProceedToMoU`), yang memvalidasi kelengkapan isian formulir langkah 1 sebelum berpindah ke langkah 2.
+  3. **Langkah 2: Syarat & Ketentuan KostManager (MoU) & Persetujuan**:
+     - Menampilkan indikator langkah: `Langkah 2 dari 2: Syarat & Ketentuan Program`.
+     - Menyajikan klausul MoU KostManager secara lengkap dan transparan (Layanan & Ruang Lingkup, Hak & Kewajiban, Pembagian Hasil & Pembayaran, Masa Berlaku & Pengakhiran).
+     - Menyertakan checkbox persetujuan wajib: *"Saya telah membaca, memahami, dan menyetujui seluruh Syarat & Ketentuan Layanan KostManager RuangSinggah."*.
+     - Menyediakan tombol *"Kembali ke Formulir"* untuk kembali merevisi isian langkah 1 tanpa kehilangan data yang telah diketik.
+     - Menyediakan tombol oranye utama *"Setuju & Lanjut Pembayaran"* (`handleSubmitPayment`) yang memverifikasi persetujuan MoU dan membuka gateway pembayaran komitmen.
+- **File Tersentuh**:
+  - `functions/public/pages/KostManagerLanding.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi build frontend Vite (`cmd /c npm run build` di `functions/public`) lulus 100% (0 error).
+
 ### 365. Syarat Wajib Verifikasi Identitas Sebelum Mendaftar KostManager & Pengalihan Otomatis ke Profil (`KostManagerLanding.tsx`, `MitraDashboard.tsx`, `MitraProfile.tsx`) (September 2026)
 - **Permintaan & Masalah**:
   1. Pengguna meminta agar verifikasi identitas (`verification_status === 'verified'`) dijadikan sebagai **syarat wajib** untuk mendaftar atau bergabung ke program KostManager.

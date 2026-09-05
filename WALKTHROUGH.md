@@ -1,35 +1,29 @@
-# Walkthrough: Syarat Wajib Verifikasi Identitas Sebelum Mendaftar KostManager & Pengalihan Otomatis ke Profil
+# Walkthrough: Penataan Alur Pendaftaran KostManager (Formulir di Awal & Syarat dan Ketentuan di Akhir)
 
 ## Ringkasan Perubahan
-Sistem pendaftaran program **KostManager** telah dilengkapi dengan validasi verifikasi identitas wajib (`verification_status === 'verified'`). Jika pengguna atau mitra belum menyelesaikan verifikasi identitas (KTP dan data diri), setiap upaya mendaftar KostManager akan dicegah dan **dialihkan secara otomatis langsung ke halaman profil verifikasi identitas**.
+Alur pendaftaran program **KostManager** pada modal pendaftaran (`KostManagerLanding.tsx`) telah dirombak menjadi sistem 2 tahap (*2-Step Onboarding Flow*):
+1. **Langkah 1**: Formulir Data Properti / Kost (Pilihan Kost Terdaftar atau Input Kost Baru, Tipe, Kamar, GPS / Peta Lokasi, Alamat Lengkap).
+2. **Langkah 2**: Syarat & Ketentuan Layanan KostManager (MoU), Checkbox Persetujuan, Tombol Kembali ke Formulir, dan Tombol Pembayaran.
 
 ---
 
-## 1. Detail Implementasi
+## 1. Detail Implementasi pada [`KostManagerLanding.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/KostManagerLanding.tsx)
 
-### A. Proteksi Pendaftaran pada [`KostManagerLanding.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/KostManagerLanding.tsx)
-1. **Fungsi Validasi `checkIdentityVerification()`**:
-   - Memeriksa status login dan verifikasi pengguna:
-     - Jika belum login $\rightarrow$ mengarahkan ke halaman login pendaftaran mitra (`/login?role=owner&mode=register`).
-     - Jika `user.verification_status !== 'verified'` $\rightarrow$ memunculkan alert notifikasi:
-       > *"Syarat Mendaftar KostManager: Anda harus menyelesaikan verifikasi identitas terlebih dahulu. Anda akan dialihkan otomatis ke halaman profil untuk melengkapi data dan dokumen identitas."*
-       dan langsung mengalihkan pengguna ke:
-       - **Mitra**: `/dashboard-mitra/profile?edit=true&step=2` (Langkah 2: Verifikasi Identitas & Unggah KTP).
-       - **User Umum**: `/profile?view=edit`.
-2. **Proteksi Pembukaan Modal (`handleOpenRegistration`)**:
-   - Mencegah modal pendaftaran terbuka jika akun belum terverifikasi.
-3. **Proteksi Akses URL Langsung (`?register=true`)**:
-   - Menambahkan hook reaktif `useEffect` yang mengecek status verifikasi saat halaman diakses via URL pendaftaran langsung. Jika belum terverifikasi, modal ditutup dan pengguna dialihkan ke profil.
-4. **Proteksi Submit Layer (`handleSubmit`)**:
-   - Memastikan data onboarding dan checkout pembayaran tidak dapat dikirim sebelum verifikasi identitas berstatus `verified`.
+1. **State Kendali Langkah Alur (`modalStep`)**:
+   - Menambahkan state `modalStep: 'form' | 'mou'` (default `'form'`).
+   - Saat modal dibuka (`handleOpenRegistration`), sistem selalu memulai pada **Langkah 1: Formulir Data Kost**.
 
-### B. Proteksi Pop-up Iklan Promo pada [`MitraDashboard.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/MitraDashboard.tsx)
-- Pada fungsi `handlePromoNavigate`, saat tombol *"Pelajari & Ajukan Sekarang"* diklik:
-  - Jika mitra belum terverifikasi (`!isVerified`), sistem memunculkan notifikasi edukasi dan langsung mengarahkan mitra ke `/dashboard-mitra/profile?edit=true&step=2`.
+2. **Langkah 1: Formulir Data Properti / Kost (`modalStep === 'form'`)**:
+   - Menampilkan indikator langkah: `Langkah 1 dari 2: Data Kost`.
+   - Pemilihan properti milik mitra yang sudah terdaftar atau input kost baru secara manual (Nama Kost, Tipe Hunian, Jumlah Kamar, Peta Lokasi GPS Leaflet, Alamat Lengkap).
+   - Validasi data sebelum lanjut ke MoU via tombol **"Lanjut: Syarat & Ketentuan"** (`handleProceedToMoU`).
 
-### C. Proteksi Tombol Upgrade pada [`MitraProfile.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/MitraProfile.tsx)
-- Tombol *"Upgrade ke KostManager"* pada kartu profil mitra dan tombol modal progres memvalidasi status `formData.verification_status !== 'verified'`.
-- Jika belum terverifikasi, tombol langsung membuka formulir Langkah 2 Verifikasi Identitas (`setSearchParams({ edit: 'true', step: '2' })`).
+3. **Langkah 2: Syarat & Ketentuan KostManager (MoU) & Persetujuan (`modalStep === 'mou'`)**:
+   - Menampilkan indikator langkah: `Langkah 2 dari 2: Syarat & Ketentuan Program`.
+   - Menampilkan dokumen MoU resmi (Ruang Lingkup Layanan, Hak & Kewajiban, Pembagian Hasil & Pembayaran, Masa Berlaku & Terminasi).
+   - Checkbox persetujuan: *"Saya telah membaca, memahami, dan menyetujui seluruh Syarat & Ketentuan Layanan KostManager RuangSinggah."*.
+   - Tombol **"Kembali ke Formulir"**: Memungkinkan mitra merevisi isian data properti langkah 1 tanpa kehilangan data.
+   - Tombol **"Setuju & Lanjut Pembayaran"** (`handleSubmitPayment`): Memvalidasi persetujuan MoU dan membuka modal gateway pembayaran komitmen.
 
 ---
 
@@ -39,24 +33,26 @@ Sistem pendaftaran program **KostManager** telah dilengkapi dengan validasi veri
   ```bash
   cmd /c npm run build (di functions/public)
   ```
-  **Status**: `✓ 2511 modules transformed. ✓ built in 40.01s` (**0 Error, 0 Warning Kritis**).
+  **Status**: `✓ 2511 modules transformed. ✓ built in 30.64s` (**0 Error, 0 Warning Kritis**).
 
 ---
 
 ## 3. Panduan Pengujian untuk Pengguna (User Testing Steps)
 
-1. **Uji Melalui Pop-up Iklan KostManager di Dashboard Mitra**:
-   - Login dengan akun mitra yang status identitasnya belum diverifikasi.
-   - Buka Beranda Dashboard Mitra (`/mitra`) $\rightarrow$ Modal pop-up iklan KostManager muncul.
-   - Klik tombol **"Pelajari & Ajukan Sekarang"**.
-   - Sistem akan memunculkan alert: *"Syarat Mendaftar KostManager: Anda harus menyelesaikan verifikasi identitas terlebih dahulu..."* dan langsung mengarahkan ke tab **Profil (Langkah 2: Verifikasi Identitas & KTP)**.
-2. **Uji Melalui Landing Page KostManager (`/kostmanager`)**:
+1. **Buka Landing Page KostManager**:
+   - Pastikan login dengan akun mitra yang sudah terverifikasi (`verification_status: 'verified'`).
    - Akses `/kostmanager`.
+2. **Buka Modal Pendaftaran**:
    - Klik tombol **"Daftar KostManager Sekarang"** atau tombol **"Pilih Paket & Daftar"**.
-   - Sistem akan memunculkan alert dan otomatis mengalihkan pengguna langsung ke halaman pengisian verifikasi identitas.
-3. **Uji Akses URL Langsung `/kostmanager?register=true`**:
-   - Buka `/kostmanager?register=true` pada akun yang belum terverifikasi.
-   - Halaman pendaftaran otomatis ditutup dan pengguna dialihkan ke profil verifikasi.
-4. **Uji Akun Mitra Terverifikasi (`verified`)**:
-   - Login dengan akun mitra yang sudah terverifikasi (`verification_status: 'verified'`).
-   - Buka `/kostmanager` $\rightarrow$ Klik daftar $\rightarrow$ Modal pendaftaran KostManager terbuka secara normal dan siap diisi.
+   - Perhatikan bahwa modal langsung menampilkan **Langkah 1: Formulir Data Kost** (bukan MoU).
+3. **Isi Formulir Langkah 1**:
+   - Pilih properti terdaftar atau isi data kost baru (nama, tipe hunian, jumlah kamar, pin lokasi peta, alamat lengkap).
+   - Klik tombol oranye **"Lanjut: Syarat & Ketentuan"**.
+4. **Tinjau Langkah 2 (Syarat & Ketentuan / MoU)**:
+   - Sistem berpindah ke **Langkah 2: Syarat & Ketentuan Program**.
+   - Tinjau seluruh poin MoU.
+   - Coba klik tombol **"Kembali ke Formulir"** $\rightarrow$ data yang sebelumnya diisi tetap utuh.
+   - Klik kembali **"Lanjut: Syarat & Ketentuan"**.
+5. **Setujui & Lanjut Pembayaran**:
+   - Centang checkbox persetujuan syarat & ketentuan.
+   - Klik tombol **"Setuju & Lanjut Pembayaran"** $\rightarrow$ modal pembayaran biaya komitmen KostManager terbuka.

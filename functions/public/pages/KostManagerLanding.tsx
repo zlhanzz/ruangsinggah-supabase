@@ -150,6 +150,7 @@ const KostManagerLanding: React.FC<KostManagerLandingProps> = ({ user, onBack, i
     setSearchParams(params);
   };
   const [hasAgreedMoU, setHasAgreedMoU] = useState(false);
+  const [modalStep, setModalStep] = useState<'form' | 'mou'>('form');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isDetectingLocation, setIsDetectingLocation] = useState(false);
   const [showMapPicker, setShowMapPicker] = useState(false);
@@ -343,6 +344,7 @@ const KostManagerLanding: React.FC<KostManagerLandingProps> = ({ user, onBack, i
 
   const handleOpenRegistration = () => {
     if (!checkIdentityVerification()) return;
+    setModalStep('form');
     setIsModalOpen(true);
   };
 
@@ -406,7 +408,8 @@ const KostManagerLanding: React.FC<KostManagerLandingProps> = ({ user, onBack, i
   const packageDuration = selectedPkg ? selectedPkg.duration_months : 12;
   const packageLabel = selectedPkg ? selectedPkg.label : 'Tahunan';
 
-  const handleSubmit = (e: React.FormEvent) => {
+  // Langkah 1: Validasi form dan lanjut ke Syarat & Ketentuan (MoU)
+  const handleProceedToMoU = (e: React.FormEvent) => {
     e.preventDefault();
     if (!checkIdentityVerification()) return;
     if (!formData.kostName || !formData.kostType || !formData.totalRooms || !formData.emptyRooms || !formData.address) {
@@ -421,6 +424,21 @@ const KostManagerLanding: React.FC<KostManagerLandingProps> = ({ user, onBack, i
       alert('Jumlah kamar kosong tidak boleh melebihi jumlah total kamar.');
       return;
     }
+
+    setModalStep('mou');
+  };
+
+  // Langkah 2: Persetujuan Syarat & Ketentuan dan Lanjut ke Pembayaran
+  const handleSubmitPayment = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!checkIdentityVerification()) return;
+    if (!hasAgreedMoU) {
+      alert('Mohon centang persetujuan Syarat & Ketentuan terlebih dahulu.');
+      return;
+    }
+
+    const tRooms = parseInt(formData.totalRooms) || 0;
+    const eRooms = parseInt(formData.emptyRooms) || 0;
 
     const meta: any = {
       userName: user.name || user.displayName || 'Pemilik Kost',
@@ -813,12 +831,16 @@ const KostManagerLanding: React.FC<KostManagerLandingProps> = ({ user, onBack, i
             <div className="px-6 py-5 border-b border-gray-100 flex justify-between items-center bg-gray-50">
               <div>
                 <h3 className="text-xl font-black leading-tight text-gray-900">Langganan KostManager</h3>
-                <p className="text-xs text-gray-500 mt-1 font-bold">Lengkapi data properti kost Anda</p>
+                <p className="text-xs text-gray-500 mt-1 font-bold">
+                  {modalStep === 'form' 
+                    ? 'Langkah 1 dari 2: Lengkapi data properti kost Anda' 
+                    : 'Langkah 2 dari 2: Persetujuan Syarat & Ketentuan'}
+                </p>
               </div>
               <button
                 onClick={() => setIsModalOpen(false)}
                 disabled={isSubmitting}
-                className="w-8 h-8 flex items-center justify-center rounded-full bg-gray-200 text-gray-600 hover:bg-rose-500 hover:text-white transition-colors"
+                className="w-8 h-8 flex items-center justify-center rounded-full bg-gray-200 text-gray-600 hover:bg-rose-500 hover:text-white transition-colors cursor-pointer"
               >
                 <X size={16} />
               </button>
@@ -826,62 +848,9 @@ const KostManagerLanding: React.FC<KostManagerLandingProps> = ({ user, onBack, i
 
             {/* Body */}
             <div className="p-6 sm:p-8 overflow-y-auto bg-white">
-              {!hasAgreedMoU ? (
-                /* MoU */
-                <div className="space-y-6">
-                  <div className="flex flex-col items-center text-center mb-4">
-                    <div className="w-12 h-12 bg-orange-100 text-orange-600 rounded-full flex items-center justify-center mb-4 border border-orange-200">
-                      <FileText size={22} />
-                    </div>
-                    <h4 className="text-lg font-bold">Syarat & Ketentuan KostManager</h4>
-                    <p className="text-gray-500 text-xs mt-1 font-semibold">Harap baca lingkup kerja sama premium berikut sebelum mendaftar.</p>
-                  </div>
-
-                  <div className="bg-gray-50 border border-gray-100 rounded-2xl p-5 max-h-60 overflow-y-auto text-xs space-y-4 text-gray-600 font-medium">
-                    <p><strong>1. Biaya Berlangganan:</strong> Berlangganan KostManager dikenakan biaya sesuai paket yang dipilih yaitu {FORMAT_CURRENCY(packagePrice)} per {packageDuration === 12 ? 'tahun' : `${packageDuration} bulan`} untuk setiap properti kost yang didaftarkan.</p>
-                    <p><strong>2. Kunjungan Surveyor:</strong> Setelah pembayaran/pendaftaran diajukan, tim surveyor dari RuangSinggah.id akan menjadwalkan survey lokasi untuk dokumentasi visual profesional.</p>
-                    <p><strong>3. Media & Pemasaran:</strong> Seluruh hak cipta dokumentasi foto/video menjadi hak milik RuangSinggah.id dan akan dipublikasikan ke channel promosi kami.</p>
-                    <p><strong>4. Penagihan Otomatis:</strong> Tagihan sewa bulanan penghuni diproses secara otomatis melalui payment gateway RuangSinggah.id dan dicairkan berkala ke dompet pemilik.</p>
-                  </div>
-
-                  <div className="flex items-start gap-3 p-4 bg-orange-50 rounded-2xl border border-orange-200">
-                    <input
-                      type="checkbox"
-                      id="agree-cb-landing"
-                      className="mt-1 w-5 h-5 text-orange-500 rounded focus:ring-orange-500 border-gray-300 cursor-pointer bg-white"
-                    />
-                    <label htmlFor="agree-cb-landing" className="text-xs text-gray-600 font-bold cursor-pointer select-none flex-1 leading-relaxed">
-                      Saya menyatakan setuju dengan seluruh Ketentuan Berlangganan program KostManager dan bersedia dikunjungi surveyor.
-                    </label>
-                  </div>
-
-                  <div className="flex gap-3 pt-2 border-t border-gray-100">
-                    <button
-                      type="button"
-                      onClick={() => setIsModalOpen(false)}
-                      className="w-full sm:w-auto px-6 py-3 text-gray-500 hover:text-gray-900 text-sm font-bold transition-colors"
-                    >
-                      Batal
-                    </button>
-                    <button
-                      className="w-full sm:flex-1 bg-orange-500 hover:bg-orange-600 text-white py-3 rounded-xl text-sm font-black uppercase tracking-widest flex items-center justify-center gap-2 active:scale-95 shadow-lg shadow-orange-500/20"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        const cb = document.getElementById('agree-cb-landing') as HTMLInputElement;
-                        if (!cb || !cb.checked) {
-                          alert("Mohon centang persetujuan terlebih dahulu.");
-                          return;
-                        }
-                        setHasAgreedMoU(true);
-                      }}
-                    >
-                      Setuju & Lanjut
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                /* Form */
-                <form onSubmit={handleSubmit} className="space-y-6">
+              {modalStep === 'form' ? (
+                /* Langkah 1: Formulir Data Kost Terlebih Dahulu */
+                <form onSubmit={handleProceedToMoU} className="space-y-6">
                   {/* Selector Metode (Case 1 vs Case 2) */}
                   {userKosts.length > 0 && (
                     <div className="bg-orange-50/50 border border-orange-100 p-4 rounded-2xl space-y-3">
@@ -1052,7 +1021,7 @@ const KostManagerLanding: React.FC<KostManagerLandingProps> = ({ user, onBack, i
                           <button
                             type="button"
                             onClick={() => setShowMapPicker(!showMapPicker)}
-                            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all border ${
+                            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all border cursor-pointer ${
                               showMapPicker 
                                 ? 'bg-orange-500 text-white border-orange-500 shadow-sm' 
                                 : 'bg-orange-50 hover:bg-orange-100 text-orange-600 border-orange-200'
@@ -1065,7 +1034,7 @@ const KostManagerLanding: React.FC<KostManagerLandingProps> = ({ user, onBack, i
                           type="button"
                           onClick={handleGetLocation}
                           disabled={isDetectingLocation}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-orange-50 hover:bg-orange-100 text-orange-600 text-[10px] font-black uppercase tracking-wider transition-all border border-orange-200 disabled:opacity-50"
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-orange-50 hover:bg-orange-100 text-orange-600 text-[10px] font-black uppercase tracking-wider transition-all border border-orange-200 disabled:opacity-50 cursor-pointer"
                         >
                           <MapPin size={12} className="stroke-[2.5]" />
                           <span>{isDetectingLocation ? 'Mencari GPS...' : 'Ambil GPS'}</span>
@@ -1109,20 +1078,69 @@ const KostManagerLanding: React.FC<KostManagerLandingProps> = ({ user, onBack, i
                     <button
                       type="button"
                       disabled={isSubmitting}
-                      onClick={() => setHasAgreedMoU(false)}
-                      className="px-6 py-3 text-gray-500 hover:text-gray-900 text-sm font-bold transition-colors disabled:opacity-50"
+                      onClick={() => setIsModalOpen(false)}
+                      className="px-6 py-3 text-gray-500 hover:text-gray-900 text-sm font-bold transition-colors disabled:opacity-50 cursor-pointer"
                     >
-                      Kembali
+                      Batal
                     </button>
                     <button
                       type="submit"
                       disabled={isSubmitting}
-                      className="px-8 py-3 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-sm font-black uppercase tracking-widest flex items-center justify-center gap-2 active:scale-95 shadow-lg shadow-orange-500/20"
+                      className="px-8 py-3 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-sm font-black uppercase tracking-widest flex items-center justify-center gap-2 active:scale-95 shadow-lg shadow-orange-500/20 cursor-pointer"
                     >
-                      Lanjut Pembayaran
+                      <span>Lanjut: Syarat & Ketentuan</span>
+                      <ArrowRight size={16} />
                     </button>
                   </div>
                 </form>
+              ) : (
+                /* Langkah 2: Syarat & Ketentuan KostManager (MoU di Akhir) */
+                <div className="space-y-6 animate-in fade-in duration-300">
+                  <div className="flex flex-col items-center text-center mb-4">
+                    <div className="w-12 h-12 bg-orange-100 text-orange-600 rounded-full flex items-center justify-center mb-4 border border-orange-200">
+                      <FileText size={22} />
+                    </div>
+                    <h4 className="text-lg font-bold text-gray-900">Syarat & Ketentuan KostManager</h4>
+                    <p className="text-gray-500 text-xs mt-1 font-semibold">Harap baca lingkup kerja sama premium berikut sebelum mendaftar.</p>
+                  </div>
+
+                  <div className="bg-gray-50 border border-gray-100 rounded-2xl p-5 max-h-60 overflow-y-auto text-xs space-y-4 text-gray-600 font-medium">
+                    <p><strong>1. Biaya Berlangganan:</strong> Berlangganan KostManager dikenakan biaya sesuai paket yang dipilih yaitu {FORMAT_CURRENCY(packagePrice)} per {packageDuration === 12 ? 'tahun' : `${packageDuration} bulan`} untuk setiap properti kost yang didaftarkan.</p>
+                    <p><strong>2. Kunjungan Surveyor:</strong> Setelah pembayaran/pendaftaran diajukan, tim surveyor dari RuangSinggah.id akan menjadwalkan survey lokasi untuk dokumentasi visual profesional.</p>
+                    <p><strong>3. Media & Pemasaran:</strong> Seluruh hak cipta dokumentasi foto/video menjadi hak milik RuangSinggah.id dan akan dipublikasikan ke channel promosi kami.</p>
+                    <p><strong>4. Penagihan Otomatis:</strong> Tagihan sewa bulanan penghuni diproses secara otomatis melalui payment gateway RuangSinggah.id dan dicairkan berkala ke dompet pemilik.</p>
+                  </div>
+
+                  <div className="flex items-start gap-3 p-4 bg-orange-50 rounded-2xl border border-orange-200">
+                    <input
+                      type="checkbox"
+                      id="agree-cb-landing"
+                      checked={hasAgreedMoU}
+                      onChange={(e) => setHasAgreedMoU(e.target.checked)}
+                      className="mt-1 w-5 h-5 text-orange-500 rounded focus:ring-orange-500 border-gray-300 cursor-pointer bg-white"
+                    />
+                    <label htmlFor="agree-cb-landing" className="text-xs text-gray-700 font-bold cursor-pointer select-none flex-1 leading-relaxed">
+                      Saya menyatakan setuju dengan seluruh Ketentuan Berlangganan program KostManager dan bersedia dikunjungi surveyor.
+                    </label>
+                  </div>
+
+                  <div className="flex gap-3 pt-2 border-t border-gray-100">
+                    <button
+                      type="button"
+                      onClick={() => setModalStep('form')}
+                      className="w-full sm:w-auto px-6 py-3 text-gray-500 hover:text-gray-900 text-sm font-bold transition-colors cursor-pointer"
+                    >
+                      Kembali ke Formulir
+                    </button>
+                    <button
+                      type="button"
+                      className="w-full sm:flex-1 bg-orange-500 hover:bg-orange-600 text-white py-3 rounded-xl text-sm font-black uppercase tracking-widest flex items-center justify-center gap-2 active:scale-95 shadow-lg shadow-orange-500/20 cursor-pointer disabled:opacity-50"
+                      onClick={handleSubmitPayment}
+                    >
+                      Setuju & Lanjut Pembayaran
+                    </button>
+                  </div>
+                </div>
               )}
             </div>
           </div>
