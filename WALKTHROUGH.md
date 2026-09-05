@@ -1,39 +1,34 @@
-# Walkthrough: Penayangan Otomatis Pop-Up Iklan KostManager Setiap Kali Mitra Baru Login
+# Walkthrough: Penayangan Berkelanjutan Pop-Up Iklan KostManager Setiap Kali Masuk Menu "Kost Saya" atau "Beranda"
 
 ## Ringkasan Perubahan
-Fitur promosi KostManager pada akun mitra biasa telah disempurnakan agar **selalu muncul secara otomatis dalam bentuk iklan pop-up modal interaktif setiap kali mitra baru login** ke Dashboard Mitra (`/mitra`), dengan tetap menjaga kenyamanan navigasi selama sesi aktif berlangsung.
+Fitur promosi KostManager pada akun mitra biasa telah disempurnakan agar **selalu muncul secara otomatis dalam bentuk iklan pop-up modal interaktif setiap kali mitra masuk atau berpindah ke menu "Kost Saya" maupun menu "Beranda"** di Dashboard Mitra (`/mitra`), memberikan visibilitas promosi yang optimal dan berkelanjutan.
 
 ---
 
 ## 1. Detail Implementasi
 
-### A. Reset Flag Sesi Otomatis saat Login & Logout
-1. **[`Login.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/Login.tsx)**:
-   - Pada saat proses autentikasi berhasil (`handleLogin`), sistem secara otomatis menghapus flag sesi lama:
+### A. Pembaruan Reaktif Navigasi Menu di [`MitraDashboard.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/MitraDashboard.tsx)
+1. **Hook Reaktif `useEffect` pada `activeMenu`**:
+   - Memantau perubahan menu aktif. Begitu mitra berada pada tab `overview` (Beranda) atau `properties` (Kost Saya) dan berstatus non-KostManager (`!isKostManager`), pop-up iklan KostManager otomatis langsung dibuka:
      ```ts
-     sessionStorage.removeItem('km_promo_popup_closed_session');
+     useEffect(() => {
+         if (!isKostManager && (activeMenu === 'overview' || activeMenu === 'properties')) {
+             setShowPromoPopup(true);
+         }
+     }, [activeMenu, isKostManager]);
      ```
-   - Hal ini memastikan bahwa setiap login baru (atau login ulang setelah logout) akan mengaktifkan kembali kemunculan pop-up iklan KostManager.
-2. **[`App.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/App.tsx)**:
-   - Menambahkan pembersihan flag `sessionStorage.removeItem('km_promo_popup_closed_session')` di dalam `handleLogout` global.
-
-### B. Lifecycle Pop-Up Cerdas & Tombol Logout Bersih di [`MitraDashboard.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/MitraDashboard.tsx)
-1. **Penyimpanan Status Penutupan Berbasis Sesi Aktif**:
-   - Fungsi `handleClosePromoPopup` menyimpan flag ke `sessionStorage`:
+2. **Pemicu Langsung pada Klik Menu (`handleMenuChange`)**:
+   - Ketika mitra mengklik tombol menu *Beranda* atau *Kost Saya* (baik dari sidebar desktop maupun mobile navigation), pop-up iklan KostManager dipicu seketika:
      ```ts
-     sessionStorage.setItem('km_promo_popup_closed_session', 'true');
+     const handleMenuChange = (menu: MenuKey) => {
+         if (!isKostManager && (menu === 'overview' || menu === 'properties')) {
+             setShowPromoPopup(true);
+         }
+         navigate(`${Page.DASHBOARD_MITRA}/${menu}`);
+     };
      ```
-   - Pop-up tidak akan melakukan spam berulang kali ketika mitra berpindah-pindah sub-menu (*Beranda*, *Kost Saya*, *Pemesanan*, *Dompet*, dll.) dalam satu sesi login yang sama.
-2. **Penayangan Otomatis saat Dashboard Dimuat**:
-   - Hook inisialisasi `useEffect` saat `MitraDashboard` dimuat memeriksa apakah mitra berstatus reguler (`!isKostManager`) dan belum menutup pop-up pada sesi login ini:
-     ```ts
-     if (!isKostManager && !sessionStorage.getItem('km_promo_popup_closed_session')) {
-       setShowPromoPopup(true);
-     }
-     ```
-3. **Pembersihan Bersih saat Logout dari Dashboard**:
-   - Disediakan `handleLogoutWithCleanup` yang membersihkan `km_promo_popup_closed_session` sebelum mengeksekusi `onLogout()`.
-   - Terpasang pada tombol *Keluar Akun* desktop sidebar maupun mobile drawer.
+3. **Penyederhanaan `handleClosePromoPopup`**:
+   - Menutup pop-up saat tombol silang `X`, *"Nanti Saja"*, backdrop, atau tombol `Escape` ditekan (`setShowPromoPopup(false)`), tanpa memblokir pembukaan kembali saat berpindah menu berikutnya.
 
 ---
 
@@ -43,23 +38,23 @@ Fitur promosi KostManager pada akun mitra biasa telah disempurnakan agar **selal
   ```bash
   cmd /c npm run build (di functions/public)
   ```
-  **Status**: `✓ 2511 modules transformed. ✓ built in 29.16s` (**0 Error, 0 Warning Kritis**).
+  **Status**: `✓ 2511 modules transformed. ✓ built in 35.91s` (**0 Error, 0 Warning Kritis**).
 
 ---
 
 ## 3. Panduan Pengujian untuk Pengguna (User Testing Steps)
 
-1. **Buka Aplikasi & Login sebagai Mitra**:
-   - Masuk ke halaman login (`/login`) dan login menggunakan akun mitra biasa (*regular partner*).
-2. **Periksa Kemunculan Pop-up Iklan**:
-   - Begitu berhasil login dan masuk ke Dashboard Mitra (`/mitra`), **pop-up modal iklan KostManager otomatis langsung muncul di tengah layar**.
-3. **Uji Penutupan Pop-up**:
-   - Klik tombol silang **`X`** di sudut kanan atas modal (atau klik *"Nanti Saja"*, klik backdrop luar, atau tekan tombol `Escape`).
-   - Pop-up akan tertutup dengan mulus.
-4. **Uji Navigasi Menu Dashboard**:
-   - Berpindahlah ke menu **Kost Saya**, **Pemesanan**, atau **Dompet & Pendapatan**.
-   - Pop-up **tidak akan muncul mengganggu lagi** selama masih dalam sesi login yang sama.
-5. **Uji Logout & Login Ulang**:
-   - Klik tombol **Keluar Akun** (*Logout*).
-   - Lakukan login kembali ke akun mitra.
-   - **Pop-up iklan KostManager akan otomatis muncul kembali**, sesuai kebutuhan promosi berkala setiap sesi login baru.
+1. **Buka Dashboard Mitra (Beranda)**:
+   - Akses `/mitra` atau `/mitra/overview`.
+   - **Pop-up modal iklan KostManager langsung muncul secara otomatis di tengah layar**.
+2. **Tutup Pop-Up**:
+   - Klik tombol silang **`X`** di sudut kanan atas (atau tombol *"Nanti Saja"* / klik backdrop). Modal tertutup seketika.
+3. **Pindah ke Menu "Kost Saya"**:
+   - Klik menu **Kost Saya** (`/mitra/properties`).
+   - **Pop-up iklan KostManager langsung muncul kembali secara otomatis**.
+4. **Pindah ke Menu Lain (misal "Pemesanan" / "Dompet")**:
+   - Klik menu **Pemesanan** atau **Dompet & Pendapatan**.
+   - Pop-up tidak menghalangi menu operasional ini.
+5. **Kembali ke Menu "Beranda" atau "Kost Saya"**:
+   - Klik kembali menu **Beranda** atau **Kost Saya**.
+   - **Pop-up iklan KostManager akan selalu terus muncul kembali secara konsisten**.

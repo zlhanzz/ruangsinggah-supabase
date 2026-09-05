@@ -2,6 +2,39 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 364. Penayangan Berkelanjutan Pop-Up Iklan KostManager Setiap Kali Masuk Menu "Kost Saya" atau "Beranda" (`MitraDashboard.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna meminta agar iklan pop-up promosi KostManager **selalu terus muncul** secara otomatis setiap kali mitra (dengan status mitra reguler / `!isKostManager`) masuk atau berpindah ke menu **Kost Saya** (`/mitra/properties`) atau ke menu **Beranda** (`/mitra/overview`).
+  2. Ketika mitra menutup pop-up via tombol close silang `X` (atau *"Nanti Saja"*), modal tertutup dengan mulus. Namun ketika mitra bernavigasi kembali ke menu Beranda atau Kost Saya (atau mengklik tombol menu tersebut), modal iklan pop-up KostManager dipicu kembali secara konsisten.
+- **Implementasi Solusi**:
+  1. **Pembaruan Reaktif `useEffect` Navigasi Menu (`MitraDashboard.tsx`)**:
+     - Menghubungkan pemantauan state `activeMenu` dan status `isKostManager`:
+       ```ts
+       useEffect(() => {
+           if (!isKostManager && (activeMenu === 'overview' || activeMenu === 'properties')) {
+               setShowPromoPopup(true);
+           }
+       }, [activeMenu, isKostManager]);
+       ```
+  2. **Pemicu Langsung pada Handler Navigasi `handleMenuChange` (`MitraDashboard.tsx`)**:
+     - Mengondisikan pemanggilan `handleMenuChange` agar mengeksekusi `setShowPromoPopup(true)` saat menu `'overview'` atau `'properties'` diklik oleh mitra biasa:
+       ```ts
+       const handleMenuChange = (menu: MenuKey) => {
+           if (!isKostManager && (menu === 'overview' || menu === 'properties')) {
+               setShowPromoPopup(true);
+           }
+           navigate(`${Page.DASHBOARD_MITRA}/${menu}`);
+       };
+       ```
+  3. **Penyederhanaan `handleClosePromoPopup`**:
+     - Menutup pop-up secara langsung (`setShowPromoPopup(false)`) tanpa memblokir pembukaan kembali saat bernavigasi antar menu.
+- **File Tersentuh**:
+  - `functions/public/pages/MitraDashboard.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi build frontend Vite (`cmd /c npm run build` di `functions/public`) lulus 100% (`✓ 2511 modules transformed, built in 35.91s`, 0 error).
+
 ### 363. Penayangan Otomatis Pop-Up Iklan KostManager Setiap Kali Mitra Baru Login (`MitraDashboard.tsx`, `Login.tsx`, `App.tsx`) (September 2026)
 - **Permintaan & Masalah**:
   1. Pengguna meminta agar iklan pop-up promosi KostManager selalu muncul secara otomatis **setiap kali mitra baru login** ke Dashboard Mitra (`/mitra`).

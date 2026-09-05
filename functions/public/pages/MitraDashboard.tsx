@@ -209,14 +209,14 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
     }, [user, mitraSubscriptionStatus, properties, kmRequests]);
 
     const handleMenuChange = (menu: MenuKey) => {
+        if (!isKostManager && (menu === 'overview' || menu === 'properties')) {
+            setShowPromoPopup(true);
+        }
         navigate(`${Page.DASHBOARD_MITRA}/${menu}`);
     };
 
     const handleClosePromoPopup = useCallback(() => {
         setShowPromoPopup(false);
-        try {
-            sessionStorage.setItem('km_promo_popup_closed_session', 'true');
-        } catch { }
     }, []);
 
     const handleLogoutWithCleanup = useCallback(() => {
@@ -226,7 +226,7 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
         onLogout?.();
     }, [onLogout]);
 
-    // Load promo popup setting on mount dan selalu munculkan pop-up iklan setiap kali mitra baru login
+    // Load promo popup setting on mount
     useEffect(() => {
         if (isKostManager) {
             setShowPromoPopup(false);
@@ -240,15 +240,14 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
         getKostManagerFeeSettings().then(feeSet => {
             setKmFeeSettings(feeSet);
         }).catch(err => console.warn('Could not load KM fee setting:', err));
-
-        // Munculkan pop-up iklan otomatis untuk sesi login baru mitra biasa
-        try {
-            const isClosedInSession = sessionStorage.getItem('km_promo_popup_closed_session');
-            if (!isClosedInSession) {
-                setShowPromoPopup(true);
-            }
-        } catch { }
     }, [isKostManager]);
+
+    // Selalu munculkan pop-up iklan promosi KostManager setiap kali mitra masuk ke menu Beranda atau Kost Saya
+    useEffect(() => {
+        if (!isKostManager && (activeMenu === 'overview' || activeMenu === 'properties')) {
+            setShowPromoPopup(true);
+        }
+    }, [activeMenu, isKostManager]);
 
     // Handle Escape key for popup
     useEffect(() => {
