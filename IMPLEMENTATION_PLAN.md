@@ -1,39 +1,67 @@
-# Rencana Implementasi: Penyesuaian Responsivitas Header Navbar (Tombol Masuk & Daftar Fit di Layar Mobile)
+# Rencana Implementasi: Proteksi Otomatis Penolakan Booking Berdasarkan Kesesuaian Gender & Modal Edukasi Penjelasan
 
 ## 1. Analisis Masalah & Kebutuhan
-- **Masalah**:
-  - Pada tampilan perangkat mobile (khususnya lebar layar < 400px seperti iPhone, Samsung Galaxy, dll.), tombol **"Masuk"** dan tombol oranye **"Daftar"** di bagian header navigasi atas tampak terlalu mepet ke tepi kanan layar dan sebagian terpotong / *overflow*.
-- **Penyebab Utama**:
-  1. Ukuran teks logo `RuangSinggah.id` pada mobile berukuran tetap `text-2xl` (24px) dan tinggi gambar `h-10` sehingga memakan porsi lebar horizontal yang terlalu besar (sekitar ~236px).
-  2. Jarak (*gap*) dan *padding* tombol autentikasi mobile berukuran lebar (`gap-3`, tombol "Masuk" `px-3 py-2`, tombol "Daftar" `px-5 py-2` font `text-sm`), memakan ruang horizontal ~166px.
-  3. Total lebar yang dibutuhkan mencapai > 430px, melebihi lebar layar mobile rata-rata (360px - 390px), sehingga tombol "Daftar" terdorong keluar batas viewport.
+- **Kondisi Saat Ini**:
+  - Sistem pemesanan sewa (*booking flow*) saat ini **belum memiliki validasi otomatis kesesuaian jenis kelamin (gender check)** antara profil pengguna (`user.gender`) dengan tipe peruntukan kost (`kost.type` / `kost.gender` — *Putra, Putri, Campur*).
+  - Pengguna laki-laki (Pria) masih dapat membuka formulir pengajuan sewa dan mengirim booking untuk kost yang secara tegas berkategori **Khusus Putri**, begitu pula sebaliknya.
+- **Tujuan Pengembangan**:
+  1. Mencegah secara otomatis pengguna laki-laki mengajukan sewa pada kost khusus putri (serta pengguna perempuan pada kost khusus putra).
+  2. Menyajikan **Modal Pop-up Edukasi & Penjelasan Interaktif** yang elegan, humanis, dan informatif (bukan `alert()` browser biasa) saat kondisi penolakan terdeteksi.
+  3. Menyediakan tombol navigasi langsung ke katalog kost yang sesuai (*Putra / Campur*) serta opsi perbaikan data jika pengguna salah mengisi gender di profil.
 
 ---
 
 ## 2. Dampak Perubahan
 File yang akan disentuh:
-- [`functions/public/components/Navbar.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/components/Navbar.tsx): Penyesuaian tata letak responsif pada header navbar, logo brand, dan tombol autentikasi (Masuk & Daftar).
+1. [`functions/public/pages/KostDetail.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/KostDetail.tsx): 
+   - Penambahan validasi gender check pada trigger booking (`handleBookingClick`) dan proses submit (`handleConfirmBooking`).
+   - Penyematan komponen pop-up modal penolakan gender mismatch yang informatif dan elegan.
+2. [`functions/public/App.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/App.tsx): 
+   - Penyelarasan validasi profil pada wrapper route `/kost/:slug` agar mencakup pemeriksaan kesesuaian gender sebelum booking.
+3. [`functions/PROGRESS.md`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/PROGRESS.md): 
+   - Pencatatan riwayat progres fitur #351.
+4. [`WALKTHROUGH.md`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/WALKTHROUGH.md): 
+   - Panduan verifikasi dan walkthrough fitur bagi pengguna.
 
 ---
 
 ## 3. Rencana Langkah-Langkah Eksekusi
-1. **Optimasi Logo Responsif**:
-   - Skala gambar logo: `h-8 sm:h-10 md:h-12 w-auto mr-1 sm:mr-1.5`.
-   - Ukuran teks nama brand: `text-xl sm:text-2xl font-extrabold` untuk "RuangSinggah" dan `text-xl sm:text-2xl font-bold` untuk ".id" dengan properti `tracking-tight shrink-0`.
-2. **Optimasi Tinggi & Padding Navbar**:
-   - Container navbar utama: `h-16 sm:h-20` dengan padding `px-3 sm:px-6 lg:px-8` agar pas dan tidak terbuang sia-sia di layar sempit.
-3. **Penyelarasan Tombol Masuk & Daftar**:
-   - Container tombol auth: `gap-1.5 sm:gap-3`.
-   - Tombol **Masuk**: `text-xs sm:text-sm font-bold text-gray-800 hover:text-orange-500 px-2 sm:px-3 py-1.5 sm:py-2 transition-colors cursor-pointer`.
-   - Tombol **Daftar**: `text-xs sm:text-sm font-bold bg-[#ff7a00] hover:bg-orange-600 text-white px-3.5 sm:px-5 py-1.5 sm:py-2 rounded-full shadow-sm hover:shadow active:scale-95 transition-all cursor-pointer whitespace-nowrap`.
-4. **Pemeriksaan Status Login / Mobile Avatar**:
-   - Pastikan avatar dan bell notifikasi mobile tetap rapi dan proporsional.
+
+### Langkah 1: Logika Deteksi Mismatch Gender
+- Normalisasi tipe kost:
+  - `kostType = (kost.type || (kost as any).gender || '').toLowerCase()`
+  - Nilai: `'putri'`, `'putra'`, atau `'campur'`
+- Normalisasi gender pengguna:
+  - `userGender = (user.gender || '').toLowerCase()`
+  - Nilai: `'pria'` / `'laki-laki'` vs `'wanita'` / `'perempuan'`
+- Aturan Validasi:
+  - **Ditolak**: Jika `kostType === 'putri'` dan `userGender` adalah Pria/Laki-laki.
+  - **Ditolak**: Jika `kostType === 'putra'` dan `userGender` adalah Wanita/Perempuan.
+  - **Diterima**: Jika `kostType === 'campur'` (dapat disewa oleh semua gender).
+  - **Diterima**: Jika `kostType === 'putri'` dan `userGender` adalah Wanita.
+  - **Diterima**: Jika `kostType === 'putra'` dan `userGender` adalah Pria.
+
+### Langkah 2: Pembuatan Modal Pop-up Penjelasan yang Elegan
+- Modal interaktif dengan visual premium:
+  - **Header & Ikon**: Badge peringatan merah/rose dengan ikon `ShieldAlert` / `Users` (`lucide-react`).
+  - **Judul**: *"Pengajuan Sewa Tidak Dapat Dilanjutkan"*.
+  - **Subjudul & Badge**: *"Batasan Kebijakan Gender Hunian"*.
+  - **Komparasi Data**: Box perbandingan visual antara **Tipe Kost (Khusus Putri)** vs **Data Profil Anda (Laki-Laki / Pria)**.
+  - **Penjelasan**: *"Demi kenyamanan, privasi, dan kepatuhan terhadap tata tertib pemilik kost, properti ini hanya menerima penyewa perempuan/putri."*
+  - **Aksi Navigasi Cepat**:
+    - Tombol Oranye: *"Cari Kost Putra / Campur"* (mengarahkan langsung ke katalog filter gender yang tepat).
+    - Tombol Sekunder: *"Periksa / Ubah Profil"* (jika ada kekeliruan data gender di `/profile`).
+    - Tombol Tutup.
+
+### Langkah 3: Pengamanan Submit Layer (Anti-Bypass)
+- Memastikan pemanggilan `createBookingRequest` menolak transaksi jika terjadi manipulasi data request tanpa gender yang sesuai.
 
 ---
 
 ## 4. Rencana Verifikasi
-1. **Verifikasi Kompilasi**:
-   - Menjalankan `npm run build` di direktori `functions/public` untuk memastikan 0 error TypeScript dan JSX.
-2. **Verifikasi Responsivitas Layout**:
-   - Memastikan tidak ada *horizontal overflow* pada resolusi layar mobile kecil (320px - 414px) maupun tablet dan desktop.
-   - Tombol "Masuk" dan "Daftar" tampak fit, simetris, presisi, dan nyaman disentuh (*touch-friendly*).
+1. **Uji Kompilasi**: Menjalankan `npm run build` di direktori `functions/public` untuk memastikan 0 error TypeScript & JSX.
+2. **Skenario Pengujian Fungsional**:
+   - **Kasus 1**: User Pria mencoba klik *"Ajukan Sewa"* pada Kost Putri $\rightarrow$ Sistem langsung memunculkan Pop-up Penolakan Gender Mismatch dan tidak membuka formulir booking.
+   - **Kasus 2**: User Wanita mencoba klik *"Ajukan Sewa"* pada Kost Putra $\rightarrow$ Sistem langsung memunculkan Pop-up Penolakan Gender Mismatch.
+   - **Kasus 3**: User Pria/Wanita menyewa Kost Campur $\rightarrow$ Pengecekan lolos dan modal booking terbuka dengan lancar.
+   - **Kasus 4**: User Pria menyewa Kost Putra, User Wanita menyewa Kost Putri $\rightarrow$ Pengecekan lolos dan modal booking terbuka dengan lancar.

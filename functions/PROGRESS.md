@@ -2,6 +2,33 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 351. Proteksi Otomatis Penolakan Booking Berdasarkan Kesesuaian Gender & Modal Pop-up Edukasi Penjelasan (`KostDetail.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna menanyakan apakah sistem booking sudah dilengkapi dengan kondisi jika user adalah laki-laki secara profil dan mencoba mengajukan sewa pada kost khusus putri.
+  2. Pengguna meminta agar kondisi tersebut otomatis ditolak oleh sistem dan menampilkan pop-up penjelasan yang informatif, jelas, dan elegan.
+- **Implementasi Solusi**:
+  1. **Logika Validasi Kesesuaian Gender (Gender Mismatch Check)**:
+     - Menambahkan fungsi helper `checkGenderMismatch()` pada `KostDetail.tsx` yang membandingkan `user.gender` dengan peruntukan tipe hunian (`kost.type` / `kost.gender`):
+       - Jika penyewa adalah Pria (Laki-laki) dan kost berkategori **Khusus Putri** $\rightarrow$ Pengajuan sewa **ditolak otomatis**.
+       - Jika penyewa adalah Wanita (Perempuan) dan kost berkategori **Khusus Putra** $\rightarrow$ Pengajuan sewa **ditolak otomatis**.
+       - Jika kost berkategori **Campur** atau gender penyewa sesuai $\rightarrow$ Pengajuan sewa **diizinkan**.
+  2. **Modal Pop-Up Edukasi & Penjelasan Interaktif (`KostDetail.tsx`)**:
+     - Menghadirkan modal pop-up modern dengan aksen gradien merah-oranye, badge status *"Sistem Proteksi Hunian"*, dan ikon `ShieldAlert`.
+     - Menyajikan kartu perbandingan visual 2 kolom: **Tipe Kost Ini (Khusus Putri/Putra)** vs **Profil Akun Anda (Pria/Wanita)**.
+     - Menyertakan penjelasan ramah & humanis mengenai kepatuhan terhadap aturan dan tata tertib pemilik kost.
+     - Menyediakan tombol aksi cepat:
+       - *"Cari Kost [Putra/Putri/Campur]"*: Navigasi instan ke halaman katalog (`/listings?type=...`) terfilter otomatis.
+       - *"Cek Data Profil"*: Akses langsung ke halaman profil (`/profile`) jika ada kekeliruan input gender.
+       - Tombol Tutup (*Close*).
+  3. **Proteksi Ganda pada Trigger Booking & Submit Layer**:
+     - Memasang pengecekan pada tombol *"Ajukan Sewa"* (`handleBookingClick`) dan pencegahan anti-bypass pada konfirmasi sewa (`handleConfirmBooking`).
+- **File Tersentuh**:
+  - `functions/public/pages/KostDetail.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi build frontend Vite (`functions/public`) lulus 100% (`✓ built in 33.27s`, 0 error).
+
 ### 350. Penyesuaian Responsivitas Header Navbar: Fit Presisi Tombol Masuk & Daftar pada Tampilan Mobile (`Navbar.tsx`) (September 2026)
 - **Permintaan & Masalah**:
   1. Tombol "Masuk" dan tombol oranye "Daftar" di header navbar tampak terlalu mepet ke batas tepi kanan layar dan sebagian terpotong (*overflow / edge clipping*) pada layar smartphone (resolusi < 400px).
