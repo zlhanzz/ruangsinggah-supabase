@@ -185,7 +185,7 @@ const App: React.FC = () => {
       navigate(
         user?.role === 'admin' && currentPortal !== 'user' ? Page.DASHBOARD_ADMIN : 
         user?.role === 'survey_agent' && currentPortal !== 'user' ? Page.DASHBOARD_AGENT : 
-        isMitra ? Page.DASHBOARD_MITRA : 
+        isMitra && currentPortal === 'owner' ? Page.DASHBOARD_MITRA : 
         Page.HOME
       );
     }
@@ -282,17 +282,26 @@ const App: React.FC = () => {
         else if (normalizedRole === 'survey_agent') role = 'survey_agent';
         else role = 'user';
 
-        // --- AKURASI PORTAL LOGIN PER ROLE (GERBANG SAKRAL) ---
-        if (role === 'owner') {
-          localStorage.setItem('portal_view', 'owner');
-        }
+        // --- AKURASI PORTAL LOGIN PER ROLE (GERBANG SAKRAL DUA ARAH) ---
         const portalView = localStorage.getItem('portal_view') || (role === 'owner' ? 'owner' : 'user');
+        
+        // 1. Gerbang Pemilik Kost (portalView === 'owner'): Hanya untuk role 'owner' atau 'admin'
         if (portalView === 'owner' && role !== 'owner' && role !== 'admin') {
           console.warn("Regular user attempted to log in to owner portal.");
           await supabase.auth.signOut();
           setUser(null);
           setLoadingAuth(false);
           navigate(`${Page.LOGIN}?error=role_mismatch`, { replace: true });
+          return;
+        }
+
+        // 2. Gerbang Pencari Kost (portalView === 'user'): Hanya untuk role 'user' (Pemilik Kost wajib masuk lewat gerbang Pemilik Kost)
+        if (portalView === 'user' && (role === 'owner' || role === 'mitra')) {
+          console.warn("Owner attempted to log in to regular user portal.");
+          await supabase.auth.signOut();
+          setUser(null);
+          setLoadingAuth(false);
+          navigate(`${Page.LOGIN}?error=role_mismatch_owner`, { replace: true });
           return;
         }
 

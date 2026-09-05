@@ -186,6 +186,12 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
       setIsRoleSelected(true);
       setSuccessMsg('');
       setSearchParams({}, { replace: true });
+    } else if (error === 'role_mismatch_owner') {
+      setErrorMsg('Akun Anda terdaftar sebagai Pemilik Kost. Silakan masuk melalui gerbang Pemilik Kost (Mitra).');
+      setActiveRole('owner');
+      setIsRoleSelected(true);
+      setSuccessMsg('');
+      setSearchParams({}, { replace: true });
     } else if (
       error === 'access_denied' ||
       window.location.hash.includes('error_code=otp_expired') ||

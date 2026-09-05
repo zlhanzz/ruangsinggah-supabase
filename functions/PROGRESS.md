@@ -2,6 +2,27 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 379. Penegakan Kesakralan Gerbang Login Dua Arah (Pencari Kost vs Pemilik Kost) (`App.tsx`, `Login.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna mempertanyakan hilangnya batasan/isolasi gerbang peran login (*"kesakralan gerbang pencari kost atau pemilik kost hilang ya? soalnya ketika mencoba masuk ke gerbang pencari kost dan login dengan email pemilik koast, yang terjadi adalah login dan langsung masuk ke dashboard mitra"*).
+  2. Akar masalah terjadi di `functions/public/App.tsx` pada fungsi `fetchUserData` yang hanya memvalidasi satu arah (`role === 'user'` yang masuk ke gerbang `owner`), tetapi tidak memvalidasi arah sebaliknya (`role === 'owner'` yang masuk ke gerbang `user`). Bahkan, baris `if (role === 'owner') localStorage.setItem('portal_view', 'owner')` menimpa pilihan gerbang `user` menjadi `owner`, dan fungsi `handleNavigationAfterLogin` langsung mengarahkan pemilik kost ke `Page.DASHBOARD_MITRA`.
+- **Implementasi Solusi**:
+  1. **Validasi Dua Arah Gerbang Sakral di `App.tsx` (`fetchUserData`)**:
+     - **Gerbang Pencari Kost (`portalView === 'user'`)**: Jika akun yang login berstatus `role === 'owner'` atau `role === 'mitra'`, sistem otomatis membatalkan login (`signOut`), me-reset state user, dan mengarahkan ke `${Page.LOGIN}?error=role_mismatch_owner`.
+     - **Gerbang Pemilik Kost (`portalView === 'owner'`)**: Jika akun yang login berstatus `role === 'user'`, sistem otomatis membatalkan login (`signOut`), me-reset state user, dan mengarahkan ke `${Page.LOGIN}?error=role_mismatch`.
+     - Menghapus penimpaan sepihak `portal_view` sehingga pilihan gerbang pengguna dihormati 100%.
+  2. **Penyesuaian Navigasi Pasca-Login (`handleNavigationAfterLogin`)**:
+     - Mengubah kondisi navigasi ke `Page.DASHBOARD_MITRA` menjadi `isMitra && currentPortal === 'owner'`.
+  3. **Penanganan Pesan Error di `Login.tsx`**:
+     - Menambahkan handler `error === 'role_mismatch_owner'` yang menampilkan pesan error: *"Akun Anda terdaftar sebagai Pemilik Kost. Silakan masuk melalui gerbang Pemilik Kost (Mitra)."* dan otomatis mengarahkan formulir ke tab Pemilik Kost.
+- **File Tersentuh**:
+  - `functions/public/App.tsx`
+  - `functions/public/pages/Login.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi build frontend Vite (`cmd /c npm run build`) lulus 100% (`✓ 2511 modules transformed, built in 41.45s`, 0 error).
+
 ### 378. Alur Konfirmasi & Penolakan Penugasan Surveyor KostManager (Tab Permintaan ➔ Aktif) (`AgentDashboard.tsx`) (September 2026)
 - **Permintaan & Masalah**:
   1. Pengguna memberikan masukan bahwa ketika admin menetapkan agen survey untuk pesanan pendataan KostManager, pesanan tersebut malah langsung masuk ke tab **Aktif**, padahal seharusnya masuk ke tab **Permintaan** terlebih dahulu untuk dikonfirmasi atau ditolak oleh agen survey (*"sekarang malah langsung masuk ke aktif, seharusnya di permintaan dulu untuk dikonfirmasi atau tidak oleh agen surveynya, kalau konfirmasi artinya prosesnya lanjut, tapi kalau tidak kembalu ke admin harus menetapkan lagi agen survey untuk pesanan pendataan kostmanager ini"*).
