@@ -952,90 +952,93 @@ const Profile: React.FC<ProfileProps> = ({ user, onLogout, onSaveSuccess, forceE
           )}
         </div>
       ) : viewMode === 'transactions' ? (
-        /* ── SUB-VIEW: RIWAYAT TRANSAKSI & TAGIHAN (5 KATEGORI) ─────────────── */
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-          {/* Header Navigation */}
-          <div className="mb-6 flex items-center justify-between gap-4">
-            <button
-              onClick={() => setViewMode('hub')}
-              className="px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-xl text-xs font-bold hover:bg-gray-50 hover:border-gray-300 transition-all shadow-xs active:scale-95 flex items-center gap-2 cursor-pointer group"
-            >
-              <ArrowLeft className="w-4 h-4 text-gray-500 group-hover:-translate-x-1 transition-transform" />
-              <span>Kembali ke Menu Profil</span>
-            </button>
+        /* ── SUB-VIEW: RIWAYAT TRANSAKSI & TAGIHAN (5 KATEGORI - MINIMALIS) ─── */
+        <div className="max-w-4xl mx-auto px-4 sm:px-6">
+          {/* Header Navigation & Title */}
+          <div className="mb-5">
+            <div className="flex items-center justify-between gap-3 mb-3">
+              <button
+                onClick={() => setViewMode('hub')}
+                className="px-3.5 py-1.5 bg-white border border-gray-200 text-gray-700 rounded-xl text-xs font-bold hover:bg-gray-50 hover:border-gray-300 transition-all shadow-2xs active:scale-95 flex items-center gap-1.5 cursor-pointer group"
+              >
+                <ArrowLeft className="w-3.5 h-3.5 text-gray-500 group-hover:-translate-x-0.5 transition-transform" />
+                <span>Kembali ke Menu Profil</span>
+              </button>
 
-            <button
-              onClick={loadUserTransactions}
-              disabled={transactionsLoading}
-              className="px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-xl text-xs font-bold hover:bg-gray-50 hover:border-gray-300 transition-all shadow-2xs active:scale-95 flex items-center gap-2 cursor-pointer"
-            >
-              <RefreshCw className={`w-3.5 h-3.5 text-gray-500 ${transactionsLoading ? 'animate-spin' : ''}`} />
-              <span>Muat Ulang Data</span>
-            </button>
-          </div>
+              <button
+                onClick={loadUserTransactions}
+                disabled={transactionsLoading}
+                className="p-2 sm:px-3 sm:py-1.5 bg-white border border-gray-200 text-gray-700 rounded-xl text-xs font-bold hover:bg-gray-50 hover:border-gray-300 transition-all shadow-2xs active:scale-95 flex items-center gap-1.5 cursor-pointer"
+                title="Muat Ulang Data"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 text-gray-500 ${transactionsLoading ? 'animate-spin' : ''}`} />
+                <span className="hidden sm:inline">Muat Ulang</span>
+              </button>
+            </div>
 
-          {/* Banner Summary & Stats */}
-          <div className="bg-gradient-to-r from-slate-900 via-[#0f172a] to-indigo-950 text-white rounded-3xl p-6 sm:p-8 mb-8 shadow-xl shadow-slate-900/10 border border-slate-800 relative overflow-hidden">
-            <div className="absolute -right-10 -bottom-10 w-64 h-64 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
-            <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
-              <div>
-                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 text-orange-400 text-xs font-bold backdrop-blur-xs border border-white/10 mb-3">
-                  <Receipt className="w-3.5 h-3.5" />
-                  <span>Pusat Transaksi & Tagihan</span>
+            {/* Clean Minimalist Title Bar */}
+            <div className="bg-white border border-gray-100 rounded-2xl p-4 sm:p-5 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-orange-50 text-[#ff7a00] border border-orange-100 flex items-center justify-center shrink-0 shadow-2xs">
+                  <Receipt className="w-5 h-5 stroke-[2]" />
                 </div>
-                <h1 className="text-2xl sm:text-3xl font-black tracking-tight">
-                  Riwayat Transaksi & Tagihan
-                </h1>
-                <p className="text-xs sm:text-sm text-gray-300 font-medium mt-1.5 max-w-xl leading-relaxed">
-                  Catatan lengkap pembayaran sewa kost, perpanjangan sewa, tagihan fasilitas khusus, jasa survey lokasi, dan pembelian database kontak kost.
-                </p>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h1 className="text-base sm:text-lg font-black text-gray-900 tracking-tight">
+                      Riwayat Transaksi & Tagihan
+                    </h1>
+                    <span className="px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 text-[11px] font-black">
+                      {userTransactions.length}
+                    </span>
+                  </div>
+                  <p className="text-xs text-gray-500 font-medium mt-0.5">
+                    Catatan pembayaran sewa, perpanjangan, fasilitas, survey, dan database.
+                  </p>
+                </div>
               </div>
 
-              {/* Quick Stats */}
-              <div className="flex items-center gap-3 sm:gap-4 shrink-0 flex-wrap">
-                <div className="bg-white/10 backdrop-blur-md rounded-2xl p-4 border border-white/10 min-w-[130px]">
-                  <p className="text-[10px] uppercase font-black text-gray-300 tracking-wider">Transaksi Lunas</p>
-                  <p className="text-lg sm:text-2xl font-black text-emerald-400 mt-0.5">
-                    {userTransactions.filter(t => t.status === 'PAID').length}
-                    <span className="text-xs font-bold text-gray-300 ml-1">Tagihan</span>
-                  </p>
+              {/* Compact Stats Pill Bar */}
+              <div className="flex items-center gap-2 pt-3 sm:pt-0 border-t sm:border-t-0 border-gray-100 shrink-0">
+                <div className="px-3 py-1.5 bg-emerald-50 border border-emerald-100/80 rounded-xl text-center">
+                  <span className="text-[10px] font-bold text-emerald-700 uppercase tracking-wider block">Lunas</span>
+                  <span className="text-xs sm:text-sm font-black text-emerald-800">
+                    {userTransactions.filter(t => t.status === 'PAID').length} Trx
+                  </span>
                 </div>
-                <div className="bg-white/10 backdrop-blur-md rounded-2xl p-4 border border-white/10 min-w-[150px]">
-                  <p className="text-[10px] uppercase font-black text-gray-300 tracking-wider">Total Pembayaran</p>
-                  <p className="text-base sm:text-xl font-black text-orange-400 mt-0.5">
+                <div className="px-3 py-1.5 bg-orange-50 border border-orange-100/80 rounded-xl text-center">
+                  <span className="text-[10px] font-bold text-orange-700 uppercase tracking-wider block">Total Pengeluaran</span>
+                  <span className="text-xs sm:text-sm font-black text-[#ff7a00]">
                     {FORMAT_CURRENCY(userTransactions.filter(t => t.status === 'PAID').reduce((acc, t) => acc + (t.amount || 0), 0))}
-                  </p>
+                  </span>
                 </div>
               </div>
             </div>
           </div>
 
           {/* Category Tabs Filter */}
-          <div className="mb-6 overflow-x-auto pb-2 scrollbar-none">
-            <div className="flex items-center gap-2 min-w-max">
+          <div className="mb-4 overflow-x-auto pb-1 scrollbar-none">
+            <div className="flex items-center gap-1.5 min-w-max">
               {[
-                { id: 'all', label: 'Semua Transaksi', icon: Layers, count: userTransactions.length },
-                { id: 'booking', label: 'Sewa Kost Baru', icon: Building2, count: userTransactions.filter(t => t.category === 'booking').length },
-                { id: 'extension', label: 'Perpanjangan Sewa', icon: RotateCcw, count: userTransactions.filter(t => t.category === 'extension').length },
-                { id: 'facility', label: 'Tagihan Fasilitas', icon: Zap, count: userTransactions.filter(t => t.category === 'facility').length },
-                { id: 'survey', label: 'Jasa Survey', icon: MapPin, count: userTransactions.filter(t => t.category === 'survey').length },
-                { id: 'database', label: 'Database Kost', icon: FileText, count: userTransactions.filter(t => t.category === 'database').length },
+                { id: 'all', label: 'Semua', count: userTransactions.length },
+                { id: 'booking', label: 'Sewa Kost', count: userTransactions.filter(t => t.category === 'booking').length },
+                { id: 'extension', label: 'Perpanjangan', count: userTransactions.filter(t => t.category === 'extension').length },
+                { id: 'facility', label: 'Fasilitas', count: userTransactions.filter(t => t.category === 'facility').length },
+                { id: 'survey', label: 'Jasa Survey', count: userTransactions.filter(t => t.category === 'survey').length },
+                { id: 'database', label: 'Database Kontak', count: userTransactions.filter(t => t.category === 'database').length },
               ].map((tab) => {
-                const IconComponent = tab.icon;
                 const isActive = selectedTrxCategory === tab.id;
                 return (
                   <button
                     key={tab.id}
                     onClick={() => setSelectedTrxCategory(tab.id)}
-                    className={`px-4 py-2.5 rounded-2xl text-xs font-black transition-all flex items-center gap-2 cursor-pointer border ${
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer border ${
                       isActive
-                        ? 'bg-gray-900 text-white border-gray-900 shadow-md shadow-gray-900/10'
+                        ? 'bg-gray-900 text-white border-gray-900 shadow-xs'
                         : 'bg-white text-gray-600 hover:bg-gray-50 border-gray-200'
                     }`}
                   >
-                    <IconComponent className={`w-3.5 h-3.5 ${isActive ? 'text-orange-400' : 'text-gray-400'}`} />
                     <span>{tab.label}</span>
-                    <span className={`px-2 py-0.2 rounded-full text-[10px] font-black ${
+                    <span className={`px-1.5 py-0.2 rounded-md text-[10px] font-black ${
                       isActive ? 'bg-white/20 text-white' : 'bg-gray-100 text-gray-500'
                     }`}>
                       {tab.count}
@@ -1048,36 +1051,34 @@ const Profile: React.FC<ProfileProps> = ({ user, onLogout, onSaveSuccess, forceE
 
           {/* Transaction Cards List */}
           {transactionsLoading ? (
-            <div className="space-y-4 animate-pulse">
-              {[1, 2, 3].map((n) => (
-                <div key={n} className="bg-white rounded-3xl p-6 border border-gray-100 shadow-xs flex flex-col md:flex-row gap-4 items-start md:items-center justify-between">
-                  <div className="space-y-2.5 w-full md:w-2/3">
-                    <div className="h-4 bg-slate-200 rounded w-1/4"></div>
-                    <div className="h-5 bg-slate-200 rounded w-3/4"></div>
-                    <div className="h-3 bg-slate-200 rounded w-1/2"></div>
+            <div className="space-y-2.5 animate-pulse">
+              {[1, 2, 3, 4].map((n) => (
+                <div key={n} className="bg-white rounded-2xl p-4 border border-gray-100 shadow-2xs flex items-center justify-between gap-4">
+                  <div className="flex items-center gap-3 w-full sm:w-2/3">
+                    <div className="w-10 h-10 bg-slate-200 rounded-xl shrink-0"></div>
+                    <div className="space-y-2 flex-1">
+                      <div className="h-3.5 bg-slate-200 rounded w-1/3"></div>
+                      <div className="h-4 bg-slate-200 rounded w-2/3"></div>
+                      <div className="h-3 bg-slate-200 rounded w-1/2"></div>
+                    </div>
                   </div>
-                  <div className="h-10 bg-slate-200 rounded-xl w-32 shrink-0"></div>
+                  <div className="h-8 bg-slate-200 rounded-xl w-24 shrink-0"></div>
                 </div>
               ))}
             </div>
           ) : userTransactions.filter(t => selectedTrxCategory === 'all' || t.category === selectedTrxCategory).length === 0 ? (
             /* Empty State */
-            <div className="bg-white rounded-3xl p-8 sm:p-14 text-center border border-gray-100 shadow-sm max-w-md mx-auto my-6">
-              <div className="w-18 h-18 rounded-3xl bg-indigo-50 text-indigo-600 border border-indigo-100 flex items-center justify-center mx-auto mb-5 shadow-xs">
-                <Receipt className="w-9 h-9 stroke-[1.5]" />
+            <div className="bg-white rounded-2xl p-8 text-center border border-gray-100 shadow-2xs max-w-sm mx-auto my-6">
+              <div className="w-12 h-12 rounded-2xl bg-gray-50 text-gray-400 border border-gray-100 flex items-center justify-center mx-auto mb-3">
+                <Receipt className="w-6 h-6 stroke-[1.5]" />
               </div>
-              <h3 className="text-lg font-black text-gray-900 mb-2">
-                Tidak Ada Riwayat Transaksi
+              <h3 className="text-sm font-bold text-gray-900 mb-1">
+                Tidak Ada Transaksi
               </h3>
-              <p className="text-xs sm:text-sm text-gray-500 font-medium leading-relaxed mb-6">
+              <p className="text-xs text-gray-500 font-medium leading-relaxed mb-4">
                 {selectedTrxCategory === 'all'
-                  ? 'Anda belum memiliki riwayat transaksi atau pembayaran apapun.'
-                  : `Belum ada transaksi pada kategori ${
-                      selectedTrxCategory === 'booking' ? 'Sewa Kost Baru' :
-                      selectedTrxCategory === 'extension' ? 'Perpanjangan Sewa' :
-                      selectedTrxCategory === 'facility' ? 'Tagihan Fasilitas Khusus' :
-                      selectedTrxCategory === 'survey' ? 'Jasa Survey Lokasi' : 'Database Kost'
-                    }.`
+                  ? 'Anda belum memiliki riwayat transaksi atau tagihan.'
+                  : `Belum ada riwayat transaksi pada kategori ini.`
                 }
               </p>
               <button
@@ -1086,28 +1087,28 @@ const Profile: React.FC<ProfileProps> = ({ user, onLogout, onSaveSuccess, forceE
                   else if (selectedTrxCategory === 'survey') navigate(Page.SURVEY_SERVICE);
                   else navigate(Page.LISTINGS);
                 }}
-                className="w-full py-3.5 px-6 bg-[#ff7a00] hover:bg-orange-600 text-white rounded-2xl text-xs font-black uppercase tracking-wider transition-all shadow-md shadow-orange-500/20 active:scale-95 cursor-pointer flex items-center justify-center gap-2"
+                className="w-full py-2.5 px-4 bg-[#ff7a00] hover:bg-orange-600 text-white rounded-xl text-xs font-bold transition-all shadow-xs active:scale-95 cursor-pointer flex items-center justify-center gap-1.5"
               >
-                <Sparkles className="w-4 h-4" />
+                <Sparkles className="w-3.5 h-3.5" />
                 <span>
-                  {selectedTrxCategory === 'database' ? 'Lihat Database Kost' :
-                   selectedTrxCategory === 'survey' ? 'Pesan Jasa Survey' : 'Jelajahi Listing Kost'}
+                  {selectedTrxCategory === 'database' ? 'Lihat Database Kontak' :
+                   selectedTrxCategory === 'survey' ? 'Pesan Jasa Survey' : 'Jelajahi Kost'}
                 </span>
               </button>
             </div>
           ) : (
-            <div className="space-y-4">
+            <div className="space-y-2.5">
               {userTransactions
                 .filter(t => selectedTrxCategory === 'all' || t.category === selectedTrxCategory)
                 .map((trx) => (
                   <div
                     key={trx.id}
-                    className="bg-white rounded-3xl p-5 sm:p-6 border border-gray-100 shadow-sm hover:shadow-md transition-shadow flex flex-col lg:flex-row gap-5 lg:items-center justify-between"
+                    className="bg-white rounded-2xl p-3.5 sm:p-4 border border-gray-100 hover:border-gray-200 shadow-2xs hover:shadow-xs transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3"
                   >
-                    {/* Left: Info & Details */}
-                    <div className="flex items-start gap-4 min-w-0 flex-1">
-                      {/* Thumbnail or Category Icon */}
-                      <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-gray-50 border border-gray-100 flex items-center justify-center shrink-0 overflow-hidden shadow-2xs">
+                    {/* Left: Icon & Core Details */}
+                    <div className="flex items-start sm:items-center gap-3 min-w-0 flex-1">
+                      {/* Category Icon / Compact Thumbnail */}
+                      <div className="w-10 h-10 rounded-xl bg-gray-50 border border-gray-100 flex items-center justify-center shrink-0 overflow-hidden text-gray-600">
                         {trx.propertyImage ? (
                           <img
                             src={trx.propertyImage}
@@ -1116,78 +1117,75 @@ const Profile: React.FC<ProfileProps> = ({ user, onLogout, onSaveSuccess, forceE
                             onError={(e) => { e.currentTarget.style.display = 'none'; }}
                           />
                         ) : trx.category === 'database' ? (
-                          <FileText className="w-6 h-6 text-emerald-600" />
+                          <FileText className="w-4 h-4 text-emerald-600" />
                         ) : trx.category === 'survey' ? (
-                          <MapPin className="w-6 h-6 text-purple-600" />
+                          <MapPin className="w-4 h-4 text-purple-600" />
                         ) : trx.category === 'facility' ? (
-                          <Zap className="w-6 h-6 text-amber-600" />
+                          <Zap className="w-4 h-4 text-amber-600" />
                         ) : trx.category === 'extension' ? (
-                          <RotateCcw className="w-6 h-6 text-indigo-600" />
+                          <RotateCcw className="w-4 h-4 text-indigo-600" />
                         ) : (
-                          <Building2 className="w-6 h-6 text-orange-600" />
+                          <Building2 className="w-4 h-4 text-orange-600" />
                         )}
                       </div>
 
-                      {/* Text details */}
+                      {/* Text Description */}
                       <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2 flex-wrap mb-1.5">
-                          <span className="font-mono text-[11px] font-black text-gray-800 bg-gray-100 px-2 py-0.5 rounded-md">
+                        <div className="flex items-center gap-1.5 flex-wrap mb-0.5">
+                          <span className="font-mono text-[10px] font-bold text-gray-700 bg-gray-100 px-1.5 py-0.5 rounded">
                             {trx.invoiceNumber}
                           </span>
-                          <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black border ${trx.categoryBadgeClass}`}>
+                          <span className={`px-2 py-0.2 rounded-full text-[9px] font-bold border ${trx.categoryBadgeClass}`}>
                             {trx.categoryLabel}
                           </span>
-                          <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black border ${trx.statusBadgeClass}`}>
+                          <span className={`px-2 py-0.2 rounded-full text-[9px] font-bold border ${trx.statusBadgeClass}`}>
                             {trx.statusLabel}
                           </span>
                         </div>
 
-                        <h3 className="text-sm sm:text-base font-black text-gray-900 truncate">
+                        <h3 className="text-xs sm:text-sm font-bold text-gray-900 truncate">
                           {trx.title}
                         </h3>
-                        <p className="text-xs text-gray-500 font-medium truncate mt-0.5">
-                          {trx.subtitle}
-                        </p>
-
-                        <div className="flex items-center gap-4 text-[11px] font-semibold text-gray-400 mt-2 flex-wrap">
-                          <div className="flex items-center gap-1">
-                            <Calendar className="w-3.5 h-3.5 text-gray-400" />
-                            <span>
-                              {new Date(trx.createdAt).toLocaleDateString('id-ID', {
-                                day: 'numeric',
-                                month: 'short',
-                                year: 'numeric',
-                                hour: '2-digit',
-                                minute: '2-digit'
-                              })}
-                            </span>
-                          </div>
-                          <div className="flex items-center gap-1">
-                            <CreditCard className="w-3.5 h-3.5 text-gray-400" />
-                            <span>{trx.paymentMethod}</span>
-                          </div>
+                        
+                        <div className="flex items-center gap-2 text-[11px] text-gray-500 font-medium mt-0.5 flex-wrap">
+                          {trx.subtitle && (
+                            <span className="truncate max-w-[200px] text-gray-600">{trx.subtitle}</span>
+                          )}
+                          <span>•</span>
+                          <span>
+                            {new Date(trx.createdAt).toLocaleDateString('id-ID', {
+                              day: 'numeric',
+                              month: 'short',
+                              year: 'numeric'
+                            })}
+                          </span>
+                          {trx.paymentMethod && (
+                            <>
+                              <span>•</span>
+                              <span className="font-semibold text-gray-600">{trx.paymentMethod}</span>
+                            </>
+                          )}
                         </div>
                       </div>
                     </div>
 
-                    {/* Right: Nominal & Action Buttons */}
-                    <div className="flex lg:flex-col items-center lg:items-end justify-between gap-3 pt-3 lg:pt-0 border-t lg:border-t-0 border-gray-50 shrink-0">
-                      <div className="text-left lg:text-right">
-                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Total Nominal</span>
-                        <p className="text-base sm:text-xl font-black text-[#ff7a00]">
+                    {/* Right: Nominal & Action Button */}
+                    <div className="flex sm:flex-col items-center sm:items-end justify-between gap-2 pt-2 sm:pt-0 border-t sm:border-t-0 border-gray-50 shrink-0">
+                      <div className="text-left sm:text-right">
+                        <p className="text-sm sm:text-base font-black text-gray-900">
                           {FORMAT_CURRENCY(trx.amount)}
                         </p>
                       </div>
 
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-1.5">
                         {trx.status === 'PAID' && (
                           <button
                             type="button"
                             onClick={() => handleOpenReceiptFromTransaction(trx)}
-                            className="px-3.5 py-2 rounded-xl bg-gray-900 hover:bg-orange-600 text-white text-xs font-bold transition-colors shadow-2xs active:scale-95 flex items-center gap-1.5 cursor-pointer"
+                            className="px-2.5 py-1.5 rounded-lg bg-gray-900 hover:bg-orange-600 text-white text-[11px] font-bold transition-colors shadow-2xs active:scale-95 flex items-center gap-1 cursor-pointer"
                             title="Buka Kwitansi Resmi"
                           >
-                            <Receipt className="w-3.5 h-3.5" />
+                            <Receipt className="w-3 h-3" />
                             <span>Kwitansi</span>
                           </button>
                         )}
@@ -1196,10 +1194,10 @@ const Profile: React.FC<ProfileProps> = ({ user, onLogout, onSaveSuccess, forceE
                           <button
                             type="button"
                             onClick={() => navigate(`/order-status/${trx.id}`)}
-                            className="px-4 py-2 rounded-xl bg-orange-500 hover:bg-orange-600 text-white text-xs font-bold transition-all shadow-md shadow-orange-500/20 active:scale-95 flex items-center gap-1.5 cursor-pointer"
+                            className="px-3 py-1.5 rounded-lg bg-orange-500 hover:bg-orange-600 text-white text-[11px] font-bold transition-all shadow-2xs active:scale-95 flex items-center gap-1 cursor-pointer"
                           >
-                            <CreditCard className="w-3.5 h-3.5" />
-                            <span>Bayar Sekarang</span>
+                            <CreditCard className="w-3 h-3" />
+                            <span>Bayar</span>
                           </button>
                         )}
 
@@ -1207,9 +1205,9 @@ const Profile: React.FC<ProfileProps> = ({ user, onLogout, onSaveSuccess, forceE
                           <button
                             type="button"
                             onClick={() => navigate(`${Page.MY_BOOKINGS}/aktif`)}
-                            className="px-3.5 py-2 rounded-xl bg-purple-50 hover:bg-purple-100 text-purple-700 text-xs font-bold border border-purple-200 transition-colors active:scale-95 cursor-pointer"
+                            className="px-2.5 py-1.5 rounded-lg bg-purple-50 hover:bg-purple-100 text-purple-700 text-[11px] font-bold border border-purple-200 transition-colors active:scale-95 cursor-pointer"
                           >
-                            <span>Lacak Survey</span>
+                            <span>Lacak</span>
                           </button>
                         )}
 
@@ -1217,9 +1215,9 @@ const Profile: React.FC<ProfileProps> = ({ user, onLogout, onSaveSuccess, forceE
                           <button
                             type="button"
                             onClick={() => navigate(Page.PRODUCTS)}
-                            className="px-3.5 py-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-xs font-bold border border-emerald-200 transition-colors active:scale-95 cursor-pointer"
+                            className="px-2.5 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-[11px] font-bold border border-emerald-200 transition-colors active:scale-95 cursor-pointer"
                           >
-                            <span>Akses Kontak</span>
+                            <span>Kontak</span>
                           </button>
                         )}
                       </div>

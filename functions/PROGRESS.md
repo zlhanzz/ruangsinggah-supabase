@@ -2,6 +2,27 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 346. Penyederhanaan & Redesain Minimalis UI Riwayat Transaksi & Tagihan (`Profile.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna meminta agar tampilan antarmuka (UI/UX) sub-view **"Riwayat Transaksi & Tagihan"** pada menu Profil (`/profile`) dibuat simpel, ringkas, dan minimalis.
+  2. Tampilan sebelumnya menggunakan banner dark-gradient berukuran raksasa (*"segede gaban"*) serta kartu transaksi yang terlalu tebal dan memakan ruang vertikal berlebih di layar smartphone.
+- **Implementasi Solusi**:
+  1. **Minimalist Clean Header**:
+     - Menghapus banner gelap tebal dan menggantinya dengan title bar putih beraksen modern: ikon `Receipt` oranye, judul *"Riwayat Transaksi & Tagihan"*, badge counter total transaksi, dan subtitle pendek yang ringkas.
+     - Menyederhanakan statistik ringkasan menjadi baris *Stat Pills* yang kompak (Pill Status Lunas & Total Pengeluaran) tanpa mendominasi viewport.
+  2. **Filter Tabs Kategori Ramping**:
+     - Mengubah filter kategori menjadi pill horisontal yang lebih tipis dan hemat ruang (`Semua`, `Sewa Kost`, `Perpanjangan`, `Fasilitas`, `Jasa Survey`, `Database Kontak`).
+  3. **Sleek & Compact Transaction Card List**:
+     - Merampingkan kartu transaksi menjadi baris item berukuran pas (`rounded-2xl border border-gray-100 p-3.5 sm:p-4 shadow-2xs`).
+     - Menata detail secara rapi: Ikon kategori modern (`w-10 h-10`), Nomor Invoice Mono kecil, Status Badge mini, Judul Properti/Layanan, tanggal & metode bayar.
+     - Menyediakan tombol aksi yang proporsional (*Kwitansi*, *Bayar*, *Lacak*, *Kontak*) dengan micro-interaction yang responsif.
+- **File Tersentuh**:
+  - `functions/public/pages/Profile.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi build frontend Vite (`functions/public`) lulus 100% (`✓ built in 28.66s`, 0 error).
+
 ### 345. Integrasi Riwayat Transaksi & Tagihan 5 Kategori pada Profile Hub Dashboard (`userService.ts`, `Profile.tsx`, `DigitalReceiptModal.tsx`) (September 2026)
 - **Permintaan & Masalah**:
   1. Pengguna meminta agar opsi **"Riwayat Transaksi & Tagihan"** pada Profile Hub Dashboard (`/profile`) menampilkan seluruh transaksi yang telah dilakukan oleh pengguna secara komprehensif, mencakup 5 kategori:
