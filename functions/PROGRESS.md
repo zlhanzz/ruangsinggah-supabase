@@ -2,6 +2,32 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 373. Perbaikan Alur Pemilihan Kost Terdaftar, Integrasi getOwnerProperties, dan Penanganan Empty State di Tahap 2 (`KostManagerLanding.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna menanyakan mengapa ketika memilih opsi *"Pilih dari Listing Kost Saya"*, sistem malah menampilkan form pendaftaran kost baru manual tanpa ada pilihan kartu kost yang sudah ada (*"dan kenapa kalau opsi yang dipilih adalah mendaftarkan properti dari kost saya, yang terjadi adalah malah tidak ada input untuk memilih kost yang sudah ada untuk didaftarkan ke kostmanager"*).
+  2. **Akar Masalah**:
+     - Ketika akun yang sedang aktif memiliki 0 listing (`userKosts.length === 0`), tombol *"Lanjut ke Data Properti"* di Tahap 1 sebelumnya memiliki *silent fallback* yang diam-diam mengubah pilihan mitra menjadi `isManualInput = true` dan `selectedKostId = 'NEW'`.
+     - Di Tahap 2, tidak ada komponen Empty State untuk kondisi `!isManualInput && userKosts.length === 0`, sehingga user yang memilih opsi pertama mendapati dirinya tiba-tiba berada di formulir baru manual tanpa penjelasan.
+     - Fungsi `loadUserKosts` sebelumnya hanya melakukan query database biasa tanpa memanfaatkan helper `getOwnerProperties`.
+- **Implementasi Solusi**:
+  1. **Integrasi Pemuatan Properti Komprehensif (`getOwnerProperties`)**:
+     - Mengimpor dan memanggil `getOwnerProperties(ownerUid)` di `loadUserKosts` dengan fallback query ganda (`owner_uid.eq.${user.id}` dan `user.uid`) untuk memastikan seluruh data properti mitra termuat 100%.
+  2. **Penghapusan Silent Fallback di Tahap 1**:
+     - Tombol navigasi Tahap 1 kini tetap menghormati pilihan mitra (`isManualInput = false`) secara konsisten.
+  3. **Penyediaan Kartu Empty State yang Informatif di Tahap 2**:
+     - Jika mitra memilih *"Pilih dari Kost Saya"* namun belum memiliki listing terdaftar di akunnya (`userKosts.length === 0`), Tahap 2 kini menampilkan kartu Empty State yang ramah dan jelas:
+       - Pesan informatif bahwa akun belum memiliki listing properti aktif di RuangSinggah.id.
+       - Tombol aksi *"Daftar Kost Baru (Manual)"* untuk beralih ke form baru secara eksplisit.
+       - Tombol aksi *"Ganti Pilihan Metode"* untuk kembali ke Tahap 1.
+  4. **Penyempurnaan Visual Property Selector**:
+     - Jika mitra memiliki listing (`userKosts.length > 0`), grid kartu properti visual ber-thumbnail, banner preview cover beresolusi tinggi, dan formulir konfirmasi data tersinkronisasi ditampilkan secara utuh.
+- **File Tersentuh**:
+  - `functions/public/pages/KostManagerLanding.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi build frontend Vite (`cmd /c npm run build`) lulus 100% (`✓ 2511 modules transformed, built in 40.59s`, 0 error).
+
 ### 372. Penyelarasan Posisi Modal Pendaftaran KostManager Menjadi Rata Tengah Simetris (Center Alignment) (`KostManagerLanding.tsx`) (September 2026)
 - **Permintaan & Masalah**:
   1. Pengguna menanyakan mengapa modal pendaftaran KostManager pada perangkat mobile berada di posisi rata bawah (*bottom-sheet*) dan meminta agar posisinya diubah menjadi tepat di tengah layar (*"kenapa tampilannya tidak ke tengah sih, kanapa form nya malah rata bawah. buat jadi centre"*).
