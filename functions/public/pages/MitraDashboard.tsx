@@ -918,6 +918,97 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
         }
     };
 
+    const renderKostManagerBanner = () => {
+        const hasKmActive = isKostManager || properties.some((p: any) => p.isManaged || p.is_managed || p.managed_by === 'kostmanager') || kmRequests.length > 0;
+
+        if (hasKmActive) {
+            return (
+                <div className="bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 rounded-3xl p-5 lg:p-6 relative overflow-hidden shadow-md border border-emerald-500/20 text-white">
+                    <div className="absolute top-0 right-0 w-32 h-32 bg-white rounded-full mix-blend-overlay filter blur-2xl opacity-10 -translate-y-1/2 translate-x-1/2 pointer-events-none"></div>
+                    <div className="relative z-10 flex flex-col md:flex-row gap-4 items-center justify-between">
+                        <div className="text-left flex-1">
+                            <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 bg-white/20 rounded-full mb-2 shadow-sm backdrop-blur-sm">
+                                <Sparkles size={11} className="text-amber-300 animate-pulse" fill="currentColor" />
+                                <span className="text-[9px] font-black uppercase tracking-widest text-amber-200">KostManager Auto-Pilot Aktif</span>
+                            </div>
+                            <h3 className="text-base lg:text-lg font-black tracking-tight leading-tight">
+                                Properti Anda Dikelola Penuh oleh RuangSinggah
+                            </h3>
+                            <p className="text-xs text-emerald-100 leading-relaxed max-w-2xl mt-1 font-medium font-sans">
+                                Status kamar, foto terverifikasi, dan promosi dikelola secara profesional. Pantau okupansi kamar dan ajukan request kapan saja.
+                            </p>
+                        </div>
+                        <div className="flex gap-2 w-full md:w-auto">
+                            <button
+                                onClick={() => handleMenuChange('properties')}
+                                className="bg-white hover:bg-emerald-50 text-emerald-800 px-5 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-widest transition-transform active:scale-95 shadow-md shrink-0 flex items-center justify-center gap-1.5 w-full md:w-auto cursor-pointer"
+                            >
+                                <Eye size={14} /> Pantau Properti
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        // ── BANNER PROMOSI KOSTMANAGER (SELALU TAMPIL UNTUK MITRA BIASA / REGULER) ──
+        return (
+            <div className="bg-gradient-to-r from-orange-600 via-amber-600 to-rose-600 rounded-3xl p-5 lg:p-7 relative overflow-hidden shadow-lg shadow-orange-500/10 border border-orange-400/30 text-white animate-in fade-in duration-500">
+                {/* Decorative Glow Orbs */}
+                <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full blur-3xl pointer-events-none -mr-10 -mt-10"></div>
+                <div className="absolute bottom-0 left-1/3 w-48 h-48 bg-amber-400/10 rounded-full blur-2xl pointer-events-none"></div>
+
+                <div className="relative z-10 flex flex-col lg:flex-row gap-6 items-start lg:items-center justify-between">
+                    <div className="text-left flex-1">
+                        <div className="inline-flex items-center gap-2 px-3 py-1 bg-white/20 rounded-full mb-3 shadow-sm backdrop-blur-md border border-white/20">
+                            <Sparkles size={12} className="text-amber-300 animate-pulse" />
+                            <span className="text-[10px] font-black uppercase tracking-widest text-amber-200">
+                                🏢 Solusi Auto-Pilot • KostManager RuangSinggah
+                            </span>
+                        </div>
+                        <h3 className="text-lg sm:text-xl lg:text-2xl font-black tracking-tight leading-snug text-white">
+                            Capek Kelola Kost Sendiri? Serahkan Operasional ke KostManager!
+                        </h3>
+                        <p className="text-xs sm:text-sm text-orange-100/90 leading-relaxed max-w-2xl mt-1.5 font-medium">
+                            Terima beres tanpa repot! Tim profesional RuangSinggah siap mengelola penagihan sewa otomatis via WhatsApp, pemasaran prioritas, penanganan hunian, hingga rekap finansial bulanan transparan.
+                        </p>
+
+                        {/* Feature Highlights Quick-Pills */}
+                        <div className="flex flex-wrap gap-2 mt-4">
+                            <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-black/15 backdrop-blur-sm rounded-xl text-[10px] sm:text-[11px] font-bold text-white border border-white/10">
+                                <ShieldCheck size={13} className="text-amber-300" />
+                                <span>Operasional Terima Beres</span>
+                            </div>
+                            <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-black/15 backdrop-blur-sm rounded-xl text-[10px] sm:text-[11px] font-bold text-white border border-white/10">
+                                <Zap size={13} className="text-amber-300" />
+                                <span>Tagihan WA Otomatis</span>
+                            </div>
+                            <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-black/15 backdrop-blur-sm rounded-xl text-[10px] sm:text-[11px] font-bold text-white border border-white/10">
+                                <TrendingUp size={13} className="text-amber-300" />
+                                <span>Pemasaran Prioritas</span>
+                            </div>
+                            <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-black/15 backdrop-blur-sm rounded-xl text-[10px] sm:text-[11px] font-bold text-white border border-white/10">
+                                <FileText size={13} className="text-amber-300" />
+                                <span>Laporan Keuangan Bulanan</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* CTA Button */}
+                    <div className="w-full lg:w-auto flex flex-col sm:flex-row items-center gap-3 shrink-0 pt-2 lg:pt-0">
+                        <button
+                            onClick={() => handlePromoNavigate(Page.KOSTMANAGER)}
+                            className="w-full sm:w-auto bg-white hover:bg-orange-50 active:scale-95 text-orange-700 hover:text-orange-800 font-black px-6 py-3.5 rounded-2xl text-xs uppercase tracking-widest transition-all shadow-xl shadow-orange-950/20 flex items-center justify-center gap-2 group cursor-pointer"
+                        >
+                            <span>Pelajari & Ajukan Sekarang</span>
+                            <ArrowRight size={15} className="group-hover:translate-x-1 transition-transform text-orange-600" />
+                        </button>
+                    </div>
+                </div>
+            </div>
+        );
+    };
+
     const handleQuickUpdateRooms = async (kostId: string, newAvailableCount: number, roomTypeIndex: number = 0) => {
         const targetKost = properties.find(p => p.id === kostId);
         if (!targetKost) return;
@@ -1176,42 +1267,8 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                                 </div>
                             )}
 
-                            {/* KostManager Status / Upsell Banner */}
-                            {(() => {
-                                const hasKmActive = properties.some(p => p.isManaged) || kmRequests.length > 0;
-
-                                if (hasKmActive) {
-                                    return (
-                                        <div className="bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 rounded-3xl p-5 lg:p-6 relative overflow-hidden shadow-md border border-emerald-500/20 text-white">
-                                            <div className="absolute top-0 right-0 w-32 h-32 bg-white rounded-full mix-blend-overlay filter blur-2xl opacity-10 -translate-y-1/2 translate-x-1/2 pointer-events-none"></div>
-                                            <div className="relative z-10 flex flex-col md:flex-row gap-4 items-center justify-between">
-                                                <div className="text-left flex-1">
-                                                    <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 bg-white/20 rounded-full mb-2 shadow-sm backdrop-blur-sm">
-                                                        <Sparkles size={11} className="text-amber-300 animate-pulse" fill="currentColor" />
-                                                        <span className="text-[9px] font-black uppercase tracking-widest text-amber-200">KostManager Auto-Pilot Aktif</span>
-                                                    </div>
-                                                    <h3 className="text-base lg:text-lg font-black tracking-tight leading-tight">
-                                                        Properti Anda Dikelola Penuh oleh RuangSinggah
-                                                    </h3>
-                                                    <p className="text-xs text-emerald-100 leading-relaxed max-w-2xl mt-1 font-medium font-sans">
-                                                        Status kamar, foto terverifikasi, dan promosi dikelola secara profesional. Pantau okupansi kamar dan ajukan request kapan saja.
-                                                    </p>
-                                                </div>
-                                                <div className="flex gap-2 w-full md:w-auto">
-                                                    <button
-                                                        onClick={() => handleMenuChange('properties')}
-                                                        className="bg-white hover:bg-emerald-50 text-emerald-800 px-5 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-widest transition-transform active:scale-95 shadow-md shrink-0 flex items-center justify-center gap-1.5 w-full md:w-auto"
-                                                    >
-                                                        <Eye size={14} /> Pantau Properti
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    );
-                                }
-
-                                return null;
-                            })()}
+                            {/* KostManager Status / Promo Upsell Banner */}
+                            {renderKostManagerBanner()}
 
                             {/* ── ALUR PEMILIK KOST (TIMELINE) & PANDUAN MULAI CEPAT ── */}
                             {(() => {
@@ -1558,34 +1615,8 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                     {/* KOST SAYA */}
                     {activeMenu === 'properties' && (
                         <div className="space-y-6 animate-in fade-in duration-300">
-                            {/* KostManager Status / Upsell Banner */}
-                            {(() => {
-                                const hasKmActive = properties.some(p => p.isManaged) || kmRequests.length > 0;
-
-                                if (hasKmActive) {
-                                    return (
-                                        <div className="bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 rounded-3xl p-5 lg:p-6 relative overflow-hidden shadow-md border border-emerald-500/20 text-white">
-                                            <div className="absolute top-0 right-0 w-32 h-32 bg-white rounded-full mix-blend-overlay filter blur-2xl opacity-10 -translate-y-1/2 translate-x-1/2 pointer-events-none"></div>
-                                            <div className="relative z-10 flex flex-col md:flex-row gap-4 items-center justify-between">
-                                                <div className="text-left flex-1">
-                                                    <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 bg-white/20 rounded-full mb-2 shadow-sm backdrop-blur-sm">
-                                                        <Sparkles size={11} className="text-amber-300 animate-pulse" fill="currentColor" />
-                                                        <span className="text-[9px] font-black uppercase tracking-widest text-amber-200">KostManager Auto-Pilot Aktif</span>
-                                                    </div>
-                                                    <h3 className="text-base lg:text-lg font-black tracking-tight leading-tight">
-                                                        Properti Anda Dikelola Penuh oleh RuangSinggah
-                                                    </h3>
-                                                    <p className="text-xs text-emerald-100 leading-relaxed max-w-2xl mt-1 font-medium font-sans">
-                                                        Status kamar, foto terverifikasi, dan promosi dikelola secara profesional. Pantau okupansi kamar dan ajukan request kapan saja.
-                                                    </p>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    );
-                                }
-
-                                return null;
-                            })()}
+                            {/* KostManager Status / Promo Upsell Banner */}
+                            {renderKostManagerBanner()}
 
                             {(() => {
                                 const publishedCount = properties.filter(p => p.status === 'published').length;

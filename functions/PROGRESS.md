@@ -2,6 +2,33 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 361. Penayangan Banner Promosi KostManager pada Mitra Biasa di Menu "Kost Saya" dan Beranda Dashboard (`MitraDashboard.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna meminta agar banner promosi KostManager selalu ditampilkan pada antarmuka Dashboard Mitra ketika status kost/mitra masih mitra biasa (*Self-Listing* reguler), khususnya di:
+     - Menu **Kost Saya** (`activeMenu === 'properties'`).
+     - Saat pertama kali buka **Dashboard** / Beranda (`activeMenu === 'overview'`).
+  2. Sebelumnya, jika mitra belum berlangganan atau belum berstatus KostManager (`!isKostManager && !hasKmActive`), container banner mengembalikan nilai `null` sehingga tidak ada banner informasi/upsell layanan KostManager yang muncul.
+- **Implementasi Solusi**:
+  1. **Komponen Helper Terpadu `renderKostManagerBanner` di `MitraDashboard.tsx`**:
+     - Membangun banner promosi KostManager yang responsif, elegan, dan berkonversi tinggi dengan gradasi modern (`bg-gradient-to-r from-orange-600 via-amber-600 to-rose-600`), efek *soft glow blur orbs*, dan ikon vector murni dari `lucide-react`.
+     - Menampilkan badge layanan: `🏢 Solusi Auto-Pilot • KostManager RuangSinggah`.
+     - Menampilkan judul menarik: *"Capek Kelola Kost Sendiri? Serahkan Operasional ke KostManager!"*.
+     - Menampilkan deskripsi manfaat: *"Terima beres tanpa repot! Tim profesional RuangSinggah siap mengelola penagihan sewa otomatis via WhatsApp, pemasaran prioritas, penanganan hunian, hingga rekap finansial bulanan transparan."*.
+     - Menyediakan 4 quick-pill keunggulan: *Operasional Terima Beres*, *Tagihan WA Otomatis*, *Pemasaran Prioritas*, *Laporan Keuangan Bulanan*.
+     - Menyediakan tombol CTA interaktif: *"Pelajari & Ajukan Sekarang"* yang memanggil `handlePromoNavigate(Page.KOSTMANAGER)` menuju halaman layanan KostManager.
+  2. **Integrasi Permanen pada Tab "Kost Saya" (`activeMenu === 'properties'`)**:
+     - Menampilkan banner promosi di atas daftar properti dan tombol tambah kost jika mitra belum berstatus KostManager.
+  3. **Integrasi Permanen pada Tab "Beranda" (`activeMenu === 'overview'`)**:
+     - Menampilkan banner promosi di bagian atas halaman beranda dashboard saat pertama kali login/buka dashboard.
+  4. **Kompatibilitas dengan Mitra KostManager Aktif**:
+     - Jika mitra sudah berstatus KostManager aktif (`isKostManager || hasKmActive`), sistem tetap menampilkan banner emerald *"KostManager Auto-Pilot Aktif"* dengan tombol pantau properti.
+- **File Tersentuh**:
+  - `functions/public/pages/MitraDashboard.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi build frontend Vite (`cmd /c npm run build` di `functions/public`) lulus 100% (`✓ 2511 modules transformed, built in 28.27s`, 0 error).
+
 ### 360. Perbaikan Pelacakan Views, Tren Kunjungan 7 Hari, CTR, dan Statistik Performa Kost Mitra (`userService.ts`, `MitraDashboard.tsx`, `supabase_schema.sql`, `increment-property-view`) (September 2026)
 - **Permintaan & Masalah**:
   1. Pada Dashboard Mitra (`MitraDashboard.tsx`), metrik statistik terkait performa listing (*Total Kunjungan / Views*, *CTR*, *Grafik Tren Kunjungan 7 Hari*, dan daftar *Performa Kost*) selalu bernilai 0 atau tidak bekerja dengan baik.
