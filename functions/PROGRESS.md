@@ -2,6 +2,20 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 342. Pembersihan Header Kecil (Top Bar Title) pada Halaman Profile Hub Dashboard (`Profile.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna meminta agar header kecil (logo *RuangSinggah.id* dan tombol icon lonceng & bantuan di bagian atas kartu profil) di halaman `/profile` dihapus.
+- **Implementasi Solusi**:
+  1. **Pembersihan Elemen Top Bar (`Profile.tsx`)**:
+     - Menghapus blok JSX header top bar kecil di atas kartu profil pada tampilan `viewMode === 'hub'`.
+     - Tampilan menu profil kini langsung menyajikan **Main Profile Card** secara bersih, rapi, dan proporsional.
+- **File Tersentuh**:
+  - `functions/public/pages/Profile.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi build frontend Vite (`functions/public`) lulus 100% (`✓ built in 33.40s`, 0 error).
+
 ### 341. Penyelarasan Akses Menu Pusat Bantuan pada Footer & Profile Hub serta Pemulihan Desain Klasik Halaman Kontak (`Footer.tsx`, `Profile.tsx`, `Contact.tsx`) (September 2026)
 - **Permintaan & Masalah**:
   1. Pengguna meminta keselarasan akses: menu *"Pusat Bantuan"* di footer dan tombol *"Pusat Bantuan 24/7"* di menu Profil (`/profile`) mengarah ke halaman yang sama persis.

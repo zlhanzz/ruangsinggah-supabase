@@ -424,32 +424,6 @@ const Profile: React.FC<ProfileProps> = ({ user, onLogout, onSaveSuccess, forceE
       {viewMode === 'hub' ? (
         <div className="max-w-md lg:max-w-xl mx-auto px-4 sm:px-6">
           
-          {/* TOP BAR HEADER (Mobile/Desktop Title) */}
-          <div className="flex items-center justify-between mb-5">
-            <div className="flex items-center gap-2">
-              <img src="/logo.png" alt="RuangSinggah" className="h-8 w-auto" />
-              <span className="font-extrabold text-lg text-gray-900 tracking-tight">
-                RuangSinggah<span className="text-[#ff7a00]">.id</span>
-              </span>
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setIsNotifModalOpen(true)}
-                className="w-9 h-9 rounded-full bg-white border border-gray-200 text-gray-600 hover:text-orange-500 hover:border-orange-200 flex items-center justify-center transition-all shadow-2xs active:scale-95 cursor-pointer"
-                title="Preferensi Notifikasi"
-              >
-                <Bell className="w-4 h-4" />
-              </button>
-              <button
-                onClick={() => window.open('https://wa.me/6281527080656?text=Halo%20Tim%20Bantuan%20RuangSinggah%2C%20saya%20butuh%20informasi...', '_blank')}
-                className="w-9 h-9 rounded-full bg-white border border-gray-200 text-gray-600 hover:text-orange-500 hover:border-orange-200 flex items-center justify-center transition-all shadow-2xs active:scale-95 cursor-pointer"
-                title="Bantuan 24/7"
-              >
-                <HelpCircle className="w-4 h-4" />
-              </button>
-            </div>
-          </div>
-
           {/* MAIN PROFILE CARD */}
           <div className="bg-gradient-to-b from-orange-50/40 via-white to-white rounded-3xl p-5 sm:p-6 border border-orange-100 shadow-sm mb-6">
             <div className="flex items-center gap-4">
