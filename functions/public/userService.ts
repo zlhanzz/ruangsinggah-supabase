@@ -129,17 +129,160 @@ export interface PropertyFilterParams {
   limit?: number;
 }
 
+/**
+ * Helper komprehensif untuk mengurutkan foto properti:
+ * Prioritas 1 (Index 0): Foto Kamar dari Tipe Kamar Termahal (Cover Utama Katalog).
+ * Prioritas 2 (Index 1..n): Foto Kamar dari Tipe-Tipe Kamar Berikutnya.
+ * Prioritas 3 (Index n+1..dst): Foto Area Publik (Bangunan Depan, Koridor, Parkir, Dapur, dll).
+ * 
+ * Mendukung pencarian foto dari:
+ * - Nested images di room_types[i].images (KostManager)
+ * - photosMeta / photos_meta (dengan label/category 'Kamar: [Nama Tipe]' atau 'Kamar Tidur')
+ * - categorizedPhotos (map kategori)
+ * - photoCategories (array kategori)
+ * - Elemen imageUrls bertipe object dengan label/category/caption
+ */
+export function sortPropertyImagesWithRoomCover(
+  images: any[], 
+  roomTypes: any[] = [],
+  photoCategories: string[] = [],
+  categorizedPhotos: Record<string, string[]> = {},
+  photosMeta: any[] = []
+): any[] {
+  if (!images || images.length <= 1) return images || [];
+
+  const getRoomPrice = (r: any) => {
+    if (Array.isArray(r.pricing) && r.pricing.length > 0) {
+      const bulanan = r.pricing.find((p: any) => p.period === 'bulanan');
+      if (bulanan && Number(bulanan.price) > 0) return Number(bulanan.price);
+      const maxP = Math.max(...r.pricing.map((p: any) => Number(p.price || 0)));
+      if (maxP > 0) return maxP;
+    }
+    return Number(r.price || 0);
+  };
+
+  const sortedRooms = [...(roomTypes || [])].sort((a, b) => getRoomPrice(b) - getRoomPrice(a));
+
+  // Helper untuk mencari kategori/label dari suatu item foto
+  const findCategory = (img: any, idx: number): string => {
+    // 1. Dari properti objek langsung (img.category / img.label / img.caption)
+    if (img && typeof img === 'object') {
+      const direct = img.category || img.label || img.caption;
+      if (direct) return String(direct).trim();
+    }
+
+    const url = typeof img === 'string' ? img : (img?.url || img?.original || img?.webp || '');
+
+    // 2. Dari photosMeta pada index yang sama atau pencocokan URL
+    if (photosMeta && photosMeta.length > 0) {
+      if (photosMeta[idx] && (photosMeta[idx].category || photosMeta[idx].label)) {
+        return (photosMeta[idx].category || photosMeta[idx].label || '').trim();
+      }
+      if (url) {
+        const matchedMeta = photosMeta.find(pm => {
+          const pmUrl = typeof pm === 'string' ? pm : (pm?.url || pm?.original || pm?.webp || '');
+          return pmUrl === url || (url && pmUrl && (url.includes(pmUrl) || pmUrl.includes(url)));
+        });
+        if (matchedMeta && (matchedMeta.category || matchedMeta.label)) {
+          return (matchedMeta.category || matchedMeta.label || '').trim();
+        }
+      }
+    }
+
+    // 3. Dari photoCategories array
+    if (Array.isArray(photoCategories) && photoCategories[idx]) {
+      return String(photoCategories[idx]).trim();
+    }
+
+    // 4. Dari categorizedPhotos map
+    if (categorizedPhotos && typeof categorizedPhotos === 'object' && url) {
+      for (const [catName, urls] of Object.entries(categorizedPhotos)) {
+        if (Array.isArray(urls)) {
+          const matched = urls.some((u: any) => {
+            const strU = typeof u === 'string' ? u : (u?.url || u?.original || u?.webp || '');
+            return strU === url || (url && strU && (strU.includes(url) || url.includes(strU)));
+          });
+          if (matched) return catName.trim();
+        }
+      }
+    }
+
+    return '';
+  };
+
+  const getScore = (img: any, idx: number): number => {
+    const rawCat = findCategory(img, idx);
+    const catLower = rawCat.trim().toLowerCase();
+    const url = typeof img === 'string' ? img : (img?.url || img?.original || img?.webp || '');
+
+    // Cek kecocokan langsung dengan tipe kamar dari harga termahal ke termurah
+    for (let rIdx = 0; rIdx < sortedRooms.length; rIdx++) {
+      const rm = sortedRooms[rIdx];
+      const rName = (rm.name || rm.type || rm.roomTypeName || `Tipe Kamar ${rIdx + 1}`).trim().toLowerCase();
+
+      // Cek apakah ada di nested images kamar ini (KostManager / nested)
+      const rmImgs = Array.isArray(rm.images) ? rm.images : [];
+      if (url && rmImgs.some((rImg: any) => {
+        const u = typeof rImg === 'string' ? rImg : (rImg?.url || rImg?.original || rImg?.webp || '');
+        return u && (u === url || u.includes(url) || url.includes(u));
+      })) {
+        return 5 + (rIdx * 10);
+      }
+
+      // Kecocokan kategori: e.g. "Kamar: Standard", "Kamar: Tipe A", "Kamar: VIP"
+      if (catLower === `kamar: ${rName}` || (catLower.startsWith('kamar:') && catLower.includes(rName))) {
+        return 10 + (rIdx * 10);
+      }
+      if (catLower.includes(rName) && !catLower.includes('kamar mandi') && !catLower.includes('dapur')) {
+        return 12 + (rIdx * 10);
+      }
+      if (catLower.includes(rName) && (catLower.includes('kamar mandi') || catLower.includes('km dalam') || catLower.includes('dapur dalam'))) {
+        return 15 + (rIdx * 10);
+      }
+    }
+
+    // Kategori kamar umum
+    if (catLower === 'kamar tidur' || catLower === 'kamar' || catLower.startsWith('kamar:')) return 40;
+    if (catLower.includes('kamar') && !catLower.includes('kamar mandi') && !catLower.includes('lingkungan')) return 45;
+    if (catLower.includes('kamar mandi') || catLower.includes('km dalam')) return 60;
+
+    // Area publik / eksterior
+    if (catLower === 'bangunan depan' || catLower === 'tampak depan' || catLower === 'fasad') return 100;
+    if (catLower === 'koridor') return 105;
+    if (catLower === 'area parkir' || catLower === 'parkir') return 110;
+    if (catLower === 'dapur bersama' || catLower === 'dapur') return 115;
+    if (catLower === 'ruang tamu') return 120;
+    if (catLower === 'wc umum') return 125;
+    if (catLower === 'lingkungan') return 130;
+    if (catLower === 'fasilitas lainnya') return 140;
+
+    return 200;
+  };
+
+  return images
+    .map((img, idx) => ({ img, score: getScore(img, idx), originalIndex: idx }))
+    .sort((a, b) => a.score !== b.score ? a.score - b.score : a.originalIndex - b.originalIndex)
+    .map(item => item.img);
+}
+
 export function transformPropertyRow(row: any): Kost {
   const rawImages = row.image_urls || [];
-  let images = rawImages.map(getDisplayImageUrl).filter((u: string) => u !== '');
-  const photosMeta = (row.metadata?.photos_meta || rawImages).map(getDisplayImageObject).filter(Boolean) as ImageUrlObject[];
-
   const rawVideos = row.video_urls || [];
   const videos = rawVideos.map(getDisplayVideoUrl).filter((u: string) => u !== '');
-
   const roomTypes = row.room_types || [];
 
-  // Prioritaskan foto kamar dari tipe kamar berharga termahal di Index 0 (Cover Preview Utama)
+  const rawPhotoCategories = row.photo_categories || row.photoCategories || (row.metadata && (row.metadata.photo_categories || row.metadata.photoCategories)) || [];
+  const rawCategorizedPhotos = row.categorized_photos || row.categorizedPhotos || (row.metadata && (row.metadata.categorized_photos || row.metadata.categorizedPhotos)) || {};
+  const rawPhotosMeta = (row.metadata?.photos_meta || rawImages).map(getDisplayImageObject).filter(Boolean) as ImageUrlObject[];
+
+  // 1. Urutkan rawImages dan rawPhotosMeta secara komprehensif (Foto Kamar Termahal di Index 0)
+  const sortedRawImages = sortPropertyImagesWithRoomCover(rawImages, roomTypes, rawPhotoCategories, rawCategorizedPhotos, rawPhotosMeta);
+  const sortedPhotosMeta = sortPropertyImagesWithRoomCover(rawPhotosMeta, roomTypes, rawPhotoCategories, rawCategorizedPhotos, rawPhotosMeta);
+
+  let images = sortedRawImages.map(getDisplayImageUrl).filter((u: string) => u !== '');
+  const photosMeta = sortedPhotosMeta.map(getDisplayImageObject).filter(Boolean) as ImageUrlObject[];
+
+  // 2. Fallback ekstra untuk KostManager jika tipe kamar termahal memiliki foto yang belum ada di images
   if (roomTypes.length > 0) {
     const getRoomPrice = (r: any) => {
       if (Array.isArray(r.pricing) && r.pricing.length > 0) {
@@ -152,27 +295,26 @@ export function transformPropertyRow(row: any): Kost {
     };
 
     const sortedRooms = [...roomTypes].sort((a, b) => getRoomPrice(b) - getRoomPrice(a));
-
-    let bestRoomPhotoUrl = '';
+    let bestNestedRoomPhotoUrl = '';
     for (const rm of sortedRooms) {
       const rmImgs = Array.isArray(rm.images) ? rm.images : [];
       for (const rImg of rmImgs) {
         const displayUrl = getDisplayImageUrl(rImg);
         if (displayUrl) {
-          bestRoomPhotoUrl = displayUrl;
+          bestNestedRoomPhotoUrl = displayUrl;
           break;
         }
       }
-      if (bestRoomPhotoUrl) break;
+      if (bestNestedRoomPhotoUrl) break;
     }
 
-    if (bestRoomPhotoUrl) {
-      const existingIdx = images.findIndex(u => u === bestRoomPhotoUrl || u.includes(bestRoomPhotoUrl) || bestRoomPhotoUrl.includes(u));
+    if (bestNestedRoomPhotoUrl) {
+      const existingIdx = images.findIndex(u => u === bestNestedRoomPhotoUrl || u.includes(bestNestedRoomPhotoUrl) || bestNestedRoomPhotoUrl.includes(u));
       if (existingIdx > 0) {
         const [moved] = images.splice(existingIdx, 1);
         images.unshift(moved);
       } else if (existingIdx === -1) {
-        images.unshift(bestRoomPhotoUrl);
+        images.unshift(bestNestedRoomPhotoUrl);
       }
     }
   }
@@ -213,8 +355,8 @@ export function transformPropertyRow(row: any): Kost {
     omnichannelContactName: row.omnichannel_contact_name,
     omnichannelContactPhone: row.omnichannel_contact_phone,
     omnichannelContactType: row.omnichannel_contact_type,
-    photoCategories: row.photo_categories || row.photoCategories || (row.metadata && (row.metadata.photo_categories || row.metadata.photoCategories)) || [],
-    categorizedPhotos: row.categorized_photos || row.categorizedPhotos || (row.metadata && (row.metadata.categorized_photos || row.metadata.categorizedPhotos)) || {},
+    photoCategories: rawPhotoCategories,
+    categorizedPhotos: rawCategorizedPhotos,
   } as Kost;
 }
 

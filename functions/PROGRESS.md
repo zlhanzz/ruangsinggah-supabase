@@ -2,6 +2,26 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 354. Penyesuaian Otomatis Cover Thumbnail Foto Kamar Termahal untuk Seluruh Listing Lama & Baru tanpa Perlu Edit Manual (`userService.ts`, `adminService.ts`) (September 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna menanyakan apakah untuk listing yang sudah ada sebelumnya (seperti pada screenshot di mana "KOST" dan "KOST APALAH DAYA" masih menampilkan foto Bangunan Depan) harus dilakukan pengeditan manual satu per satu, ataukah bisa berubah dan tersesuaikan secara otomatis karena seluruh foto sudah terdata dan dikelompokkan sudut/kategorinya di database.
+  2. Ditemukan akar masalah di mana transformer data `transformPropertyRow` sebelumnya hanya mengecek properti `rm.images` (format khusus KostManager), dan belum memeriksa metadata `photos_meta`, `categorized_photos`, `photo_categories`, dan objek `image_urls` yang digunakan oleh listing Mitra biasa dan listing lama.
+- **Implementasi Solusi**:
+  1. **Algoritma Sorting Komprehensif Multi-Sumber (`userService.ts`)**:
+     - Mengembangkan fungsi `sortPropertyImagesWithRoomCover(images, roomTypes, photoCategories, categorizedPhotos, photosMeta)` yang mengekstrak metadata foto dari 5 sumber data sekaligus.
+     - Melakukan scoring cerdas yang mengidentifikasi foto interior kamar dari tipe kamar dengan harga tarif tertinggi (termahal) dan menempatkannya pada Index 0 (`imageUrls[0]` / `photosMeta[0]`).
+     - Mengurutkan foto kamar lainnya di urutan berikutnya, diikuti oleh foto-foto area publik (Bangunan Depan, Koridor, Parkir, Dapur Bersama, dll.).
+  2. **Integrasi Data Transformer Otomatis (`userService.ts` & `adminService.ts`)**:
+     - Mengintegrasikan `sortPropertyImagesWithRoomCover` ke dalam `transformPropertyRow` di `userService.ts` dan `getProperties`, `addPropertyWithMedia`, `updatePropertyWithMedia` di `adminService.ts`.
+     - Seluruh listing (lama maupun baru, Mitra biasa maupun KostManager) kini secara **100% otomatis** menampilkan foto kamar dari tipe termahal sebagai cover preview utama saat dimuat di katalog pencarian, dashboard, maupun halaman detail tanpa memerlukan edit manual sama sekali.
+- **File Tersentuh**:
+  - `functions/public/userService.ts`
+  - `functions/public/adminService.ts`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi build frontend Vite (`cmd /c npm run build` di `functions/public`) lulus 100% (`✓ 2511 modules transformed, built in 24.97s`, 0 error).
+
 ### 353. Penataan Foto Cover Preview Listing Properti: Prioritas Foto Kamar dari Tipe Kamar Termahal (`KostFormMitra.tsx`, `KostManagerPropertyFormModal.tsx`, `AgentDashboard.tsx`, `adminService.ts`, `userService.ts`) (September 2026)
 - **Permintaan & Masalah**:
   1. Pengguna menemukan bahwa saat properti dilisting, foto cover preview yang tampil di katalog pencarian dan dashboard adalah tampak bangunan depan (fasad) kost.

@@ -1,7 +1,8 @@
 import { supabase } from './supabase';
 import { Kost, DatabaseProduct, ImageUrlObject, VideoUrlObject, SurveyRequest, Banner, KostManagerPackage, MitraPromoPopupSetting, KostManagerFeeSettings, KostManagerFeeLogEntry } from './types';
 import { notifyAdminStatusUpdate, sendMitraPublishedEmailBrevoDirect } from './emailService';
-import { ensureAbsoluteUrl, getDisplayImageUrl, getDisplayImageObject } from './userService';
+import { ensureAbsoluteUrl, getDisplayImageUrl, getDisplayImageObject, sortPropertyImagesWithRoomCover } from './userService';
+export { sortPropertyImagesWithRoomCover };
 import { getCurrentDate } from './utils/timeUtils';
 
 // ---- TYPE DEF ----
@@ -392,16 +393,20 @@ export async function getAdminProperties(ownerUid?: string): Promise<BasicProper
 
   return data.map((row) => {
     const rawImages = row.image_urls || [];
-    const images: string[] = rawImages.map(getDisplayImageUrl).filter((u: string) => u !== '');
-    const photosMeta = (row.metadata?.photos_meta || rawImages).map(getDisplayImageObject).filter(Boolean) as ImageUrlObject[];
+    const photoCategories = row.photo_categories || row.photoCategories || (row.metadata && (row.metadata.photo_categories || row.metadata.photoCategories)) || [];
+    const categorizedPhotos = row.categorized_photos || row.categorizedPhotos || (row.metadata && (row.metadata.categorized_photos || row.metadata.categorizedPhotos)) || {};
+    const rawPhotosMeta = (row.metadata?.photos_meta || rawImages).map(getDisplayImageObject).filter(Boolean) as ImageUrlObject[];
+
+    const sortedRawImages = sortPropertyImagesWithRoomCover(rawImages, row.room_types || [], photoCategories, categorizedPhotos, rawPhotosMeta);
+    const sortedPhotosMeta = sortPropertyImagesWithRoomCover(rawPhotosMeta, row.room_types || [], photoCategories, categorizedPhotos, rawPhotosMeta);
+
+    const images: string[] = sortedRawImages.map(getDisplayImageUrl).filter((u: string) => u !== '');
+    const photosMeta = sortedPhotosMeta.map(getDisplayImageObject).filter(Boolean) as ImageUrlObject[];
 
     const rawVideos = row.video_urls || [];
     const videos: string[] = rawVideos.map((vid: any) =>
       typeof vid === 'string' ? vid : (vid.original || '')
     ).filter((u: string) => u !== '');
-
-    const photoCategories = row.photo_categories || row.photoCategories || (row.metadata && (row.metadata.photo_categories || row.metadata.photoCategories)) || [];
-    const categorizedPhotos = row.categorized_photos || row.categorizedPhotos || (row.metadata && (row.metadata.categorized_photos || row.metadata.categorizedPhotos)) || {};
 
     const ownerData = Array.isArray(row.users) ? row.users[0] : row.users;
     const isSystemId = ['super_admin_id', 'admin-system-id'].includes(row.owner_uid?.toLowerCase());
@@ -2007,51 +2012,6 @@ export async function deleteResidentStatus(residentId: string): Promise<void> {
   triggerCrossTabRefresh();
 }
 
-// Helper untuk mengurutkan foto properti dengan foto kamar dari tipe termahal di Index 0 (Cover Utama)
-export function sortPropertyImagesWithRoomCover(images: any[], roomTypes: any[] = []): any[] {
-  if (!images || images.length <= 1) return images || [];
-
-  const getRoomPrice = (r: any) => {
-    if (Array.isArray(r.pricing) && r.pricing.length > 0) {
-      const bulanan = r.pricing.find((p: any) => p.period === 'bulanan');
-      if (bulanan && Number(bulanan.price) > 0) return Number(bulanan.price);
-      const maxP = Math.max(...r.pricing.map((p: any) => Number(p.price || 0)));
-      if (maxP > 0) return maxP;
-    }
-    return Number(r.price || 0);
-  };
-
-  const sortedRooms = [...(roomTypes || [])].sort((a, b) => getRoomPrice(b) - getRoomPrice(a));
-
-  const getScore = (img: any): number => {
-    const rawCat = (typeof img === 'object' ? (img.category || img.label) : '') || '';
-    const catLower = rawCat.trim().toLowerCase();
-
-    for (let rIdx = 0; rIdx < sortedRooms.length; rIdx++) {
-      const rm = sortedRooms[rIdx];
-      const rName = (rm.name || `Tipe Kamar ${rIdx + 1}`).trim().toLowerCase();
-      if (catLower === `kamar: ${rName}` || (catLower.startsWith('kamar:') && catLower.includes(rName))) {
-        return 10 + (rIdx * 10);
-      }
-      if (catLower.includes(rName) && (catLower.includes('kamar mandi') || catLower.includes('km dalam') || catLower.includes('dapur dalam'))) {
-        return 15 + (rIdx * 10);
-      }
-    }
-
-    if (catLower.startsWith('kamar:')) return 50;
-    if (catLower === 'bangunan depan') return 100;
-    if (catLower === 'koridor') return 105;
-    if (catLower === 'area parkir') return 110;
-    if (catLower === 'dapur bersama') return 115;
-    if (catLower === 'ruang tamu') return 120;
-    if (catLower === 'wc umum') return 125;
-    if (catLower === 'lingkungan') return 130;
-    return 150;
-  };
-
-  return [...images].sort((a, b) => getScore(a) - getScore(b));
-}
-
 export async function addPropertyWithMedia(
   kostData: Partial<Kost>,
   imageFiles: (File | { file: File; label?: string; category?: string })[],
@@ -2106,7 +2066,13 @@ export async function addPropertyWithMedia(
   }
 
   const rawAllImages = [...existingImages, ...newImageObjects];
-  const allImages = sortPropertyImagesWithRoomCover(rawAllImages, kostData.roomTypes || []);
+  const allImages = sortPropertyImagesWithRoomCover(
+    rawAllImages, 
+    kostData.roomTypes || [],
+    kostData.photoCategories || [],
+    kostData.categorizedPhotos || {},
+    (kostData.photosMeta || rawAllImages)
+  );
   const derivedPhotoCategories = kostData.photoCategories && kostData.photoCategories.length > 0
     ? kostData.photoCategories
     : allImages.map((img: any) => img.label || img.category || '');
@@ -2356,7 +2322,13 @@ export async function updatePropertyWithMedia(
 
   const targetOwnerUid = (isAdmin && kostData.ownerUid) ? kostData.ownerUid : existing.owner_uid;
   const rawAllImages = [...finalImageObjects, ...newImageObjects];
-  const allImages = sortPropertyImagesWithRoomCover(rawAllImages, kostData.roomTypes || existing.room_types || []);
+  const allImages = sortPropertyImagesWithRoomCover(
+    rawAllImages, 
+    kostData.roomTypes || existing.room_types || [],
+    kostData.photoCategories || existing.photo_categories || (existing.metadata && (existing.metadata.photo_categories || existing.metadata.photoCategories)) || [],
+    kostData.categorizedPhotos || existing.categorized_photos || (existing.metadata && (existing.metadata.categorized_photos || existing.metadata.categorizedPhotos)) || {},
+    (kostData.photosMeta || existing.metadata?.photos_meta || rawAllImages)
+  );
 
   const derivedPhotoCategories = (kostData.photoCategories && kostData.photoCategories.length > 0 && kostData.photoCategories.some((c: any) => !!c))
     ? kostData.photoCategories
