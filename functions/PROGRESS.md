@@ -2,6 +2,26 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 362. Transformasi Promosi KostManager Menjadi Iklan Pop-Up Modal Interaktif dengan Tombol Close Silang (`MitraDashboard.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna meminta agar penayangan promosi KostManager tidak berbentuk banner statis horizontal yang memakan ruang halaman secara permanen, melainkan berbentuk **Iklan Pop-Up (Modal Overlay)** yang dapat ditutup secara fleksibel oleh mitra dengan mengklik tombol silang (`X`) di sudutnya saat pertama kali membuka Beranda dashboard atau masuk ke menu Kost Saya.
+- **Implementasi Solusi**:
+  1. **Pembersihan Layout Halaman (Hapus Banner Statis Inline)**:
+     - Mengubah fungsi `renderKostManagerBanner` di `MitraDashboard.tsx` agar mengembalikan `null` untuk status mitra biasa, sehingga layout halaman Beranda (`overview`) dan Kost Saya (`properties`) tetap bersih, lapang, dan bebas dari banner statis yang menghalangi konten.
+  2. **Trigger & Mekanisme Iklan Pop-Up Cerdas**:
+     - Memperbarui trigger `showPromoPopup` agar otomatis muncul saat mitra biasa pertama kali membuka Dashboard (tab Beranda) atau beralih ke menu Kost Saya (`/mitra/properties`).
+     - Menyimpan status dismiss penutupan ke `sessionStorage` (`km_promo_popup_closed_*`) dan `localStorage` agar setelah ditutup oleh user dengan tombol silang (`X`), modal tidak melakukan spam berulang kali dalam sesi navigasi yang sama.
+  3. **Komponen Modal Pop-Up Interaktif & Tombol Silang (X) di Sudut**:
+     - Dilengkapi tombol floating close silang (`<X size={20} strokeWidth={2.5} />`) di sudut kanan atas modal dengan styling lingkaran hitam ber-border kontras (`bg-gray-900 hover:bg-black text-white border-2 border-white/80 shadow-2xl`).
+     - Mendukung penutupan fleksibel via: klik tombol silang (`X`), klik tombol *"Nanti Saja"*, klik backdrop overlay luar, atau menekan tombol `Escape`.
+     - Menyajikan kartu modal visual elegan dengan gradasi oranye-amber-rose, badge program eksklusif, ringkasan 4 manfaat utama, dan tombol aksi utama *"Pelajari & Ajukan Sekarang"* menuju `/kostmanager`.
+- **File Tersentuh**:
+  - `functions/public/pages/MitraDashboard.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi build frontend Vite (`cmd /c npm run build` di `functions/public`) lulus 100% (`✓ 2511 modules transformed, built in 27.83s`, 0 error).
+
 ### 361. Penayangan Banner Promosi KostManager pada Mitra Biasa di Menu "Kost Saya" dan Beranda Dashboard (`MitraDashboard.tsx`) (September 2026)
 - **Permintaan & Masalah**:
   1. Pengguna meminta agar banner promosi KostManager selalu ditampilkan pada antarmuka Dashboard Mitra ketika status kost/mitra masih mitra biasa (*Self-Listing* reguler), khususnya di:
