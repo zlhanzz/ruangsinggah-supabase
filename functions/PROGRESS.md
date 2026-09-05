@@ -2,6 +2,24 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 374. Penghapusan Kolom Input Form Redundan pada Alur Pendaftaran Kost Eksisting (`KostManagerLanding.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna memberikan masukan bahwa ketika mendaftarkan properti kost yang sudah ada (*"Pilih dari Listing Kost Saya"*), seluruh kolom input teks manual (`Nama Kost`, `Jenis Kost`, `Jumlah Kamar`, `Link Maps`, `Alamat`, `Ambil GPS`) seharusnya tidak perlu ditampilkan lagi, karena seluruh data spesifikasi, foto, dan mini-map lokasi sudah terbaca otomatis dari listing yang dipilih (*"jika mendaftarkan kost yang sudah ada, seharusnya input ini sudah tidak ada, karena semua datanya sudah terbaca dari sistem, bahkan preview map atau mini mapnya sudah ada berdasarkan listing yang sudah ada"*).
+- **Implementasi Solusi**:
+  1. **Penghapusan Form Input Redundan pada Kost Terdaftar (`!isManualInput`)**:
+     - Mengubah kondisi render formulir input manual menjadi eksklusif `isManualInput === true`.
+     - Ketika mitra memilih kost yang sudah ada, Tahap 2 murni berfokus pada **Daftar Pilihan Kartu Kost** dan **Showcase Preview Properti (Foto Cover Resolusi Tinggi, Nama, Tipe, Kamar, Kota, Alamat, dan Mini-Map Interaktif)** tanpa ada kolom input teks yang berulang.
+  2. **Penyelarasan Alur Lanjut**:
+     - Setelah memilih kartu properti dan melihat previewnya, mitra dapat langsung menekan tombol *"Lanjut: Syarat & Ketentuan"* secara instan (0 ketik ulang / zero redundant inputs).
+  3. **Formulir Manual Tetap Eksklusif untuk Kost Baru (`isManualInput === true`)**:
+     - Kolom input manual lengkap, pinpoint peta Google, dan deteksi GPS hanya ditampilkan saat mitra memilih jalur *"Daftar Kost Baru (Manual)"*.
+- **File Tersentuh**:
+  - `functions/public/pages/KostManagerLanding.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi build frontend Vite (`cmd /c npm run build`) lulus 100% (`✓ 2511 modules transformed, built in 46.02s`, 0 error).
+
 ### 373. Perbaikan Alur Pemilihan Kost Terdaftar, Integrasi getOwnerProperties, dan Penanganan Empty State di Tahap 2 (`KostManagerLanding.tsx`) (September 2026)
 - **Permintaan & Masalah**:
   1. Pengguna menanyakan mengapa ketika memilih opsi *"Pilih dari Listing Kost Saya"*, sistem malah menampilkan form pendaftaran kost baru manual tanpa ada pilihan kartu kost yang sudah ada (*"dan kenapa kalau opsi yang dipilih adalah mendaftarkan properti dari kost saya, yang terjadi adalah malah tidak ada input untuk memilih kost yang sudah ada untuk didaftarkan ke kostmanager"*).

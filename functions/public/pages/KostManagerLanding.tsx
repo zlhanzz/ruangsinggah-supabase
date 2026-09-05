@@ -1396,198 +1396,186 @@ const KostManagerLanding: React.FC<KostManagerLandingProps> = ({ user, onBack, i
                     </div>
                   )}
 
-                  {/* Section: Detail Informasi Properti (Hanya ditampilkan jika mode manual ATAU ada kost terpilih) */}
-                  {(isManualInput || userKosts.length > 0) && (
-                    <>
-                      <div className="space-y-4 pt-2">
-                        <div className="flex items-center gap-2 border-b border-slate-100 pb-2">
-                          <span className="text-[11px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-1.5">
-                            <FileText size={13} className="text-orange-500" />
-                            {!isManualInput ? 'Konfirmasi Data Properti' : 'Formulir Properti Kost Baru'}
-                          </span>
+                  {/* Section: Detail Formulir Manual (Hanya ditampilkan saat mendaftarkan Kost Baru) */}
+                  {isManualInput && (
+                    <div className="space-y-4 pt-2 animate-in fade-in duration-300">
+                      <div className="flex items-center gap-2 border-b border-slate-100 pb-2">
+                        <span className="text-[11px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-1.5">
+                          <FileText size={13} className="text-orange-500" />
+                          Formulir Properti Kost Baru
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                            Nama Kost <span className="text-rose-500">*</span>
+                          </label>
+                          <div className="relative">
+                            <input
+                              type="text"
+                              name="kostName"
+                              required
+                              value={formData.kostName}
+                              onChange={handleChange}
+                              className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-900 focus:border-orange-500 focus:ring-2 focus:ring-orange-200 outline-none text-sm font-medium transition-all"
+                              placeholder="Contoh: Kost Orange Residence"
+                            />
+                          </div>
+                        </div>
+                        <div>
+                          <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                            Jenis Kost <span className="text-rose-500">*</span>
+                          </label>
+                          <select
+                            name="kostType"
+                            required
+                            value={formData.kostType}
+                            onChange={handleChange}
+                            className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-900 focus:border-orange-500 focus:ring-2 focus:ring-orange-200 outline-none text-sm appearance-none cursor-pointer font-medium transition-all"
+                          >
+                            <option value="" disabled>Pilih Jenis Kost</option>
+                            <option value="Putra">Putra</option>
+                            <option value="Putri">Putri</option>
+                            <option value="Campur Biasa">Campur Biasa</option>
+                            <option value="Campur/Pasutri">Campur/Pasutri</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                            Jumlah Total Kamar <span className="text-rose-500">*</span>
+                          </label>
+                          <input
+                            type="number"
+                            name="totalRooms"
+                            min="1"
+                            required
+                            value={formData.totalRooms}
+                            onChange={handleChange}
+                            className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-900 focus:border-orange-500 focus:ring-2 focus:ring-orange-200 outline-none text-sm font-medium transition-all"
+                            placeholder="10"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                            Jumlah Kamar Kosong <span className="text-rose-500">*</span>
+                          </label>
+                          <input
+                            type="number"
+                            name="emptyRooms"
+                            min="0"
+                            required
+                            value={formData.emptyRooms}
+                            onChange={handleChange}
+                            className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-900 focus:border-orange-500 focus:ring-2 focus:ring-orange-200 outline-none text-sm font-medium transition-all"
+                            placeholder="2"
+                          />
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                          Link Google Maps Lokasi
+                        </label>
+                        <input
+                          type="url"
+                          name="googleMapsLink"
+                          value={formData.googleMapsLink}
+                          onChange={handleChange}
+                          className="w-full px-3.5 py-2.5 rounded-xl border outline-none text-sm font-medium transition-all bg-white text-slate-900 focus:border-orange-500 focus:ring-2 focus:ring-orange-200 border-slate-200"
+                          placeholder="https://maps.app.goo.gl/... atau https://google.com/maps/..."
+                        />
+                      </div>
+
+                      <div>
+                        <div className="flex justify-between items-center mb-1.5">
+                          <label className="block text-xs font-bold text-slate-700">
+                            Alamat Lengkap Kost <span className="text-rose-500">*</span>
+                          </label>
+                          <div className="flex gap-2">
+                            <button
+                              type="button"
+                              onClick={() => setShowMapPicker(!showMapPicker)}
+                              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all border cursor-pointer ${
+                                showMapPicker 
+                                  ? 'bg-orange-500 text-white border-orange-500 shadow-xs' 
+                                  : 'bg-orange-50 hover:bg-orange-100 text-orange-600 border-orange-200'
+                              }`}
+                            >
+                              <Compass size={12} />
+                              <span>{showMapPicker ? 'Tutup Peta' : 'Pilih di Peta'}</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={handleGetLocation}
+                              disabled={isDetectingLocation}
+                              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-orange-50 hover:bg-orange-100 text-orange-600 text-[10px] font-black uppercase tracking-wider transition-all border border-orange-200 disabled:opacity-50 cursor-pointer"
+                            >
+                              <MapPin size={11} className="stroke-[2.5]" />
+                              <span>{isDetectingLocation ? 'Mencari GPS...' : 'Ambil GPS'}</span>
+                            </button>
+                          </div>
                         </div>
 
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                          <div>
-                            <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                              Nama Kost <span className="text-rose-500">*</span>
-                            </label>
-                            <div className="relative">
-                              <input
-                                type="text"
-                                name="kostName"
-                                required
-                                value={formData.kostName}
-                                onChange={handleChange}
-                                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-900 focus:border-orange-500 focus:ring-2 focus:ring-orange-200 outline-none text-sm font-medium transition-all"
-                                placeholder="Contoh: Kost Orange Residence"
+                        {showMapPicker && (
+                          <div className="mb-3 space-y-2 animate-in slide-in-from-top-4 duration-300">
+                            <span className="block text-[10px] font-black text-orange-600 uppercase tracking-widest leading-none">
+                              Geser marker merah atau klik di peta untuk menentukan titik koordinat
+                            </span>
+                            <div className="rounded-2xl overflow-hidden border border-slate-200 shadow-inner bg-slate-50 relative z-0">
+                              <LocationPicker 
+                                lat={mapCoords.lat}
+                                lng={mapCoords.lng}
+                                onLocationChange={(lat, lng, address) => {
+                                  setMapCoords({ lat, lng });
+                                  setFormData(prev => ({
+                                    ...prev,
+                                    googleMapsLink: `https://www.google.com/maps?q=${lat},${lng}`,
+                                    address: address || prev.address
+                                  }));
+                                }}
                               />
                             </div>
                           </div>
-                          <div>
-                            <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                              Jenis Kost <span className="text-rose-500">*</span>
-                            </label>
-                            <select
-                              name="kostType"
-                              required
-                              value={formData.kostType}
-                              onChange={handleChange}
-                              className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-900 focus:border-orange-500 focus:ring-2 focus:ring-orange-200 outline-none text-sm appearance-none cursor-pointer font-medium transition-all"
-                            >
-                              <option value="" disabled>Pilih Jenis Kost</option>
-                              <option value="Putra">Putra</option>
-                              <option value="Putri">Putri</option>
-                              <option value="Campur Biasa">Campur Biasa</option>
-                              <option value="Campur/Pasutri">Campur/Pasutri</option>
-                            </select>
-                          </div>
-                        </div>
+                        )}
 
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                          <div>
-                            <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                              Jumlah Total Kamar <span className="text-rose-500">*</span>
-                            </label>
-                            <input
-                              type="number"
-                              name="totalRooms"
-                              min="1"
-                              required
-                              value={formData.totalRooms}
-                              onChange={handleChange}
-                              className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-900 focus:border-orange-500 focus:ring-2 focus:ring-orange-200 outline-none text-sm font-medium transition-all"
-                              placeholder="10"
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                              Jumlah Kamar Kosong <span className="text-rose-500">*</span>
-                            </label>
-                            <input
-                              type="number"
-                              name="emptyRooms"
-                              min="0"
-                              required
-                              value={formData.emptyRooms}
-                              onChange={handleChange}
-                              className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-900 focus:border-orange-500 focus:ring-2 focus:ring-orange-200 outline-none text-sm font-medium transition-all"
-                              placeholder="2"
-                            />
-                          </div>
-                        </div>
-
-                        <div>
-                          <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                            Link Google Maps Lokasi
-                          </label>
-                          <input
-                            type="url"
-                            name="googleMapsLink"
-                            value={formData.googleMapsLink}
-                            onChange={handleChange}
-                            readOnly={!isManualInput}
-                            className={`w-full px-3.5 py-2.5 rounded-xl border outline-none text-sm font-medium transition-all ${
-                              !isManualInput 
-                                ? 'bg-slate-50 text-slate-500 border-slate-200 cursor-not-allowed font-medium' 
-                                : 'bg-white text-slate-900 focus:border-orange-500 focus:ring-2 focus:ring-orange-200 border-slate-200'
-                            }`}
-                            placeholder={!isManualInput ? "Link lokasi tersinkronisasi otomatis dari titik koordinat listing" : "https://maps.app.goo.gl/... atau https://google.com/maps/..."}
-                          />
-                          {!isManualInput && (
-                            <p className="text-[10px] text-slate-400 mt-1 italic">
-                              * Titik koordinat peta diambil langsung dari data listing properti Anda.
-                            </p>
-                          )}
-                        </div>
-
-                        <div>
-                          <div className="flex justify-between items-center mb-1.5">
-                            <label className="block text-xs font-bold text-slate-700">
-                              Alamat Lengkap Kost <span className="text-rose-500">*</span>
-                            </label>
-                            <div className="flex gap-2">
-                              {isManualInput && (
-                                <button
-                                  type="button"
-                                  onClick={() => setShowMapPicker(!showMapPicker)}
-                                  className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all border cursor-pointer ${
-                                    showMapPicker 
-                                      ? 'bg-orange-500 text-white border-orange-500 shadow-xs' 
-                                      : 'bg-orange-50 hover:bg-orange-100 text-orange-600 border-orange-200'
-                                  }`}
-                                >
-                                  <Compass size={12} />
-                                  <span>{showMapPicker ? 'Tutup Peta' : 'Pilih di Peta'}</span>
-                                </button>
-                              )}
-                              <button
-                                type="button"
-                                onClick={handleGetLocation}
-                                disabled={isDetectingLocation}
-                                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-orange-50 hover:bg-orange-100 text-orange-600 text-[10px] font-black uppercase tracking-wider transition-all border border-orange-200 disabled:opacity-50 cursor-pointer"
-                              >
-                                <MapPin size={11} className="stroke-[2.5]" />
-                                <span>{isDetectingLocation ? 'Mencari GPS...' : 'Ambil GPS'}</span>
-                              </button>
-                            </div>
-                          </div>
-
-                          {isManualInput && showMapPicker && (
-                            <div className="mb-3 space-y-2 animate-in slide-in-from-top-4 duration-300">
-                              <span className="block text-[10px] font-black text-orange-600 uppercase tracking-widest leading-none">
-                                Geser marker merah atau klik di peta untuk menentukan titik koordinat
-                              </span>
-                              <div className="rounded-2xl overflow-hidden border border-slate-200 shadow-inner bg-slate-50 relative z-0">
-                                <LocationPicker 
-                                  lat={mapCoords.lat}
-                                  lng={mapCoords.lng}
-                                  onLocationChange={(lat, lng, address) => {
-                                    setMapCoords({ lat, lng });
-                                    setFormData(prev => ({
-                                      ...prev,
-                                      googleMapsLink: `https://www.google.com/maps?q=${lat},${lng}`,
-                                      address: address || prev.address
-                                    }));
-                                  }}
-                                />
-                              </div>
-                            </div>
-                          )}
-
-                          <textarea
-                            name="address"
-                            required
-                            rows={3}
-                            value={formData.address}
-                            onChange={handleChange}
-                            placeholder="Contoh: Jl. Perintis Kemerdekaan KM 9, No. 12, Tamalanrea, Makassar"
-                            className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-900 focus:border-orange-500 focus:ring-2 focus:ring-orange-200 outline-none text-sm resize-none font-medium transition-all"
-                          />
-                        </div>
+                        <textarea
+                          name="address"
+                          required
+                          rows={3}
+                          value={formData.address}
+                          onChange={handleChange}
+                          placeholder="Contoh: Jl. Perintis Kemerdekaan KM 9, No. 12, Tamalanrea, Makassar"
+                          className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-900 focus:border-orange-500 focus:ring-2 focus:ring-orange-200 outline-none text-sm resize-none font-medium transition-all"
+                        />
                       </div>
+                    </div>
+                  )}
 
-                      {/* Sticky Footer Tahap 2 */}
-                      <div className="pt-4 border-t border-slate-100 flex items-center justify-between gap-3 bg-white sticky bottom-0">
-                        <button
-                          type="button"
-                          disabled={isSubmitting}
-                          onClick={() => setModalStep('method')}
-                          className="px-5 py-2.5 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 text-xs sm:text-sm font-bold transition-all disabled:opacity-50 cursor-pointer flex items-center gap-1.5"
-                        >
-                          <ArrowLeft size={14} />
-                          <span>Kembali ke Pilihan Metode</span>
-                        </button>
-                        <button
-                          type="submit"
-                          disabled={isSubmitting}
-                          className="px-6 sm:px-8 py-3 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white rounded-xl text-xs sm:text-sm font-black uppercase tracking-wider flex items-center justify-center gap-2 active:scale-95 shadow-lg shadow-orange-500/25 transition-all cursor-pointer"
-                        >
-                          <span>Lanjut: Syarat & Ketentuan</span>
-                          <ArrowRight size={16} />
-                        </button>
-                      </div>
-                    </>
+                  {/* Sticky Footer Tahap 2 (Ditampilkan jika ada kost terpilih atau sedang input manual) */}
+                  {(isManualInput || (userKosts.length > 0 && selectedKostId)) && (
+                    <div className="pt-4 border-t border-slate-100 flex items-center justify-between gap-3 bg-white sticky bottom-0">
+                      <button
+                        type="button"
+                        disabled={isSubmitting}
+                        onClick={() => setModalStep('method')}
+                        className="px-5 py-2.5 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 text-xs sm:text-sm font-bold transition-all disabled:opacity-50 cursor-pointer flex items-center gap-1.5"
+                      >
+                        <ArrowLeft size={14} />
+                        <span>Kembali ke Pilihan Metode</span>
+                      </button>
+                      <button
+                        type="submit"
+                        disabled={isSubmitting}
+                        className="px-6 sm:px-8 py-3 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white rounded-xl text-xs sm:text-sm font-black uppercase tracking-wider flex items-center justify-center gap-2 active:scale-95 shadow-lg shadow-orange-500/25 transition-all cursor-pointer"
+                      >
+                        <span>Lanjut: Syarat & Ketentuan</span>
+                        <ArrowRight size={16} />
+                      </button>
+                    </div>
                   )}
                 </form>
               )}
