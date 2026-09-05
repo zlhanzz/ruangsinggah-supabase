@@ -843,7 +843,7 @@ const KostManagerLanding: React.FC<KostManagerLandingProps> = ({ user, onBack, i
 
       {/* Modal Formulir Pendaftaran */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-0 sm:p-4 md:p-6" style={{ width: '100vw', height: '100vh', position: 'fixed', top: 0, left: 0 }}>
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-3.5 sm:p-4 md:p-6" style={{ width: '100vw', height: '100vh', position: 'fixed', top: 0, left: 0 }}>
           {/* Backdrop */}
           <div 
             className="absolute inset-0 bg-slate-950/80 backdrop-blur-sm transition-opacity" 
@@ -851,7 +851,7 @@ const KostManagerLanding: React.FC<KostManagerLandingProps> = ({ user, onBack, i
           />
 
           {/* Modal Card */}
-          <div className="bg-white border border-slate-200/80 text-slate-900 w-full sm:max-w-2xl max-h-[92vh] sm:max-h-[88vh] rounded-t-3xl sm:rounded-3xl shadow-2xl relative z-10 animate-in slide-in-from-bottom-6 sm:zoom-in-95 duration-300 flex flex-col overflow-hidden">
+          <div className="bg-white border border-slate-200/80 text-slate-900 w-full max-w-lg sm:max-w-2xl max-h-[90vh] sm:max-h-[88vh] rounded-3xl shadow-2xl relative z-10 animate-in zoom-in-95 duration-200 flex flex-col overflow-hidden">
             
             {/* Top Accent Gradient Bar */}
             <div className="h-1.5 w-full bg-gradient-to-r from-orange-500 via-amber-500 to-orange-600 flex-shrink-0" />

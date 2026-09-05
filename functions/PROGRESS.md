@@ -2,6 +2,23 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 372. Penyelarasan Posisi Modal Pendaftaran KostManager Menjadi Rata Tengah Simetris (Center Alignment) (`KostManagerLanding.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna menanyakan mengapa modal pendaftaran KostManager pada perangkat mobile berada di posisi rata bawah (*bottom-sheet*) dan meminta agar posisinya diubah menjadi tepat di tengah layar (*"kenapa tampilannya tidak ke tengah sih, kanapa form nya malah rata bawah. buat jadi centre"*).
+- **Implementasi Solusi**:
+  1. **Pemosisian Center Horisontal & Vertikal Penuh**:
+     - Mengubah alignment container modal dari `items-end sm:items-center` menjadi `items-center justify-center` pada semua resolusi viewport.
+     - Menerapkan padding luar `p-3.5 sm:p-4 md:p-6` agar modal memiliki margin yang simetris dan aman di semua sisi layar.
+  2. **Sudut Membulat & Animasi Dialog Modern**:
+     - Mengubah border radius modal dari `rounded-t-3xl sm:rounded-3xl` menjadi `rounded-3xl` penuh.
+     - Mengubah animasi masuk modal dari `slide-in-from-bottom-6` menjadi `animate-in zoom-in-95 duration-200` yang muncul simetris dari tengah layar.
+- **File Tersentuh**:
+  - `functions/public/pages/KostManagerLanding.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi build frontend Vite (`cmd /c npm run build`) lulus 100% (`✓ 2511 modules transformed, built in 40.41s`, 0 error).
+
 ### 371. Redesain & Penyederhanaan Kartu Pemilihan Metode Registrasi KostManager Menjadi Tombol Pilihan Interaktif Bergaya SaaS Modern (`KostManagerLanding.tsx`) (September 2026)
 - **Permintaan & Masalah**:
   1. Pengguna memberikan feedback bahwa tampilan tahap pemilihan metode (Tahap 1) sebelumnya memiliki terlalu banyak teks penjelasan panjang (*wall of text*), serta kurang menonjolkan bahwa kedua opsi tersebut adalah tombol/kartu aksi yang dapat dipilih secara interaktif (*"terlalu banyak text, dan tidak kelihatan bahwa itu adalah tombol yang bisa dipilih, make it simple but cool, and functional"*).
