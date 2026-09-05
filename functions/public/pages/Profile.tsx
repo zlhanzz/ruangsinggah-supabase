@@ -52,11 +52,23 @@ const Profile: React.FC<ProfileProps> = ({ user, onLogout, onSaveSuccess, forceE
     if (viewParam === 'favorites') return 'favorites';
     if (viewParam === 'transactions') return 'transactions';
     if (viewParam === 'rental_history') return 'rental_history';
+    if (location.pathname === Page.SETTINGS || location.pathname === '/settings') {
+      return 'hub';
+    }
+    if (location.pathname === Page.PROFILE || location.pathname === '/profile') {
+      return 'edit_personal_data';
+    }
     return 'hub';
   };
 
+  const determineInitialEditing = (): boolean => {
+    if (forceEdit) return true;
+    const searchParams = new URLSearchParams(location.search);
+    return searchParams.get('view') === 'edit' || searchParams.get('edit') === 'true';
+  };
+
   const [viewMode, setViewMode] = useState<'hub' | 'edit_personal_data' | 'favorites' | 'transactions' | 'rental_history'>(determineInitialMode);
-  const [isEditing, setIsEditing] = useState(forceEdit || false);
+  const [isEditing, setIsEditing] = useState<boolean>(determineInitialEditing);
   const [loading, setLoading] = useState(false);
   const [activeKostCount, setActiveKostCount] = useState<number>(0);
   const [favoriteKosts, setFavoriteKosts] = useState<Kost[]>([]);
@@ -140,19 +152,31 @@ const Profile: React.FC<ProfileProps> = ({ user, onLogout, onSaveSuccess, forceE
     }
     const searchParams = new URLSearchParams(location.search);
     const viewParam = searchParams.get('view') || searchParams.get('tab');
-    if (viewParam === 'edit' || viewParam === 'personal_data' || searchParams.get('edit') === 'true') {
+    const isExplicitEdit = viewParam === 'edit' || searchParams.get('edit') === 'true';
+
+    if (isExplicitEdit) {
       setIsEditing(true);
+      setViewMode('edit_personal_data');
+    } else if (viewParam === 'personal_data') {
+      setIsEditing(false);
       setViewMode('edit_personal_data');
     } else if (location.pathname === Page.SETTINGS || location.pathname === '/settings') {
       setViewMode('hub');
+      setIsEditing(false);
     } else if (viewParam === 'favorites') {
       setViewMode('favorites');
+      setIsEditing(false);
     } else if (viewParam === 'transactions') {
       setViewMode('transactions');
+      setIsEditing(false);
     } else if (viewParam === 'rental_history') {
       setViewMode('rental_history');
-    } else if (!viewParam && location.pathname === Page.PROFILE) {
-      setViewMode(initialMode || 'hub');
+      setIsEditing(false);
+    } else if (location.pathname === Page.PROFILE || location.pathname === '/profile') {
+      setViewMode(initialMode || 'edit_personal_data');
+      if (!isExplicitEdit) {
+        setIsEditing(false);
+      }
     }
   }, [location.pathname, location.search, forceEdit, initialMode]);
 
@@ -477,13 +501,14 @@ const Profile: React.FC<ProfileProps> = ({ user, onLogout, onSaveSuccess, forceE
         localStorage.setItem(storedKey, JSON.stringify({ ...parsed, ...formData }));
       }
 
+      // 4. Notify app of user changes
+      window.dispatchEvent(new Event('RS_USER_UPDATED'));
+
       setIsEditing(false);
-      setViewMode('hub');
-      if (onSaveSuccess) {
+      if (forceEdit && onSaveSuccess) {
         onSaveSuccess();
       } else {
-        alert('Profil berhasil diperbarui!');
-        window.location.reload();
+        alert('Data profil berhasil disimpan!');
       }
     } catch (error) {
       console.error('Error saving profile:', error);
@@ -512,7 +537,6 @@ const Profile: React.FC<ProfileProps> = ({ user, onLogout, onSaveSuccess, forceE
       verification_status: user.verification_status || 'unverified'
     });
     setIsEditing(false);
-    setViewMode('hub');
   };
 
   const handlePasswordChange = async (e: React.FormEvent) => {
@@ -626,10 +650,10 @@ const Profile: React.FC<ProfileProps> = ({ user, onLogout, onSaveSuccess, forceE
               </div>
             </div>
 
-            {/* Banner Action: Edit Profil & Data Kontak Pribadi */}
+            {/* Banner Action: Data Kontak Pribadi */}
             <button
               onClick={() => {
-                setIsEditing(true);
+                setIsEditing(false);
                 setViewMode('edit_personal_data');
               }}
               className="w-full mt-5 bg-orange-500/5 hover:bg-orange-500/10 border border-orange-200 rounded-2xl p-3 sm:p-3.5 flex items-center justify-between transition-all group active:scale-[0.99] cursor-pointer"
@@ -638,10 +662,10 @@ const Profile: React.FC<ProfileProps> = ({ user, onLogout, onSaveSuccess, forceE
                 <div className="w-7 h-7 rounded-xl bg-orange-500 text-white flex items-center justify-center shadow-xs">
                   <Edit3 className="w-3.5 h-3.5" />
                 </div>
-                <span className="truncate">Edit Profil & Data Kontak Pribadi</span>
+                <span className="truncate">Data Kontak Pribadi</span>
               </div>
               <div className="flex items-center gap-1 text-[11px] font-extrabold text-orange-600 shrink-0 ml-2">
-                <span>{isPersonalDataComplete ? 'Ubah' : 'Lengkapi'}</span>
+                <span>{isPersonalDataComplete ? 'Lihat / Ubah' : 'Lengkapi'}</span>
                 <ChevronRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
               </div>
             </button>
@@ -1363,61 +1387,102 @@ const Profile: React.FC<ProfileProps> = ({ user, onLogout, onSaveSuccess, forceE
         /* ── SUB-VIEW: EDIT DATA PRIBADI FORM ────────────────────────────────── */
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           
-          {/* TOP BACK TO HUB BUTTON & HEADER */}
+          {/* TOP BACK & ACTION HEADER */}
           <div className="mb-6 flex items-center justify-between gap-4">
-            <button
-              onClick={() => {
-                setIsEditing(false);
-                setViewMode('hub');
-              }}
-              className="px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-xl text-xs font-bold hover:bg-gray-50 hover:border-gray-300 transition-all shadow-xs active:scale-95 flex items-center gap-2 cursor-pointer"
-            >
-              <ArrowLeft className="w-4 h-4 text-gray-500" />
-              <span>Kembali ke Menu Profil</span>
-            </button>
+            {isEditing ? (
+              <button
+                type="button"
+                onClick={handleCancel}
+                className="px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-xl text-xs font-bold hover:bg-gray-50 hover:border-gray-300 transition-all shadow-xs active:scale-95 flex items-center gap-2 cursor-pointer"
+              >
+                <ArrowLeft className="w-4 h-4 text-gray-500" />
+                <span>Batal Edit</span>
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => {
+                  if (onBack) {
+                    onBack();
+                  } else if (window.history.length > 1) {
+                    navigate(-1);
+                  } else {
+                    navigate(Page.HOME);
+                  }
+                }}
+                className="px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-xl text-xs font-bold hover:bg-gray-50 hover:border-gray-300 transition-all shadow-xs active:scale-95 flex items-center gap-2 cursor-pointer"
+              >
+                <ArrowLeft className="w-4 h-4 text-gray-500" />
+                <span>Kembali</span>
+              </button>
+            )}
 
-            <button
-              onClick={handleSave}
-              disabled={loading}
-              className="px-5 py-2 bg-[#ff7a00] hover:bg-orange-600 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-orange-500/20 active:scale-95 flex items-center gap-2 cursor-pointer disabled:opacity-50"
-            >
-              {loading ? (
-                <>
-                  <RefreshCw className="w-4 h-4 animate-spin" />
-                  Menyimpan...
-                </>
-              ) : (
-                <>
-                  <Check className="w-4 h-4" />
-                  Simpan Perubahan
-                </>
-              )}
-            </button>
+            {isEditing ? (
+              <button
+                type="button"
+                onClick={handleSave}
+                disabled={loading}
+                className="px-5 py-2 bg-[#ff7a00] hover:bg-orange-600 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-orange-500/20 active:scale-95 flex items-center gap-2 cursor-pointer disabled:opacity-50"
+              >
+                {loading ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                    Menyimpan...
+                  </>
+                ) : (
+                  <>
+                    <Check className="w-4 h-4" />
+                    Simpan Perubahan
+                  </>
+                )}
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setIsEditing(true)}
+                className="px-5 py-2 bg-[#ff7a00] hover:bg-orange-600 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-orange-500/20 active:scale-95 flex items-center gap-2 cursor-pointer"
+              >
+                <Edit3 className="w-4 h-4" />
+                <span>Edit Data Profil</span>
+              </button>
+            )}
           </div>
 
           {/* DESKTOP BREADCRUMB & HEADER SECTION */}
           <div className="hidden lg:block mb-8">
             <div className="flex items-center gap-2 text-xs font-semibold text-gray-400 mb-3">
-              <span className="text-gray-300">/</span>
-              <span className="text-gray-500 hover:text-gray-700 cursor-pointer" onClick={() => setViewMode('hub')}>
-                Menu Profil
+              <span 
+                className="text-gray-500 hover:text-gray-700 cursor-pointer" 
+                onClick={() => {
+                  if (onBack) onBack();
+                  else if (window.history.length > 1) navigate(-1);
+                  else navigate(Page.HOME);
+                }}
+              >
+                Kembali
               </span>
               <span className="text-gray-300">/</span>
-              <span className="text-[#ff7a00] font-bold">Edit Data Kontak Pribadi</span>
+              <span className="text-gray-500">Profil Saya</span>
+              <span className="text-gray-300">/</span>
+              <span className="text-[#ff7a00] font-bold">
+                {isEditing ? 'Edit Data Kontak Pribadi' : 'Data Kontak Pribadi'}
+              </span>
             </div>
 
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
               <div>
                 <div className="flex items-center gap-3">
                   <h1 className="text-2xl sm:text-3xl font-black text-gray-900 tracking-tight">
-                    Edit Data Kontak Pribadi
+                    {isEditing ? 'Edit Data Kontak Pribadi' : 'Data Kontak Pribadi'}
                   </h1>
                   <span className="bg-orange-50 text-[#ff7a00] border border-orange-200 text-xs font-extrabold px-3 py-0.5 rounded-full shadow-2xs">
                     {getRoleBadge()}
                   </span>
                 </div>
                 <p className="text-xs sm:text-sm text-gray-500 font-medium mt-1">
-                  Kelola data personal, aksesibilitas sistem, dan parameter verifikasi identitas Anda.
+                  {isEditing
+                    ? 'Perbarui data personal, nomor kontak, domisili, dan parameter verifikasi identitas Anda.'
+                    : 'Kelola data personal, aksesibilitas sistem, dan parameter verifikasi identitas Anda.'}
                 </p>
               </div>
             </div>
@@ -2007,10 +2072,20 @@ const Profile: React.FC<ProfileProps> = ({ user, onLogout, onSaveSuccess, forceE
             <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-end gap-3 pt-2">
               <button
                 type="button"
-                onClick={() => onBack ? onBack() : navigate(Page.HOME)}
+                onClick={() => {
+                  if (isEditing) {
+                    handleCancel();
+                  } else if (onBack) {
+                    onBack();
+                  } else if (window.history.length > 1) {
+                    navigate(-1);
+                  } else {
+                    navigate(Page.HOME);
+                  }
+                }}
                 className="w-full sm:w-auto px-6 py-3.5 sm:py-3 bg-white hover:bg-gray-50 border border-orange-200 text-[#ff7a00] rounded-2xl sm:rounded-xl text-sm sm:text-xs font-bold transition-all shadow-xs active:scale-95 cursor-pointer text-center order-2 sm:order-1"
               >
-                Kembali
+                {isEditing ? 'Batal' : 'Kembali'}
               </button>
 
               <button

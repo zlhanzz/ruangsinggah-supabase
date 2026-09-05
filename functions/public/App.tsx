@@ -537,8 +537,8 @@ const App: React.FC = () => {
     if (session?.user) {
       await fetchUserData(session.user);
     }
-    alert('Data Tersimpan');
     if (pendingTransaction) {
+      alert('Data Tersimpan');
       if (pendingTransaction.type === 'kost') {
         const found = listings.find((k: any) => k.id === pendingTransaction.id);
         navigate(`/kost/${found ? createKostSlug(found) : pendingTransaction.id}`);
@@ -546,17 +546,6 @@ const App: React.FC = () => {
         navigate(Page.PRODUCTS);
       }
       setPendingTransaction(null);
-    } else {
-      const currentPortal = localStorage.getItem('portal_view') || 'user';
-      if (user?.role === 'admin' && currentPortal !== 'user') {
-        navigate(Page.DASHBOARD_ADMIN);
-      } else if (user?.role === 'survey_agent' && currentPortal !== 'user') {
-        navigate(Page.DASHBOARD_AGENT);
-      } else if ((user?.role === 'owner' || user?.role === 'mitra') && currentPortal === 'owner') {
-        navigate(Page.DASHBOARD_MITRA);
-      } else {
-        navigate(Page.HOME);
-      }
     }
   };
 

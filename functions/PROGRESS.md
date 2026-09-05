@@ -2,6 +2,32 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 357. Penyempurnaan UX Profil Desktop: Mode Peninjauan Default, Simpan Data tanpa Redirect Beranda, dan Navigasi Tombol Kembali (`Profile.tsx`, `Navbar.tsx`, `App.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  1. Pada tampilan Desktop saat klik *"Profil Saya"*, halaman profil sebelumnya langsung membuka form dalam mode edit aktif (`?view=edit`), bukan mode peninjauan (*read-only* data overview).
+  2. Ketika data profil diedit lalu disimpan (*"Simpan Perubahan"*), sistem sebelumnya langsung me-redirect pengguna keluar ke beranda (`Page.HOME`). Pengguna menginginkan agar data tersimpan di Supabase, tetap di halaman profil, dan kembali ke mode peninjauan (*view mode*) menampilkan data yang baru disimpan.
+  3. Ketika tombol kembali diklik pada halaman profil desktop, tombol harus membawa pengguna kembali ke halaman sebelumnya yang dibuka sebelum masuk ke menu profil desktop (`navigate(-1)`), atau jika sedang dalam mode edit, tombol berfungsi sebagai "Batal Edit" yang kembali ke mode peninjauan tanpa keluar halaman.
+- **Implementasi Solusi**:
+  1. **Mode Peninjauan (View Mode) Default pada Desktop (`Navbar.tsx` & `Profile.tsx`)**:
+     - Mengubah menu dropdown desktop *"Profil Saya"* di `Navbar.tsx` agar memanggil `onPageChange(Page.PROFILE)` tanpa query string `?view=edit`.
+     - Mengatur inisialisasi state `isEditing = false` secara default saat membuka `/profile`, sehingga data profil ditampilkan dalam format kartu informasi read-only yang rapi dan elegan.
+  2. **Header Dinamis & Tombol Aksi Kanan Atas (`Profile.tsx`)**:
+     - Saat `isEditing === false` (Mode Peninjauan): Header menampilkan judul *"Data Kontak Pribadi"*, tombol kembali *"Kembali"* (`onBack` / `navigate(-1)`), dan tombol aksi kanan atas **"Edit Data Profil"** (ikon pencil `<Edit3 />`).
+     - Saat `isEditing === true` (Mode Edit): Header menampilkan judul *"Edit Data Kontak Pribadi"*, tombol kembali *"Batal Edit"* (`handleCancel`), dan tombol aksi kanan atas **"Simpan Perubahan"** (ikon checklist `<Check />`).
+  3. **Penyimpanan Mulus & Tanpa Redirect Beranda (`Profile.tsx` & `App.tsx`)**:
+     - Memperbarui fungsi `handleSave()` di `Profile.tsx` untuk menyimpan data ke Supabase (`users`, `user_verifications`, Supabase Auth metadata, dan localStorage), men-dispatch event `RS_USER_UPDATED`, mematikan mode edit `setIsEditing(false)`, dan menampilkan feedback alert sukses tanpa me-redirect keluar halaman.
+     - Mengondisikan `handleProfileSaveSuccess` di `App.tsx` agar hanya melakukan redirect jika ada alur checkout pemesanan kamar/produk yang tertunda (`pendingTransaction`).
+  4. **Navigasi Kontekstual Tombol Kembali (`Profile.tsx`)**:
+     - Tombol kembali di header atas dan tombol bawah responsif sekarang cerdas mendeteksi status: jika `isEditing === true`, mengeksekusi `handleCancel()` (kembali ke peninjauan); jika `isEditing === false`, mengeksekusi `onBack` / `navigate(-1)` (kembali ke halaman sebelumnya).
+- **File Tersentuh**:
+  - `functions/public/pages/Profile.tsx`
+  - `functions/public/components/Navbar.tsx`
+  - `functions/public/App.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi build frontend Vite (`cmd /c npm run build` di `functions/public`) lulus 100% (`✓ 2511 modules transformed, built in 34.96s`, 0 error).
+
 ### 356. Penghapusan Popover Dropdown Avatar pada Header Mobile & Navigasi Langsung ke Profile Hub (`Navbar.tsx`) (September 2026)
 - **Permintaan & Masalah**:
   1. Pengguna meminta agar popover dropdown menu melayang (*"LOGIN SEBAGAI...", "Profil Saya", "Pesan / Chat", "Kost Saya", "Pengaturan", "Keluar"*) dihapus dari tampilan mobile saat avatar di kanan atas header diklik.
