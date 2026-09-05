@@ -2,6 +2,27 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 352. Penyederhanaan Desain Modal Pop-Up Penolakan Gender Mismatch: Tampilan Minimalis, Bersih, dan To-The-Point (`KostDetail.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna meminta agar tampilan modal penolakan gender mismatch disederhanakan tanpa elemen yang rumit (*"cukup tampilan sederhana, tidak usah seribet ini, yang penting pesan tersampaikan dan efektif"*).
+- **Implementasi Solusi**:
+  1. **Minimalist Centered Modal Layout (`KostDetail.tsx`)**:
+     - Menghapus ornamen berat seperti pita gradien atas, badge sistem, dua kotak perbandingan terpisah, dan paragraf peringatan ganda.
+     - Mengubah modal menjadi berukuran kompak (`max-w-sm`) dengan perataan teks terpusat (*center-aligned*).
+     - Menampilkan ikon `ShieldAlert` rose di lingkaran merah lembut terpusat.
+  2. **Pesan Ringkas & Terarah**:
+     - Judul tegas: `Kost {Khusus Putri / Putra}`.
+     - Pesan ramah 1 kalimat: *"Mohon maaf, kost ini khusus untuk penyewa **{Putri / Putra}**, sedangkan profil Anda terdaftar sebagai **{Pria / Wanita}**."*
+  3. **Tombol Aksi Proporsional**:
+     - Tombol oranye utama: *"Cari Kost {Putra / Campur}"*.
+     - Tombol sekunder: *"Tutup"*.
+- **File Tersentuh**:
+  - `functions/public/pages/KostDetail.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi build frontend Vite (`functions/public`) lulus 100% (`✓ built in 31.64s`, 0 error).
+
 ### 351. Proteksi Otomatis Penolakan Booking Berdasarkan Kesesuaian Gender & Modal Pop-up Edukasi Penjelasan (`KostDetail.tsx`) (September 2026)
 - **Permintaan & Masalah**:
   1. Pengguna menanyakan apakah sistem booking sudah dilengkapi dengan kondisi jika user adalah laki-laki secara profil dan mencoba mengajukan sewa pada kost khusus putri.

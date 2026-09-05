@@ -2808,115 +2808,65 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
         </div>
       </div>
 
-      {/* MODAL PENOLAKAN GENDER MISMATCH */}
+      {/* MODAL PENOLAKAN GENDER MISMATCH (SIMPEL & ELEGAN) */}
       {isGenderMismatchModalOpen && (
         <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 sm:p-6 animate-in fade-in duration-200">
-          {/* Backdrop blur */}
           <div 
-            className="fixed inset-0 bg-gray-950/60 backdrop-blur-sm transition-opacity" 
+            className="fixed inset-0 bg-gray-950/50 backdrop-blur-xs transition-opacity" 
             onClick={() => setIsGenderMismatchModalOpen(false)} 
           />
 
-          <div className="relative w-full max-w-lg bg-white rounded-3xl shadow-2xl border border-rose-100 overflow-hidden z-10 animate-in zoom-in-95 duration-200">
-            {/* Top Accent Ribbon */}
-            <div className="h-2.5 bg-gradient-to-r from-rose-500 via-red-500 to-amber-500 w-full" />
+          <div className="relative w-full max-w-sm bg-white rounded-3xl shadow-2xl border border-gray-100 p-6 sm:p-7 text-center z-10 animate-in zoom-in-95 duration-200">
+            {/* Close Button */}
+            <button 
+              onClick={() => setIsGenderMismatchModalOpen(false)}
+              className="absolute top-4 right-4 p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-xl transition-colors cursor-pointer"
+              title="Tutup"
+            >
+              <X className="w-5 h-5" />
+            </button>
 
-            <div className="p-6 sm:p-8">
-              {/* Header Icon + Title */}
-              <div className="flex items-start gap-4 mb-5">
-                <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-rose-50 border border-rose-100 flex items-center justify-center text-rose-600 shrink-0 shadow-xs">
-                  <ShieldAlert className="w-6 h-6 sm:w-7 sm:h-7 stroke-[2.2]" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-rose-100/80 text-rose-700 text-[10px] font-black uppercase tracking-wider mb-1.5">
-                    <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse"></span>
-                    Sistem Proteksi Hunian
-                  </div>
-                  <h3 className="text-lg sm:text-xl font-black text-gray-900 leading-tight">
-                    Pengajuan Sewa Ditolak Otomatis
-                  </h3>
-                  <p className="text-xs text-gray-500 mt-0.5">
-                    Ketidaksesuaian gender profil dengan aturan tipe kost
-                  </p>
-                </div>
-                <button 
-                  onClick={() => setIsGenderMismatchModalOpen(false)}
-                  className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-xl transition-colors cursor-pointer"
-                  title="Tutup"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
+            {/* Icon */}
+            <div className="w-14 h-14 rounded-2xl bg-rose-50 border border-rose-100 flex items-center justify-center text-rose-500 mx-auto mb-4">
+              <ShieldAlert className="w-7 h-7" />
+            </div>
 
-              {/* Box Perbandingan Visual */}
-              <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-4 mb-5 space-y-3">
-                <div className="text-[11px] font-extrabold text-slate-400 uppercase tracking-wider">
-                  Rincian Kebijakan Gender:
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="bg-white rounded-xl p-3.5 border border-slate-200 shadow-2xs">
-                    <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1">
-                      Tipe Kost Ini
-                    </span>
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-sm sm:text-base font-extrabold text-rose-600">
-                        {genderMismatchInfo.kostGenderLabel}
-                      </span>
-                    </div>
-                    <span className="text-[10px] text-gray-400 mt-0.5 block">
-                      Hanya untuk penyewa {genderMismatchInfo.kostGenderLabel.toLowerCase().includes('putri') ? 'Wanita / Mahasiswi' : 'Pria / Mahasiswa'}
-                    </span>
-                  </div>
+            {/* Title & Message */}
+            <h3 className="text-lg font-black text-gray-900 mb-2">
+              Kost {genderMismatchInfo.kostGenderLabel}
+            </h3>
+            
+            <p className="text-sm text-gray-600 leading-relaxed mb-6">
+              Mohon maaf, kost ini khusus untuk penyewa{' '}
+              <strong className="text-rose-600 font-extrabold">
+                {genderMismatchInfo.kostGenderLabel.toLowerCase().includes('putri') ? 'Putri / Wanita' : 'Putra / Pria'}
+              </strong>
+              , sedangkan profil Anda terdaftar sebagai{' '}
+              <strong className="text-gray-900 font-extrabold">
+                {genderMismatchInfo.userGenderLabel}
+              </strong>.
+            </p>
 
-                  <div className="bg-white rounded-xl p-3.5 border border-slate-200 shadow-2xs">
-                    <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1">
-                      Profil Akun Anda
-                    </span>
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-sm sm:text-base font-extrabold text-gray-900">
-                        {genderMismatchInfo.userGenderLabel}
-                      </span>
-                    </div>
-                    <span className="text-[10px] text-gray-400 mt-0.5 block">
-                      Terdaftar pada data akun Anda
-                    </span>
-                  </div>
-                </div>
-              </div>
+            {/* Buttons */}
+            <div className="space-y-2">
+              <button
+                onClick={() => {
+                  setIsGenderMismatchModalOpen(false);
+                  const targetType = genderMismatchInfo.kostGenderLabel.toLowerCase().includes('putri') ? 'Putra' : 'Putri';
+                  navigate(`${Page.LISTINGS}?type=${targetType}`);
+                }}
+                className="w-full flex items-center justify-center gap-2 bg-[#ff7a00] hover:bg-orange-600 text-white text-sm font-bold py-3.5 px-4 rounded-xl shadow-xs hover:shadow active:scale-98 transition-all cursor-pointer"
+              >
+                <Search className="w-4 h-4" />
+                <span>Cari Kost {genderMismatchInfo.kostGenderLabel.toLowerCase().includes('putri') ? 'Putra / Campur' : 'Putri / Campur'}</span>
+              </button>
 
-              {/* Penjelasan Humanis */}
-              <div className="bg-amber-50/80 border border-amber-200/70 rounded-2xl p-3.5 text-xs text-amber-900 leading-relaxed mb-6 flex items-start gap-2.5">
-                <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-                <div>
-                  <span className="font-bold">Ketentuan Pemilik Kost:</span> Demi menjaga keamanan, privasi, dan kenyamanan seluruh penghuni sesuai tata tertib pemilik hunian, pengajuan sewa ini <strong>tidak dapat dilanjutkan</strong>.
-                </div>
-              </div>
-
-              {/* Action Buttons */}
-              <div className="flex flex-col sm:flex-row gap-2.5">
-                <button
-                  onClick={() => {
-                    setIsGenderMismatchModalOpen(false);
-                    const targetType = genderMismatchInfo.kostGenderLabel.toLowerCase().includes('putri') ? 'Putra' : 'Putri';
-                    navigate(`${Page.LISTINGS}?type=${targetType}`);
-                  }}
-                  className="flex-1 flex items-center justify-center gap-2 bg-[#ff7a00] hover:bg-orange-600 text-white text-xs sm:text-sm font-black py-3.5 px-4 rounded-xl shadow-xs hover:shadow active:scale-98 transition-all cursor-pointer"
-                >
-                  <Search className="w-4 h-4" />
-                  <span>Cari Kost {genderMismatchInfo.kostGenderLabel.toLowerCase().includes('putri') ? 'Putra / Campur' : 'Putri / Campur'}</span>
-                </button>
-
-                <button
-                  onClick={() => {
-                    setIsGenderMismatchModalOpen(false);
-                    navigate(Page.PROFILE);
-                  }}
-                  className="flex items-center justify-center gap-2 bg-gray-100 hover:bg-gray-200 text-gray-800 text-xs sm:text-sm font-bold py-3.5 px-4 rounded-xl transition-all cursor-pointer"
-                >
-                  <UserIcon className="w-4 h-4 text-gray-600" />
-                  <span>Cek Data Profil</span>
-                </button>
-              </div>
+              <button
+                onClick={() => setIsGenderMismatchModalOpen(false)}
+                className="w-full py-2.5 text-xs font-bold text-gray-500 hover:text-gray-800 transition-colors cursor-pointer"
+              >
+                Tutup
+              </button>
             </div>
           </div>
         </div>
