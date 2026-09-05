@@ -166,7 +166,7 @@ const KostManagerLanding: React.FC<KostManagerLandingProps> = ({ user, onBack, i
     setSearchParams(params);
   };
   const [hasAgreedMoU, setHasAgreedMoU] = useState(false);
-  const [modalStep, setModalStep] = useState<'method' | 'form' | 'mou'>('method');
+  const [modalStep, setModalStep] = useState<'method' | 'form' | 'mou' | 'summary'>('method');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isDetectingLocation, setIsDetectingLocation] = useState(false);
   const [showMapPicker, setShowMapPicker] = useState(false);
@@ -479,9 +479,9 @@ const KostManagerLanding: React.FC<KostManagerLandingProps> = ({ user, onBack, i
     setModalStep('mou');
   };
 
-  // Langkah 2: Persetujuan Syarat & Ketentuan dan Lanjut ke Pembayaran
-  const handleSubmitPayment = (e: React.FormEvent) => {
-    e.preventDefault();
+  // Langkah Pembayaran: Pembuatan Metadata Transaksi & Pembukaan Payment Gateway
+  const handleSubmitPayment = (e?: React.SyntheticEvent) => {
+    if (e) e.preventDefault();
     if (!checkIdentityVerification()) return;
     if (!hasAgreedMoU) {
       alert('Mohon centang persetujuan Syarat & Ketentuan terlebih dahulu.');
@@ -909,59 +909,80 @@ const KostManagerLanding: React.FC<KostManagerLandingProps> = ({ user, onBack, i
                 </button>
               </div>
 
-              {/* Progress Step Indicator (3 Steps) */}
-              <div className="mt-4 pt-3 border-t border-slate-200/60 flex items-center justify-between gap-2">
+              {/* Progress Step Indicator (4 Steps) */}
+              <div className="mt-4 pt-3 border-t border-slate-200/60 flex items-center justify-between gap-1 sm:gap-2">
                 {/* Step 1: Metode */}
-                <div className="flex items-center gap-2">
-                  <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-black transition-all ${
+                <div className="flex items-center gap-1.5 sm:gap-2">
+                  <div className={`w-5 h-5 sm:w-6 sm:h-6 rounded-full flex items-center justify-center text-[10px] font-black transition-all ${
                     modalStep === 'method' 
                       ? 'bg-orange-500 text-white ring-4 ring-orange-500/20 shadow-xs' 
                       : 'bg-emerald-500 text-white'
                   }`}>
-                    {modalStep !== 'method' ? <Check size={12} className="stroke-[3]" /> : '1'}
+                    {modalStep !== 'method' ? <Check size={11} className="stroke-[3]" /> : '1'}
                   </div>
-                  <span className={`text-xs font-bold ${modalStep === 'method' ? 'text-orange-600' : 'text-slate-700'}`}>
-                    Pilih Metode
+                  <span className={`text-[11px] sm:text-xs font-bold ${modalStep === 'method' ? 'text-orange-600' : 'text-slate-700'}`}>
+                    Metode
                   </span>
                 </div>
 
                 {/* Divider 1 */}
-                <div className={`h-1 flex-1 max-w-[40px] sm:max-w-[70px] rounded-full transition-all ${
+                <div className={`h-0.5 sm:h-1 flex-1 max-w-[20px] sm:max-w-[45px] rounded-full transition-all ${
                   modalStep !== 'method' ? 'bg-orange-500' : 'bg-slate-200'
                 }`} />
 
                 {/* Step 2: Data Properti */}
-                <div className="flex items-center gap-2">
-                  <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-black transition-all ${
+                <div className="flex items-center gap-1.5 sm:gap-2">
+                  <div className={`w-5 h-5 sm:w-6 sm:h-6 rounded-full flex items-center justify-center text-[10px] font-black transition-all ${
                     modalStep === 'form' 
                       ? 'bg-orange-500 text-white ring-4 ring-orange-500/20 shadow-xs' 
-                      : (modalStep === 'mou' ? 'bg-emerald-500 text-white' : 'bg-slate-200 text-slate-500')
+                      : (modalStep === 'mou' || modalStep === 'summary' ? 'bg-emerald-500 text-white' : 'bg-slate-200 text-slate-500')
                   }`}>
-                    {modalStep === 'mou' ? <Check size={12} className="stroke-[3]" /> : '2'}
+                    {modalStep === 'mou' || modalStep === 'summary' ? <Check size={11} className="stroke-[3]" /> : '2'}
                   </div>
-                  <span className={`text-xs font-bold ${
-                    modalStep === 'form' ? 'text-orange-600' : (modalStep === 'mou' ? 'text-slate-700' : 'text-slate-400')
+                  <span className={`text-[11px] sm:text-xs font-bold ${
+                    modalStep === 'form' ? 'text-orange-600' : (modalStep === 'mou' || modalStep === 'summary' ? 'text-slate-700' : 'text-slate-400')
                   }`}>
-                    Data Properti
+                    Properti
                   </span>
                 </div>
 
                 {/* Divider 2 */}
-                <div className={`h-1 flex-1 max-w-[40px] sm:max-w-[70px] rounded-full transition-all ${
-                  modalStep === 'mou' ? 'bg-orange-500' : 'bg-slate-200'
+                <div className={`h-0.5 sm:h-1 flex-1 max-w-[20px] sm:max-w-[45px] rounded-full transition-all ${
+                  modalStep === 'mou' || modalStep === 'summary' ? 'bg-orange-500' : 'bg-slate-200'
                 }`} />
 
-                {/* Step 3: Syarat & MoU */}
-                <div className="flex items-center gap-2">
-                  <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-black transition-all ${
+                {/* Step 3: Syarat & S&K */}
+                <div className="flex items-center gap-1.5 sm:gap-2">
+                  <div className={`w-5 h-5 sm:w-6 sm:h-6 rounded-full flex items-center justify-center text-[10px] font-black transition-all ${
                     modalStep === 'mou' 
+                      ? 'bg-orange-500 text-white ring-4 ring-orange-500/20 shadow-xs' 
+                      : (modalStep === 'summary' ? 'bg-emerald-500 text-white' : 'bg-slate-200 text-slate-500')
+                  }`}>
+                    {modalStep === 'summary' ? <Check size={11} className="stroke-[3]" /> : '3'}
+                  </div>
+                  <span className={`text-[11px] sm:text-xs font-bold ${
+                    modalStep === 'mou' ? 'text-orange-600' : (modalStep === 'summary' ? 'text-slate-700' : 'text-slate-400')
+                  }`}>
+                    Syarat & MoU
+                  </span>
+                </div>
+
+                {/* Divider 3 */}
+                <div className={`h-0.5 sm:h-1 flex-1 max-w-[20px] sm:max-w-[45px] rounded-full transition-all ${
+                  modalStep === 'summary' ? 'bg-orange-500' : 'bg-slate-200'
+                }`} />
+
+                {/* Step 4: Ringkasan & Bayar */}
+                <div className="flex items-center gap-1.5 sm:gap-2">
+                  <div className={`w-5 h-5 sm:w-6 sm:h-6 rounded-full flex items-center justify-center text-[10px] font-black transition-all ${
+                    modalStep === 'summary' 
                       ? 'bg-orange-500 text-white ring-4 ring-orange-500/20 shadow-xs' 
                       : 'bg-slate-200 text-slate-500'
                   }`}>
-                    3
+                    4
                   </div>
-                  <span className={`text-xs font-bold ${modalStep === 'mou' ? 'text-orange-600' : 'text-slate-400'}`}>
-                    Syarat & MoU
+                  <span className={`text-[11px] sm:text-xs font-bold ${modalStep === 'summary' ? 'text-orange-600' : 'text-slate-400'}`}>
+                    Ringkasan
                   </span>
                 </div>
               </div>
@@ -1581,91 +1602,65 @@ const KostManagerLanding: React.FC<KostManagerLandingProps> = ({ user, onBack, i
               )}
 
               {/* ========================================================================= */}
-              {/* TAHAP 3: SYARAT & KETENTUAN (MoU) & PEMBAYARAN                            */}
+              {/* TAHAP 3: SYARAT & KETENTUAN (MoU)                                         */}
               {/* ========================================================================= */}
               {modalStep === 'mou' && (
-                <div className="space-y-6 animate-in fade-in duration-300">
+                <div className="space-y-5 animate-in fade-in duration-300">
                   
-                  {/* Order & Property Summary Card */}
-                  <div className="rounded-2xl border border-orange-200/90 bg-gradient-to-br from-orange-50/70 via-white to-amber-50/50 p-4 sm:p-5 space-y-3 shadow-xs">
-                    <div className="flex items-center justify-between border-b border-orange-100 pb-2.5">
-                      <span className="text-[11px] font-black text-orange-800 uppercase tracking-wider flex items-center gap-1.5">
-                        <Sparkles size={13} className="text-orange-500" />
-                        Ringkasan Pendaftaran
-                      </span>
-                      <span className="text-xs font-black text-orange-600 bg-orange-100/70 px-2.5 py-0.5 rounded-full border border-orange-200">
-                        {packageLabel} ({packageDuration === 12 ? '1 Tahun' : `${packageDuration} Bulan`})
-                      </span>
+                  {/* Header Tahap 3 */}
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-2xl bg-orange-500/10 border border-orange-500/20 text-orange-600 flex items-center justify-center flex-shrink-0 shadow-xs">
+                      <FileText size={20} className="stroke-[2.5]" />
                     </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-                      <div className="bg-white/90 rounded-xl p-3 border border-orange-100/80 shadow-2xs">
-                        <span className="text-[10px] font-bold text-slate-400 block mb-0.5">Properti Kost:</span>
-                        <strong className="text-slate-900 block truncate text-sm">{formData.kostName || 'Kost Anda'}</strong>
-                        <span className="text-[11px] text-slate-500 font-medium block truncate mt-0.5">
-                          Tipe: {formData.kostType} • {formData.totalRooms} Kamar
-                        </span>
-                      </div>
-                      <div className="bg-white/90 rounded-xl p-3 border border-orange-100/80 shadow-2xs">
-                        <span className="text-[10px] font-bold text-slate-400 block mb-0.5">Biaya Berlangganan:</span>
-                        <strong className="text-orange-600 block text-base font-black">
-                          {FORMAT_CURRENCY(packagePrice)}
-                        </strong>
-                        <span className="text-[10px] text-slate-500 font-medium block">
-                          Termasuk survey & foto profesional
-                        </span>
-                      </div>
+                    <div>
+                      <h4 className="text-base sm:text-lg font-black text-slate-900 tracking-tight leading-tight">
+                        Syarat & Ketentuan Layanan KostManager
+                      </h4>
+                      <p className="text-xs text-slate-500 font-medium">
+                        Harap baca dan pahami kesepakatan kemitraan sebelum melanjutkan
+                      </p>
                     </div>
                   </div>
 
                   {/* Document Terms Box */}
-                  <div className="space-y-3">
-                    <div className="flex items-center gap-2">
-                      <FileText size={15} className="text-orange-500" />
-                      <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest">
-                        Syarat & Ketentuan Layanan KostManager
-                      </h4>
+                  <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-4 sm:p-5 max-h-72 overflow-y-auto text-xs space-y-3.5 text-slate-600 font-medium leading-relaxed">
+                    <div className="flex gap-3">
+                      <div className="w-6 h-6 rounded-full bg-orange-100 text-orange-600 flex items-center justify-center flex-shrink-0 text-[11px] font-black">
+                        1
+                      </div>
+                      <div>
+                        <strong className="text-slate-900 block mb-0.5">Biaya Berlangganan & Aktivasi Layanan:</strong>
+                        Berlangganan KostManager dikenakan tarif resmi {FORMAT_CURRENCY(packagePrice)} per {packageDuration === 12 ? 'tahun' : `${packageDuration} bulan`} per properti kost. Layanan aktif secara otomatis setelah pembayaran berhasil diverifikasi.
+                      </div>
                     </div>
 
-                    <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-4 sm:p-5 max-h-56 overflow-y-auto text-xs space-y-3.5 text-slate-600 font-medium leading-relaxed">
-                      <div className="flex gap-2.5">
-                        <div className="w-5 h-5 rounded-full bg-orange-100 text-orange-600 flex items-center justify-center flex-shrink-0 text-[10px] font-bold">
-                          1
-                        </div>
-                        <div>
-                          <strong className="text-slate-900 block mb-0.5">Biaya Berlangganan & Aktivasi:</strong>
-                          Berlangganan KostManager dikenakan tarif resmi {FORMAT_CURRENCY(packagePrice)} per {packageDuration === 12 ? 'tahun' : `${packageDuration} bulan`} per properti kost. Layanan aktif setelah pembayaran terverifikasi.
-                        </div>
+                    <div className="flex gap-3">
+                      <div className="w-6 h-6 rounded-full bg-orange-100 text-orange-600 flex items-center justify-center flex-shrink-0 text-[11px] font-black">
+                        2
                       </div>
-
-                      <div className="flex gap-2.5">
-                        <div className="w-5 h-5 rounded-full bg-orange-100 text-orange-600 flex items-center justify-center flex-shrink-0 text-[10px] font-bold">
-                          2
-                        </div>
-                        <div>
-                          <strong className="text-slate-900 block mb-0.5">Kunjungan Surveyor & Foto Profesional:</strong>
-                          Tim surveyor resmi RuangSinggah.id akan menjadwalkan kunjungan langsung ke lokasi properti untuk pengambilan foto/video berkualitas tinggi dan pembuatan denah/katalog visual kamar.
-                        </div>
+                      <div>
+                        <strong className="text-slate-900 block mb-0.5">Kunjungan Surveyor & Foto Profesional:</strong>
+                        Tim surveyor resmi RuangSinggah.id akan menjadwalkan kunjungan langsung ke lokasi properti untuk pengambilan foto/video kamar berkualitas tinggi, verifikasi fasilitas, dan pembuatan denah/katalog visual.
                       </div>
+                    </div>
 
-                      <div className="flex gap-2.5">
-                        <div className="w-5 h-5 rounded-full bg-orange-100 text-orange-600 flex items-center justify-center flex-shrink-0 text-[10px] font-bold">
-                          3
-                        </div>
-                        <div>
-                          <strong className="text-slate-900 block mb-0.5">Media Promosi Eksklusif:</strong>
-                          Seluruh materi visual akan dipromosikan melalui channel prioritas RuangSinggah.id (Instagram, TikTok, Website, dan Banner Prioritas) untuk mempercepat keterisian kamar.
-                        </div>
+                    <div className="flex gap-3">
+                      <div className="w-6 h-6 rounded-full bg-orange-100 text-orange-600 flex items-center justify-center flex-shrink-0 text-[11px] font-black">
+                        3
                       </div>
+                      <div>
+                        <strong className="text-slate-900 block mb-0.5">Prioritas Media Promosi & Pemasaran:</strong>
+                        Seluruh materi visual properti akan dipromosikan melalui channel prioritas RuangSinggah.id (Instagram, TikTok, Website, dan Banner Prioritas) untuk memaksimalkan keterisian kamar.
+                      </div>
+                    </div>
 
-                      <div className="flex gap-2.5">
-                        <div className="w-5 h-5 rounded-full bg-orange-100 text-orange-600 flex items-center justify-center flex-shrink-0 text-[10px] font-bold">
-                          4
-                        </div>
-                        <div>
-                          <strong className="text-slate-900 block mb-0.5">Sistem Penagihan & Pembayaran Terpadu:</strong>
-                          Tagihan sewa bulanan penghuni dikelola otomatis oleh sistem digital RuangSinggah.id dan dicairkan berkala langsung ke rekening/dompet pemilik.
-                        </div>
+                    <div className="flex gap-3">
+                      <div className="w-6 h-6 rounded-full bg-orange-100 text-orange-600 flex items-center justify-center flex-shrink-0 text-[11px] font-black">
+                        4
+                      </div>
+                      <div>
+                        <strong className="text-slate-900 block mb-0.5">Sistem Penagihan & Pembayaran Terpadu:</strong>
+                        Tagihan sewa bulanan penghuni dikelola otomatis oleh sistem digital RuangSinggah.id dan dicairkan secara berkala langsung ke rekening bank atau dompet digital pemilik kost.
                       </div>
                     </div>
                   </div>
@@ -1699,18 +1694,116 @@ const KostManagerLanding: React.FC<KostManagerLandingProps> = ({ user, onBack, i
                     <button
                       type="button"
                       onClick={() => setModalStep('form')}
-                      className="px-5 py-2.5 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 text-xs sm:text-sm font-bold transition-all cursor-pointer"
+                      className="px-5 py-2.5 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 text-xs sm:text-sm font-bold transition-all cursor-pointer flex items-center gap-1.5"
                     >
-                      Kembali ke Formulir
+                      <ArrowLeft size={14} />
+                      <span>Kembali ke Data Properti</span>
                     </button>
                     <button
                       type="button"
                       disabled={!hasAgreedMoU}
-                      onClick={handleSubmitPayment}
+                      onClick={() => {
+                        if (!hasAgreedMoU) {
+                          alert('Mohon centang persetujuan Syarat & Ketentuan terlebih dahulu.');
+                          return;
+                        }
+                        setModalStep('summary');
+                      }}
                       className="px-6 sm:px-8 py-3 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white rounded-xl text-xs sm:text-sm font-black uppercase tracking-wider flex items-center justify-center gap-2 active:scale-95 shadow-lg shadow-orange-500/25 transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                     >
+                      <span>Lanjut: Ringkasan Biaya</span>
+                      <ArrowRight size={16} />
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* ========================================================================= */}
+              {/* TAHAP 4: RINGKASAN PENDAFTARAN & PEMBAYARAN LANGGANAN                     */}
+              {/* ========================================================================= */}
+              {modalStep === 'summary' && (
+                <div className="space-y-5 animate-in fade-in duration-300">
+                  
+                  {/* Header Tahap 4 */}
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-2xl bg-orange-500/10 border border-orange-500/20 text-orange-600 flex items-center justify-center flex-shrink-0 shadow-xs">
+                      <Sparkles size={20} className="stroke-[2.5]" />
+                    </div>
+                    <div>
+                      <h4 className="text-base sm:text-lg font-black text-slate-900 tracking-tight leading-tight">
+                        Ringkasan Pendaftaran & Pembayaran
+                      </h4>
+                      <p className="text-xs text-slate-500 font-medium">
+                        Tinjau rincian langganan dan properti sebelum melakukan pembayaran
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Order & Property Summary Cards */}
+                  <div className="rounded-2xl border border-orange-200/90 bg-gradient-to-br from-orange-50/70 via-white to-amber-50/50 p-4 sm:p-5 space-y-3.5 shadow-xs">
+                    <div className="flex items-center justify-between border-b border-orange-100 pb-2.5">
+                      <span className="text-[11px] font-black text-orange-800 uppercase tracking-wider flex items-center gap-1.5">
+                        <Sparkles size={13} className="text-orange-500" />
+                        Rincian Paket & Properti
+                      </span>
+                      <span className="text-xs font-black text-orange-600 bg-orange-100/70 px-2.5 py-0.5 rounded-full border border-orange-200">
+                        {packageLabel} ({packageDuration === 12 ? '1 Tahun Penuh' : `${packageDuration} Bulan`})
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                      {/* Kartu Properti */}
+                      <div className="bg-white/95 rounded-xl p-3.5 border border-orange-100/90 shadow-2xs space-y-1">
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Properti Kost Terdaftar</span>
+                        <strong className="text-slate-900 block truncate text-sm font-black">{formData.kostName || 'Kost Anda'}</strong>
+                        <div className="text-[11px] text-slate-500 font-medium flex items-center gap-2">
+                          <span className="bg-slate-100 text-slate-700 px-2 py-0.5 rounded-md font-bold text-[10px]">{formData.kostType}</span>
+                          <span>{formData.totalRooms} Total Kamar</span>
+                        </div>
+                        {formData.address && (
+                          <p className="text-[10px] text-slate-400 truncate pt-1 border-t border-slate-100 mt-1">
+                            {formData.address}
+                          </p>
+                        )}
+                      </div>
+
+                      {/* Kartu Biaya */}
+                      <div className="bg-white/95 rounded-xl p-3.5 border border-orange-100/90 shadow-2xs space-y-1">
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Total Biaya Langganan</span>
+                        <strong className="text-orange-600 block text-lg font-black">
+                          {FORMAT_CURRENCY(packagePrice)}
+                        </strong>
+                        <div className="text-[10px] text-emerald-600 font-bold flex items-center gap-1">
+                          <CheckCircle2 size={12} />
+                          <span>Survey & Foto Profesional Termasuk (Rp 0)</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Badge Persetujuan MoU */}
+                    <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold">
+                      <CheckCircle size={14} className="text-emerald-600 stroke-[3] flex-shrink-0" />
+                      <span>Syarat & Ketentuan Layanan telah disetujui</span>
+                    </div>
+                  </div>
+
+                  {/* Sticky Footer Tahap 4 */}
+                  <div className="flex items-center justify-between gap-3 pt-3 border-t border-slate-100 bg-white sticky bottom-0">
+                    <button
+                      type="button"
+                      onClick={() => setModalStep('mou')}
+                      className="px-5 py-2.5 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 text-xs sm:text-sm font-bold transition-all cursor-pointer flex items-center gap-1.5"
+                    >
+                      <ArrowLeft size={14} />
+                      <span>Kembali ke Syarat & MoU</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleSubmitPayment}
+                      className="px-6 sm:px-8 py-3 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white rounded-xl text-xs sm:text-sm font-black uppercase tracking-wider flex items-center justify-center gap-2 active:scale-95 shadow-lg shadow-orange-500/25 transition-all cursor-pointer"
+                    >
                       <ShieldCheck size={17} className="stroke-[2.5]" />
-                      <span>Setuju & Lanjut Pembayaran</span>
+                      <span>Bayar & Aktifkan Langganan</span>
                     </button>
                   </div>
                 </div>

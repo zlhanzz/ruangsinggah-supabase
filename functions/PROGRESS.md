@@ -2,6 +2,27 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 375. Pemisahan Syarat & Ketentuan (MoU) dan Ringkasan Pembayaran Langganan Menjadi 4 Tahap Terpisah (`KostManagerLanding.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna meminta agar Syarat & Ketentuan (MoU) dipisahkan dari Ringkasan Pembayaran terkait rincian biaya langganan, dan tidak disatukan dalam satu layar (*"syarat dan ketentuan terlebih dahulu baru lanjut ke ringkasan pembayaran langganan terkait ringkasan biayanya, jangan disatukan"*).
+  2. Penggabungan kedua komponen di Tahap 3 sebelumnya membuat tampilan terlalu padat dan membingungkan mitra karena membaca MoU sambil melihat rincian biaya sekaligus.
+- **Implementasi Solusi**:
+  1. **Struktur Alur 4 Tahap Terpisah & Terurut**:
+     - **Tahap 1 (`method`)**: *Pilih Metode Registrasi* (Pilih dari Kost Saya vs Daftarkan Kost Baru).
+     - **Tahap 2 (`form`)**: *Data Properti* (Pilih properti visual atau input form properti baru).
+     - **Tahap 3 (`mou`)**: *Syarat & Ketentuan Layanan (MoU)* eksklusif, memuat poin-poin kesepakatan kemitraan, info survey & foto profesional, SOP penagihan terpadu, checkbox persetujuan, dan tombol navigasi *"Lanjut: Ringkasan Biaya"*.
+     - **Tahap 4 (`summary`)**: *Ringkasan Pendaftaran & Pembayaran*, memuat kartu properti terdaftar, kartu rincian total biaya langganan transparan (biaya survey Rp 0 / gratis), badge hijau status persetujuan MoU, serta tombol aksi *"Bayar & Aktifkan Langganan"*.
+  2. **Pembaruan Stepper Progress Indicator (4 Steps)**:
+     - Header progress bar diperbarui menjadi 4 langkah proporsional (`Metode` ➔ `Properti` ➔ `Syarat & MoU` ➔ `Ringkasan`), lengkap dengan nomor urut, icon centang checkmark untuk langkah yang sudah terselesaikan, dan garis pembatas dinamis.
+  3. **Navigasi Balik (Back Navigation) yang Mulus**:
+     - Mitra dapat mundur ke langkah sebelumnya kapan saja (Tahap 4 ➔ Tahap 3 ➔ Tahap 2 ➔ Tahap 1) tanpa kehilangan data yang telah dipilih atau diisi.
+- **File Tersentuh**:
+  - `functions/public/pages/KostManagerLanding.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi build frontend Vite (`cmd /c npm run build`) lulus 100% (`✓ 2511 modules transformed, built in 32.64s`, 0 error).
+
 ### 374. Penghapusan Kolom Input Form Redundan pada Alur Pendaftaran Kost Eksisting (`KostManagerLanding.tsx`) (September 2026)
 - **Permintaan & Masalah**:
   1. Pengguna memberikan masukan bahwa ketika mendaftarkan properti kost yang sudah ada (*"Pilih dari Listing Kost Saya"*), seluruh kolom input teks manual (`Nama Kost`, `Jenis Kost`, `Jumlah Kamar`, `Link Maps`, `Alamat`, `Ambil GPS`) seharusnya tidak perlu ditampilkan lagi, karena seluruh data spesifikasi, foto, dan mini-map lokasi sudah terbaca otomatis dari listing yang dipilih (*"jika mendaftarkan kost yang sudah ada, seharusnya input ini sudah tidak ada, karena semua datanya sudah terbaca dari sistem, bahkan preview map atau mini mapnya sudah ada berdasarkan listing yang sudah ada"*).
