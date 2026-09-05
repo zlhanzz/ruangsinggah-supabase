@@ -52,12 +52,6 @@ const Profile: React.FC<ProfileProps> = ({ user, onLogout, onSaveSuccess, forceE
     if (viewParam === 'favorites') return 'favorites';
     if (viewParam === 'transactions') return 'transactions';
     if (viewParam === 'rental_history') return 'rental_history';
-    if (location.pathname === Page.SETTINGS || location.pathname === '/settings') {
-      return 'hub';
-    }
-    if (location.pathname === Page.PROFILE || location.pathname === '/profile') {
-      return 'edit_personal_data';
-    }
     return 'hub';
   };
 
@@ -160,9 +154,6 @@ const Profile: React.FC<ProfileProps> = ({ user, onLogout, onSaveSuccess, forceE
     } else if (viewParam === 'personal_data') {
       setIsEditing(false);
       setViewMode('edit_personal_data');
-    } else if (location.pathname === Page.SETTINGS || location.pathname === '/settings') {
-      setViewMode('hub');
-      setIsEditing(false);
     } else if (viewParam === 'favorites') {
       setViewMode('favorites');
       setIsEditing(false);
@@ -172,11 +163,9 @@ const Profile: React.FC<ProfileProps> = ({ user, onLogout, onSaveSuccess, forceE
     } else if (viewParam === 'rental_history') {
       setViewMode('rental_history');
       setIsEditing(false);
-    } else if (location.pathname === Page.PROFILE || location.pathname === '/profile') {
-      setViewMode(initialMode || 'edit_personal_data');
-      if (!isExplicitEdit) {
-        setIsEditing(false);
-      }
+    } else {
+      setViewMode(initialMode || 'hub');
+      setIsEditing(false);
     }
   }, [location.pathname, location.search, forceEdit, initialMode]);
 
@@ -537,6 +526,24 @@ const Profile: React.FC<ProfileProps> = ({ user, onLogout, onSaveSuccess, forceE
       verification_status: user.verification_status || 'unverified'
     });
     setIsEditing(false);
+  };
+
+  const handleBackNavigationFromData = () => {
+    if (isEditing) {
+      handleCancel();
+    } else if (!forceEdit) {
+      const searchParams = new URLSearchParams(location.search);
+      if (searchParams.has('view') || searchParams.has('tab') || searchParams.has('edit')) {
+        navigate(location.pathname, { replace: true });
+      }
+      setViewMode('hub');
+    } else if (onBack) {
+      onBack();
+    } else if (window.history.length > 1) {
+      navigate(-1);
+    } else {
+      navigate(Page.HOME);
+    }
   };
 
   const handlePasswordChange = async (e: React.FormEvent) => {
@@ -1401,15 +1408,7 @@ const Profile: React.FC<ProfileProps> = ({ user, onLogout, onSaveSuccess, forceE
             ) : (
               <button
                 type="button"
-                onClick={() => {
-                  if (onBack) {
-                    onBack();
-                  } else if (window.history.length > 1) {
-                    navigate(-1);
-                  } else {
-                    navigate(Page.HOME);
-                  }
-                }}
+                onClick={handleBackNavigationFromData}
                 className="px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-xl text-xs font-bold hover:bg-gray-50 hover:border-gray-300 transition-all shadow-xs active:scale-95 flex items-center gap-2 cursor-pointer"
               >
                 <ArrowLeft className="w-4 h-4 text-gray-500" />
@@ -1453,11 +1452,7 @@ const Profile: React.FC<ProfileProps> = ({ user, onLogout, onSaveSuccess, forceE
             <div className="flex items-center gap-2 text-xs font-semibold text-gray-400 mb-3">
               <span 
                 className="text-gray-500 hover:text-gray-700 cursor-pointer" 
-                onClick={() => {
-                  if (onBack) onBack();
-                  else if (window.history.length > 1) navigate(-1);
-                  else navigate(Page.HOME);
-                }}
+                onClick={handleBackNavigationFromData}
               >
                 Kembali
               </span>
@@ -2072,17 +2067,7 @@ const Profile: React.FC<ProfileProps> = ({ user, onLogout, onSaveSuccess, forceE
             <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-end gap-3 pt-2">
               <button
                 type="button"
-                onClick={() => {
-                  if (isEditing) {
-                    handleCancel();
-                  } else if (onBack) {
-                    onBack();
-                  } else if (window.history.length > 1) {
-                    navigate(-1);
-                  } else {
-                    navigate(Page.HOME);
-                  }
-                }}
+                onClick={handleBackNavigationFromData}
                 className="w-full sm:w-auto px-6 py-3.5 sm:py-3 bg-white hover:bg-gray-50 border border-orange-200 text-[#ff7a00] rounded-2xl sm:rounded-xl text-sm sm:text-xs font-bold transition-all shadow-xs active:scale-95 cursor-pointer text-center order-2 sm:order-1"
               >
                 {isEditing ? 'Batal' : 'Kembali'}

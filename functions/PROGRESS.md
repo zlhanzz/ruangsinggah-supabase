@@ -2,6 +2,32 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 367. Pemulihan Profile Hub pada Menu Profil Mobile & Penyelarasan Navigasi Desktop (`Profile.tsx`, `Navbar.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  1. Pada antarmuka Mobile, saat pengguna menekan tab menu **Profil** (di Bottom Navigation Bar) atau menekan ikon Avatar di header, aplikasi langsung menampilkan formulir / tinjauan Data Kontak Pribadi (`edit_personal_data`), sehingga seluruh fitur dan menu Profile Hub (Riwayat Sewa Kost, Kost Favorit Saya, Riwayat Transaksi & Tagihan, Keamanan & Kata Sandi, Preferensi Notifikasi, Pusat Bantuan 24/7, Syarat & Ketentuan Sewa, Keluar Akun) terlewat dan tidak muncul.
+  2. Sementara pada tampilan Desktop, menu Profile Hub tersebut sebelumnya ditempatkan pada dropdown menu *"Pengaturan"* (`/settings`), sedangkan menu *"Profil Saya"* mengarah ke data pribadi.
+  3. Karena di perangkat Mobile tidak ada tombol tab *"Pengaturan"* terpisah pada bottom navigation bar (hanya ada 5 tab utama: *Home, Search, Chat, Orders, Profil*), rute `/profile` harus menampilkan Profile Hub secara default agar pengguna mobile dapat mengakses seluruh menu profil dan pengaturan.
+- **Implementasi Solusi**:
+  1. **Inisialisasi & Sinkronisasi Route Default ke Profile Hub (`Profile.tsx`)**:
+     - Memperbarui fungsi `determineInitialMode()` dan hook sinkronisasi `useEffect` agar rute `/profile` tanpa query parameter mengembalikan `viewMode = 'hub'` secara default.
+     - Mode `edit_personal_data` hanya diaktifkan jika terdapat parameter query eksplisit (`?view=edit`, `?view=personal_data`, `?edit=true`) atau `forceEdit === true` (alur transaksi tertunda).
+     - Sub-view lainnya (`?view=favorites`, `?view=transactions`, `?view=rental_history`) tetap diarahkan ke modul masing-masing secara presisi.
+  2. **Penyempurnaan Navigasi Kembali dari Data Pribadi ke Profile Hub (`Profile.tsx`)**:
+     - Menambahkan handler terpadu `handleBackNavigationFromData()` pada sub-view Data Kontak Pribadi.
+     - Jika pengguna sedang dalam mode edit $\rightarrow$ membatalkan edit (`handleCancel()`).
+     - Jika pengguna sedang meninjau data pribadi (tidak sedang edit) $\rightarrow$ klik tombol *"Kembali"* (baik tombol atas mobile, tombol bawah responsif, maupun breadcrumb desktop) akan mengembalikan tampilan ke `viewMode = 'hub'` secara mulus.
+  3. **Penyelarasan Menu Dropdown Desktop (`Navbar.tsx`)**:
+     - Mengarahkan tombol dropdown desktop **"Profil Saya"** ke `/profile?view=personal_data` sehingga pengguna desktop tetap langsung diarahkan ke data pribadi.
+     - Mengarahkan tombol dropdown desktop **"Pengaturan"** ke `Page.SETTINGS` (`/settings` / mode Hub).
+     - Mempertahankan akses langsung Mobile Bottom Navigation Bar (`Page.PROFILE`) dan Avatar mobile ke Profile Hub Dashboard yang kaya fitur.
+- **File Tersentuh**:
+  - `functions/public/pages/Profile.tsx`
+  - `functions/public/components/Navbar.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi build frontend Vite (`cmd /c npm run build` di `functions/public`) lulus 100% (0 error).
+
 ### 366. Penataan Alur Pendaftaran KostManager: Formulir Data Kost di Awal & Syarat dan Ketentuan (MoU) di Akhir (`KostManagerLanding.tsx`) (September 2026)
 - **Permintaan & Masalah**:
   1. Pengguna meminta agar Syarat & Ketentuan (MoU) program KostManager ditampilkan di akhir alur pendaftaran, bukan di awal formulir (*"tampilkan syarat dan ketentuan kostmanager di akhir, bukan diawal form"*).

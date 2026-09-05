@@ -256,7 +256,7 @@ const Navbar: React.FC<NavbarProps> = ({ activePage, onPageChange, user, onLogou
                           <>
                             <button
                               onClick={() => {
-                                onPageChange(Page.PROFILE);
+                                onPageChange(Page.PROFILE + '?view=personal_data');
                                 setIsProfileOpen(false);
                               }}
                               className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-orange-50 hover:text-orange-600"
