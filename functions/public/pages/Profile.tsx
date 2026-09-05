@@ -661,7 +661,7 @@ const Profile: React.FC<ProfileProps> = ({ user, onLogout, onSaveSuccess, forceE
               
               {/* Pusat Bantuan 24/7 */}
               <button
-                onClick={() => window.open('https://wa.me/6281527080656?text=Halo%20Tim%20Bantuan%20RuangSinggah%2C%20saya%20butuh%20bantuan%20sewa%20kost...', '_blank')}
+                onClick={() => navigate(Page.CONTACT)}
                 className="w-full p-4 flex items-center justify-between text-left hover:bg-orange-50/40 transition-colors group cursor-pointer"
               >
                 <div className="flex items-center gap-3.5 min-w-0">

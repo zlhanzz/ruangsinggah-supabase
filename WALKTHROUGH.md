@@ -1,45 +1,30 @@
-# Walkthrough: Redesain Profile Hub Dashboard Interaktif & Sub-view Edit Data Pribadi
+# Walkthrough: Penyelarasan Menu Pusat Bantuan Terpadu pada Footer & Profile Hub
 
 ## Ringkasan Pekerjaan
-Pembaruan komprehensif pada halaman **Profil Pengguna (`/profile`)** untuk mentransformasikan antarmuka dari formulir data pribadi mentah menjadi **Profile Hub Dashboard** yang elegan, modern, dan intuitif (sesuai referensi UI pengguna). Seluruh fitur sebelumnya (validasi, upload KTP WebP, penyimpanan data diri Supabase) tetap terjaga 100% dan dapat diakses melalui sub-view edit data pribadi.
+Penyelarasan navigasi menu **Pusat Bantuan** pada Footer dan Profile Hub Dashboard (`/profile`), serta penyempurnaan antarmuka halaman **Pusat Bantuan (`/contact`)** agar konsisten, modern, responsif, dan 100% menggunakan pure bundled SVG icon (`lucide-react`).
 
 ---
 
-## 📸 Detail Struktur Antarmuka Baru
+## 📸 Detail Perubahan Navigasi & Tampilan
 
-### 1. Header Profil Pengguna
-- **Avatar Dinamis**: Menampilkan foto profil pengguna dengan opsi inisial cerdas jika foto belum diunggah.
-- **Nama & Kontak**: Menampilkan nama lengkap dan nomor WhatsApp / email terdaftar.
-- **Lencana Verifikasi Identitas**: Status verifikasi KTP instan (`Terverifikasi` berwarna hijau dengan ikon `ShieldCheck` atau `Belum Terverifikasi` berwarna abu-abu/oranye).
+### 1. Perubahan Menu Footer (`Footer.tsx`)
+- Teks menu di bawah kolom **PERUSAHAAN** yang sebelumnya bernama **"Kontak"** kini telah diubah menjadi **"Pusat Bantuan"**.
+- Mengklik menu ini akan membuka halaman Pusat Bantuan (`/contact`).
 
-### 2. Menu Aktivitas Sewa & Transaksi
-- **Kost Saya**: Menghubungkan langsung ke `/my-kost` dilengkapi *live counter badge* jumlah kost/kamar aktif penyewa.
-- **Riwayat Transaksi**: Menghubungkan ke riwayat transaksi dan pembayaran tagihan sewa.
-- **Pesan & Chat**: Menghubungkan ke `/chat` untuk berkirim pesan dengan pemilik kost/pengelola.
+### 2. Penyelarasan Menu Profile Hub (`Profile.tsx`)
+- Tombol **"Pusat Bantuan 24/7"** di dalam Profile Hub yang sebelumnya langsung melakukan `window.open` ke WhatsApp eksternal, kini diarahkan menggunakan `navigate(Page.CONTACT)`.
+- Dengan ini, pengguna yang mengklik "Pusat Bantuan 24/7" di profil akan melihat tampilan Pusat Bantuan yang sama persis seperti yang dibuka dari footer web.
 
-### 3. Pengaturan Akun & Keamanan
-- **Edit Profil & Data Kontak Pribadi**: Membuka sub-view formulir edit data diri lengkap.
-- **Ganti Kata Sandi**: Membuka modal popup interaktif untuk mereset/mengganti password akun Supabase Auth dengan konfirmasi keamanan.
-- **Preferensi Notifikasi**: Membuka modal kontrol pengaturan notifikasi via WhatsApp, Email, dan Penawaran Promo.
-
-### 4. Bantuan & Legalitas
-- **Pusat Bantuan & Layanan CS 24/7**: Tautan langsung ke layanan pelanggan WhatsApp / form kontak bantuan.
-- **Syarat & Ketentuan**: Membuka dokumen Syarat & Ketentuan Layanan.
-- **Kebijakan Privasi**: Membuka dokumen Kebijakan Privasi data pengguna.
-
-### 5. Tombol Keluar & Footer
-- **Keluar / Logout**: Tombol keluar berwarna merah dengan konfirmasi pembersihan sesi.
-- **Footer**: Identitas versi aplikasi RuangSinggah.
-
----
-
-## 🔄 Alur Navigasi Sub-view Formulir Data Pribadi
-1. Pengguna membuka `/profile` ➔ Tampilan default adalah **Profile Hub Dashboard**.
-2. Pengguna menekan opsi *"Edit Profil & Data Kontak Pribadi"*.
-3. Sistem beralih ke sub-view formulir edit data lengkap dengan tombol navigasi `← Kembali ke Menu Profil` di bagian atas.
-4. Pengguna dapat mengubah nama, nomor HP, pekerjaan, jenis kelamin, status perkawinan, agama, tempat & tanggal lahir, alamat, foto profil, serta upload KTP.
-5. Menekan tombol `Simpan Perubahan` akan memperbarui data ke Supabase dan secara otomatis mengembalikan tampilan ke Profile Hub dengan data ter-refresh.
-6. Menekan tombol `← Kembali ke Menu Profil` atau `Batal` mengembalikan tampilan ke Profile Hub tanpa kehilangan konteks.
+### 3. Redesain Modern Halaman Pusat Bantuan (`Contact.tsx`)
+- **Header Pusat Bantuan**: Dilengkapi badge layanan pelanggan, judul terpadu, dan tombol `← Kembali` responsif.
+- **3 Kanal Layanan Terpadu**:
+  1. **WhatsApp CS 24/7**: Live chat langsung ke nomor WhatsApp resmi (+62 815-2708-0656).
+  2. **Email Resmi**: Dukungan formal di `bantuan@ruangsinggah.id`.
+  3. **Kantor Operasional**: Lokasi kantor Makassar & jam operasional.
+- **Formulir Kirim Pesan & Pertanyaan**:
+  - Pilihan kategori keperluan (Info Kost, Beli Database, Jasa Survey, Daftar Mitra, Kendala Transaksi, dll.).
+  - Pesan yang diisi akan otomatis diteruskan secara rapi ke WhatsApp CS resmi.
+- **100% Pure Bundled SVG (`lucide-react`)**: Bebas kedipan teks (FOUT), 0 network overhead.
 
 ---
 
@@ -50,27 +35,24 @@ Pembaruan komprehensif pada halaman **Profil Pengguna (`/profile`)** untuk mentr
 - **Hasil Rollup/Vite**:
   ```text
   ✓ 2510 modules transformed.
-  rendering chunks...
-  computing gzip size...
-  ../../public/assets/Profile-SZYc3N9_.js    54.99 kB │ gzip: 11.06 kB
-  ✓ built in 1m 38s
+  ../../public/assets/Contact-B-J4z-4v.js    16.93 kB │ gzip: 4.71 kB
+  ✓ built in 43.42s
   ```
 - **0 Error Kompilasi, 0 Warning Syntax**.
-
-### 2. Standar Baku UI/UX & Ikon
-- **100% Pure Bundled SVG (`lucide-react`)**: Bebas Flash of Unstyled Text (FOUT), 0 network request untuk rendering icon.
 
 ---
 
 ## 🚀 Panduan Pengujian oleh Pengguna (User Testing Guide)
 
-1. Buka aplikasi di browser (mode mobile maupun desktop).
-2. Login sebagai pengguna/pencari kost.
-3. Klik ikon atau menu **Profil** di navigasi bawah (mobile) atau dropdown avatar di navbar (desktop):
-   - Pastikan yang pertama kali muncul adalah **Profile Hub Dashboard** yang rapi.
-4. Uji interaksi fitur:
-   - Klik **Kost Saya** ➔ memastikan masuk ke halaman `/my-kost`.
-   - Klik **Ganti Kata Sandi** ➔ pastikan modal ganti kata sandi muncul.
-   - Klik **Preferensi Notifikasi** ➔ pastikan modal pengaturan notifikasi muncul dan toggle switch dapat digeser.
-   - Klik **Edit Profil & Data Kontak Pribadi** ➔ pastikan formulir data pribadi terbuka lengkap dengan tombol `← Kembali ke Menu Profil` di atasnya.
-   - Lakukan edit data atau tekan `← Kembali ke Menu Profil` untuk kembali ke hub dashboard.
+1. Buka aplikasi web (mobile atau desktop).
+2. **Uji dari Footer**:
+   - Gulir ke bagian footer web.
+   - Lihat kolom **PERUSAHAAN** ➔ pastikan menu tertulis **"Pusat Bantuan"**.
+   - Klik menu tersebut ➔ pastikan halaman Pusat Bantuan (`/contact`) terbuka.
+3. **Uji dari Profile Hub**:
+   - Buka halaman **Profil** (`/profile`).
+   - Pada section *Bantuan & Informasi Legal*, klik **"Pusat Bantuan 24/7"**.
+   - Pastikan diarahkan ke halaman Pusat Bantuan (`/contact`) yang sama persis.
+4. **Uji Fitur Pusat Bantuan**:
+   - Coba klik tombol *Chat WhatsApp Sekarang* atau isi form pesan cepat untuk memastikan pesan terformat dengan rapi.
+   - Klik tombol `← Kembali` di sudut atas untuk kembali ke halaman sebelumnya secara mulus.

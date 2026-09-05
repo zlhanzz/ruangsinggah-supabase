@@ -2,6 +2,33 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 341. Penyelarasan Menu Pusat Bantuan Terpadu pada Footer Navigasi, Profile Hub Dashboard, dan Redesain Modern Halaman Pusat Bantuan (`Footer.tsx`, `Profile.tsx`, `Contact.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna meminta perubahan teks menu pada footer pengguna dari *"Kontak"* menjadi *"Pusat Bantuan"*.
+  2. Pengguna meminta agar tombol *"Pusat Bantuan 24/7"* pada menu Profil (`/profile`) menampilkan halaman yang sama persis dengan yang ada di footer (tidak lagi langsung membuka tautan WhatsApp mentah di tab baru, melainkan membuka halaman Pusat Bantuan terpadu).
+- **Implementasi Solusi**:
+  1. **Penyelarasan Menu Footer (`Footer.tsx`)**:
+     - Mengubah label menu di bawah kolom "PERUSAHAAN" dari `Kontak` menjadi `Pusat Bantuan` yang memanggil `onPageChange(Page.CONTACT)`.
+  2. **Penyelarasan Menu Profile Hub (`Profile.tsx`)**:
+     - Memperbarui event `onClick` pada tombol menu *"Pusat Bantuan 24/7"* agar mengeksekusi `navigate(Page.CONTACT)`.
+  3. **Penyempurnaan Halaman Pusat Bantuan (`Contact.tsx`)**:
+     - Merombak antarmuka `/contact` menjadi **Pusat Bantuan & Layanan Pelanggan** modern dan berkelas.
+     - Mengganti seluruh icon HTML/SVG mentah dengan pure vector bundled SVG dari package **`lucide-react`** (`Headphones`, `MessageCircle`, `Mail`, `MapPin`, `Clock`, `ShieldCheck`, `Send`, `ArrowLeft`, `CheckCircle2`, `ExternalLink`).
+     - Menyediakan 3 kartu kanal utama:
+       - **WhatsApp CS 24/7**: Terhubung langsung ke WhatsApp resmi RuangSinggah (+62 815-2708-0656) dengan template chat otomatis.
+       - **Email Resmi**: Dukungan formal & legalitas di `bantuan@ruangsinggah.id`.
+       - **Kantor Operasional**: Informasi jam kerja & lokasi kantor Makassar.
+     - Menyediakan formulir pesan & pertanyaan cepat interaktif dengan auto-forward ke WhatsApp CS resmi.
+     - Menyematkan tombol navigasi `← Kembali` responsif untuk kenyamanan pengguna mobile & desktop.
+- **File Tersentuh**:
+  - `functions/public/components/Footer.tsx`
+  - `functions/public/pages/Profile.tsx`
+  - `functions/public/pages/Contact.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi build frontend Vite (`functions/public`) lulus 100% (`✓ built in 43.42s`, 0 error).
+
 ### 340. Redesain Profile Hub Dashboard Interaktif, Sub-view Edit Data Pribadi, dan Modal Preferensi Keamanan (`Profile.tsx`, `Navbar.tsx`) (September 2026)
 - **Permintaan & Masalah**:
   1. Halaman `/profile` sebelumnya langsung membuka formulir data pribadi mentah (input nama, kontak, foto profil, KTP, dll.) saat pengguna mengklik menu Profil.

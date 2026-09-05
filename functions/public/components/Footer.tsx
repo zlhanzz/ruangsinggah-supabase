@@ -93,7 +93,7 @@ const Footer: React.FC<FooterProps> = ({ onPageChange }) => {
                   onClick={() => onPageChange(Page.CONTACT)} 
                   className="hover:text-[#ff7a00] hover:underline underline-offset-4 transition-colors cursor-pointer text-left"
                 >
-                  Kontak
+                  Pusat Bantuan
                 </button>
               </li>
               <li>
