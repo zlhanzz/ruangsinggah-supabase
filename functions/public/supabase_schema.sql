@@ -155,6 +155,8 @@ ALTER TABLE public.properties ADD COLUMN IF NOT EXISTS virtual_tour_url     TEXT
 ALTER TABLE public.properties ADD COLUMN IF NOT EXISTS additional_fee_price NUMERIC(15,2);
 ALTER TABLE public.properties ADD COLUMN IF NOT EXISTS additional_fee_name  TEXT;
 ALTER TABLE public.properties ADD COLUMN IF NOT EXISTS is_managed           BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE public.properties ADD COLUMN IF NOT EXISTS views                INTEGER DEFAULT 0;
+ALTER TABLE public.properties ADD COLUMN IF NOT EXISTS metadata             JSONB DEFAULT '{}';
 ALTER TABLE public.properties ADD COLUMN IF NOT EXISTS created_at           TIMESTAMPTZ NOT NULL DEFAULT NOW();
 ALTER TABLE public.properties ADD COLUMN IF NOT EXISTS updated_at           TIMESTAMPTZ NOT NULL DEFAULT NOW();
 
@@ -807,6 +809,64 @@ END;
 $$;
 
 GRANT EXECUTE ON FUNCTION public.submit_property_review(UUID, JSONB, NUMERIC) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.submit_property_review(UUID, JSONB, NUMERIC) TO anon;
+
+-- ============================================================
+-- STEP 13B: SECURE PROPERTY VIEW COUNTER (Bypass RLS for analytics)
+-- ============================================================
+
+CREATE OR REPLACE FUNCTION public.increment_property_view(
+  p_property_id UUID,
+  p_today_str TEXT,
+  p_viewer_uid UUID DEFAULT NULL
+)
+RETURNS VOID
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_owner_uid UUID;
+  v_current_meta JSONB;
+  v_daily_views JSONB;
+  v_today_count INT;
+  v_total_views INT;
+BEGIN
+  -- 1. Ambil data properti saat ini
+  SELECT owner_uid, COALESCE(metadata, '{}'::jsonb)
+  INTO v_owner_uid, v_current_meta
+  FROM public.properties
+  WHERE id = p_property_id;
+
+  IF NOT FOUND THEN
+    RETURN;
+  END IF;
+
+  -- 2. Abaikan jika yang melihat adalah pemilik properti
+  IF p_viewer_uid IS NOT NULL AND v_owner_uid = p_viewer_uid THEN
+    RETURN;
+  END IF;
+
+  -- 3. Update metadata daily_views dan total views
+  v_daily_views := COALESCE(v_current_meta->'daily_views', '{}'::jsonb);
+  v_today_count := COALESCE((v_daily_views->>p_today_str)::int, 0) + 1;
+  v_daily_views := jsonb_set(v_daily_views, ARRAY[p_today_str], to_jsonb(v_today_count));
+  
+  v_total_views := COALESCE((v_current_meta->>'views')::int, 0) + 1;
+  
+  v_current_meta := jsonb_set(v_current_meta, '{daily_views}', v_daily_views);
+  v_current_meta := jsonb_set(v_current_meta, '{views}', to_jsonb(v_total_views));
+
+  -- 4. Simpan ke tabel properties
+  UPDATE public.properties
+  SET
+    metadata = v_current_meta,
+    updated_at = NOW()
+  WHERE id = p_property_id;
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.increment_property_view(UUID, TEXT, UUID) TO anon, authenticated;
 
 
 -- ============================================================

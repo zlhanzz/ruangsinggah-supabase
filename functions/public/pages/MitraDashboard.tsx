@@ -650,7 +650,10 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
             const availableBalance = Math.max(0, allTimeRevenue - totalWithdrawn);
 
             // 4. Views (Total views from properties)
-            const totalViews = propsData.reduce((a, p) => a + (p.views || 0), 0);
+            const totalViews = propsData.reduce((a: number, p: any) => {
+                const pViews = Number(p.views || (p.metadata && p.metadata.views) || (p.metadata && p.metadata.daily_views ? Object.values(p.metadata.daily_views).reduce((sum: number, val: any) => sum + Number(val || 0), 0) : 0) || 0);
+                return a + pViews;
+            }, 0);
 
             // 5. Active Tenants (Direct from Resident Status Table)
             const activeCount = statusRecords.filter(r => {
@@ -1501,8 +1504,13 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                                 <div className="lg:col-span-2 bg-white rounded-3xl p-6 border border-gray-100 shadow-sm">
                                     <h3 className="font-black text-gray-900 text-sm mb-6">Performa Kost</h3>
                                     <div className="space-y-5">
-                                        {properties.slice(0, 3).map(p => {
-                                            const pct = Math.min(100, Math.round(((p.views || 0) / Math.max(1, stats.totalViews)) * 100));
+                                        {[...properties].sort((a, b) => {
+                                            const aViews = Number(a.views || (a.metadata && a.metadata.views) || 0);
+                                            const bViews = Number(b.views || (b.metadata && b.metadata.views) || 0);
+                                            return bViews - aViews;
+                                        }).slice(0, 4).map(p => {
+                                            const pViews = Number(p.views || (p.metadata && p.metadata.views) || (p.metadata && p.metadata.daily_views ? Object.values(p.metadata.daily_views).reduce((sum: number, val: any) => sum + Number(val || 0), 0) : 0) || 0);
+                                            const pct = Math.min(100, Math.round((pViews / Math.max(1, stats.totalViews)) * 100));
                                             return (
                                                 <div key={p.id}>
                                                     <div className="flex items-center justify-between mb-2">
@@ -1510,16 +1518,19 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                                                             <div className="w-8 h-8 rounded-xl bg-gray-100 overflow-hidden shrink-0">
                                                                 <img src={p.imageUrls[0] as string} className="w-full h-full object-cover" alt="" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
                                                             </div>
-                                                            <p className="text-xs font-black text-gray-900 truncate max-w-[110px]">{p.title}</p>
+                                                            <p className="text-xs font-black text-gray-900 truncate max-w-[120px]">{p.title}</p>
                                                         </div>
-                                                        <p className="text-xs font-bold text-gray-400">{p.views || 0} views</p>
+                                                        <p className="text-xs font-bold text-gray-500">{pViews.toLocaleString()} views</p>
                                                     </div>
                                                     <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                                                        <div className="h-full bg-orange-400 rounded-full transition-all duration-1000" style={{ width: `${pct}%` }} />
+                                                        <div className="h-full bg-orange-400 rounded-full transition-all duration-1000" style={{ width: `${Math.max(pct, pViews > 0 ? 8 : 0)}%` }} />
                                                     </div>
                                                 </div>
                                             );
                                         })}
+                                        {properties.length === 0 && (
+                                            <p className="text-xs text-gray-400 font-bold text-center py-4">Belum ada listing kost</p>
+                                        )}
                                     </div>
                                 </div>
                             </div>

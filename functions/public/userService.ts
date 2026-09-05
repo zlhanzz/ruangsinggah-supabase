@@ -352,6 +352,8 @@ export function transformPropertyRow(row: any): Kost {
     additionalFeeStartsFrom: row.additional_fee_starts_from,
     createdAt: convertTimestamp(row.created_at),
     updatedAt: convertTimestamp(row.updated_at),
+    views: row.views || (row.metadata && row.metadata.views) || (row.metadata && row.metadata.daily_views ? Object.values(row.metadata.daily_views).reduce((sum: number, val: any) => sum + Number(val || 0), 0) : 0) || 0,
+    metadata: row.metadata || {},
     omnichannelContactName: row.omnichannel_contact_name,
     omnichannelContactPhone: row.omnichannel_contact_phone,
     omnichannelContactType: row.omnichannel_contact_type,
@@ -1498,10 +1500,28 @@ export async function incrementPropertyView(propertyId: string, viewerUid?: stri
 
     const todayStr = new Date().toISOString().split('T')[0]; // Format: YYYY-MM-DD
 
-    // 2. Ambil data properti saat ini
+    // 2. LAYER 1: Coba jalankan PostgreSQL RPC increment_property_view (Security Definer)
+    try {
+      const { error: rpcError } = await supabase.rpc('increment_property_view', {
+        p_property_id: propertyId,
+        p_today_str: todayStr,
+        p_viewer_uid: viewerUid || null
+      });
+      if (!rpcError) return;
+    } catch { }
+
+    // 3. LAYER 2: Coba jalankan Edge Function increment-property-view
+    try {
+      const { error: fnError } = await supabase.functions.invoke('increment-property-view', {
+        body: { propertyId, viewerUid }
+      });
+      if (!fnError) return;
+    } catch { }
+
+    // 4. LAYER 3: Fallback langsung ke tabel properties metadata (hanya jika diizinkan RLS)
     const { data: prop, error: fetchError } = await supabase
       .from('properties')
-      .select('id, views, owner_uid, metadata')
+      .select('id, owner_uid, metadata')
       .eq('id', propertyId)
       .maybeSingle();
 
@@ -1510,7 +1530,6 @@ export async function incrementPropertyView(propertyId: string, viewerUid?: stri
     // Abaikan kunjungan jika yang melihat adalah pemilik kost itu sendiri
     if (viewerUid && prop.owner_uid === viewerUid) return;
 
-    const newViews = Number(prop.views || 0) + 1;
     const meta = typeof prop.metadata === 'object' && prop.metadata !== null ? { ...prop.metadata } : {};
     const dailyViews = typeof meta.daily_views === 'object' && meta.daily_views !== null ? { ...meta.daily_views } : {};
     
@@ -1524,13 +1543,13 @@ export async function incrementPropertyView(propertyId: string, viewerUid?: stri
       if (dKey < cutoffStr) delete dailyViews[dKey];
     }
 
+    const totalViews = Number(meta.views || 0) + 1;
+    meta.views = totalViews;
     meta.daily_views = dailyViews;
 
-    // 3. Simpan pembaruan views dan metadata ke Supabase
     await supabase
       .from('properties')
       .update({
-        views: newViews,
         metadata: meta
       })
       .eq('id', propertyId);

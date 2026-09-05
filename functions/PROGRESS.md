@@ -2,6 +2,41 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 360. Perbaikan Pelacakan Views, Tren Kunjungan 7 Hari, CTR, dan Statistik Performa Kost Mitra (`userService.ts`, `MitraDashboard.tsx`, `supabase_schema.sql`, `increment-property-view`) (September 2026)
+- **Permintaan & Masalah**:
+  1. Pada Dashboard Mitra (`MitraDashboard.tsx`), metrik statistik terkait performa listing (*Total Kunjungan / Views*, *CTR*, *Grafik Tren Kunjungan 7 Hari*, dan daftar *Performa Kost*) selalu bernilai 0 atau tidak bekerja dengan baik.
+  2. **Akar Masalah**:
+     - Tabel `properties` di Supabase sebelumnya tidak memiliki kolom `views` secara eksplisit, dan Row Level Security (RLS) pada tabel `properties` membatasi `UPDATE` hanya untuk pemilik properti (`owner_uid`) atau admin.
+     - Akibatnya, saat pengunjung umum (anonim/user lain) membuka detail listing properti di `KostDetail.tsx`, pemanggilan fungsi `incrementPropertyView` gagal di level database karena ditolak RLS atau kolom `views` tidak ditemukan.
+     - Tanpa data `views` dan pencatatan riwayat harian (`daily_views`), perhitungan CTR, agregasi total kunjungan, pemetaan grafik 7 hari, dan pengurutan performa kost di dashboard mitra selalu menampilkan nilai 0.
+- **Implementasi Solusi**:
+  1. **Peningkatan Skema Database & Stored Procedure RPC (`supabase_schema.sql`)**:
+     - Menambahkan definisi kolom `views BIGINT DEFAULT 0` dan `metadata JSONB DEFAULT '{}'` pada tabel `properties`.
+     - Membuat fungsi stored procedure PostgreSQL `increment_property_view(prop_id UUID, today_date TEXT)` dengan `SECURITY DEFINER` sehingga aman dipanggil oleh pengunjung umum (anonim/terautentikasi) untuk menambah counter `views` dan `metadata.daily_views[today_date]` secara atomik tanpa melanggar RLS.
+  2. **Supabase Edge Function (`supabase/functions/increment-property-view/index.ts`)**:
+     - Menyediakan Edge Function ber-auth Service Role sebagai fallback cadangan cloud untuk meng-increment properti `views` dan `daily_views` secara real-time.
+  3. **Penyempurnaan Multi-Layer Tracking di `userService.ts`**:
+     - Memperbarui `incrementPropertyView(propertyId)` dengan 3 lapis redundansi fail-safe:
+       1. Mencoba RPC Supabase `increment_property_view`.
+       2. Jika RPC tidak tersedia, memanggil Edge Function `increment-property-view`.
+       3. Jika keduanya offline, melakukan update aman ke `metadata` properti (jika berizin) atau fallback graceful.
+     - Memperbarui `convertPropertyRowToKost` untuk mengekstrak data `views` dan `daily_views` dari berbagai kemungkinan lokasi (`row.views`, `row.metadata?.views`, atau total riwayat `row.metadata?.daily_views`).
+  4. **Kalkulasi & Visualisasi Statistik Dinamis pada Dashboard Mitra (`MitraDashboard.tsx`)**:
+     - **Total Kunjungan**: Menghitung akumulasi riil dari seluruh listing mitra (`p.views` atau `p.metadata?.views` atau agregat `daily_views`).
+     - **Click-Through Rate (CTR)**: Menghitung persentase konversi riil dari interaksi chat & booking terhadap total views: `((totalBookings + totalChats) / totalViews) * 100` (dibulatkan 1 desimal).
+     - **Tren Kunjungan 7 Hari (Area Chart)**: Memetakan data 7 hari ke belakang secara dinamis berdasarkan `p.metadata?.daily_views[dateKey]`, dengan fallback distribusi proporsional jika data historis baru mulai dicatat.
+     - **Daftar Performa Kost**: Mengurutkan listing milik mitra berdasarkan jumlah views terbanyak secara menurun (*descending*) dan menampilkan badge total kunjungan aktual dengan ikon `<Eye />`.
+- **File Tersentuh**:
+  - `functions/public/userService.ts`
+  - `functions/public/pages/MitraDashboard.tsx`
+  - `functions/public/supabase_schema.sql`
+  - `functions/supabase/functions/increment-property-view/index.ts`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Pengujian simulasi penulisan `metadata.views` & `metadata.daily_views` berhasil dieksekusi pada database Supabase.
+  - Kompilasi build frontend Vite (`cmd /c npm run build` di `functions/public`) lulus 100% (`✓ 2511 modules transformed, built in 57.15s`, 0 error).
+
 ### 359. Rollback Tampilan Pengaturan Desktop ke Versi Terpadu (Commit `6cf21b27`) (`Profile.tsx`) (September 2026)
 - **Permintaan & Masalah**:
   1. Pengguna meminta untuk mengembalikan tampilan halaman Pengaturan / Profil ke versi sebelumnya (*"kembalikan aja ke versi sebelumnnya deh"*).
