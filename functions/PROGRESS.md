@@ -2,6 +2,32 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 358. Redesain Halaman Pengaturan Desktop: Navigasi Sidebar Kiri Sticky & Panel Konten Responsif Split Layout (`Profile.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  1. Pada tampilan Desktop (`≥ 1024px`), menu Pengaturan (`/settings` dan `/profile`) sebelumnya menggunakan tata letak mobile card stack single-column bertumpuk yang kurang mencerminkan standar UI/UX desktop modern.
+  2. Pengguna meminta tata letak khas aplikasi web desktop profesional: **Navigasi Sisi Kiri (Left Sidebar)** yang memuat mini profile card dan menu navigasi kategori, serta **Panel Konten Kanan (Right Content Panel)** yang berganti secara instan di tempat (*in-place switching*) tanpa reload halaman.
+  3. Tampilan mobile (`< 1024px`) tetap mempertahankan antarmuka Mobile Hub Touch-Friendly card-stack yang bersih dan terpadu.
+- **Implementasi Solusi**:
+  1. **Sidebar Navigasi Kiri Desktop Sticky (`renderDesktopSettingsSidebar`)**:
+     - Membangun sidebar vertikal sticky (`col-span-4 xl:col-span-3 sticky top-24`) berisi:
+       - Mini Profile Card: Avatar, initial fallback, nama pengguna, email, dan badge role terverifikasi.
+       - Grup Navigasi 1 (Akun & Profil): *Data Kontak Pribadi*, *Keamanan & Kata Sandi* (modal), *Preferensi Notifikasi* (modal).
+       - Grup Navigasi 2 (Aktivitas Sewa & Transaksi): *Riwayat Sewa Kost* (badge total), *Kost Favorit Saya* (badge total tersimpan), *Riwayat Transaksi & Tagihan* (badge total invoice).
+       - Grup Navigasi 3 (Bantuan & Legal): *Pusat Bantuan 24/7* (badge live status), *Syarat & Ketentuan Sewa*.
+       - Tombol Aksi Bawah: *Keluar Akun* (`LogOut`).
+     - Indikator status aktif dengan pill highlight oranye (`bg-[#ff7a00] text-white shadow-md`), ikon SVG Lucide murni, dan counter badge dinamis.
+  2. **Panel Konten Kanan Dinamis (`col-span-8 xl:col-span-9`)**:
+     - Pergantian sub-panel (*Favorites*, *Transactions*, *Rental History*, *Personal Data Overview / Edit*) langsung di tempat tanpa memutus navigasi sidebar.
+  3. **Pemisahan Responsif Murni (Desktop Split vs Mobile Hub)**:
+     - `hidden lg:block`: Merender 2-column split layout desktop lengkap dengan breadcrumb dan tombol kembali.
+     - `block lg:hidden`: Merender mobile single-column view touch-optimised dengan tombol kembali terintegrasi.
+- **File Tersentuh**:
+  - `functions/public/pages/Profile.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi build frontend Vite (`cmd /c npm run build` di `functions/public`) lulus 100% (`✓ 2511 modules transformed, built in 28.02s`, 0 error).
+
 ### 357. Penyempurnaan UX Profil Desktop: Mode Peninjauan Default, Simpan Data tanpa Redirect Beranda, dan Navigasi Tombol Kembali (`Profile.tsx`, `Navbar.tsx`, `App.tsx`) (September 2026)
 - **Permintaan & Masalah**:
   1. Pada tampilan Desktop saat klik *"Profil Saya"*, halaman profil sebelumnya langsung membuka form dalam mode edit aktif (`?view=edit`), bukan mode peninjauan (*read-only* data overview).
