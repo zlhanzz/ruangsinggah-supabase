@@ -2,6 +2,28 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 363. Penayangan Otomatis Pop-Up Iklan KostManager Setiap Kali Mitra Baru Login (`MitraDashboard.tsx`, `Login.tsx`, `App.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna meminta agar iklan pop-up promosi KostManager selalu muncul secara otomatis **setiap kali mitra baru login** ke Dashboard Mitra (`/mitra`).
+  2. Ketika mitra menutup pop-up tersebut (mengklik tombol close silang `X` di sudut, tombol *"Nanti Saja"*, klik backdrop, atau tombol `Escape`), pop-up tidak boleh melakukan spam berulang kali selama sesi login tersebut masih aktif saat mitra berpindah antar menu/tab di dashboard.
+  3. Namun ketika mitra melakukan logout dan login kembali (atau akun mitra lain login), modal iklan pop-up KostManager harus **selalu muncul kembali** secara konsisten.
+- **Implementasi Solusi**:
+  1. **Pembersihan Flag Sesi pada Alur Login & Logout (`Login.tsx` & `App.tsx`)**:
+     - Pada `Login.tsx`, saat autentikasi mitra berhasil (`handleLogin`), sistem secara otomatis mengeksekusi `sessionStorage.removeItem('km_promo_popup_closed_session')` sehingga setiap login baru selalu mereset status dismiss pop-up.
+     - Pada `App.tsx`, fungsi `handleLogout` juga membersihkan key `sessionStorage.removeItem('km_promo_popup_closed_session')`.
+  2. **Penyempurnaan Lifecycle Pop-Up di `MitraDashboard.tsx`**:
+     - Memperbarui `handleClosePromoPopup` agar menyimpan penutupan ke flag sesi `sessionStorage.setItem('km_promo_popup_closed_session', 'true')` tanpa memblokir login sesi berikutnya secara permanen.
+     - Menyediakan fungsi `handleLogoutWithCleanup` yang membersihkan `sessionStorage.removeItem('km_promo_popup_closed_session')` sebelum memanggil `onLogout()`, dan mengaitkannya ke seluruh tombol *Keluar Akun* (sidebar desktop maupun drawer mobile).
+     - Menyesuaikan hook inisialisasi `useEffect` saat `MitraDashboard` dimuat: jika pengguna belum berstatus KostManager (`!isKostManager`) dan belum menutup pop-up pada sesi aktif ini (`!sessionStorage.getItem('km_promo_popup_closed_session')`), maka modal pop-up iklan KostManager (`showPromoPopup`) otomatis terbuka seketika.
+- **File Tersentuh**:
+  - `functions/public/pages/Login.tsx`
+  - `functions/public/App.tsx`
+  - `functions/public/pages/MitraDashboard.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi build frontend Vite (`cmd /c npm run build` di `functions/public`) lulus 100% (`✓ 2511 modules transformed, built in 29.16s`, 0 error).
+
 ### 362. Transformasi Promosi KostManager Menjadi Iklan Pop-Up Modal Interaktif dengan Tombol Close Silang (`MitraDashboard.tsx`) (September 2026)
 - **Permintaan & Masalah**:
   1. Pengguna meminta agar penayangan promosi KostManager tidak berbentuk banner statis horizontal yang memakan ruang halaman secara permanen, melainkan berbentuk **Iklan Pop-Up (Modal Overlay)** yang dapat ditutup secara fleksibel oleh mitra dengan mengklik tombol silang (`X`) di sudutnya saat pertama kali membuka Beranda dashboard atau masuk ke menu Kost Saya.

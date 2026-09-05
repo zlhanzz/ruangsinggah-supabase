@@ -209,30 +209,24 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
     }, [user, mitraSubscriptionStatus, properties, kmRequests]);
 
     const handleMenuChange = (menu: MenuKey) => {
-        if ((menu === 'properties' || menu === 'overview') && !isKostManager) {
-            try {
-                const sessionKey = `km_promo_popup_closed_${menu}`;
-                if (!sessionStorage.getItem(sessionKey)) {
-                    setShowPromoPopup(true);
-                }
-            } catch { }
-        }
         navigate(`${Page.DASHBOARD_MITRA}/${menu}`);
     };
 
     const handleClosePromoPopup = useCallback(() => {
         setShowPromoPopup(false);
         try {
-            const currentTab = tab || activeMenu || 'overview';
-            sessionStorage.setItem(`km_promo_popup_closed_${currentTab}`, 'true');
-            sessionStorage.setItem(`km_promo_popup_closed_overview`, 'true');
-            sessionStorage.setItem(`km_promo_popup_closed_properties`, 'true');
-            const storageKey = `km_promo_popup_last_shown_${uid || 'guest'}`;
-            localStorage.setItem(storageKey, String(Date.now()));
+            sessionStorage.setItem('km_promo_popup_closed_session', 'true');
         } catch { }
-    }, [uid, tab, activeMenu]);
+    }, []);
 
-    // Load promo popup setting on mount dan trigger pop-up iklan jika mitra biasa membuka Beranda atau menu Kost Saya
+    const handleLogoutWithCleanup = useCallback(() => {
+        try {
+            sessionStorage.removeItem('km_promo_popup_closed_session');
+        } catch { }
+        onLogout?.();
+    }, [onLogout]);
+
+    // Load promo popup setting on mount dan selalu munculkan pop-up iklan setiap kali mitra baru login
     useEffect(() => {
         if (isKostManager) {
             setShowPromoPopup(false);
@@ -247,17 +241,14 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
             setKmFeeSettings(feeSet);
         }).catch(err => console.warn('Could not load KM fee setting:', err));
 
-        // Munculkan pop-up iklan jika belum ditutup di sesi ini saat buka dashboard / menu Kost Saya
+        // Munculkan pop-up iklan otomatis untuk sesi login baru mitra biasa
         try {
-            const currentTab = tab || 'overview';
-            if (currentTab === 'overview' || currentTab === 'properties') {
-                const sessionKey = `km_promo_popup_closed_${currentTab}`;
-                if (!sessionStorage.getItem(sessionKey)) {
-                    setShowPromoPopup(true);
-                }
+            const isClosedInSession = sessionStorage.getItem('km_promo_popup_closed_session');
+            if (!isClosedInSession) {
+                setShowPromoPopup(true);
             }
         } catch { }
-    }, [tab, isKostManager]);
+    }, [isKostManager]);
 
     // Handle Escape key for popup
     useEffect(() => {
@@ -1063,8 +1054,8 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                 {/* Logout Option */}
                 <div className="p-4 border-t border-gray-50">
                     <button
-                        onClick={() => onLogout?.()}
-                        className="w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-sm font-semibold text-red-500 hover:bg-red-50 transition-colors"
+                        onClick={handleLogoutWithCleanup}
+                        className="w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-sm font-semibold text-red-500 hover:bg-red-50 transition-colors cursor-pointer"
                     >
                         <LogOut size={18} />
                         Keluar Akun
@@ -1121,8 +1112,8 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
 
                         <div className="p-4 border-t border-gray-50">
                             <button
-                                onClick={() => { onLogout?.(); setMobileSidebarOpen(false); }}
-                                className="w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-sm font-semibold text-red-500 hover:bg-red-50 transition-colors"
+                                onClick={() => { handleLogoutWithCleanup(); setMobileSidebarOpen(false); }}
+                                className="w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-sm font-semibold text-red-500 hover:bg-red-50 transition-colors cursor-pointer"
                             >
                                 <LogOut size={18} />
                                 Keluar Akun

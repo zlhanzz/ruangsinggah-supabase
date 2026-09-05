@@ -500,6 +500,9 @@ const App: React.FC = () => {
       // Force clear local state no matter what happens with Supabase backend
       setUser(null);
       localStorage.removeItem('portal_view');
+      try {
+        sessionStorage.removeItem('km_promo_popup_closed_session');
+      } catch { }
       navigate(Page.HOME);
       setPendingTransaction(null);
     }

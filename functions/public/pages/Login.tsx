@@ -261,6 +261,10 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
         return;
       }
 
+      try {
+        sessionStorage.removeItem('km_promo_popup_closed_session');
+      } catch { }
+
       if (onLoginSuccess) onLoginSuccess();
     } catch (error: any) {
       setErrorMsg(getErrorMessage(error.message || 'unknown'));
