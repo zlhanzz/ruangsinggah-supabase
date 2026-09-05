@@ -366,105 +366,35 @@ const Navbar: React.FC<NavbarProps> = ({ activePage, onPageChange, user, onLogou
                 </div>
               )}
 
-              {/* Mobile User Profile (Avatar only) or Login button */}
+              {/* Mobile User Profile (Avatar only) - Direct tap navigates to Profile Hub */}
               {user ? (
-                <div className="relative" ref={mobileProfileRef}>
-                  <button onClick={() => setIsProfileOpen(!isProfileOpen)} className="relative w-8 h-8 rounded-full bg-orange-100 text-orange-600 flex items-center justify-center text-xs font-black border border-orange-200 focus:outline-none overflow-hidden">
-                    {/* Layer 1: Initials */}
-                    <div className="absolute inset-0 flex items-center justify-center bg-gray-100 text-gray-500 z-0">
-                      {getInitials(user.displayName || user.name)}
-                    </div>
-                    
-                    {/* Layer 2: Photo */}
-                    {user.photoURL && (
-                      <img 
-                        src={user.photoURL} 
-                        alt="Profile" 
-                        className="absolute inset-0 w-full h-full rounded-full object-cover z-10" 
-                        onError={(e) => {
-                          e.currentTarget.style.display = 'none';
-                        }}
-                      />
-                    )}
-                    {user.role === 'admin' && (
-                      <div className="absolute -bottom-1 -right-1 bg-blue-500 text-white rounded-full p-0.5 border-2 border-white">
-                        <svg className="w-2 h-2" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>
-                      </div>
-                    )}
-                  </button>
-
-                  {isProfileOpen && (
-                    <div className="absolute right-0 mt-2 w-48 bg-white rounded-xl shadow-xl border border-gray-100 py-1 animate-in fade-in slide-in-from-top-2 z-[101]">
-                      <div className="px-4 py-3 border-b border-gray-50">
-                        <p className="text-[10px] font-black uppercase text-gray-400 tracking-widest">
-                          {user.role === 'admin' ? 'Login Sebagai Admin' : 'Login Sebagai'}
-                        </p>
-                        <p className="text-sm font-bold text-gray-900 truncate">{user.email}</p>
-                      </div>
-                      <button
-                        onClick={() => {
-                          onPageChange(`${Page.PROFILE}?view=edit` as any);
-                          setIsProfileOpen(false);
-                        }}
-                        className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-orange-50 hover:text-orange-600"
-                      >
-                        Profil Saya
-                      </button>
-                      <button
-                        onClick={() => {
-                          onPageChange(Page.CHAT);
-                          setIsProfileOpen(false);
-                        }}
-                        className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-orange-50 hover:text-orange-600 border-t border-gray-50"
-                      >
-                        Pesan / Chat
-                      </button>
-                      <button
-                        onClick={() => {
-                          onPageChange(Page.MY_BOOKINGS);
-                          setIsProfileOpen(false);
-                        }}
-                        className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-orange-50 hover:text-orange-600 border-t border-gray-50"
-                      >
-                        Kost Saya
-                      </button>
-                      <button
-                        onClick={() => {
-                          onPageChange(Page.SETTINGS);
-                          setIsProfileOpen(false);
-                        }}
-                        className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-orange-50 hover:text-orange-600 border-t border-gray-50"
-                      >
-                        Pengaturan
-                      </button>
-                      {['admin', 'survey_agent'].includes(user.role) && (
-                        <button
-                          onClick={() => {
-                            const targetPage = user.role === 'admin' 
-                              ? (isAdminPage ? Page.HOME : Page.DASHBOARD_ADMIN) 
-                              : Page.DASHBOARD_AGENT;
-                            onPageChange(targetPage);
-                            setIsProfileOpen(false);
-                          }}
-                          className="block w-full text-left px-4 py-2 text-sm text-blue-600 hover:bg-blue-50 font-bold border-t border-gray-50"
-                        >
-                          {user.role === 'admin' 
-                            ? (isAdminPage ? 'Tampilan User' : 'Dashboard Admin') 
-                            : 'Dashboard Agen'}
-                        </button>
-                      )}
-                      <button
-                        onClick={() => {
-                          if (onLogout) onLogout();
-                          setIsProfileOpen(false);
-                        }}
-                        className="block w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 font-medium"
-                      >
-                        Keluar
-                      </button>
+                <button 
+                  onClick={() => onPageChange(Page.PROFILE)} 
+                  className="relative w-8 h-8 rounded-full bg-orange-100 text-orange-600 flex items-center justify-center text-xs font-black border border-orange-200 focus:outline-none overflow-hidden active:scale-95 transition-transform cursor-pointer"
+                  title="Menu Profil"
+                >
+                  {/* Layer 1: Initials */}
+                  <div className="absolute inset-0 flex items-center justify-center bg-gray-100 text-gray-500 z-0">
+                    {getInitials(user.displayName || user.name)}
+                  </div>
+                  
+                  {/* Layer 2: Photo */}
+                  {user.photoURL && (
+                    <img 
+                      src={user.photoURL} 
+                      alt="Profile" 
+                      className="absolute inset-0 w-full h-full rounded-full object-cover z-10" 
+                      onError={(e) => {
+                        e.currentTarget.style.display = 'none';
+                      }}
+                    />
+                  )}
+                  {user.role === 'admin' && (
+                    <div className="absolute -bottom-1 -right-1 bg-blue-500 text-white rounded-full p-0.5 border-2 border-white">
+                      <svg className="w-2 h-2" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>
                     </div>
                   )}
-                </div>
+                </button>
               ) : (
                 <div className="flex items-center gap-1.5 sm:gap-3">
                   <button

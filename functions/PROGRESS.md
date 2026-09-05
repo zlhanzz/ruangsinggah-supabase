@@ -2,6 +2,22 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 356. Penghapusan Popover Dropdown Avatar pada Header Mobile & Navigasi Langsung ke Profile Hub (`Navbar.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna meminta agar popover dropdown menu melayang (*"LOGIN SEBAGAI...", "Profil Saya", "Pesan / Chat", "Kost Saya", "Pengaturan", "Keluar"*) dihapus dari tampilan mobile saat avatar di kanan atas header diklik.
+  2. Popover dropdown menu hanya boleh muncul secara eksklusif pada tampilan Desktop, sedangkan di mobile cukup dengan navigasi langsung ke Profile Hub.
+- **Implementasi Solusi**:
+  1. **Pembersihan Popover Dropdown Mobile (`Navbar.tsx`)**:
+     - Menghapus rendering container popover dropdown mobile (`isProfileOpen && ...`).
+  2. **Navigasi Langsung Avatar Mobile (`Navbar.tsx`)**:
+     - Mengubah handler klik tombol avatar mobile menjadi navigasi langsung `onPageChange(Page.PROFILE)` (Profile Hub Dashboard) tanpa memunculkan menu popover.
+- **File Tersentuh**:
+  - `functions/public/components/Navbar.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi build frontend Vite (`cmd /c npm run build` di `functions/public`) lulus 100% (`✓ 2511 modules transformed, built in 27.70s`, 0 error).
+
 ### 355. Pemisahan Responsif Alur Navigasi Desktop & Mobile: Menu Baru "Pengaturan" (Profile Hub) & Direct Edit "Profil Saya" (`types.ts`, `Navbar.tsx`, `Profile.tsx`, `App.tsx`) (September 2026)
 - **Permintaan & Masalah**:
   1. Pengguna meminta arsitektur navigasi yang berbeda dan teroptimasi untuk Desktop vs Mobile:
