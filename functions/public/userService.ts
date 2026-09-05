@@ -1801,7 +1801,10 @@ export async function getUserRentalHistory(userId: string): Promise<UserRentalHi
       });
     });
 
-    return items;
+    // Hanya kembalikan riwayat sewa yang sudah selesai/lewat masa sewa (bukan yang aktif saat ini)
+    const pastRentalItems = items.filter(item => !item.isCurrentlyActive && item.status !== 'PENDING');
+
+    return pastRentalItems;
   } catch (err) {
     console.error('[userService] Exception in getUserRentalHistory:', err);
     return [];

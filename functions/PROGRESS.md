@@ -2,6 +2,24 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 349. Penyaringan Murni Riwayat Kost Selesai & Penghapusan Filter Tabs (`userService.ts`, `Profile.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna meminta agar sub-view **"Riwayat Sewa Kost"** hanya menampilkan riwayat hunian/kost yang **sudah pernah disewa sebelumnya (selesai/masa lalu)** dan tidak menampilkan unit yang masih aktif (karena unit aktif dikelola terpisah di modul *Kost Saya / Orders*).
+  2. Pengguna meminta agar baris tab filter (*"Semua Kost"*, *"Aktif Dihuni"*, *"Pernah Disewa"*) dihapus agar tampilan langsung bersih dan sederhana.
+- **Implementasi Solusi**:
+  1. **Penyaringan Khusus Kost Selesai (`userService.ts`)**:
+     - Memperbarui fungsi `getUserRentalHistory` untuk memfilter data agar hanya mengembalikan riwayat hunian yang sudah selesai/lewat masa sewa (`!item.isCurrentlyActive`).
+  2. **Pembersihan Filter Tabs & Kartu Terfokus (`Profile.tsx`)**:
+     - Menghapus baris tab filter dari sub-view `rental_history`.
+     - Menyajikan kartu kost riwayat sewa secara langsung dengan badge status *"Pernah Disewa (Selesai)"*, info kamar, rentang tanggal sewa, tarif sewa terakhir, dan tombol aksi *"Sewa Lagi"*.
+- **File Tersentuh**:
+  - `functions/public/userService.ts`
+  - `functions/public/pages/Profile.tsx`
+  - `functions/PROGRESS.md`
+  - `walkthrough.md`
+- **Verifikasi**:
+  - Kompilasi build frontend Vite (`functions/public`) lulus 100% (`✓ built in 36.52s`, 0 error).
+
 ### 348. Sub-View Mandiri "Riwayat Sewa Kost" pada Profile Hub Dashboard (`userService.ts`, `Profile.tsx`) (September 2026)
 - **Permintaan & Masalah**:
   1. Pengguna meminta agar opsi **"Riwayat Sewa & Kontrak"** pada Profile Hub (`/profile`) tidak sekadar redirect ke menu operasional Kost Saya / Orders (`/my-bookings/aktif`).
