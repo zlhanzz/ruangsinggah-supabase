@@ -2,6 +2,29 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 371. Redesain & Penyederhanaan Kartu Pemilihan Metode Registrasi KostManager Menjadi Tombol Pilihan Interaktif Bergaya SaaS Modern (`KostManagerLanding.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna memberikan feedback bahwa tampilan tahap pemilihan metode (Tahap 1) sebelumnya memiliki terlalu banyak teks penjelasan panjang (*wall of text*), serta kurang menonjolkan bahwa kedua opsi tersebut adalah tombol/kartu aksi yang dapat dipilih secara interaktif (*"terlalu banyak text, dan tidak kelihatan bahwa itu adalah tombol yang bisa dipilih, make it simple but cool, and functional"*).
+  2. Terdapat juga visual clipping pada bagian atas modal di layar mobile akibat jarak padding/margin yang terlalu sempit dengan progress step indicator.
+- **Implementasi Solusi**:
+  1. **Penyederhanaan Teks & Visual Affordance**:
+     - Memangkas paragraf panjang dan deretan pill checklist berlebih menjadi 1 baris *punchy tagline* yang ringkas, jelas, dan profesional.
+     - Menyempurnakan tipografi heading modal menjadi *"Pilih Metode Registrasi"* dengan subjudul *"Tentukan sumber data properti kost yang ingin Anda daftarkan"*.
+  2. **Modern Interactive Action Cards (SaaS Standard)**:
+     - Merancang kedua opsi menjadi tombol kartu interaktif (`role="button"`, `tabIndex={0}`, keyboard accessible Enter/Space, `active:scale-[0.99]`).
+     - Menghadirkan **Gradient Icon Box**:
+       - *Pilih dari Kost Saya*: Ikon `<Building2 />` dengan gradien oranye-amber (`from-orange-500 to-amber-500`), soft shadow, dan status badge `{count} Properti`.
+       - *Daftar Kost Baru*: Ikon `<PlusCircle />` dengan gradien amber-oranye (`from-amber-500 to-orange-600`), soft shadow, dan badge `Eksklusif / Input Baru`.
+     - Memberikan efek seleksi yang tegas dan kontras: kartu yang aktif mendapatkan *active ring 2px*, border oranye menyala, gradien background halus, dan radio indicator bulat dengan centang oranye tebal.
+  3. **Responsivitas & Anti-Clipping**:
+     - Memperbaiki margin/padding container modal sehingga bebas dari visual clipping pada seluruh resolusi layar mobile maupun desktop.
+- **File Tersentuh**:
+  - `functions/public/pages/KostManagerLanding.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi build frontend Vite (`cmd /c npm run build`) lulus 100% (`✓ 2511 modules transformed, built in 46.24s`, 0 error).
+
 ### 370. Pemisahan Tahap Awal Pemilihan Metode Pendaftaran KostManager (Dedicated Step) & Penyelarasan Alur Multi-Step (`KostManagerLanding.tsx`) (September 2026)
 - **Permintaan & Masalah**:
   1. Pengguna meminta agar sebelum seluruh kolom input data properti muncul, dibuat alur terpisah di awal untuk memilih metode pendaftaran (*"sebelum semua input data ini muncul, buat agar alurnya memilih dulu apakah memilih listing kost yang sudah ada untuk didaftarkan atau mendaftarkan kost baru secara exclusif, supaya mitra sadar bahwa dia punya dua pilihan. setelah pilihan itu baru deh lanjut untuk ke setiap tahan lanjutan inputan data sesuai dengan pilihannya"*).

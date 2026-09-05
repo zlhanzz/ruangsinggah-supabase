@@ -943,19 +943,21 @@ const KostManagerLanding: React.FC<KostManagerLandingProps> = ({ user, onBack, i
               {/* TAHAP 1: LAYAR DEDICATED PEMILIHAN METODE PENDAFTARAN                     */}
               {/* ========================================================================= */}
               {modalStep === 'method' && (
-                <div className="space-y-6 animate-in fade-in duration-300">
-                  <div className="text-center max-w-lg mx-auto space-y-1">
-                    <h4 className="text-base sm:text-lg font-black text-slate-900">
-                      Bagaimana Anda Ingin Mendaftarkan Kost?
+                <div className="space-y-5 animate-in fade-in duration-300">
+                  <div className="text-center max-w-md mx-auto space-y-1">
+                    <h4 className="text-base sm:text-lg font-black text-slate-900 tracking-tight">
+                      Pilih Metode Registrasi
                     </h4>
-                    <p className="text-xs text-slate-500 font-medium leading-relaxed">
-                      Silakan tentukan apakah Anda ingin mendaftarkan listing yang sudah ada atau mendaftarkan properti kost baru secara eksklusif.
+                    <p className="text-xs text-slate-500 font-medium">
+                      Tentukan sumber data properti kost yang ingin Anda daftarkan
                     </p>
                   </div>
 
-                  <div className="grid grid-cols-1 gap-4 pt-1">
+                  <div className="grid grid-cols-1 gap-3.5 pt-1">
                     {/* Opsi A: Pilih dari Kost Saya */}
                     <div
+                      role="button"
+                      tabIndex={0}
                       onClick={() => {
                         setIsManualInput(false);
                         if (userKosts.length > 0 && !selectedKostId) {
@@ -966,55 +968,55 @@ const KostManagerLanding: React.FC<KostManagerLandingProps> = ({ user, onBack, i
                           handleKostSelection(userKosts[0].id);
                         }
                       }}
-                      className={`p-4 sm:p-5 rounded-3xl border-2 transition-all cursor-pointer flex flex-col sm:flex-row items-start sm:items-center gap-4 relative group ${
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          setIsManualInput(false);
+                          if (userKosts.length > 0) handleKostSelection(userKosts[0].id);
+                        }
+                      }}
+                      className={`p-4 sm:p-5 rounded-2xl border-2 transition-all duration-200 cursor-pointer flex items-center gap-4 relative group select-none active:scale-[0.99] ${
                         !isManualInput 
-                          ? 'border-orange-500 bg-orange-50/50 shadow-md shadow-orange-500/10 ring-2 ring-orange-500/20' 
-                          : 'border-slate-200 bg-white hover:border-orange-300 hover:bg-slate-50/60'
+                          ? 'border-orange-500 bg-gradient-to-r from-orange-500/10 via-amber-500/5 to-transparent shadow-md shadow-orange-500/10 ring-2 ring-orange-500/20' 
+                          : 'border-slate-200 bg-white hover:border-orange-300 hover:bg-slate-50/70 hover:shadow-sm'
                       }`}
                     >
-                      <div className={`w-14 h-14 rounded-2xl flex items-center justify-center flex-shrink-0 transition-colors ${
-                        !isManualInput ? 'bg-orange-500 text-white shadow-md shadow-orange-500/20' : 'bg-slate-100 text-slate-600 group-hover:bg-orange-100 group-hover:text-orange-600'
+                      {/* Icon Gradient Box */}
+                      <div className={`w-12 h-12 sm:w-14 sm:h-14 rounded-2xl flex items-center justify-center flex-shrink-0 transition-all duration-200 ${
+                        !isManualInput 
+                          ? 'bg-gradient-to-br from-orange-500 to-amber-500 text-white shadow-md shadow-orange-500/25 scale-105' 
+                          : 'bg-slate-100 text-slate-600 group-hover:bg-orange-100 group-hover:text-orange-600'
                       }`}>
-                        <Building2 size={26} />
+                        <Building2 size={24} className="sm:w-7 sm:h-7" />
                       </div>
 
-                      <div className="flex-1 min-w-0 space-y-2">
-                        <div className="flex flex-wrap items-center justify-between gap-2">
-                          <h5 className="text-sm font-black text-slate-900">
-                            Pilih dari Listing Kost Saya
+                      {/* Content */}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1 flex-wrap">
+                          <h5 className="text-sm sm:text-base font-black text-slate-900 leading-tight">
+                            Pilih dari Kost Saya
                           </h5>
                           {userKosts.length > 0 ? (
-                            <span className="text-[10px] font-black px-2.5 py-0.5 rounded-full bg-orange-100 text-orange-700 border border-orange-200">
-                              {userKosts.length} Properti Tersedia
+                            <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-orange-100 text-orange-700 border border-orange-200">
+                              {userKosts.length} Properti
                             </span>
                           ) : (
                             <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">
-                              Belum ada listing
+                              0 Listing
                             </span>
                           )}
                         </div>
-
-                        <p className="text-xs text-slate-500 font-medium leading-relaxed">
-                          Daftarkan properti kost yang sudah ada di akun Anda ke program KostManager Autopilot. Data spesifikasi kamar, foto, dan lokasi GPS tersinkronisasi otomatis tanpa input ulang.
+                        <p className="text-xs text-slate-500 font-medium leading-normal">
+                          Otomatis sinkronkan data, foto, kamar, dan GPS dari kost yang ada.
                         </p>
-
-                        <div className="flex flex-wrap items-center gap-2 pt-1 text-[10px] font-bold text-slate-600">
-                          <span className="flex items-center gap-1 bg-white px-2 py-1 rounded-lg border border-slate-200 shadow-2xs">
-                            <CheckCircle2 size={12} className="text-emerald-600" /> Foto Otomatis
-                          </span>
-                          <span className="flex items-center gap-1 bg-white px-2 py-1 rounded-lg border border-slate-200 shadow-2xs">
-                            <CheckCircle2 size={12} className="text-emerald-600" /> Koordinat GPS
-                          </span>
-                          <span className="flex items-center gap-1 bg-white px-2 py-1 rounded-lg border border-slate-200 shadow-2xs">
-                            <CheckCircle2 size={12} className="text-emerald-600" /> Proses Instan
-                          </span>
-                        </div>
                       </div>
 
-                      {/* Selection Radio Circle */}
-                      <div className="self-end sm:self-center flex-shrink-0">
+                      {/* Radio / Selection Indicator */}
+                      <div className="flex-shrink-0">
                         <div className={`w-6 h-6 rounded-full flex items-center justify-center transition-all ${
-                          !isManualInput ? 'bg-orange-500 text-white shadow-sm' : 'border-2 border-slate-300 bg-white'
+                          !isManualInput 
+                            ? 'bg-orange-500 text-white shadow-sm ring-2 ring-orange-500/20' 
+                            : 'border-2 border-slate-300 bg-white group-hover:border-orange-400'
                         }`}>
                           {!isManualInput && <Check size={14} className="stroke-[3]" />}
                         </div>
@@ -1023,53 +1025,55 @@ const KostManagerLanding: React.FC<KostManagerLandingProps> = ({ user, onBack, i
 
                     {/* Opsi B: Daftarkan Kost Baru */}
                     <div
+                      role="button"
+                      tabIndex={0}
                       onClick={() => {
                         setIsManualInput(true);
                         handleKostSelection('NEW');
                       }}
-                      className={`p-4 sm:p-5 rounded-3xl border-2 transition-all cursor-pointer flex flex-col sm:flex-row items-start sm:items-center gap-4 relative group ${
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          setIsManualInput(true);
+                          handleKostSelection('NEW');
+                        }
+                      }}
+                      className={`p-4 sm:p-5 rounded-2xl border-2 transition-all duration-200 cursor-pointer flex items-center gap-4 relative group select-none active:scale-[0.99] ${
                         isManualInput 
-                          ? 'border-orange-500 bg-orange-50/50 shadow-md shadow-orange-500/10 ring-2 ring-orange-500/20' 
-                          : 'border-slate-200 bg-white hover:border-orange-300 hover:bg-slate-50/60'
+                          ? 'border-orange-500 bg-gradient-to-r from-orange-500/10 via-amber-500/5 to-transparent shadow-md shadow-orange-500/10 ring-2 ring-orange-500/20' 
+                          : 'border-slate-200 bg-white hover:border-orange-300 hover:bg-slate-50/70 hover:shadow-sm'
                       }`}
                     >
-                      <div className={`w-14 h-14 rounded-2xl flex items-center justify-center flex-shrink-0 transition-colors ${
-                        isManualInput ? 'bg-orange-500 text-white shadow-md shadow-orange-500/20' : 'bg-slate-100 text-slate-600 group-hover:bg-orange-100 group-hover:text-orange-600'
+                      {/* Icon Gradient Box */}
+                      <div className={`w-12 h-12 sm:w-14 sm:h-14 rounded-2xl flex items-center justify-center flex-shrink-0 transition-all duration-200 ${
+                        isManualInput 
+                          ? 'bg-gradient-to-br from-amber-500 to-orange-600 text-white shadow-md shadow-amber-500/25 scale-105' 
+                          : 'bg-slate-100 text-slate-600 group-hover:bg-orange-100 group-hover:text-orange-600'
                       }`}>
-                        <PlusCircle size={26} />
+                        <PlusCircle size={24} className="sm:w-7 sm:h-7" />
                       </div>
 
-                      <div className="flex-1 min-w-0 space-y-2">
-                        <div className="flex flex-wrap items-center justify-between gap-2">
-                          <h5 className="text-sm font-black text-slate-900">
-                            Daftar Kost Baru Eksklusif (Manual)
+                      {/* Content */}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1 flex-wrap">
+                          <h5 className="text-sm sm:text-base font-black text-slate-900 leading-tight">
+                            Daftar Kost Baru
                           </h5>
-                          <span className="text-[10px] font-black px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-200">
-                            Input Baru
+                          <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-200">
+                            Eksklusif / Input Baru
                           </span>
                         </div>
-
-                        <p className="text-xs text-slate-500 font-medium leading-relaxed">
-                          Daftarkan unit properti kost baru yang belum pernah diunggah ke RuangSinggah.id. Anda akan dipandu untuk melengkapi informasi properti, titik lokasi peta, dan spesifikasi kamar dari awal.
+                        <p className="text-xs text-slate-500 font-medium leading-normal">
+                          Input formulir, titik peta Google, dan spesifikasi unit baru dari awal.
                         </p>
-
-                        <div className="flex flex-wrap items-center gap-2 pt-1 text-[10px] font-bold text-slate-600">
-                          <span className="flex items-center gap-1 bg-white px-2 py-1 rounded-lg border border-slate-200 shadow-2xs">
-                            <CheckCircle2 size={12} className="text-emerald-600" /> Formulir Mandiri
-                          </span>
-                          <span className="flex items-center gap-1 bg-white px-2 py-1 rounded-lg border border-slate-200 shadow-2xs">
-                            <CheckCircle2 size={12} className="text-emerald-600" /> Pinpoint Peta Google
-                          </span>
-                          <span className="flex items-center gap-1 bg-white px-2 py-1 rounded-lg border border-slate-200 shadow-2xs">
-                            <CheckCircle2 size={12} className="text-emerald-600" /> Registrasi Baru
-                          </span>
-                        </div>
                       </div>
 
-                      {/* Selection Radio Circle */}
-                      <div className="self-end sm:self-center flex-shrink-0">
+                      {/* Radio / Selection Indicator */}
+                      <div className="flex-shrink-0">
                         <div className={`w-6 h-6 rounded-full flex items-center justify-center transition-all ${
-                          isManualInput ? 'bg-orange-500 text-white shadow-sm' : 'border-2 border-slate-300 bg-white'
+                          isManualInput 
+                            ? 'bg-orange-500 text-white shadow-sm ring-2 ring-orange-500/20' 
+                            : 'border-2 border-slate-300 bg-white group-hover:border-orange-400'
                         }`}>
                           {isManualInput && <Check size={14} className="stroke-[3]" />}
                         </div>
