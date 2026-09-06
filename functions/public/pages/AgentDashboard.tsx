@@ -484,30 +484,57 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
 
         const kitchenMap: Record<string, string> = {
             'kompor': 'Kompor',
+            'kompor gas': 'Kompor',
+            'gas': 'Kompor',
             'kulkas': 'Kulkas',
             'kulkas bersama': 'Kulkas',
             'kulkas umum': 'Kulkas',
+            'lemari es': 'Kulkas',
             'dispenser': 'Dispenser',
             'dispenser air': 'Dispenser',
+            'air minum': 'Dispenser',
+            'galon': 'Dispenser',
             'wastafel cuci piring': 'Wastafel Cuci Piring',
             'wastafel dapur': 'Wastafel Cuci Piring',
+            'cuci piring': 'Wastafel Cuci Piring',
+            'sink': 'Wastafel Cuci Piring',
+            'sink cuci piring': 'Wastafel Cuci Piring',
             'peralatan masak': 'Peralatan Masak',
+            'alat masak': 'Peralatan Masak',
+            'kitchen set': 'Peralatan Masak',
             'meja makan': 'Meja Makan',
-            'meja makan bersama': 'Meja Makan'
+            'meja makan bersama': 'Meja Makan',
+            'ruang makan': 'Meja Makan'
         };
 
         const parkingMap: Record<string, string> = {
             'parkir motor': 'Parkir Motor',
+            'motor': 'Parkir Motor',
             'parkir mobil': 'Parkir Mobil',
-            'parkir sepeda': 'Parkir Sepeda'
+            'mobil': 'Parkir Mobil',
+            'garasi mobil': 'Parkir Mobil',
+            'carport': 'Parkir Mobil',
+            'parkir sepeda': 'Parkir Sepeda',
+            'sepeda': 'Parkir Sepeda'
         };
 
         const bathroomMap: Record<string, string> = {
             'kloset duduk': 'Kloset Duduk',
+            'closet duduk': 'Kloset Duduk',
+            'toilet duduk': 'Kloset Duduk',
             'kloset jongkok': 'Kloset Jongkok',
+            'closet jongkok': 'Kloset Jongkok',
+            'toilet jongkok': 'Kloset Jongkok',
             'shower': 'Shower',
+            'shower mandi': 'Shower',
             'wastafel': 'Wastafel',
-            'wastafel wc': 'Wastafel'
+            'wastafel wc': 'Wastafel',
+            'wastafel cuci tangan': 'Wastafel',
+            'water heater': 'Water Heater',
+            'pemanas air': 'Water Heater',
+            'bak mandi': 'Bak Mandi',
+            'ember & gayung': 'Ember & Gayung',
+            'gayung': 'Ember & Gayung'
         };
 
         const standardMainMap: Record<string, string> = {
@@ -587,9 +614,17 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
             mainFacilitiesSet.add(trimmed);
         });
 
-        // If Area Parkir is selected but no parking sub-options chosen, default to 'Parkir Motor'
+        // Sensible fallbacks when parent facility is checked but sub-options set is empty:
         if (mainFacilitiesSet.has('Area Parkir') && parkingSet.size === 0) {
             parkingSet.add('Parkir Motor');
+        }
+        if (mainFacilitiesSet.has('Dapur Bersama') && kitchenSet.size === 0) {
+            kitchenSet.add('Kompor');
+            kitchenSet.add('Wastafel Cuci Piring');
+        }
+        if (mainFacilitiesSet.has('WC Umum') && bathroomSet.size === 0) {
+            bathroomSet.add('Kloset Duduk');
+            bathroomSet.add('Shower');
         }
 
         return {
@@ -2835,9 +2870,13 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                     setAgreedToTerms(parsed.agreedToTerms);
                 }
                 if (parsed.kmListingForm) {
-                    // Sanitize draft room types: keep valid survey photos
+                    // Sanitize draft room types: keep valid survey photos and map textual specs
                     let draftRoomTypes = (parsed.kmListingForm.roomTypes || []).map((rt: any) => ({
                         ...rt,
+                        roomFacilities: rt.roomFacilities || rt.features || rt.room_facilities || rt.facilities || [],
+                        bathroomFacilities: rt.bathroomFacilities || [],
+                        pricing: rt.pricing || (rt.price ? [{ period: 'bulanan', price: rt.price }] : []),
+                        size: rt.size || rt.dimensions || '3x4 m',
                         images: (rt.images || []).filter(isValidSurveyPhoto),
                         photoCategories: rt.photoCategories || [],
                         categorized_photos: rt.categorized_photos || {},
@@ -2846,9 +2885,17 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
 
                     // Fallback room definitions to database if draft has none (while keeping photos clean)
                     if (draftRoomTypes.length === 0) {
-                        const sourceRooms = dbKmProp?.room_types || dbPropertyRecord?.room_types || [];
+                        const sourceRooms = (Array.isArray(dbKmProp?.room_types) && dbKmProp.room_types.length > 0)
+                            ? dbKmProp.room_types
+                            : ((Array.isArray(dbPropertyRecord?.room_types) && dbPropertyRecord.room_types.length > 0)
+                                ? dbPropertyRecord.room_types
+                                : (Array.isArray(dbPropertyRecord?.metadata?.self_listing_room_types) ? dbPropertyRecord.metadata.self_listing_room_types : []));
                         draftRoomTypes = sourceRooms.map((rm: any) => ({
                             ...rm,
+                            roomFacilities: rm.roomFacilities || rm.features || rm.room_facilities || rm.facilities || [],
+                            bathroomFacilities: rm.bathroomFacilities || [],
+                            pricing: rm.pricing || (rm.price ? [{ period: 'bulanan', price: rm.price }] : []),
+                            size: rm.size || rm.dimensions || '3x4 m',
                             images: (rm.images || []).filter(isValidSurveyPhoto),
                             photoCategories: [],
                             categorized_photos: {},
@@ -2884,29 +2931,43 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                     parsed.kmListingForm.image_urls = draftImageUrls;
                     parsed.kmListingForm.photoCategories = draftPhotoCats;
 
-                    // Fallback and normalize facilities from database if draft facilities are empty or missing
-                    const sourceFacs = (parsed.kmListingForm.facilities && parsed.kmListingForm.facilities.length > 2)
-                        ? parsed.kmListingForm.facilities
-                        : (dbKmProp?.facilities || dbPropertyRecord?.facilities || parsed.kmListingForm.facilities || ['WiFi', 'Area Parkir', 'Dapur Bersama']);
+                    // Merge and normalize all facilities from draft, database records, and transaction metadata
+                    const combinedSourceFacs = Array.from(new Set([
+                        ...(Array.isArray(parsed.kmListingForm?.facilities) ? parsed.kmListingForm.facilities : []),
+                        ...(Array.isArray(dbKmProp?.facilities) ? dbKmProp.facilities : []),
+                        ...(Array.isArray(dbPropertyRecord?.facilities) ? dbPropertyRecord.facilities : []),
+                        ...(Array.isArray(dbPropertyRecord?.metadata?.self_listing_facilities) ? dbPropertyRecord.metadata.self_listing_facilities : []),
+                        ...(Array.isArray(req.transaction?.metadata?.facilities) ? req.transaction.metadata.facilities : []),
+                        ...(Array.isArray((req as any).metadata?.facilities) ? (req as any).metadata.facilities : [])
+                    ]));
 
-                    const sourceKitchen = (parsed.kmListingForm.publicKitchenFacilities && parsed.kmListingForm.publicKitchenFacilities.length > 0)
-                        ? parsed.kmListingForm.publicKitchenFacilities
-                        : (dbKmProp?.metadata?.publicKitchenFacilities || dbPropertyRecord?.metadata?.publicKitchenFacilities || []);
+                    const combinedKitchen = Array.from(new Set([
+                        ...(Array.isArray(parsed.kmListingForm?.publicKitchenFacilities) ? parsed.kmListingForm.publicKitchenFacilities : []),
+                        ...(Array.isArray(dbKmProp?.metadata?.publicKitchenFacilities) ? dbKmProp.metadata.publicKitchenFacilities : []),
+                        ...(Array.isArray(dbPropertyRecord?.metadata?.publicKitchenFacilities) ? dbPropertyRecord.metadata.publicKitchenFacilities : []),
+                        ...(Array.isArray(req.transaction?.metadata?.publicKitchenFacilities) ? req.transaction.metadata.publicKitchenFacilities : [])
+                    ]));
 
-                    const sourceParking = (parsed.kmListingForm.publicParkingFacilities && parsed.kmListingForm.publicParkingFacilities.length > 0)
-                        ? parsed.kmListingForm.publicParkingFacilities
-                        : (dbKmProp?.metadata?.publicParkingFacilities || dbPropertyRecord?.metadata?.publicParkingFacilities || ['Parkir Motor']);
+                    const combinedParking = Array.from(new Set([
+                        ...(Array.isArray(parsed.kmListingForm?.publicParkingFacilities) ? parsed.kmListingForm.publicParkingFacilities : []),
+                        ...(Array.isArray(dbKmProp?.metadata?.publicParkingFacilities) ? dbKmProp.metadata.publicParkingFacilities : []),
+                        ...(Array.isArray(dbPropertyRecord?.metadata?.publicParkingFacilities) ? dbPropertyRecord.metadata.publicParkingFacilities : []),
+                        ...(Array.isArray(req.transaction?.metadata?.publicParkingFacilities) ? req.transaction.metadata.publicParkingFacilities : [])
+                    ]));
 
-                    const sourceBathroom = (parsed.kmListingForm.publicBathroomFacilities && parsed.kmListingForm.publicBathroomFacilities.length > 0)
-                        ? parsed.kmListingForm.publicBathroomFacilities
-                        : (dbKmProp?.metadata?.publicBathroomFacilities || dbPropertyRecord?.metadata?.publicBathroomFacilities || []);
+                    const combinedBathroom = Array.from(new Set([
+                        ...(Array.isArray(parsed.kmListingForm?.publicBathroomFacilities) ? parsed.kmListingForm.publicBathroomFacilities : []),
+                        ...(Array.isArray(dbKmProp?.metadata?.publicBathroomFacilities) ? dbKmProp.metadata.publicBathroomFacilities : []),
+                        ...(Array.isArray(dbPropertyRecord?.metadata?.publicBathroomFacilities) ? dbPropertyRecord.metadata.publicBathroomFacilities : []),
+                        ...(Array.isArray(req.transaction?.metadata?.publicBathroomFacilities) ? req.transaction.metadata.publicBathroomFacilities : [])
+                    ]));
 
                     const resolvedInitialOwnerUid = resolveValidOwnerUid(parsed.kmListingForm.owner_uid || req.user_id, req, fetchedUser, dbPropertyRecord?.owner_uid);
                     const normalizedDraftFacs = normalizeAndExtractPublicFacilities(
-                        sourceFacs,
-                        sourceKitchen,
-                        sourceParking,
-                        sourceBathroom
+                        combinedSourceFacs.length > 0 ? combinedSourceFacs : ['WiFi', 'Area Parkir', 'Dapur Bersama'],
+                        combinedKitchen,
+                        combinedParking,
+                        combinedBathroom
                     );
 
                     const mergedForm = {
@@ -2987,17 +3048,28 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
 
                 const cleanKmRoomTypes = (dbKmProp.room_types || []).map((rm: any) => ({
                     ...rm,
+                    roomFacilities: rm.roomFacilities || rm.features || rm.room_facilities || rm.facilities || [],
+                    bathroomFacilities: rm.bathroomFacilities || [],
+                    pricing: rm.pricing || (rm.price ? [{ period: 'bulanan', price: rm.price }] : []),
+                    size: rm.size || rm.dimensions || '3x4 m',
                     images: (rm.images || []).filter(isValidSurveyPhoto),
                     photoCategories: [],
                     categorized_photos: {},
                     categorizedPhotos: {}
                 }));
 
+                const combinedKmFacs = Array.from(new Set([
+                    ...(Array.isArray(dbKmProp.facilities) ? dbKmProp.facilities : []),
+                    ...(Array.isArray(dbPropertyRecord?.facilities) ? dbPropertyRecord.facilities : []),
+                    ...(Array.isArray(dbPropertyRecord?.metadata?.self_listing_facilities) ? dbPropertyRecord.metadata.self_listing_facilities : []),
+                    ...(Array.isArray(req.transaction?.metadata?.facilities) ? req.transaction.metadata.facilities : [])
+                ]));
+
                 const normalizedKmFacs = normalizeAndExtractPublicFacilities(
-                    dbKmProp.facilities || ['WiFi', 'Area Parkir'],
-                    dbKmProp.metadata?.publicKitchenFacilities || [],
-                    dbKmProp.metadata?.publicParkingFacilities || [],
-                    dbKmProp.metadata?.publicBathroomFacilities || []
+                    combinedKmFacs.length > 0 ? combinedKmFacs : ['WiFi', 'Area Parkir', 'Dapur Bersama'],
+                    Array.from(new Set([...(dbKmProp.metadata?.publicKitchenFacilities || []), ...(dbPropertyRecord?.metadata?.publicKitchenFacilities || [])])),
+                    Array.from(new Set([...(dbKmProp.metadata?.publicParkingFacilities || []), ...(dbPropertyRecord?.metadata?.publicParkingFacilities || [])])),
+                    Array.from(new Set([...(dbKmProp.metadata?.publicBathroomFacilities || []), ...(dbPropertyRecord?.metadata?.publicBathroomFacilities || [])]))
                 );
 
                 const dynamicKmCats = computeDynamicPublicPhotoCategories(
@@ -3051,11 +3123,18 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                 console.log("openKostManagerListing: fallback to loading from dbPropertyRecord (preserving original photos as self-listing only):", dbPropertyRecord.id);
                 kmOriginalLocationRef.current = dbPropertyRecord.location || null;
                 
+                const combinedPropFacs = Array.from(new Set([
+                    ...(Array.isArray(dbPropertyRecord.facilities) ? dbPropertyRecord.facilities : []),
+                    ...(Array.isArray(dbPropertyRecord.metadata?.self_listing_facilities) ? dbPropertyRecord.metadata.self_listing_facilities : []),
+                    ...(Array.isArray(req.transaction?.metadata?.facilities) ? req.transaction.metadata.facilities : []),
+                    ...(Array.isArray((req as any).metadata?.facilities) ? (req as any).metadata.facilities : [])
+                ]));
+
                 const normalizedPropFacs = normalizeAndExtractPublicFacilities(
-                    dbPropertyRecord.facilities || ['WiFi', 'Area Parkir'],
-                    dbPropertyRecord.metadata?.publicKitchenFacilities || [],
-                    dbPropertyRecord.metadata?.publicParkingFacilities || [],
-                    dbPropertyRecord.metadata?.publicBathroomFacilities || []
+                    combinedPropFacs.length > 0 ? combinedPropFacs : ['WiFi', 'Area Parkir', 'Dapur Bersama'],
+                    Array.from(new Set([...(dbPropertyRecord.metadata?.publicKitchenFacilities || []), ...(req.transaction?.metadata?.publicKitchenFacilities || [])])),
+                    Array.from(new Set([...(dbPropertyRecord.metadata?.publicParkingFacilities || []), ...(req.transaction?.metadata?.publicParkingFacilities || [])])),
+                    Array.from(new Set([...(dbPropertyRecord.metadata?.publicBathroomFacilities || []), ...(req.transaction?.metadata?.publicBathroomFacilities || [])]))
                 );
 
                 // FRESH SLATE FOR PHOTOS: Do NOT copy self-listing photos into surveyor's form!
@@ -3081,8 +3160,16 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                 }
 
                 // If room types exist in self-listing property, keep textual specs (names, pricing, facilities) but clean room photos
-                const cleanRoomTypes = (dbPropertyRecord.room_types || []).map((rm: any) => ({
+                const sourceSelfRooms = (Array.isArray(dbPropertyRecord.room_types) && dbPropertyRecord.room_types.length > 0)
+                    ? dbPropertyRecord.room_types
+                    : (Array.isArray(dbPropertyRecord.metadata?.self_listing_room_types) ? dbPropertyRecord.metadata.self_listing_room_types : []);
+
+                const cleanRoomTypes = sourceSelfRooms.map((rm: any) => ({
                     ...rm,
+                    roomFacilities: rm.roomFacilities || rm.features || rm.room_facilities || rm.facilities || [],
+                    bathroomFacilities: rm.bathroomFacilities || [],
+                    pricing: rm.pricing || (rm.price ? [{ period: 'bulanan', price: rm.price }] : []),
+                    size: rm.size || rm.dimensions || '3x4 m',
                     images: [],
                     photoCategories: [],
                     categorized_photos: {},

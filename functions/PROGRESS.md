@@ -2,6 +2,38 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 397. Penyempurnaan Kloning Fasilitas Listing Mitra & Fitur Kamar ke Formulir Pendataan KostManager (`AgentDashboard.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna melaporkan bahwa saat agen survei membuka formulir pendataan KostManager (*Onboarding Kost - Survey Field App*), beberapa fasilitas yang sebelumnya terdaftar saat masih menjadi listing mitra biasa tidak terkloning dengan lengkap ke data awal pendataan KostManager.
+  2. Secara khusus pada Langkah 1 (Properti), fasilitas **Dapur Bersama** tercentang namun seluruh **Kelengkapan Dapur Bersama** (*Kompor, Kulkas, Dispenser, Wastafel Cuci Piring, Peralatan Masak, Meja Makan*) tidak tercentang / kosong.
+  3. Pengguna juga mengonfirmasi error console `VM127:2 Uncaught TypeError: Cannot read properties of undefined (reading 'startTime')` yang muncul saat membuka formulir survei.
+- **Akar Masalah**:
+  1. **Draf Awal Menimpa Data Database**: Ketika draf survei awal (*draft_data*) sudah ada pada `survey_requests` atau `localStorage`, pembacaan data di `openKostManagerListing` hanya mengambil `parsed.kmListingForm.facilities` dan mengabaikan `dbPropertyRecord.facilities`. Karena draf belum memiliki array sub-fasilitas terpisah (`publicKitchenFacilities: []`), sub-kelengkapan dapur dari database asli mitra tidak pernah di-ekstraksi.
+  2. **Struktur Penyimpanan Fasilitas Mitra**: Listing mitra menyimpan seluruh fasilitas dan sub-kelengkapan (misal: `'Dapur Bersama'`, `'Kompor'`, `'Kulkas Bersama'`, `'Wastafel Cuci Piring'`) ke dalam array flat `properties.facilities` dan `metadata.self_listing_facilities`, bukan pada kolom terpisah `metadata.publicKitchenFacilities`.
+  3. **Keterbatasan Kamus Mapping Sinonim**: Kamus pemetaan `kitchenMap`, `parkingMap`, dan `bathroomMap` di `normalizeAndExtractPublicFacilities` belum mencakup semua sinonim sub-fasilitas yang disimpan oleh form mitra (seperti *kitchen set, lemari es, dispenser air, meja makan bersama, wastafel dapur, sink, ember & gayung, dll.*).
+  4. **Ketiadaan Sensible Default saat Induk Terpilih**: Belum ada fallback default untuk *Dapur Bersama* dan *WC Umum* jika fasilitas induk tercentang namun sub-fasilitas kosong.
+  5. **Error Console Browser (`VM127:2 startTime`)**: Diidentifikasi berasal dari script ekstensi Chrome pengguna (misal *Google Core Web Vitals* / *Lighthouse Profiler*) yang mencoba membaca `entry.startTime` dari Performance Observer saat transisi animasi modal.
+- **Implementasi Solusi**:
+  1. **Perluasan Kamus Normalisasi & Ekstraksi Sub-Fasilitas (`AgentDashboard.tsx`)**:
+     - Memperluas pemetaan sinonim dapur: `kompor`, `kompor gas`, `gas`, `kulkas`, `kulkas bersama`, `kulkas umum`, `lemari es`, `dispenser`, `dispenser air`, `air minum`, `galon`, `wastafel cuci piring`, `wastafel dapur`, `cuci piring`, `sink`, `sink cuci piring`, `peralatan masak`, `alat masak`, `kitchen set`, `meja makan`, `meja makan bersama`, `ruang makan`.
+     - Memperluas pemetaan parkir: `parkir motor`, `motor`, `parkir mobil`, `mobil`, `garasi mobil`, `carport`, `parkir sepeda`, `sepeda`.
+     - Memperluas pemetaan WC umum: `kloset duduk`, `closet duduk`, `toilet duduk`, `kloset jongkok`, `closet jongkok`, `toilet jongkok`, `shower`, `shower mandi`, `wastafel`, `wastafel wc`, `wastafel cuci tangan`, `water heater`, `pemanas air`, `bak mandi`, `ember & gayung`, `gayung`.
+  2. **Sensible Fallback Otomatis untuk Fasilitas Induk**:
+     - Jika `Area Parkir` aktif & sub kosong $\rightarrow$ default `['Parkir Motor']`.
+     - Jika `Dapur Bersama` aktif & sub kosong $\rightarrow$ default `['Kompor', 'Wastafel Cuci Piring']`.
+     - Jika `WC Umum` aktif & sub kosong $\rightarrow$ default `['Kloset Duduk', 'Shower']`.
+  3. **Penggabungan Komprehensif Sumber Data Fasilitas di `openKostManagerListing`**:
+     - Menggabungkan array fasilitas dari `parsed.kmListingForm.facilities`, `dbKmProp?.facilities`, `dbPropertyRecord?.facilities`, `dbPropertyRecord?.metadata?.self_listing_facilities`, `req.transaction?.metadata?.facilities`, dan `req.metadata?.facilities` sehingga seluruh sub-kelengkapan yang pernah dipilih mitra tidak hilang saat draf dimuat maupun saat pembukaan pertama.
+  4. **Penyempurnaan Kloning Tipe Kamar & Fitur Kamar (Langkah 2 - Data Kamar)**:
+     - Memastikan `roomFacilities` pada tipe kamar membaca multi-kolom cadangan: `rm.roomFacilities || rm.features || rm.room_facilities || rm.facilities || []`.
+     - Memastikan normalisasi `pricing`, `size`, dan `roomCount` terisi dengan aman.
+- **File Tersentuh**:
+  - `functions/public/pages/AgentDashboard.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi build frontend Vite (`npm run build` di `functions/public`) lulus 100% (2512 modul tertransformasi, `✓ built in 44.54s`, 0 error).
+
 ### 396. Perbaikan Auto-Save & Pemulihan Draft Form Listing & Edit Listing Mitra (`KostFormMitra.tsx`) (September 2026)
 - **Permintaan & Masalah**:
   1. Pengguna melaporkan bahwa form pendaftaran baru dan edit listing di Dashboard Mitra kembali bermasalah di mana draft isian tidak tersimpan otomatis ketika diisi, saat beralih tahap, maupun ketika modal form ditutup. Akibatnya, saat form dibuka kembali, pengguna harus mengisi ulang dari awal.
