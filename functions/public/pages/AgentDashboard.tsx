@@ -441,6 +441,8 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
     };
 
     const [isEditingKostManager, setIsEditingKostManager] = useState<SurveyRequest | null>(null);
+    const hasAutoLoadedOnboardingRef = useRef<boolean>(false);
+    const isClosingKostManagerRef = useRef<boolean>(false);
     const [photoCategories, setPhotoCategories] = useState<string[]>(['Bangunan Depan', 'Koridor', 'Area Parkir', 'Lingkungan']);
     const [newPhotoCategoryName, setNewPhotoCategoryName] = useState('');
     const [googleMapsUrlInput, setGoogleMapsUrlInput] = useState('');
@@ -2138,6 +2140,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
 
 
     const closeKostManagerListing = () => {
+        isClosingKostManagerRef.current = true;
         setIsEditingKostManager(null);
         setMitraProfile(null);
         setSignatureData(null);
@@ -2167,9 +2170,21 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
         setTemporaryRoom(null);
         setActiveRoomIdx(null);
         setPhotoCategories(['Bangunan Depan', 'Koridor', 'Area Parkir', 'Lingkungan']);
+        
+        // Bersihkan parameter onboarding_id secara instan dari window.history dan router
+        try {
+            const url = new URL(window.location.href);
+            if (url.searchParams.has('onboarding_id')) {
+                url.searchParams.delete('onboarding_id');
+                window.history.replaceState({}, '', url.toString());
+            }
+        } catch (e) {
+            console.warn("Error cleaning window URL:", e);
+        }
         const cleanupParams = new URLSearchParams(searchParams);
         cleanupParams.delete('onboarding_id');
-        setSearchParams(cleanupParams);
+        setSearchParams(cleanupParams, { replace: true });
+
         setIsExistingPropertyMigration(false);
         setWarningAccepted(false);
     };
@@ -2416,7 +2431,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
     // Auto-load onboarding from URL search params on refresh (menggunakan string comparison UUID & direct fetch fallback)
     useEffect(() => {
         const onboardingIdStr = searchParams.get('onboarding_id');
-        if (onboardingIdStr && !isEditingKostManager) {
+        if (onboardingIdStr && !isEditingKostManager && !isClosingKostManagerRef.current) {
             if (surveyRequests && surveyRequests.length > 0) {
                 const found = surveyRequests.find(r => String(r.id) === String(onboardingIdStr));
                 if (found) {
@@ -2710,6 +2725,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
     };
 
     const openKostManagerListing = async (req: SurveyRequest) => {
+        isClosingKostManagerRef.current = false;
         setIsEditingKostManager(req);
         setAgreedToTerms(false);
         setSignatureData(null);
