@@ -3906,14 +3906,47 @@ const KostManagerManagement: React.FC<KostManagerManagementProps> = ({
                                             (() => {
                                                 const rawImgs = reviewProperty?.image_urls || [];
                                                 const normPhotos = normalizePhotos(rawImgs);
-                                                const baseCats = ['Bangunan Depan', 'Koridor', 'Area Parkir', 'Lingkungan'];
+                                                const baseCats = ['Bangunan Depan', 'Koridor', 'Lingkungan'];
                                                 
+                                                // Parking sub-facilities
+                                                const propParking = reviewProperty?.publicParkingFacilities || reviewProperty?.metadata?.publicParkingFacilities || [];
+                                                if (propParking.length > 0) {
+                                                    propParking.forEach((p: string) => {
+                                                        if (p && !baseCats.includes(p)) baseCats.push(p);
+                                                    });
+                                                } else if ((reviewProperty?.facilities || []).some((f: any) => /parkir/i.test(typeof f === 'string' ? f : f?.name || ''))) {
+                                                    if (!baseCats.includes('Area Parkir')) baseCats.push('Area Parkir');
+                                                }
+
+                                                // Kitchen & sub-facilities
+                                                const propKitchen = reviewProperty?.publicKitchenFacilities || reviewProperty?.metadata?.publicKitchenFacilities || [];
+                                                if ((reviewProperty?.facilities || []).some((f: any) => /dapur/i.test(typeof f === 'string' ? f : f?.name || ''))) {
+                                                    if (!baseCats.includes('Dapur Bersama')) baseCats.push('Dapur Bersama');
+                                                }
+                                                if (propKitchen.length > 0) {
+                                                    propKitchen.forEach((k: string) => {
+                                                        if (k && !baseCats.includes(k)) baseCats.push(k);
+                                                    });
+                                                }
+
+                                                // Bathroom & sub-facilities
+                                                const propBathroom = reviewProperty?.publicBathroomFacilities || reviewProperty?.metadata?.publicBathroomFacilities || [];
+                                                if ((reviewProperty?.facilities || []).some((f: any) => /(wc|toilet|kamar mandi luar)/i.test(typeof f === 'string' ? f : f?.name || ''))) {
+                                                    if (!baseCats.includes('WC Umum')) baseCats.push('WC Umum');
+                                                }
+                                                if (propBathroom.length > 0) {
+                                                    propBathroom.forEach((b: string) => {
+                                                        if (b && !baseCats.includes(b)) baseCats.push(b);
+                                                    });
+                                                }
+
                                                 // Add dynamic categories from facilities if available
                                                 (reviewProperty?.facilities || []).forEach((f: any) => {
                                                     const fName = typeof f === 'string' ? f : (f?.name || '');
-                                                    if (/(dapur|kitchen)/i.test(fName) && !baseCats.includes('Dapur Bersama')) baseCats.push('Dapur Bersama');
                                                     if (/(ruang tamu|living room)/i.test(fName) && !baseCats.includes('Ruang Tamu')) baseCats.push('Ruang Tamu');
                                                     if (/(rooftop|jemuran|balkon)/i.test(fName) && !baseCats.includes('Area Jemur / Rooftop')) baseCats.push('Area Jemur / Rooftop');
+                                                    if (/cctv/i.test(fName) && !baseCats.includes('CCTV')) baseCats.push('CCTV');
+                                                    if (/laundry/i.test(fName) && !baseCats.includes('Laundry')) baseCats.push('Laundry');
                                                 });
 
                                                 return (

@@ -2,6 +2,37 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 391. Integrasi Kategori Foto Dinamis untuk Sub-Fasilitas Tercentang pada Pendataan KostManager (`AgentDashboard.tsx`, `KostManagerPropertyFormModal.tsx`, `KostManagerPortal.tsx`, `KostManagerManagement.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna meminta: *"khusus pendataan kostmanager, semua sub fasilitas yang dicentang juga harus muncul input kategori fotonya sih yang terintegrasi dengan sub fasilitas yang tercentang itu"*.
+  2. Sebelumnya, slot kategori foto area umum hanya menampilkan fasilitas utama (`Bangunan Depan`, `Koridor`, `Area Parkir`, `Dapur Bersama`, `WC Umum`, `Lingkungan`). Seluruh sub-fasilitas yang dicentang (seperti *Kompor*, *Kulkas*, *Dispenser*, *Wastafel Cuci Piring*, *Peralatan Masak*, *Meja Makan* di bawah Dapur Bersama; *Parkir Motor*, *Parkir Mobil*, *Parkir Sepeda* di bawah Area Parkir; *Kloset Duduk*, *Kloset Jongkok*, *Shower*, *Wastafel* di bawah WC Umum, serta sub-fasilitas kustom lainnya) sebelumnya di-filter keluar oleh array `nonPhotoFacs` dan ter-collapse menjadi satu kategori induk saja.
+- **Implementasi Solusi**:
+  1. **Komputasi Dinamis Kategori Foto Sub-Fasilitas (`computeDynamicPublicPhotoCategories`)**:
+     - Memperbarui fungsi `computeDynamicPublicPhotoCategories` di `AgentDashboard.tsx` dan `KostManagerPropertyFormModal.tsx` agar menerima parameter `parkingFacilities`, `kitchenFacilities`, dan `bathroomFacilities`.
+     - Ketika fasilitas *Area Parkir* dipilih, setiap sub-fasilitas parkir yang dicentang (misal: *Parkir Motor*, *Parkir Mobil*, *Parkir Sepeda*, dll.) otomatis dimunculkan sebagai kartu input kategori foto individual.
+     - Ketika *Dapur Bersama* dipilih, kartu *Dapur Bersama* dimunculkan bersama seluruh sub-fasilitas dapur yang dicentang (misal: *Kompor*, *Kulkas*, *Dispenser*, *Wastafel Cuci Piring*, *Peralatan Masak*, *Meja Makan*, dll.).
+     - Ketika *WC Umum* dipilih, kartu *WC Umum* dimunculkan bersama seluruh sub-fasilitas kamar mandi yang dicentang (misal: *Kloset Duduk*, *Kloset Jongkok*, *Shower*, *Wastafel*, dll.).
+     - Fasilitas fisik lainnya (*Ruang Tamu*, *CCTV*, *Laundry*, *Mushola*, *Area Jemuran*, *Lift*, dan fasilitas kustom) tetap dibuatkan kartu kategori foto secara otomatis, sementara fasilitas murni layanan (*WiFi*, *Security 24 Jam*, *Akses 24 Jam*, *Cleaning Service*) tetap dikecualikan dari slot foto.
+  2. **Sinkronisasi Reaktif Real-Time (`useEffect`)**:
+     - Menghubungkan state `photoCategories` dengan array `kmListingForm.publicParkingFacilities`, `kmListingForm.publicKitchenFacilities`, dan `kmListingForm.publicBathroomFacilities` pada hook `useEffect`.
+     - Setiap kali pengguna mencentang atau menghapus centang pada sub-fasilitas di Step 1, daftar kartu unggah foto di Step 2 langsung diperbarui secara instan tanpa kehilangan foto yang sudah diunggah.
+  3. **Preservasi Kategori Foto Spesifik (Anti-Collapsing)**:
+     - Menghapus logika lama yang menimpa/menggabungkan label sub-fasilitas (*parkir motor*, *parkir mobil*, dll.) menjadi label generik *Area Parkir* pada `loadDraft`, `loadPropertyData`, `KostManagerPortal.tsx`, dan rendering foto.
+     - Setiap foto yang diunggah untuk sub-fasilitas tertentu tersimpan dan terpetakan dengan label aslinya secara presisi.
+  4. **Penyempurnaan Ikon Visual Bundled SVG (`lucide-react`)**:
+     - Menggunakan ikon SVG ter-bundle murni (`CookingPot`, `Bath`, `MapPin`, `Home`, `Armchair`, `Eye`, `Sparkles`, `Camera`) untuk sub-fasilitas dapur, kamar mandi, parkir, dan lainnya, 100% bebas dari FOUT (Flash of Unstyled Text).
+  5. **Dukungan Audit Review Admin (`KostManagerManagement.tsx`)**:
+     - Menyelaraskan kartu audit verifikasi foto properti di dashboard admin agar menampilkan slot kartu pemeriksaan untuk setiap sub-fasilitas yang dipilih.
+- **File Tersentuh**:
+  - `functions/public/pages/AgentDashboard.tsx`
+  - `functions/public/components/admin/KostManagerPropertyFormModal.tsx`
+  - `functions/public/components/admin/KostManagerPortal.tsx`
+  - `functions/public/components/admin/KostManagerManagement.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi build frontend Vite (`cmd /c npm run build` di `functions/public`) lulus 100% (`✓ 2512 modules transformed, built in 55.36s`, 0 error).
+
 ### 390. Peningkatan Dual-Engine Auto-Sensor AI & Editor Sensor Foto Interaktif Pendataan KostManager (`autoSensorService.ts`, `PhotoSensorModal.tsx`, `AgentDashboard.tsx`, `KostManagerPropertyFormModal.tsx`) (September 2026)
 - **Permintaan & Masalah**:
   1. Pengguna melaporkan bahwa fitur auto blur dan sensor banner pada pengunggahan foto di pendataan KostManager belum bekerja dengan baik (seperti pada foto "Bangunan Depan 1" di mana spanduk "TERIMA KOST / HUB" pada pagar/gerbang belum tersensor secara optimal).

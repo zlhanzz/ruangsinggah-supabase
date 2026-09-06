@@ -307,21 +307,76 @@ const checkHasFacility = (facilityList: string[], target: string) => {
 };
 
 // Photo category computator
-const computeDynamicPublicPhotoCategories = (facilities: string[] = [], manualExtras: string[] = []): string[] => {
+const computeDynamicPublicPhotoCategories = (
+    facilities: string[] = [], 
+    manualExtras: string[] = [],
+    parkingFacilities: string[] = [],
+    kitchenFacilities: string[] = [],
+    bathroomFacilities: string[] = []
+): string[] => {
     const base = ['Bangunan Depan', 'Koridor'];
     const dynamic: string[] = [];
 
+    // 1. Area Parkir & Sub-facilities
+    const hasParking = (facilities || []).some(f => {
+        const l = (f || '').toLowerCase().trim();
+        return l === 'area parkir' || l === 'parkir' || l === 'parkiran' || l === 'parkir motor' || l === 'parkir mobil';
+    });
+    if (hasParking) {
+        if (parkingFacilities && parkingFacilities.length > 0) {
+            parkingFacilities.forEach(pf => {
+                const clean = (pf || '').trim();
+                if (clean && !dynamic.includes(clean) && !base.includes(clean)) {
+                    dynamic.push(clean);
+                }
+            });
+        } else {
+            if (!dynamic.includes('Area Parkir')) {
+                dynamic.push('Area Parkir');
+            }
+        }
+    }
+
+    // 2. Dapur Bersama & Sub-facilities
+    const hasKitchen = (facilities || []).some(f => {
+        const l = (f || '').toLowerCase().trim();
+        return l === 'dapur bersama' || l === 'dapur' || l === 'dapur umum';
+    });
+    if (hasKitchen) {
+        if (!dynamic.includes('Dapur Bersama')) {
+            dynamic.push('Dapur Bersama');
+        }
+        if (kitchenFacilities && kitchenFacilities.length > 0) {
+            kitchenFacilities.forEach(kf => {
+                const clean = (kf || '').trim();
+                if (clean && !dynamic.includes(clean) && !base.includes(clean)) {
+                    dynamic.push(clean);
+                }
+            });
+        }
+    }
+
+    // 3. WC Umum & Sub-facilities
+    const hasBathroom = (facilities || []).some(f => {
+        const l = (f || '').toLowerCase().trim();
+        return l === 'wc umum' || l === 'kamar mandi umum' || l === 'toilet umum' || l === 'kamar mandi luar';
+    });
+    if (hasBathroom) {
+        if (!dynamic.includes('WC Umum')) {
+            dynamic.push('WC Umum');
+        }
+        if (bathroomFacilities && bathroomFacilities.length > 0) {
+            bathroomFacilities.forEach(bf => {
+                const clean = (bf || '').trim();
+                if (clean && !dynamic.includes(clean) && !base.includes(clean)) {
+                    dynamic.push(clean);
+                }
+            });
+        }
+    }
+
     const facMapping: { [key: string]: string } = {
-        'area parkir': 'Area Parkir',
-        'parkir': 'Area Parkir',
-        'parkiran': 'Area Parkir',
-        'parkir motor': 'Area Parkir',
-        'parkir mobil': 'Area Parkir',
-        'dapur bersama': 'Dapur Bersama',
-        'dapur': 'Dapur Bersama',
-        'dapur umum': 'Dapur Bersama',
         'ruang tamu': 'Ruang Tamu',
-        'wc umum': 'WC Umum',
         'cctv': 'CCTV',
         'laundry': 'Laundry',
         'mushola': 'Mushola',
@@ -334,10 +389,9 @@ const computeDynamicPublicPhotoCategories = (facilities: string[] = [], manualEx
     const nonPhotoFacs = [
         'wifi', 'wi-fi', 'internet', 'security 24 jam', 'security', 'satpam', 'penjaga kost',
         'akses 24 jam', 'bebas jam malam', '24 jam', 'cleaning service', 'pembersihan', 'kebersihan',
-        'kompor', 'kulkas', 'kulkas bersama', 'kulkas umum', 'dispenser', 'dispenser air',
-        'wastafel cuci piring', 'wastafel dapur', 'peralatan masak', 'meja makan', 'meja makan bersama',
-        'kloset duduk', 'kloset jongkok', 'shower', 'wastafel', 'wastafel wc',
-        'parkir sepeda'
+        'area parkir', 'parkir', 'parkiran', 'parkir motor', 'parkir mobil', 'parkir sepeda',
+        'dapur bersama', 'dapur', 'dapur umum',
+        'wc umum', 'kamar mandi umum', 'toilet umum', 'kamar mandi luar'
     ];
 
     (facilities || []).forEach(f => {
@@ -370,7 +424,7 @@ const computeDynamicPublicPhotoCategories = (facilities: string[] = [], manualEx
     });
 
     (manualExtras || []).forEach(c => {
-        const clean = c.trim();
+        const clean = (c || '').trim();
         if (clean && !dynamic.includes(clean) && !base.includes(clean)) {
             dynamic.push(clean);
         }
@@ -706,19 +760,42 @@ export const KostManagerPropertyFormModal: React.FC<KostManagerPropertyFormModal
         });
 
         // Compute dynamic public photo categories including any extra categories from photos
-        const dynamicPublicCats = computeDynamicPublicPhotoCategories(normalizedLoadedFacs.facilities, extraCatsFromPhotos);
+        const dynamicPublicCats = computeDynamicPublicPhotoCategories(
+            normalizedLoadedFacs.facilities,
+            extraCatsFromPhotos,
+            normalizedLoadedFacs.publicParkingFacilities || [],
+            normalizedLoadedFacs.publicKitchenFacilities || [],
+            normalizedLoadedFacs.publicBathroomFacilities || []
+        );
         setPhotoCategories(dynamicPublicCats);
     }, [editingPropertyId, newPropForm]);
 
     // Dynamic Public Photo Categories sync when facilities change
     useEffect(() => {
         const currentPhotoLabels = (kmListingForm.image_urls || []).map((img: any) => (typeof img === 'object' ? img.label : '')).filter(Boolean);
-        const dynamicPublicCats = computeDynamicPublicPhotoCategories(kmListingForm.facilities || [], currentPhotoLabels);
+        const dynamicPublicCats = computeDynamicPublicPhotoCategories(
+            kmListingForm.facilities || [],
+            currentPhotoLabels,
+            kmListingForm.publicParkingFacilities || [],
+            kmListingForm.publicKitchenFacilities || [],
+            kmListingForm.publicBathroomFacilities || []
+        );
         setPhotoCategories(prev => {
             const manualExtras = prev.filter(c => !dynamicPublicCats.includes(c) && !['Bangunan Depan', 'Koridor', 'Lingkungan', 'Area Parkir', 'Parkiran', 'Dapur Bersama', 'Ruang Tamu', 'WC Umum', 'CCTV', 'Laundry'].includes(c));
-            return computeDynamicPublicPhotoCategories(kmListingForm.facilities || [], [...currentPhotoLabels, ...manualExtras]);
+            return computeDynamicPublicPhotoCategories(
+                kmListingForm.facilities || [],
+                [...currentPhotoLabels, ...manualExtras],
+                kmListingForm.publicParkingFacilities || [],
+                kmListingForm.publicKitchenFacilities || [],
+                kmListingForm.publicBathroomFacilities || []
+            );
         });
-    }, [kmListingForm.facilities]);
+    }, [
+        kmListingForm.facilities,
+        kmListingForm.publicParkingFacilities,
+        kmListingForm.publicKitchenFacilities,
+        kmListingForm.publicBathroomFacilities
+    ]);
 
     // Mini Map initialization
     useEffect(() => {
@@ -2441,24 +2518,16 @@ export const KostManagerPropertyFormModal: React.FC<KostManagerPropertyFormModal
                                             : (kmListingForm.photoCategories?.[idx] || (idx < photoCategories.length ? photoCategories[idx] : `Foto Area Lainnya ${idx + 1}`));
                                         
                                         const lower = (rawCat || '').toLowerCase().trim();
-                                        if (lower.includes('fasad') || lower.includes('depan') || lower.includes('gedung') || lower.includes('tampak depan')) {
+                                        if (lower.includes('fasad') || lower.includes('gedung') || lower.includes('tampak depan')) {
                                             rawCat = 'Bangunan Depan';
-                                        } else if (lower.includes('koridor') || lower.includes('lorong') || lower.includes('akses') || lower.includes('pintu masuk')) {
+                                        } else if (lower.includes('lorong') || lower.includes('akses') || lower.includes('pintu masuk')) {
                                             rawCat = 'Koridor';
-                                        } else if (lower.includes('area umum') || lower.includes('parkiran') || lower.includes('parkir motor') || lower.includes('parkir mobil') || lower.includes('parkir') || lower.includes('garasi')) {
+                                        } else if (lower === 'area umum' || lower === 'parkiran') {
                                             rawCat = 'Area Parkir';
-                                        } else if (lower.includes('dapur')) {
-                                            rawCat = 'Dapur Bersama';
-                                        } else if (lower.includes('wc') || lower.includes('toilet') || lower.includes('kamar mandi luar')) {
-                                            rawCat = 'WC Umum';
-                                        } else if (lower.includes('lingkungan') || lower.includes('taman') || lower.includes('sekitar')) {
+                                        } else if (lower === 'taman' || lower === 'sekitar') {
                                             rawCat = 'Lingkungan';
-                                        } else if (lower.includes('ruang tamu') || lower.includes('ruang santai')) {
+                                        } else if (lower === 'ruang santai') {
                                             rawCat = 'Ruang Tamu';
-                                        } else if (lower.includes('cctv')) {
-                                            rawCat = 'CCTV';
-                                        } else if (lower.includes('laundry') || lower.includes('jemuran') || lower.includes('cuci')) {
-                                            rawCat = 'Laundry';
                                         }
 
                                         return { url, idx, rawCat };
@@ -2473,9 +2542,13 @@ export const KostManagerPropertyFormModal: React.FC<KostManagerPropertyFormModal
                                                     <div key={label} className="bg-white border border-[#e0c0af]/60 rounded-2xl p-3.5 shadow-xs space-y-3">
                                                         <div className="flex justify-between items-center">
                                                             <div className="flex items-center gap-1.5">
-                                                                {label.includes('Depan') ? <Home className="w-4 h-4 text-[#ff7a00] shrink-0" /> :
-                                                                 label.includes('Parkir') ? <MapPin className="w-4 h-4 text-[#ff7a00] shrink-0" /> :
-                                                                 label.includes('Dapur') ? <Home className="w-4 h-4 text-[#ff7a00] shrink-0" /> :
+                                                                {label.toLowerCase().includes('depan') || label.toLowerCase().includes('gedung') || label.toLowerCase().includes('fasad') ? <Home className="w-4 h-4 text-[#ff7a00] shrink-0" /> :
+                                                                 label.toLowerCase().includes('parkir') || label.toLowerCase().includes('motor') || label.toLowerCase().includes('mobil') || label.toLowerCase().includes('sepeda') || label.toLowerCase().includes('garasi') ? <MapPin className="w-4 h-4 text-[#ff7a00] shrink-0" /> :
+                                                                 label.toLowerCase().includes('dapur') || label.toLowerCase().includes('kompor') || label.toLowerCase().includes('kulkas') || label.toLowerCase().includes('dispenser') || label.toLowerCase().includes('masak') || label.toLowerCase().includes('makan') ? <CookingPot className="w-4 h-4 text-[#ff7a00] shrink-0" /> :
+                                                                 label.toLowerCase().includes('wc') || label.toLowerCase().includes('toilet') || label.toLowerCase().includes('kloset') || label.toLowerCase().includes('shower') || label.toLowerCase().includes('wastafel') || label.toLowerCase().includes('kamar mandi') ? <Bath className="w-4 h-4 text-[#ff7a00] shrink-0" /> :
+                                                                 label.toLowerCase().includes('ruang tamu') || label.toLowerCase().includes('santai') || label.toLowerCase().includes('sofa') ? <Armchair className="w-4 h-4 text-[#ff7a00] shrink-0" /> :
+                                                                 label.toLowerCase().includes('cctv') ? <Eye className="w-4 h-4 text-[#ff7a00] shrink-0" /> :
+                                                                 label.toLowerCase().includes('laundry') || label.toLowerCase().includes('jemuran') || label.toLowerCase().includes('cuci') ? <Sparkles className="w-4 h-4 text-[#ff7a00] shrink-0" /> :
                                                                  <Camera className="w-4 h-4 text-[#ff7a00] shrink-0" />}
                                                                 <span className="text-xs font-black text-[#0b1c30] uppercase tracking-wider">{label}</span>
                                                                 {isBannerProneCategory(label) && (

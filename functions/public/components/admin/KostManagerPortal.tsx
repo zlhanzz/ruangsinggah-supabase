@@ -185,24 +185,20 @@ const normalizePhotosWithLabels = (imgUrls: any[]): { original: string; url: str
         const lowerLabel = normalizedLabel.toLowerCase();
 
         // Intelligent category resolver matching survey form
-        if (lowerLabel.includes('fasad') || lowerLabel.includes('depan') || lowerLabel.includes('gedung') || lowerLabel.includes('tampak depan')) {
+        if (lowerLabel.includes('fasad') || lowerLabel.includes('gedung') || lowerLabel.includes('tampak depan')) {
             normalizedLabel = 'Bangunan Depan';
-        } else if (lowerLabel.includes('koridor') || lowerLabel.includes('lorong') || lowerLabel.includes('akses') || lowerLabel.includes('pintu masuk')) {
+        } else if (lowerLabel.includes('lorong') || lowerLabel.includes('akses') || lowerLabel.includes('pintu masuk')) {
             normalizedLabel = 'Koridor';
-        } else if (lowerLabel.includes('parkir') || lowerLabel.includes('parkiran') || lowerLabel.includes('garasi')) {
+        } else if (lowerLabel === 'area umum' || lowerLabel === 'parkiran') {
             normalizedLabel = 'Area Parkir';
-        } else if (lowerLabel.includes('dapur')) {
+        } else if (lowerLabel === 'dapur') {
             normalizedLabel = 'Dapur Bersama';
-        } else if (lowerLabel.includes('wc umum') || lowerLabel.includes('toilet') || lowerLabel.includes('kamar mandi luar') || lowerLabel.includes('wc luar')) {
+        } else if (lowerLabel === 'toilet' || lowerLabel === 'kamar mandi luar' || lowerLabel === 'wc luar') {
             normalizedLabel = 'WC Umum';
-        } else if (lowerLabel.includes('lingkungan') || lowerLabel.includes('taman') || lowerLabel.includes('sekitar')) {
+        } else if (lowerLabel === 'taman' || lowerLabel === 'sekitar') {
             normalizedLabel = 'Lingkungan';
-        } else if (lowerLabel.includes('ruang tamu') || lowerLabel.includes('ruang santai')) {
+        } else if (lowerLabel === 'ruang santai') {
             normalizedLabel = 'Ruang Tamu';
-        } else if (lowerLabel.includes('cctv')) {
-            normalizedLabel = 'CCTV';
-        } else if (lowerLabel.includes('laundry') || lowerLabel.includes('jemuran') || lowerLabel.includes('cuci')) {
-            normalizedLabel = 'Laundry';
         }
 
         // If still no label, assign fallback slot

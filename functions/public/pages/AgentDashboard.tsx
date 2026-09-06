@@ -27,7 +27,7 @@ import {
     Smartphone, MessageCircle, ExternalLink, ArrowLeft, UploadCloud, Edit, Mail, Heart,
     Signal, Wifi, BatteryCharging, CheckSquare, Layers, Building2,
     Loader2, GraduationCap, Store, ShoppingBag, Building, Fuel, Church,
-    ShieldAlert
+    ShieldAlert, CookingPot, ParkingCircle, Droplets, Armchair
 } from 'lucide-react';
 import {
     isBannerProneCategory,
@@ -600,22 +600,77 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
         };
     };
 
-    // Helper to dynamically compute public photo categories based on checked facilities
-    const computeDynamicPublicPhotoCategories = (facilities: string[] = [], manualExtras: string[] = []): string[] => {
+    // Helper to dynamically compute public photo categories based on checked facilities and sub-facilities
+    const computeDynamicPublicPhotoCategories = (
+        facilities: string[] = [],
+        manualExtras: string[] = [],
+        parkingFacilities: string[] = [],
+        kitchenFacilities: string[] = [],
+        bathroomFacilities: string[] = []
+    ): string[] => {
         const base = ['Bangunan Depan', 'Koridor', 'Lingkungan'];
         const dynamic: string[] = [];
 
+        // 1. Area Parkir & Sub-facilities
+        const hasParking = (facilities || []).some(f => {
+            const l = (f || '').toLowerCase().trim();
+            return l === 'area parkir' || l === 'parkir' || l === 'parkiran' || l === 'parkir motor' || l === 'parkir mobil';
+        });
+        if (hasParking) {
+            if (parkingFacilities && parkingFacilities.length > 0) {
+                parkingFacilities.forEach(pf => {
+                    const clean = (pf || '').trim();
+                    if (clean && !dynamic.includes(clean) && !base.includes(clean)) {
+                        dynamic.push(clean);
+                    }
+                });
+            } else {
+                if (!dynamic.includes('Area Parkir')) {
+                    dynamic.push('Area Parkir');
+                }
+            }
+        }
+
+        // 2. Dapur Bersama & Sub-facilities
+        const hasKitchen = (facilities || []).some(f => {
+            const l = (f || '').toLowerCase().trim();
+            return l === 'dapur bersama' || l === 'dapur' || l === 'dapur umum';
+        });
+        if (hasKitchen) {
+            if (!dynamic.includes('Dapur Bersama')) {
+                dynamic.push('Dapur Bersama');
+            }
+            if (kitchenFacilities && kitchenFacilities.length > 0) {
+                kitchenFacilities.forEach(kf => {
+                    const clean = (kf || '').trim();
+                    if (clean && !dynamic.includes(clean) && !base.includes(clean)) {
+                        dynamic.push(clean);
+                    }
+                });
+            }
+        }
+
+        // 3. WC Umum & Sub-facilities
+        const hasBathroom = (facilities || []).some(f => {
+            const l = (f || '').toLowerCase().trim();
+            return l === 'wc umum' || l === 'kamar mandi umum' || l === 'toilet umum' || l === 'kamar mandi luar';
+        });
+        if (hasBathroom) {
+            if (!dynamic.includes('WC Umum')) {
+                dynamic.push('WC Umum');
+            }
+            if (bathroomFacilities && bathroomFacilities.length > 0) {
+                bathroomFacilities.forEach(bf => {
+                    const clean = (bf || '').trim();
+                    if (clean && !dynamic.includes(clean) && !base.includes(clean)) {
+                        dynamic.push(clean);
+                    }
+                });
+            }
+        }
+
         const facMapping: { [key: string]: string } = {
-            'area parkir': 'Area Parkir',
-            'parkir': 'Area Parkir',
-            'parkiran': 'Area Parkir',
-            'parkir motor': 'Area Parkir',
-            'parkir mobil': 'Area Parkir',
-            'dapur bersama': 'Dapur Bersama',
-            'dapur': 'Dapur Bersama',
-            'dapur umum': 'Dapur Bersama',
             'ruang tamu': 'Ruang Tamu',
-            'wc umum': 'WC Umum',
             'cctv': 'CCTV',
             'laundry': 'Laundry',
             'mushola': 'Mushola',
@@ -628,10 +683,9 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
         const nonPhotoFacs = [
             'wifi', 'wi-fi', 'internet', 'security 24 jam', 'security', 'satpam', 'penjaga kost',
             'akses 24 jam', 'bebas jam malam', '24 jam', 'cleaning service', 'pembersihan', 'kebersihan',
-            'kompor', 'kulkas', 'kulkas bersama', 'kulkas umum', 'dispenser', 'dispenser air',
-            'wastafel cuci piring', 'wastafel dapur', 'peralatan masak', 'meja makan', 'meja makan bersama',
-            'kloset duduk', 'kloset jongkok', 'shower', 'wastafel', 'wastafel wc',
-            'parkir sepeda'
+            'area parkir', 'parkir', 'parkiran', 'parkir motor', 'parkir mobil', 'parkir sepeda',
+            'dapur bersama', 'dapur', 'dapur umum',
+            'wc umum', 'kamar mandi umum', 'toilet umum', 'kamar mandi luar'
         ];
 
         (facilities || []).forEach(f => {
@@ -644,14 +698,14 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                 }
             } else {
                 const cleanName = f.trim();
-                if (!dynamic.includes(cleanName) && !base.includes(cleanName)) {
+                if (!dynamic.includes(cleanName) && !base.includes(cleanName) && cleanName !== 'Lingkungan') {
                     dynamic.push(cleanName);
                 }
             }
         });
 
         (manualExtras || []).forEach(c => {
-            const clean = c.trim();
+            const clean = (c || '').trim();
             if (clean && !dynamic.includes(clean) && !base.includes(clean)) {
                 dynamic.push(clean);
             }
@@ -1781,13 +1835,31 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
     // Step 1: Automatically sync public photo categories when facilities change
     useEffect(() => {
         if (isEditingKostManager) {
-            const dynamicPublicCats = computeDynamicPublicPhotoCategories(kmListingForm.facilities || []);
+            const dynamicPublicCats = computeDynamicPublicPhotoCategories(
+                kmListingForm.facilities || [],
+                [],
+                kmListingForm.publicParkingFacilities || [],
+                kmListingForm.publicKitchenFacilities || [],
+                kmListingForm.publicBathroomFacilities || []
+            );
             setPhotoCategories(prev => {
                 const manualExtras = prev.filter(c => !dynamicPublicCats.includes(c) && !['Bangunan Depan', 'Koridor', 'Lingkungan', 'Area Parkir', 'Parkiran', 'Dapur Bersama', 'Ruang Tamu', 'WC Umum', 'CCTV', 'Laundry'].includes(c));
-                return computeDynamicPublicPhotoCategories(kmListingForm.facilities || [], manualExtras);
+                return computeDynamicPublicPhotoCategories(
+                    kmListingForm.facilities || [],
+                    manualExtras,
+                    kmListingForm.publicParkingFacilities || [],
+                    kmListingForm.publicKitchenFacilities || [],
+                    kmListingForm.publicBathroomFacilities || []
+                );
             });
         }
-    }, [kmListingForm.facilities, isEditingKostManager]);
+    }, [
+        kmListingForm.facilities,
+        kmListingForm.publicParkingFacilities,
+        kmListingForm.publicKitchenFacilities,
+        kmListingForm.publicBathroomFacilities,
+        isEditingKostManager
+    ]);
 
 
     // Auto-correct default location coordinates based on text address
@@ -2804,7 +2876,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                         let cat = (typeof img === 'object' && img.label) 
                             ? img.label 
                             : (parsed.kmListingForm.photoCategories?.[idx] || parsed.photoCategories?.[idx] || (idx < 4 ? ['Bangunan Depan', 'Koridor', 'Area Parkir', 'Lingkungan'][idx] : `Foto Lainnya ${idx - 3}`));
-                        if (cat.toLowerCase() === 'area umum' || cat.toLowerCase() === 'parkiran' || cat.toLowerCase() === 'parkir motor' || cat.toLowerCase() === 'parkir mobil') cat = 'Area Parkir';
+                        if (cat.toLowerCase() === 'area umum' || cat.toLowerCase() === 'parkiran') cat = 'Area Parkir';
                         draftImageUrls.push(urlStr);
                         draftPhotoCats.push(cat);
                     });
@@ -2839,7 +2911,13 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                     setTemporaryRoom(parsed.temporaryRoom || null);
                     setActiveRoomIdx(parsed.activeRoomIdx !== undefined ? parsed.activeRoomIdx : null);
                     setKmActiveTab(parsed.kmActiveTab || 'info');
-                    const dynamicDraftCats = computeDynamicPublicPhotoCategories(mergedForm.facilities || ['WiFi', 'Area Parkir'], draftPhotoCats);
+                    const dynamicDraftCats = computeDynamicPublicPhotoCategories(
+                        mergedForm.facilities || ['WiFi', 'Area Parkir'],
+                        draftPhotoCats,
+                        mergedForm.publicParkingFacilities || [],
+                        mergedForm.publicKitchenFacilities || [],
+                        mergedForm.publicBathroomFacilities || []
+                    );
                     setPhotoCategories(dynamicDraftCats);
                     if (parsed.isExistingPropertyMigration !== undefined) {
                         setIsExistingPropertyMigration(parsed.isExistingPropertyMigration);
@@ -2918,7 +2996,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                     const urlStr = getImageUrlString(img);
                     if (!urlStr || !isValidSurveyPhoto(urlStr)) return;
                     let label = (typeof img === 'object' && img.label) ? img.label : '';
-                    if (label.toLowerCase() === 'area umum' || label.toLowerCase() === 'parkiran' || label.toLowerCase() === 'parkir motor' || label.toLowerCase() === 'parkir mobil') label = 'Area Parkir';
+                    if (label.toLowerCase() === 'area umum' || label.toLowerCase() === 'parkiran') label = 'Area Parkir';
                     if (!label) {
                         label = (idx < 4 ? ['Bangunan Depan', 'Koridor', 'Area Parkir', 'Lingkungan'][idx] : `Foto Lainnya ${idx - 3}`);
                     }
@@ -2941,7 +3019,13 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                     dbKmProp.metadata?.publicBathroomFacilities || []
                 );
 
-                const dynamicKmCats = computeDynamicPublicPhotoCategories(normalizedKmFacs.facilities || ['WiFi', 'Area Parkir'], loadedKmPhotoCategories);
+                const dynamicKmCats = computeDynamicPublicPhotoCategories(
+                    normalizedKmFacs.facilities || ['WiFi', 'Area Parkir'],
+                    loadedKmPhotoCategories,
+                    normalizedKmFacs.publicParkingFacilities || [],
+                    normalizedKmFacs.publicKitchenFacilities || [],
+                    normalizedKmFacs.publicBathroomFacilities || []
+                );
                 setPhotoCategories(dynamicKmCats);
                 setShowAddLandmarkForm(false);
                 setActiveRoomIdx(null);
@@ -2995,7 +3079,13 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
 
                 // FRESH SLATE FOR PHOTOS: Do NOT copy self-listing photos into surveyor's form!
                 // The surveyor MUST take brand new, authentic on-site survey photos.
-                const freshDynamicCats = computeDynamicPublicPhotoCategories(normalizedPropFacs.facilities || ['WiFi', 'Area Parkir'], []);
+                const freshDynamicCats = computeDynamicPublicPhotoCategories(
+                    normalizedPropFacs.facilities || ['WiFi', 'Area Parkir'],
+                    [],
+                    normalizedPropFacs.publicParkingFacilities || [],
+                    normalizedPropFacs.publicKitchenFacilities || [],
+                    normalizedPropFacs.publicBathroomFacilities || []
+                );
                 setPhotoCategories(freshDynamicCats);
                 setShowAddLandmarkForm(false);
                 setActiveRoomIdx(null);
@@ -8368,7 +8458,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                                                         let rawCat = (typeof urlOrObj === 'object' && urlOrObj.label)
                                                             ? urlOrObj.label
                                                             : (kmListingForm.photoCategories?.[idx] || photoCategories[idx] || 'Foto Properti');
-                                                        if (rawCat.toLowerCase() === 'area umum' || rawCat.toLowerCase() === 'parkiran' || rawCat.toLowerCase() === 'parkir motor' || rawCat.toLowerCase() === 'parkir mobil') rawCat = 'Area Parkir';
+                                                        if (rawCat.toLowerCase() === 'area umum' || rawCat.toLowerCase() === 'parkiran') rawCat = 'Area Parkir';
                                                         return { url, idx, rawCat };
                                                     }).filter(item => !!item.url);
 
@@ -8381,9 +8471,13 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                                                                     <div key={label} className="bg-white border border-[#e0c0af]/60 rounded-xl p-3 shadow-xs space-y-2.5">
                                                                         <div className="flex justify-between items-center">
                                                                             <div className="flex items-center gap-1.5">
-                                                                                {label.includes('Depan') ? <Home className="w-3.5 h-3.5 text-[#ff7a00] shrink-0" /> :
-                                                                                 label.includes('Parkir') ? <MapPin className="w-3.5 h-3.5 text-[#ff7a00] shrink-0" /> :
-                                                                                 label.includes('Dapur') ? <Home className="w-3.5 h-3.5 text-[#ff7a00] shrink-0" /> :
+                                                                                {label.toLowerCase().includes('depan') || label.toLowerCase().includes('gedung') || label.toLowerCase().includes('fasad') ? <Home className="w-3.5 h-3.5 text-[#ff7a00] shrink-0" /> :
+                                                                                 label.toLowerCase().includes('parkir') || label.toLowerCase().includes('motor') || label.toLowerCase().includes('mobil') || label.toLowerCase().includes('sepeda') || label.toLowerCase().includes('garasi') ? <MapPin className="w-3.5 h-3.5 text-[#ff7a00] shrink-0" /> :
+                                                                                 label.toLowerCase().includes('dapur') || label.toLowerCase().includes('kompor') || label.toLowerCase().includes('kulkas') || label.toLowerCase().includes('dispenser') || label.toLowerCase().includes('masak') || label.toLowerCase().includes('makan') ? <CookingPot className="w-3.5 h-3.5 text-[#ff7a00] shrink-0" /> :
+                                                                                 label.toLowerCase().includes('wc') || label.toLowerCase().includes('toilet') || label.toLowerCase().includes('kloset') || label.toLowerCase().includes('shower') || label.toLowerCase().includes('wastafel') || label.toLowerCase().includes('kamar mandi') ? <Bath className="w-3.5 h-3.5 text-[#ff7a00] shrink-0" /> :
+                                                                                 label.toLowerCase().includes('ruang tamu') || label.toLowerCase().includes('santai') || label.toLowerCase().includes('sofa') ? <Armchair className="w-3.5 h-3.5 text-[#ff7a00] shrink-0" /> :
+                                                                                 label.toLowerCase().includes('cctv') ? <Eye className="w-3.5 h-3.5 text-[#ff7a00] shrink-0" /> :
+                                                                                 label.toLowerCase().includes('laundry') || label.toLowerCase().includes('jemuran') || label.toLowerCase().includes('cuci') ? <Sparkles className="w-3.5 h-3.5 text-[#ff7a00] shrink-0" /> :
                                                                                  <Camera className="w-3.5 h-3.5 text-[#ff7a00] shrink-0" />}
                                                                                 <span className="text-[11px] font-bold text-[#584235] uppercase tracking-wider">{label}</span>
                                                                                 {isBannerProneCategory(label) && (
