@@ -2229,13 +2229,28 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
     const saveKostManagerDraftToDatabase = async (currentForm: any, stepNum?: number, cats?: string[]) => {
         if (!isEditingKostManager) return;
         try {
+            // Normalisasi dan sanitasi format foto publik agar selalu membawa label kategori eksplisit
+            const currentCats = cats || photoCategories || [];
+            const sanitizedImages = (currentForm?.image_urls || []).map((img: any, idx: number) => {
+                const url = getImageUrlString(img);
+                let label = (typeof img === 'object' && img.label)
+                    ? img.label
+                    : (currentForm?.photoCategories?.[idx] || currentCats[idx] || 'Bangunan Depan');
+                if (label.toLowerCase() === 'area umum' || label.toLowerCase() === 'parkiran') label = 'Area Parkir';
+                return { original: url, url, label };
+            }).filter((item: any) => Boolean(item.url));
+
             const draftData = {
-                kmListingForm: currentForm,
+                kmListingForm: {
+                    ...currentForm,
+                    image_urls: sanitizedImages,
+                    photoCategories: sanitizedImages.map((s: any) => s.label)
+                },
                 kmStep: stepNum !== undefined ? stepNum : kmStep,
                 temporaryRoom,
                 activeRoomIdx,
                 kmActiveTab,
-                photoCategories: cats || photoCategories,
+                photoCategories: currentCats,
                 isExistingPropertyMigration,
                 warningAccepted,
                 signatureData,
@@ -2259,7 +2274,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                 last_draft_updated_at: new Date().toISOString()
             };
 
-            await supabase
+            const { error: updateError } = await supabase
                 .from('survey_requests')
                 .update({ 
                     evaluation_summary: updatedEvalSummary,
@@ -2267,24 +2282,33 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                 })
                 .eq('id', isEditingKostManager.id);
 
+            if (updateError) {
+                console.warn("Error updating survey_requests draft in DB:", updateError);
+            } else {
+                console.log("Draft successfully auto-saved directly to Supabase Cloud Database for survey request:", isEditingKostManager.id);
+            }
+
             // Update state in-memory agar selalu sinkron
             setIsEditingKostManager((prev: any) => prev ? { ...prev, evaluation_summary: updatedEvalSummary } : null);
-            console.log("Draft successfully auto-saved directly to Supabase Cloud Database for survey request:", isEditingKostManager.id);
         } catch (err) {
             console.warn("Silent background draft save warning:", err);
         }
     };
 
     const closeKostManagerListingWithSave = async () => {
-        if (isEditingKostManager && (kmListingForm.title || (kmListingForm.image_urls && kmListingForm.image_urls.length > 0))) {
-            await saveKostManagerDraftToDatabase(kmListingForm, kmStep, photoCategories);
+        if (isEditingKostManager && (kmListingForm.title || (kmListingForm.image_urls && kmListingForm.image_urls.length > 0) || (kmListingForm.roomTypes && kmListingForm.roomTypes.length > 0))) {
+            try {
+                await saveKostManagerDraftToDatabase(kmListingForm, kmStep, photoCategories);
+            } catch (e) {
+                console.warn("Error saving draft before closing modal:", e);
+            }
         }
         closeKostManagerListing();
     };
 
     // Auto-save Kost Manager Onboarding draft effect (Debounced to database & instant to localStorage)
     useEffect(() => {
-        if (isEditingKostManager && (kmListingForm.title || (kmListingForm.image_urls && kmListingForm.image_urls.length > 0) || (kmListingForm.facilities && kmListingForm.facilities.length > 0))) {
+        if (isEditingKostManager && (kmListingForm.title || (kmListingForm.image_urls && kmListingForm.image_urls.length > 0) || (kmListingForm.facilities && kmListingForm.facilities.length > 0) || (kmListingForm.roomTypes && kmListingForm.roomTypes.length > 0))) {
             const draftKey = `km_draft_${isEditingKostManager.id}`;
             const draftData = {
                 kmListingForm,
@@ -2307,11 +2331,40 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
 
             const timer = setTimeout(() => {
                 saveKostManagerDraftToDatabase(kmListingForm, kmStep, photoCategories);
-            }, 1200);
+            }, 1000);
 
             return () => clearTimeout(timer);
         }
-    }, [isEditingKostManager?.id, kmListingForm, kmStep, temporaryRoom, activeRoomIdx, kmActiveTab, photoCategories, signatureData, agreedToTerms]);
+    }, [isEditingKostManager?.id, kmListingForm, kmStep, temporaryRoom, activeRoomIdx, kmActiveTab, photoCategories, signatureData, agreedToTerms, isExistingPropertyMigration, warningAccepted]);
+
+    // Listener beforeunload untuk mengamankan draf saat reload atau browser ditutup
+    useEffect(() => {
+        const handleBeforeUnload = () => {
+            if (isEditingKostManager && (kmListingForm.title || (kmListingForm.image_urls && kmListingForm.image_urls.length > 0) || (kmListingForm.roomTypes && kmListingForm.roomTypes.length > 0))) {
+                const draftKey = `km_draft_${isEditingKostManager.id}`;
+                const draftData = {
+                    kmListingForm,
+                    kmStep,
+                    temporaryRoom,
+                    activeRoomIdx,
+                    kmActiveTab,
+                    photoCategories,
+                    isExistingPropertyMigration,
+                    warningAccepted,
+                    signatureData,
+                    agreedToTerms,
+                    lastUpdated: new Date().toISOString()
+                };
+                try {
+                    localStorage.setItem(draftKey, JSON.stringify(draftData));
+                } catch (e) {
+                    console.warn("LocalStorage beforeunload save error:", e);
+                }
+            }
+        };
+        window.addEventListener('beforeunload', handleBeforeUnload);
+        return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+    }, [isEditingKostManager, kmListingForm, kmStep, temporaryRoom, activeRoomIdx, kmActiveTab, photoCategories, isExistingPropertyMigration, warningAccepted, signatureData, agreedToTerms]);
 
     // Auto-load onboarding from URL search params on refresh
     useEffect(() => {
@@ -2796,8 +2849,8 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
         const isValidSurveyPhoto = (urlOrObj: any): boolean => {
             const urlStr = getImageUrlString(urlOrObj);
             if (!urlStr) return false;
-            // Any photo uploaded in kostmanager survey or blob/data is ALWAYS valid
-            if (urlStr.includes('kostmanager/') || urlStr.startsWith('blob:') || urlStr.startsWith('data:')) {
+            // Any photo uploaded in kostmanager survey or blob/data or drafts is ALWAYS valid
+            if (urlStr.includes('kostmanager/') || urlStr.includes('drafts/') || urlStr.startsWith('blob:') || urlStr.startsWith('data:')) {
                 return true;
             }
             if (selfListingImagesSet.has(urlStr) || selfRoomImagesSet.has(urlStr)) return false;
@@ -2844,22 +2897,26 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
 
         const resolvedOwnerUid = resolveValidOwnerUid(req.user_id, req, fetchedUser);
 
-        // 2. Load draft from Cloud Database first, fallback to localStorage
-        let savedDraftData: any = (req as any).evaluation_summary?.draft_data || (req as any).draft_data || null;
-
-        if (!savedDraftData) {
-            try {
-                const { data: sReqDraft } = await supabase
-                    .from('survey_requests')
-                    .select('evaluation_summary')
-                    .eq('id', req.id)
-                    .maybeSingle();
-                if (sReqDraft?.evaluation_summary?.draft_data) {
-                    savedDraftData = sReqDraft.evaluation_summary.draft_data;
-                }
-            } catch (e) {
-                console.warn("Could not query DB draft from survey_requests:", e);
+        // 2. Load draft from Cloud Database first, fallback to in-memory request object and localStorage
+        let savedDraftData: any = null;
+        try {
+            const { data: sReqDraft } = await supabase
+                .from('survey_requests')
+                .select('evaluation_summary')
+                .eq('id', req.id)
+                .maybeSingle();
+            if (sReqDraft?.evaluation_summary?.draft_data) {
+                savedDraftData = sReqDraft.evaluation_summary.draft_data;
+                console.log("openKostManagerListing: loaded freshest draft from Supabase DB for survey:", req.id);
             }
+        } catch (e) {
+            console.warn("Could not query DB draft from survey_requests:", e);
+        }
+
+        if (!savedDraftData && (req as any).evaluation_summary?.draft_data) {
+            savedDraftData = (req as any).evaluation_summary.draft_data;
+        } else if (!savedDraftData && (req as any).draft_data) {
+            savedDraftData = (req as any).draft_data;
         }
 
         if (!savedDraftData) {
@@ -2867,6 +2924,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
             if (savedDraft) {
                 try {
                     savedDraftData = JSON.parse(savedDraft);
+                    console.log("openKostManagerListing: loaded draft fallback from localStorage");
                 } catch (e) {
                     console.error("Failed to parse saved localStorage draft:", e);
                 }
@@ -2928,7 +2986,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
 
                     // Sanitize draft public area images
                     const rawDraftImages = Array.isArray(parsed.kmListingForm.image_urls) ? parsed.kmListingForm.image_urls : [];
-                    const draftImageUrls: string[] = [];
+                    const draftImageUrls: any[] = [];
                     const draftPhotoCats: string[] = [];
                     rawDraftImages.forEach((img: any, idx: number) => {
                         const urlStr = getImageUrlString(img);
@@ -2938,7 +2996,8 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                             ? img.label 
                             : (parsed.kmListingForm.photoCategories?.[idx] || parsed.photoCategories?.[idx] || (idx < 4 ? ['Bangunan Depan', 'Koridor', 'Area Parkir', 'Lingkungan'][idx] : `Foto Lainnya ${idx - 3}`));
                         if (cat.toLowerCase() === 'area umum' || cat.toLowerCase() === 'parkiran') cat = 'Area Parkir';
-                        draftImageUrls.push(urlStr);
+                        
+                        draftImageUrls.push({ original: urlStr, url: urlStr, label: cat });
                         draftPhotoCats.push(cat);
                     });
                     parsed.kmListingForm.image_urls = draftImageUrls;
@@ -3264,22 +3323,22 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
         
         setUploadingRooms(prev => ({ ...prev, [typeIdx]: true }));
         try {
-            const folder = `kostmanager/rooms/${Date.now()}`;
+            const folder = `kostmanager/drafts/${isEditingKostManager?.id || 'temp'}/rooms/${Date.now()}`;
             const publicUrl = await uploadFileAndGetURL(file, folder);
             
-            setKmListingForm((prev: any) => {
-                const updatedRoomTypes = [...prev.roomTypes];
-                const rt = updatedRoomTypes[typeIdx];
-                const currentImages = rt.images || [];
-                updatedRoomTypes[typeIdx] = {
-                    ...rt,
-                    images: [...currentImages, publicUrl]
-                };
-                return {
-                    ...prev,
-                    roomTypes: updatedRoomTypes
-                };
-            });
+            const updatedRoomTypes = [...(kmListingForm.roomTypes || [])];
+            const rt = updatedRoomTypes[typeIdx];
+            const currentImages = rt.images || [];
+            updatedRoomTypes[typeIdx] = {
+                ...rt,
+                images: [...currentImages, publicUrl]
+            };
+            const updatedForm = {
+                ...kmListingForm,
+                roomTypes: updatedRoomTypes
+            };
+            setKmListingForm(updatedForm);
+            await saveKostManagerDraftToDatabase(updatedForm, kmStep, photoCategories);
             alert('Foto tipe kamar berhasil diunggah!');
         } catch (err) {
             alert('Gagal unggah foto: ' + (err as Error).message);
@@ -5178,7 +5237,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                                                                                                             <img src={url} alt={getPhotoCaption(label, pIdx)} className="w-full h-full object-cover" />
                                                                                                             <button
                                                                                                                 type="button"
-                                                                                                                onClick={() => {
+                                                                                                                onClick={async () => {
                                                                                                                     const updatedCategorized = { ...currentCategorized };
                                                                                                                     const targetKey = Object.keys(updatedCategorized).find(k => k === rawLabel || (rawLabel.includes('Interior') && k.includes('Interior'))) || rawLabel;
                                                                                                                     const list = [...(updatedCategorized[targetKey] || [])];
@@ -5188,16 +5247,18 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                                                                                                                     } else {
                                                                                                                         delete updatedCategorized[targetKey];
                                                                                                                     }
-                                                                                                                    const { images, photoCategories } = exportCategorizedPhotos(updatedCategorized);
+                                                                                                                    const { images, photoCategories: expCats } = exportCategorizedPhotos(updatedCategorized);
                                                                                                                     const updatedRoomTypes = [...kmListingForm.roomTypes];
                                                                                                                     updatedRoomTypes[activeRoomIdx] = { 
                                                                                                                         ...rt, 
                                                                                                                         categorized_photos: updatedCategorized,
                                                                                                                         categorizedPhotos: updatedCategorized,
                                                                                                                         images,
-                                                                                                                        photoCategories
+                                                                                                                        photoCategories: expCats
                                                                                                                     };
-                                                                                                                    setKmListingForm({ ...kmListingForm, roomTypes: updatedRoomTypes });
+                                                                                                                    const updatedForm = { ...kmListingForm, roomTypes: updatedRoomTypes };
+                                                                                                                    setKmListingForm(updatedForm);
+                                                                                                                    await saveKostManagerDraftToDatabase(updatedForm, kmStep, photoCategories);
                                                                                                                 }}
                                                                                                                 className="absolute top-1 right-1 bg-red-600 hover:bg-red-700 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold shadow-md transition-all active:scale-90"
                                                                                                                 title="Hapus foto ini"
@@ -5224,7 +5285,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                                                                                                                     try {
                                                                                                                         const newUrls = [];
                                                                                                                         for (let f = 0; f < files.length; f++) {
-                                                                                                                            const folder = `kostmanager/rooms/${Date.now()}_${f}`;
+                                                                                                                            const folder = `kostmanager/drafts/${isEditingKostManager?.id || 'temp'}/rooms/${Date.now()}_${f}`;
                                                                                                                             const publicUrl = await uploadFileAndGetURL(files[f], folder);
                                                                                                                             newUrls.push(publicUrl);
                                                                                                                         }
@@ -5233,18 +5294,18 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                                                                                                                         const list = [...(updatedCategorized[targetKey] || [])];
                                                                                                                         newUrls.forEach(u => list.push(u));
                                                                                                                         updatedCategorized[targetKey] = list;
-                                                                                                                        const { images, photoCategories } = exportCategorizedPhotos(updatedCategorized);
+                                                                                                                        const { images, photoCategories: expCats } = exportCategorizedPhotos(updatedCategorized);
                                                                                                                         const updatedRoomTypes = [...kmListingForm.roomTypes];
                                                                                                                         updatedRoomTypes[activeRoomIdx] = { 
                                                                                                                             ...rt, 
                                                                                                                             categorized_photos: updatedCategorized,
                                                                                                                             categorizedPhotos: updatedCategorized,
                                                                                                                             images,
-                                                                                                                            photoCategories
+                                                                                                                            photoCategories: expCats
                                                                                                                         };
                                                                                                                         const updatedForm = { ...kmListingForm, roomTypes: updatedRoomTypes };
                                                                                                                         setKmListingForm(updatedForm);
-                                                                                                                        saveKostManagerDraftToDatabase(updatedForm, kmStep, photoCategories);
+                                                                                                                        await saveKostManagerDraftToDatabase(updatedForm, kmStep, photoCategories);
                                                                                                                     } catch (err) {
                                                                                                                         alert('Gagal unggah foto: ' + (err as Error).message);
                                                                                                                     } finally {
@@ -8589,13 +8650,13 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                                                             ? urlOrObj.label
                                                             : (kmListingForm.photoCategories?.[idx] || photoCategories[idx] || 'Foto Properti');
                                                         if (rawCat.toLowerCase() === 'area umum' || rawCat.toLowerCase() === 'parkiran') rawCat = 'Area Parkir';
-                                                        return { url, idx, rawCat };
+                                                        return { url, idx, rawCat, originalObj: urlOrObj };
                                                     }).filter(item => !!item.url);
 
                                                     return (
                                                         <div className="space-y-3">
                                                             {photoCategories.map((label: string) => {
-                                                                const catPhotos = imagesWithCats.filter(item => item.rawCat === label);
+                                                                const catPhotos = imagesWithCats.filter(item => item.rawCat.toLowerCase().trim() === label.toLowerCase().trim());
 
                                                                 return (
                                                                     <div key={label} className="bg-white border border-[#e0c0af]/60 rounded-xl p-3 shadow-xs space-y-2.5">
@@ -8635,18 +8696,20 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                                                                                         )}
                                                                                         <button
                                                                                             type="button"
-                                                                                            onClick={() => {
+                                                                                            onClick={async () => {
                                                                                                 const updatedImages = [...(kmListingForm.image_urls || [])];
                                                                                                 const updatedCats = [...(kmListingForm.photoCategories || [])];
                                                                                                 updatedImages.splice(p.idx, 1);
-                                                                                                updatedCats.splice(p.idx, 1);
+                                                                                                if (updatedCats.length > p.idx) {
+                                                                                                    updatedCats.splice(p.idx, 1);
+                                                                                                }
                                                                                                 const updatedForm = { 
                                                                                                     ...kmListingForm, 
                                                                                                     image_urls: updatedImages,
                                                                                                     photoCategories: updatedCats
                                                                                                 };
                                                                                                 setKmListingForm(updatedForm);
-                                                                                                saveKostManagerDraftToDatabase(updatedForm, kmStep, photoCategories);
+                                                                                                await saveKostManagerDraftToDatabase(updatedForm, kmStep, photoCategories);
                                                                                             }}
                                                                                             className="absolute top-1 right-1 bg-red-600 hover:bg-red-700 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold shadow-md transition-all active:scale-90 z-10"
                                                                                             title="Hapus foto ini"
@@ -8683,9 +8746,10 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                                                                                             const uploadKey = `public_${label}`;
                                                                                             setUploadingPublicAreas(prev => ({ ...prev, [uploadKey]: true }));
                                                                                             try {
+                                                                                                const newPhotoEntries = [];
                                                                                                 const newUrls = [];
                                                                                                 for (let f = 0; f < files.length; f++) {
-                                                                                                    const folder = `kostmanager/public/${Date.now()}_${f}`;
+                                                                                                    const folder = `kostmanager/drafts/${isEditingKostManager?.id || 'temp'}/public/${Date.now()}_${f}`;
                                                                                                     const processedFile = await processPhotoWithAutoSensor(files[f], label, (detectedInfo) => {
                                                                                                         if (detectedInfo && detectedInfo.detectedCount > 0) {
                                                                                                             setKmBannerNotice(`🛡️ Auto-Sensor AI mendeteksi & menyensor ${detectedInfo.detectedCount} area kontak pada foto "${label}".`);
@@ -8694,20 +8758,17 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                                                                                                     });
                                                                                                     const publicUrl = await uploadFileAndGetURL(processedFile, folder);
                                                                                                     newUrls.push(publicUrl);
+                                                                                                    newPhotoEntries.push({ original: publicUrl, url: publicUrl, label });
                                                                                                 }
-                                                                                                const updatedImages = [...(kmListingForm.image_urls || [])];
-                                                                                                const updatedCats = [...(kmListingForm.photoCategories || [])];
-                                                                                                newUrls.forEach(u => {
-                                                                                                    updatedImages.push(u);
-                                                                                                    updatedCats.push(label);
-                                                                                                });
+                                                                                                const updatedImages = [...(kmListingForm.image_urls || []), ...newPhotoEntries];
+                                                                                                const updatedCats = [...(kmListingForm.photoCategories || []), ...newUrls.map(() => label)];
                                                                                                 const updatedForm = { 
                                                                                                     ...kmListingForm, 
                                                                                                     image_urls: updatedImages,
                                                                                                     photoCategories: updatedCats
                                                                                                 };
                                                                                                 setKmListingForm(updatedForm);
-                                                                                                saveKostManagerDraftToDatabase(updatedForm, kmStep, photoCategories);
+                                                                                                await saveKostManagerDraftToDatabase(updatedForm, kmStep, photoCategories);
                                                                                             } catch (err) {
                                                                                                 alert('Gagal unggah foto: ' + (err as Error).message);
                                                                                             } finally {
@@ -9466,16 +9527,16 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                                                               })()}
 
                                                               {['Kasur', 'Lemari', 'Meja Belajar', 'AC', 'Kipas Angin', 'Water Heater', 'Jendela Luar', 'Kamar Mandi Dalam', 'Dapur Dalam'].map(fac => {
-                                                                  const isChecked = temporaryRoom.roomFacilities?.includes(fac);
+                                                                  const isChecked = Boolean(temporaryRoom.roomFacilities?.includes(fac));
                                                                   const isPerabot = ['Kasur', 'Lemari', 'Meja Belajar', 'AC', 'Kipas Angin', 'Water Heater'].includes(fac);
-                                                                  const isKosongan = temporaryRoom.roomFacilities?.includes('Kosongan (Tanpa Perabot)');
+                                                                  const isKosongan = Boolean(temporaryRoom.roomFacilities?.includes('Kosongan (Tanpa Perabot)'));
                                                                   const isDisabled = isPerabot && isKosongan;
                                                                   return (
                                                                       <React.Fragment key={fac}>
                                                                           <label className={`flex items-center gap-2.5 cursor-pointer transition-all ${isDisabled ? 'opacity-40 pointer-events-none' : ''}`}>
                                                                               <input 
                                                                                   type="checkbox"
-                                                                                  checked={isChecked && !isDisabled}
+                                                                                  checked={Boolean(isChecked && !isDisabled)}
                                                                                   disabled={isDisabled}
                                                                                   onChange={() => {
                                                                                       const current = temporaryRoom.roomFacilities || [];
@@ -9494,12 +9555,12 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                                                                                   <span className="text-[10px] font-black text-gray-500 uppercase tracking-wider mb-0.5">Kelengkapan Kamar Mandi Dalam:</span>
                                                                                   <div className="grid grid-cols-2 gap-2.5">
                                                                                       {['Kloset Duduk', 'Kloset Jongkok', 'Shower', 'Wastafel'].map(bfac => {
-                                                                                          const isBChecked = temporaryRoom.bathroomFacilities?.includes(bfac);
+                                                                                          const isBChecked = Boolean(temporaryRoom.bathroomFacilities?.includes(bfac));
                                                                                           return (
                                                                                               <label key={bfac} className="flex items-center gap-2 cursor-pointer">
                                                                                                   <input 
                                                                                                       type="checkbox"
-                                                                                                      checked={isBChecked}
+                                                                                                      checked={!!isBChecked}
                                                                                                       onChange={() => {
                                                                                                           const current = temporaryRoom.bathroomFacilities || [];
                                                                                                           const updated = current.includes(bfac)
@@ -9539,7 +9600,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                                                                                       <div className="col-span-2 flex gap-1.5 mt-1 border-t border-orange-100 pt-2">
                                                                                           <input 
                                                                                               type="text" 
-                                                                                              value={customBathroomFacilityInput} 
+                                                                                              value={customBathroomFacilityInput ?? ''} 
                                                                                               onChange={e => setCustomBathroomFacilityInput(e.target.value)} 
                                                                                               placeholder="Tambah kelengkapan WC..." 
                                                                                               className="flex-grow h-[28px] px-2 border border-[#e0c0af] rounded text-[11px] bg-white outline-none text-[#584235] font-bold"
@@ -9547,7 +9608,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                                                                                           <button 
                                                                                               type="button"
                                                                                               onClick={() => {
-                                                                                                  if (!customBathroomFacilityInput.trim()) return;
+                                                                                                  if (!customBathroomFacilityInput?.trim()) return;
                                                                                                   const current = temporaryRoom.bathroomFacilities || [];
                                                                                                   if (!current.includes(customBathroomFacilityInput.trim())) {
                                                                                                       setTemporaryRoom({ ...temporaryRoom, bathroomFacilities: [...current, customBathroomFacilityInput.trim()] });
@@ -9568,7 +9629,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                                                                                   <span className="text-[10px] font-black text-gray-500 uppercase tracking-wider mb-0.5">Kelengkapan Dapur Dalam:</span>
                                                                                   <div className="grid grid-cols-2 gap-2.5">
                                                                                       {['Kompor', 'Kulkas', 'Wastafel Cuci Piring', 'Kitchen Set', 'Dispenser'].map(kfac => {
-                                                                                          const isKChecked = temporaryRoom.kitchenFacilities?.includes(kfac);
+                                                                                          const isKChecked = Boolean(temporaryRoom.kitchenFacilities?.includes(kfac));
                                                                                           return (
                                                                                               <label key={kfac} className="flex items-center gap-2 cursor-pointer">
                                                                                                   <input 
@@ -9611,14 +9672,14 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                                                                                       <input 
                                                                                           type="text" 
                                                                                           placeholder="Tambah kelengkapan dapur..." 
-                                                                                          value={customKitchenFacilityInput} 
+                                                                                          value={customKitchenFacilityInput ?? ''} 
                                                                                           onChange={e => setCustomKitchenFacilityInput(e.target.value)} 
                                                                                           className="flex-grow h-[28px] px-2 border border-[#e0c0af] rounded text-[11px] bg-white outline-none text-[#584235] font-bold"
                                                                                       />
                                                                                       <button 
                                                                                           type="button" 
                                                                                           onClick={() => {
-                                                                                              if (!customKitchenFacilityInput.trim()) return;
+                                                                                              if (!customKitchenFacilityInput?.trim()) return;
                                                                                               const current = temporaryRoom.kitchenFacilities || [];
                                                                                               if (!current.includes(customKitchenFacilityInput.trim())) {
                                                                                                   setTemporaryRoom({ ...temporaryRoom, kitchenFacilities: [...current, customKitchenFacilityInput.trim()] });
@@ -9823,7 +9884,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                                                                                                                 try {
                                                                                                                     const newUrls = [];
                                                                                                                     for (let f = 0; f < files.length; f++) {
-                                                                                                                        const folder = `kostmanager/rooms/${Date.now()}_${f}`;
+                                                                                                                        const folder = `kostmanager/drafts/${isEditingKostManager?.id || 'temp'}/rooms/${Date.now()}_${f}`;
                                                                                                                         const publicUrl = await uploadFileAndGetURL(files[f], folder);
                                                                                                                         newUrls.push(publicUrl);
                                                                                                                     }

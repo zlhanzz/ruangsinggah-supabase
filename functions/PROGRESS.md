@@ -2,6 +2,34 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 399. Perbaikan Pemulihan Draf Foto Survei KostManager & Isolasi Storage Antara KostManager dan Listing Mitra (`AgentDashboard.tsx`, `adminService.ts`) (September 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna melaporkan bahwa saat form pendataan KostManager (*ONBOARDING KOST - Survey Field App*) ditutup atau localhost sempat mati/refresh, seluruh foto yang sebelumnya telah diunggah oleh surveyor hilang dan kembali menampilkan `0 FOTO` (misal: *Bangunan Depan: 0 FOTO, Koridor: 0 FOTO, Lingkungan: 0 FOTO*), sehingga surveyor terpaksa mengunggah ulang dari awal padahal sistem sudah memiliki fitur draf berbasis database.
+  2. Pengguna secara eksplisit meminta pemisahan dan isolasi yang tegas antara draf & foto KostManager dengan draf & foto listing biasa (Mitra self-listing) dari segi Supabase Storage dan database metadata agar tidak saling tercampur.
+- **Akar Masalah**:
+  1. **Struktur Objek Foto & Pergeseran Kategori saat Hidrasi Draf**: Pada form pendataan KostManager di `AgentDashboard.tsx`, foto publik sebelumnya disimpan sebagai string URL datar dengan array `photoCategories` terpisah. Saat form dibuka kembali dari draf database/lokal (`openKostManagerListing`), terjadi pergeseran indeks antara array foto dan kategori dinamis, serta filter kategori sebelumnya bersifat case-sensitive dan tidak mencocokkan objek foto `{ original, url, label }`.
+  2. **Keterlambatan Debounce & Ketiadaan Sync Instan ke Database**: Auto-save draf sebelumnya hanya mengandalkan debounce timer. Saat surveyor mengunggah atau menghapus foto lalu langsung menutup modal atau mematikan browser, data foto terbaru belum tersimpan ke kolom `evaluation_summary.draft_data` di tabel `survey_requests`.
+  3. **Isolasi Folder Storage**: Foto KostManager sebelumnya menggunakan folder umum `kostmanager/rooms/...` dan `kostmanager/public/...` tanpa menyertakan ID survei, sedangkan draf mitra menggunakan `drafts/${userId}/...`.
+- **Implementasi Solusi**:
+  1. **Struktur Foto Komprehensif & Penyimpanan Objek Berkategori**:
+     - Setiap foto area publik kini disimpan sebagai objek `{ original: publicUrl, url: publicUrl, label }` sekaligus array string backward-compatible.
+     - Logika pencocokan foto di Step 1 diperbarui menggunakan normalisasi `.toLowerCase().trim()` sehingga foto tidak akan hilang saat ada perbedaan huruf besar/kecil.
+  2. **Sinkronisasi Instan ke Database pada Setiap Aksi Unggah/Hapus Foto**:
+     - Memperbarui handler upload dan hapus foto di Step 1 (Area Publik), Step 2 (Tipe Kamar Aktif), dan `handleUploadRoomPhoto` agar langsung memanggil `saveKostManagerDraftToDatabase` seketika (non-debounced) setelah file terunggah/terhapus.
+  3. **Isolasi Penuh Supabase Storage Antara KostManager dan Listing Mitra**:
+     - **KostManager Survey Drafts**: Seluruh foto survei diisolasi secara ketat di dalam folder `kostmanager/drafts/${surveyRequestId}/public/...` dan `kostmanager/drafts/${surveyRequestId}/rooms/...`.
+     - **Mitra Self-Listing Drafts**: Tetap terisolasi di dalam folder `drafts/${userId}/...` (pada bucket `properties`).
+     - Mencegah percampuran aset antara listing mandiri mitra dan operasional pendataan surveyor KostManager.
+  4. **Pembersihan Draf Aman Setelah Publikasi**:
+     - Saat survei KostManager berhasil dipublikasikan (*Submit Listing*), draf database dibersihkan dan status diperbarui secara atomik.
+- **File Tersentuh**:
+  - `functions/public/pages/AgentDashboard.tsx`
+  - `functions/public/adminService.ts`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi build frontend Vite (`npm run build` di `functions/public`) lulus 100% (2512 modul tertransformasi, `✓ built in 1m 6s`, 0 error).
+
 ### 398. Perbaikan Sinkronisasi Uncheck Fasilitas Induk, Pembersihan Sub-Fasilitas & Kategori Upload Foto Form Pendataan KostManager (`AgentDashboard.tsx`, `KostManagerPropertyFormModal.tsx`) (September 2026)
 - **Permintaan & Masalah**:
   1. Pengguna melaporkan bahwa saat fasilitas induk (seperti **WC Umum**) di-uncheck (dihapus centangnya) pada form pendataan KostManager, sub-fasilitas di dalamnya tidak ikut ter-uncheck dan kategori upload foto untuk sub-fasilitas tersebut (*KLOSET DUDUK*, *SHOWER*) masih tetap muncul di daftar upload foto area properti.
