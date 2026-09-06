@@ -2,6 +2,31 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 383. Perbaikan Alur Konfirmasi & Penolakan Tugas Pendataan KostManager serta Ketahanan Notifikasi (`notificationService.ts`, `adminService.ts`, `AgentDashboard.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna melaporkan bahwa saat surveyor mencoba menolak penugasan pendataan KostManager, muncul notifikasi error **"Gagal menolak tugas."** padahal seharusnya status tugas kembali ke Admin (`PENDING_ASSIGNMENT`) untuk penetapan agen ulang.
+  2. Saat surveyor mencoba menerima penugasan pendataan KostManager ("Terima & Konfirmasi"), muncul error **"Gagal menerima tugas."** padahal seharusnya tugas berpindah ke tab Aktif (`SURVEYING`) untuk proses survei/pendataan.
+  3. **Akar Masalah**:
+     - Pada `notificationService.ts`, fungsi `notifySurveyStatusUpdate()` sebelumnya hanya mencari data di tabel `survey_requests` (`from('survey_requests').select(...).eq('id', surveyId)`). Ketika ID yang dikirim adalah ID deterministik / `kostmanager_requests` / `kostmanager_surveys`, query mengembalikan null dan melempar `throw new Error('Survey not found')`. Karena fungsi ini di-`await` langsung di `AgentDashboard.tsx`, proses "Terima Tugas" gagal total.
+     - Pada `adminService.ts`, fungsi `updateSurveyRequest()` saat penolakan tugas (`assigned_agent_id: null`, `status: 'PENDING_ASSIGNMENT'`) mengalami kendala RLS / ketidaksesuaian ID deterministik saat mencoba memperbarui `kostmanager_surveys` dan `kostmanager_requests`.
+- **Implementasi Solusi**:
+  1. **Multi-Table Fallback & Resilient Notification di `notificationService.ts`**:
+     - Meningkatkan fungsi `notifySurveyStatusUpdate` agar mencari ke `survey_requests` terlebih dahulu, lalu fallback ke `kostmanager_requests` (berdasarkan ID atau `transaction_id`), serta `kostmanager_surveys`.
+     - Membungkus seluruh alur pengiriman email & in-app notification dalam blok `try/catch` mandiri sehingga kegagalan notifikasi tidak pernah membatalkan mutasi status di database.
+  2. **Resolusi Multi-Tabel Tangguh di `adminService.ts` (`updateSurveyRequest`)**:
+     - Menghubungkan ID transaksi KostManager secara cerdas sehingga pembaruan status (`SURVEYING`, `PENDING_ASSIGNMENT`, dll.) dan pelepasan agen (`assigned_agent_id: null`) tersinkronisasi ke ketiga tabel (`kostmanager_surveys`, `kostmanager_requests`, dan `survey_requests`) tanpa melempar fatal error.
+  3. **Non-Blocking Notification Dispatch & Logging di `AgentDashboard.tsx`**:
+     - Menjalankan `notifySurveyStatusUpdate()` secara non-blocking / asynchronously (`.catch(...)`) pada fungsi `handleAccept()` sehingga transisi state UI instan dan bebas freeze.
+     - Menambahkan logging detail pada blok error penolakan dan penerimaan tugas.
+- **File Tersentuh**:
+  - `functions/public/notificationService.ts`
+  - `functions/public/adminService.ts`
+  - `functions/public/pages/AgentDashboard.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi build frontend Vite (`cmd /c npm run build` di `functions/public`) lulus 100% (`✓ 2511 modules transformed, built in 40.64s`, 0 error).
+
 ### 382. Resolusi Kartu Duplikat Pesanan Pendataan KostManager & Deduplikasi Multi-Layer (`adminService.ts`, `AgentDashboard.tsx`) (September 2026)
 - **Permintaan & Masalah**:
   1. Pengguna melaporkan bahwa saat pesanan pendataan KostManager ditugaskan kepada surveyor oleh Admin, muncul **dua kartu yang sama persis (duplikat)** untuk satu pesanan di tab **Permintaan** pada Dashboard Agen.

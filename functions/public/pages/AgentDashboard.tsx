@@ -5357,12 +5357,16 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                                                                     agent_phone: user?.phone || user?.phoneNumber || '',
                                                                     agent_photo_url: user?.photo_url || user?.photoURL || ''
                                                                 });
-                                                                await notifySurveyStatusUpdate(req.id, 'SURVEYING');
+                                                                // Trigger notification safely in background
+                                                                notifySurveyStatusUpdate(req.id, 'SURVEYING').catch(e => {
+                                                                    console.warn('[AgentDashboard] Notification notice:', e);
+                                                                });
                                                                 alert('Pesanan Dikonfirmasi & Diterima! Tugas kini ada di tab Aktif.');
                                                                 await loadSurveyRequests(true);
                                                                 setAgentTab('active');
                                                             } catch (error) {
-                                                                alert('Gagal menerima tugas.');
+                                                                console.error('[AgentDashboard] Error accepting task:', error);
+                                                                alert('Gagal menerima tugas: ' + ((error as Error)?.message || 'Terjadi kesalahan sistem.'));
                                                             } finally {
                                                                 setIsSubmitting(false);
                                                             }
@@ -5391,7 +5395,8 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                                                                 alert('Tugas berhasil ditolak. Pesanan dikembalikan ke Admin.');
                                                                 await loadSurveyRequests(true);
                                                             } catch (error) {
-                                                                alert('Gagal menolak tugas.');
+                                                                console.error('[AgentDashboard] Error rejecting task:', error);
+                                                                alert('Gagal menolak tugas: ' + ((error as Error)?.message || 'Terjadi kesalahan sistem.'));
                                                             } finally {
                                                                 setIsSubmitting(false);
                                                             }
@@ -5726,12 +5731,16 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                                                                 agent_phone: user?.phone || user?.phoneNumber || '',
                                                                 agent_photo_url: user?.photo_url || user?.photoURL || ''
                                                             });
-                                                            await notifySurveyStatusUpdate(req.id, 'SURVEYING');
+                                                            // Trigger notification safely in background
+                                                            notifySurveyStatusUpdate(req.id, 'SURVEYING').catch(e => {
+                                                                console.warn('[AgentDashboard] Notification notice:', e);
+                                                            });
                                                             alert('Pesanan Dikonfirmasi & Diterima! Tugas kini ada di tab Aktif.');
                                                             await loadSurveyRequests(true);
                                                             setAgentTab('active');
                                                         } catch (error) {
-                                                            alert('Gagal menerima tugas.');
+                                                            console.error('[AgentDashboard] Error accepting task:', error);
+                                                            alert('Gagal menerima tugas: ' + ((error as Error)?.message || 'Terjadi kesalahan sistem.'));
                                                         } finally {
                                                             setIsSubmitting(false);
                                                         }
@@ -5760,7 +5769,8 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                                                             alert('Tugas berhasil ditolak. Pesanan dikembalikan ke Admin.');
                                                             await loadSurveyRequests(true);
                                                         } catch (error) {
-                                                            alert('Gagal menolak tugas.');
+                                                            console.error('[AgentDashboard] Error rejecting task:', error);
+                                                            alert('Gagal menolak tugas: ' + ((error as Error)?.message || 'Terjadi kesalahan sistem.'));
                                                         } finally {
                                                             setIsSubmitting(false);
                                                         }

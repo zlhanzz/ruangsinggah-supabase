@@ -3579,6 +3579,8 @@ export async function updateSurveyRequest(
 
   // --- CHECK IF TARGET IS KOSTMANAGER SURVEY / REQUEST ---
   let existingKmSurvey: any = null;
+
+  // 1. Coba cari di kostmanager_surveys by id
   const { data: bySurvId } = await supabase
     .from('kostmanager_surveys')
     .select('id, kostmanager_request_id')
@@ -3588,6 +3590,7 @@ export async function updateSurveyRequest(
   if (bySurvId) {
     existingKmSurvey = bySurvId;
   } else {
+    // 2. Coba cari di kostmanager_surveys by request_id
     const { data: byReqId } = await supabase
       .from('kostmanager_surveys')
       .select('id, kostmanager_request_id')
@@ -3596,6 +3599,7 @@ export async function updateSurveyRequest(
     if (byReqId) {
       existingKmSurvey = byReqId;
     } else {
+      // 3. Coba cari di kostmanager_requests by id
       const { data: kmReqOnly } = await supabase
         .from('kostmanager_requests')
         .select('id, transaction_id')
@@ -3603,6 +3607,32 @@ export async function updateSurveyRequest(
         .maybeSingle();
       if (kmReqOnly) {
         existingKmSurvey = { id: null, kostmanager_request_id: kmReqOnly.id, transaction_id: kmReqOnly.transaction_id };
+      } else {
+        // 4. Fallback: Cek jika id adalah id dari survey_requests yang memiliki transaction_id KostManager
+        const { data: survReq } = await supabase
+          .from('survey_requests')
+          .select('id, transaction_id')
+          .eq('id', id)
+          .maybeSingle();
+        if (survReq?.transaction_id) {
+          const { data: kmReqByTrx } = await supabase
+            .from('kostmanager_requests')
+            .select('id, transaction_id')
+            .eq('transaction_id', survReq.transaction_id)
+            .maybeSingle();
+          if (kmReqByTrx) {
+            const { data: kmSurvByTrx } = await supabase
+              .from('kostmanager_surveys')
+              .select('id, kostmanager_request_id')
+              .eq('kostmanager_request_id', kmReqByTrx.id)
+              .maybeSingle();
+            existingKmSurvey = {
+              id: kmSurvByTrx?.id || null,
+              kostmanager_request_id: kmReqByTrx.id,
+              transaction_id: kmReqByTrx.transaction_id
+            };
+          }
+        }
       }
     }
   }
@@ -3622,11 +3652,11 @@ export async function updateSurveyRequest(
     if (updates.assigned_agent_id === null || updates.status === 'PENDING_ASSIGNMENT') {
       // Tolak / Deassign: Kembalikan tugas ke Admin di seluruh tabel
       if (existingKmSurvey.id) {
-        const { error: delErr } = await supabase
+        await supabase
           .from('kostmanager_surveys')
           .delete()
-          .eq('id', existingKmSurvey.id);
-        if (delErr) console.warn('Warning deleting kostmanager_surveys:', delErr);
+          .eq('id', existingKmSurvey.id)
+          .catch(e => console.warn('Warning deleting kostmanager_surveys:', e));
       }
 
       const { error: reqErr } = await supabase
@@ -3639,7 +3669,9 @@ export async function updateSurveyRequest(
           updated_at: new Date().toISOString()
         })
         .eq('id', existingKmSurvey.kostmanager_request_id);
-      if (reqErr) throw reqErr;
+      if (reqErr) {
+        console.warn('Warning updating kostmanager_requests on reject:', reqErr);
+      }
 
       // Sync to survey_requests
       if (kmTrxId) {
@@ -3655,6 +3687,19 @@ export async function updateSurveyRequest(
           })
           .eq('transaction_id', kmTrxId)
           .catch(e => console.warn('Warning syncing survey_requests deassign:', e));
+      } else if (id) {
+        await supabase
+          .from('survey_requests')
+          .update({
+            assigned_agent_id: null,
+            agent_name: null,
+            agent_phone: null,
+            agent_photo_url: null,
+            status: 'PENDING_ASSIGNMENT',
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', id)
+          .catch(e => console.warn('Warning syncing survey_requests by id deassign:', e));
       }
       return;
     }
@@ -3679,7 +3724,7 @@ export async function updateSurveyRequest(
         .from('kostmanager_surveys')
         .update(kmSurveyUpdates)
         .eq('id', existingKmSurvey.id);
-      if (kmSurveyErr) throw kmSurveyErr;
+      if (kmSurveyErr) console.warn('Warning updating kostmanager_surveys:', kmSurveyErr);
     } else {
       kmSurveyUpdates.kostmanager_request_id = existingKmSurvey.kostmanager_request_id;
       kmSurveyUpdates.status = 'SURVEYING';
@@ -3711,7 +3756,7 @@ export async function updateSurveyRequest(
       .from('kostmanager_requests')
       .update(kmReqUpdates)
       .eq('id', existingKmSurvey.kostmanager_request_id);
-    if (kmReqErr) throw kmReqErr;
+    if (kmReqErr) console.warn('Warning updating kostmanager_requests:', kmReqErr);
 
     // Sync to survey_requests
     if (kmTrxId) {
@@ -3732,15 +3777,28 @@ export async function updateSurveyRequest(
         .update(surveyUpdates)
         .eq('transaction_id', kmTrxId)
         .catch(e => console.warn('Warning syncing survey_requests on update:', e));
+    } else if (id) {
+      await supabase
+        .from('survey_requests')
+        .update({
+          status: 'SURVEYING',
+          assigned_agent_id: updates.assigned_agent_id || user.id,
+          agent_name: updates.agent_name,
+          agent_phone: updates.agent_phone,
+          agent_photo_url: updates.agent_photo_url,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', id)
+        .catch(e => console.warn('Warning syncing survey_requests by id:', e));
     }
 
     return;
   }
 
   // Regular users can update their own (for feedback/rating), agents can update assigned or unassigned tasks
-  const { data: existing } = await supabase.from('survey_requests').select('user_id, assigned_agent_id, transaction_id, status').eq('id', id).single();
+  const { data: existing } = await supabase.from('survey_requests').select('user_id, assigned_agent_id, transaction_id, status').eq('id', id).maybeSingle();
   
-  if (!isAdmin && user.id !== existing?.user_id && user.id !== existing?.assigned_agent_id && existing?.assigned_agent_id !== null && existing?.status !== 'PENDING_ASSIGNMENT') {
+  if (existing && !isAdmin && user.id !== existing?.user_id && user.id !== existing?.assigned_agent_id && existing?.assigned_agent_id !== null && existing?.status !== 'PENDING_ASSIGNMENT') {
      throw new Error('Access Denied');
   }
 

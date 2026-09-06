@@ -120,39 +120,106 @@ export const subscribeToNotifications = (userId: string, onNewNotification: (not
 
 export const notifySurveyStatusUpdate = async (surveyId: string, newStatus: string) => {
   try {
+    if (!surveyId) return false;
+
     // 1. Ambil detail survey untuk mendapatkan ID User & ID Agent
-    const { data: survey, error } = await supabase
+    let user_id: string | null = null;
+    let assigned_agent_id: string | null = null;
+    let kost_name = 'Kost Terdaftar';
+    let survey_date: string | null = null;
+    let survey_time: string | null = null;
+    let notes: string | null = null;
+
+    // 1a. Coba cari di survey_requests
+    const { data: survey } = await supabase
       .from('survey_requests')
       .select('user_id, assigned_agent_id, kost_name, survey_date, survey_time, notes')
       .eq('id', surveyId)
-      .single();
+      .maybeSingle();
 
-    if (error || !survey) throw error || new Error('Survey not found');
+    if (survey) {
+      user_id = survey.user_id;
+      assigned_agent_id = survey.assigned_agent_id;
+      kost_name = survey.kost_name || kost_name;
+      survey_date = survey.survey_date;
+      survey_time = survey.survey_time;
+      notes = survey.notes;
+    } else {
+      // 1b. Fallback: Coba cari di kostmanager_requests
+      const { data: kmReq } = await supabase
+        .from('kostmanager_requests')
+        .select('user_id, assigned_agent_id, kost_name, survey_date, survey_time, notes')
+        .or(`id.eq.${surveyId},transaction_id.eq.${surveyId}`)
+        .maybeSingle();
 
-    const { user_id, assigned_agent_id, kost_name } = survey;
+      if (kmReq) {
+        user_id = kmReq.user_id;
+        assigned_agent_id = kmReq.assigned_agent_id;
+        kost_name = kmReq.kost_name || kost_name;
+        survey_date = kmReq.survey_date;
+        survey_time = kmReq.survey_time;
+        notes = kmReq.notes;
+      } else {
+        // 1c. Fallback: Coba cari di kostmanager_surveys
+        const { data: kmSurv } = await supabase
+          .from('kostmanager_surveys')
+          .select(`
+            assigned_agent_id,
+            request:kostmanager_request_id (
+              user_id,
+              assigned_agent_id,
+              kost_name,
+              survey_date,
+              survey_time,
+              notes
+            )
+          `)
+          .eq('id', surveyId)
+          .maybeSingle();
 
-    // 2. Kirim notifikasi ke USER
-    let userTitle = 'Update Status Survey';
-    let userMsg = `Status survey Anda untuk ${kost_name} telah diperbarui menjadi ${newStatus}.`;
-
-    if (newStatus === 'AGENT_ASSIGNED') {
-      userTitle = 'Surveyor Ditemukan! 🔎';
-      userMsg = `Surveyor telah ditetapkan untuk kost ${kost_name}. Mohon tunggu jadwal kunjungan.`;
-    } else if (newStatus === 'HEADING_TO_LOCATION') {
-      userTitle = 'Surveyor Menuju Lokasi 🚗';
-      userMsg = `Surveyor kami sedang dalam perjalanan menuju ${kost_name}. Mohon pastikan akses tersedia.`;
-    } else if (newStatus === 'RESCHEDULED') {
-      userTitle = 'Jadwal Survey Diperbarui 🗓️';
-      userMsg = `Jadwal survey untuk ${kost_name} diubah menjadi ${survey.survey_date} pukul ${survey.survey_time} dengan alasan: "${survey.notes || 'Penyesuaian jadwal lapangan oleh Surveyor.'}"`;
-    } else if (newStatus === 'SURVEYING') {
-      userTitle = 'Survey Sedang Berlangsung ⚡';
-      userMsg = `Surveyor sedang berada di lokasi ${kost_name} untuk melakukan pengecekan.`;
-    } else if (newStatus === 'COMPLETED' || newStatus === 'SUBMITTED') {
-      userTitle = 'Survey Selesai! ✅';
-      userMsg = `Hasil survey untuk ${kost_name} telah tersedia. Silakan cek di menu My Kost.`;
+        if (kmSurv) {
+          const req = kmSurv.request as any;
+          user_id = req?.user_id || null;
+          assigned_agent_id = kmSurv.assigned_agent_id || req?.assigned_agent_id || null;
+          kost_name = req?.kost_name || kost_name;
+          survey_date = req?.survey_date || null;
+          survey_time = req?.survey_time || null;
+          notes = req?.notes || null;
+        }
+      }
     }
 
-    await sendNotification(user_id, userTitle, userMsg, 'info', { surveyId, status: newStatus }, '/my-kost');
+    if (!user_id && !assigned_agent_id) {
+      console.warn(`[NotificationService] Survey/KostManager record not found for id ${surveyId}, skipping notification.`);
+      return false;
+    }
+
+    // 2. Kirim notifikasi ke USER (Mitra Pemesan)
+    if (user_id) {
+      let userTitle = 'Update Status Survey';
+      let userMsg = `Status survey Anda untuk ${kost_name} telah diperbarui menjadi ${newStatus}.`;
+
+      if (newStatus === 'AGENT_ASSIGNED') {
+        userTitle = 'Surveyor Ditemukan! 🔎';
+        userMsg = `Surveyor telah ditetapkan untuk kost ${kost_name}. Mohon tunggu jadwal kunjungan.`;
+      } else if (newStatus === 'HEADING_TO_LOCATION') {
+        userTitle = 'Surveyor Menuju Lokasi 🚗';
+        userMsg = `Surveyor kami sedang dalam perjalanan menuju ${kost_name}. Mohon pastikan akses tersedia.`;
+      } else if (newStatus === 'RESCHEDULED') {
+        userTitle = 'Jadwal Survey Diperbarui 🗓️';
+        userMsg = `Jadwal survey untuk ${kost_name} diubah menjadi ${survey_date || '-'} pukul ${survey_time || '-'} dengan alasan: "${notes || 'Penyesuaian jadwal lapangan oleh Surveyor.'}"`;
+      } else if (newStatus === 'SURVEYING') {
+        userTitle = 'Survey Sedang Berlangsung ⚡';
+        userMsg = `Surveyor sedang berada di lokasi ${kost_name} untuk melakukan pendataan lapangan.`;
+      } else if (newStatus === 'COMPLETED' || newStatus === 'SUBMITTED') {
+        userTitle = 'Survey Selesai! ✅';
+        userMsg = `Hasil survey untuk ${kost_name} telah tersedia. Silakan cek di menu My Kost.`;
+      }
+
+      await sendNotification(user_id, userTitle, userMsg, 'info', { surveyId, status: newStatus }, '/my-kost').catch(e => {
+        console.warn('[NotificationService] Send notification to user failed:', e);
+      });
+    }
 
     // 3. Kirim notifikasi ke AGENT (jika sudah ada agent)
     if (assigned_agent_id) {
@@ -164,17 +231,16 @@ export const notifySurveyStatusUpdate = async (surveyId: string, newStatus: stri
         agentMsg = `Anda telah ditugaskan untuk melakukan survey di ${kost_name}. Cek dashboard agen Anda.`;
       }
 
-      await sendNotification(assigned_agent_id, agentTitle, agentMsg, 'assignment', { surveyId, status: newStatus }, '/agent-dashboard');
+      await sendNotification(assigned_agent_id, agentTitle, agentMsg, 'assignment', { surveyId, status: newStatus }, '/agent-dashboard').catch(e => {
+        console.warn('[NotificationService] Send notification to agent failed:', e);
+      });
     }
 
     // 4. Kirim Email Notifikasi via Cloud Function
     try {
       const emailEndpoint = 'https://us-central1-ruangsinggahid-3afb2.cloudfunctions.net/sendSurveyStatusEmail';
       
-      // Tentukan siapa yang menerima email berdasarkan status
       let recipientRole: 'user' | 'agent' | null = null;
-      
-      // Kasus khusus: ASSIGNED_TO_AGENT dipanggil saat admin pertama kali menetapkan agen
       if (newStatus === 'ASSIGNED_TO_AGENT') {
         recipientRole = 'agent';
       } else if (['AGENT_ASSIGNED', 'HEADING_TO_LOCATION', 'RESCHEDULED', 'COMPLETED'].includes(newStatus)) {
@@ -182,8 +248,6 @@ export const notifySurveyStatusUpdate = async (surveyId: string, newStatus: stri
       }
 
       if (recipientRole) {
-        // Panggil secara asynchronous tanpa menunggu (fire and forget)
-        // untuk menjaga performa UI
         fetch(emailEndpoint, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
