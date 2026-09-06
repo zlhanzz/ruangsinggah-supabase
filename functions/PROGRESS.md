@@ -2,6 +2,30 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 385. Isolasi Total Data KostManager vs Data Self-Listing Mitra Biasa, Inisialisasi Foto Bersih Onboarding, & Fallback Otomatis (`AgentDashboard.tsx`, `userService.ts`) (September 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna meminta pemisahan tegas antara aset data kelolaan KostManager (foto surveyor, fasilitas audit lapangan, dan listing detail per unit kamar individu 101/102) dengan data *self-listing* milik mitra biasa (foto mitra, listing per tipe kamar umum Standard/VIP + jumlah kamar, fasilitas asli).
+  2. Saat surveyor membuka form Onboarding Kost (*Survey Field App* di `AgentDashboard.tsx`), slot foto sebelumnya terisi otomatis dengan foto lama milik mitra biasa. Seharusnya, surveyor memulai dengan slot foto baru/kosong (`+ TAMBAH FOTO`) untuk mengambil foto on-site yang otentik.
+  3. Data yang dibuat saat kost menjadi kelolaan KostManager tidak boleh diklaim/diambil oleh mitra jika mitra berhenti berlangganan. Jika berhenti langganan KostManager (`is_managed = false`), sistem harus otomatis mengembalikan tampilan ke data asli *self-listing* milik mitra.
+- **Implementasi Solusi**:
+  1. **Inisialisasi Bersih (*Fresh Slate*) Onboarding Surveyor di `AgentDashboard.tsx`**:
+     - Mengosongkan seluruh foto properti (`image_urls: []`) dan foto kamar (`room.images: []`) saat surveyor membuka form onboarding kost dari properti migrasi mitra biasa.
+     - Membersihkan draft lama yang sempat menyimpan foto mitra biasa tanpa `dbKmProp`.
+  2. **Pencadangan Data Self-Listing Asli (*Snapshot Backup*) di `AgentDashboard.tsx`**:
+     - Saat menyimpan onboarding KostManager (`handleSaveKostManagerListing`), data asli mitra biasa secara otomatis dicadangkan ke `metadata.self_listing_images`, `metadata.self_listing_room_types`, `metadata.self_listing_facilities`, `metadata.self_listing_rules`, dan `metadata.self_listing_description`.
+     - Data baru surveyor disimpan ke `properties` (`is_managed: true`) dan tabel khusus `mitra_kostmanager`.
+  3. **Penegakan Dua Mode Tampilan Cerdas (*Dual-Mode Smart Display*) di `userService.ts`**:
+     - Pada `transformPropertyRow()`:
+       - **Mode KostManager (`is_managed === true`)**: Menampilkan foto surveyor, fasilitas hasil audit, dan listing detail per unit kamar individu.
+       - **Mode Mitra Biasa (`is_managed === false`)**: Mengembalikan tampilan secara otomatis ke cadangan `metadata.self_listing_*` (foto asli mitra, listing per tipe kamar umum, fasilitas asli mitra).
+- **File Tersentuh**:
+  - `functions/public/pages/AgentDashboard.tsx`
+  - `functions/public/userService.ts`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi build frontend Vite (`cmd /c npm run build` di `functions/public`) lulus 100% (`✓ 2511 modules transformed, built in 48.21s`, 0 error).
+
 ### 384. Resolusi Runtime Error `TypeError: supabase...catch is not a function` pada `updateSurveyRequest` (`adminService.ts`) (September 2026)
 - **Permintaan & Masalah**:
   1. Saat agen menolak atau memperbarui tugas di Dashboard Agen, muncul dialog pop-up error: `Gagal menolak tugas: supabase.from(...).update(...).eq(...).catch is not a function at updateSurveyRequest (adminService.ts:3689:12)`.

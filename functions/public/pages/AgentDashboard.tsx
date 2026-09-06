@@ -2563,12 +2563,22 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                     }
 
                     // Sanitize draft image_urls and photoCategories
+                    // If draft was saved from an old session where self-listing photos were auto-imported without surveyor taking fresh photos:
+                    const isPureSelfListingMigration = dbPropertyRecord && !dbKmProp && !dbPropertyRecord.is_managed;
+                    const rawPropImagesSet = new Set(
+                        (Array.isArray(dbPropertyRecord?.image_urls) ? dbPropertyRecord.image_urls : []).map(getImageUrlString).filter(Boolean)
+                    );
+
                     const rawDraftImages = Array.isArray(parsed.kmListingForm.image_urls) ? parsed.kmListingForm.image_urls : [];
                     const draftImageUrls: string[] = [];
                     const draftPhotoCats: string[] = [];
                     rawDraftImages.forEach((img: any, idx: number) => {
                         const urlStr = getImageUrlString(img);
                         if (!urlStr) return;
+                        // Strip legacy imported self-listing photos from draft so surveyor captures fresh survey photos
+                        if (isPureSelfListingMigration && rawPropImagesSet.has(urlStr) && !urlStr.includes('kostmanager/')) {
+                            return;
+                        }
                         let cat = (typeof img === 'object' && img.label) 
                             ? img.label 
                             : (parsed.kmListingForm.photoCategories?.[idx] || parsed.photoCategories?.[idx] || (idx < 4 ? ['Bangunan Depan', 'Koridor', 'Area Parkir', 'Lingkungan'][idx] : `Foto Lainnya ${idx - 3}`));
@@ -2721,31 +2731,17 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                 return;
             }
 
-            // B. Fallback to `properties` table record if exists
+            // B. Fallback to `properties` table record if exists (Self-Listing Migration)
             if (dbPropertyRecord) {
                 setIsExistingPropertyMigration(true);
                 setWarningAccepted(false);
-                console.log("openKostManagerListing: fallback to loading from dbPropertyRecord:", dbPropertyRecord.id);
+                console.log("openKostManagerListing: fallback to loading from dbPropertyRecord (preserving original photos as self-listing only):", dbPropertyRecord.id);
                 kmOriginalLocationRef.current = dbPropertyRecord.location || null;
                 
-                const rawPropImages = Array.isArray(dbPropertyRecord.image_urls) ? dbPropertyRecord.image_urls : [];
-                const loadedPropImageUrls: string[] = [];
-                const loadedPropPhotoCategories: string[] = [];
-
-                rawPropImages.forEach((img: any, idx: number) => {
-                    const urlStr = getImageUrlString(img);
-                    if (!urlStr) return;
-                    let label = (typeof img === 'object' && img.label) ? img.label : '';
-                    if (label.toLowerCase() === 'area umum' || label.toLowerCase() === 'parkiran' || label.toLowerCase() === 'parkir motor' || label.toLowerCase() === 'parkir mobil') label = 'Area Parkir';
-                    if (!label) {
-                        label = (idx < 4 ? ['Bangunan Depan', 'Koridor', 'Area Parkir', 'Lingkungan'][idx] : `Foto Lainnya ${idx - 3}`);
-                    }
-                    loadedPropImageUrls.push(urlStr);
-                    loadedPropPhotoCategories.push(label);
-                });
-
-                const dynamicPropCats = computeDynamicPublicPhotoCategories(dbPropertyRecord.facilities || ['WiFi', 'Area Parkir'], loadedPropPhotoCategories);
-                setPhotoCategories(dynamicPropCats);
+                // FRESH SLATE FOR PHOTOS: Do NOT copy self-listing photos into surveyor's form!
+                // The surveyor MUST take brand new, authentic on-site survey photos.
+                const freshDynamicCats = computeDynamicPublicPhotoCategories(dbPropertyRecord.facilities || ['WiFi', 'Area Parkir'], []);
+                setPhotoCategories(freshDynamicCats);
                 setShowAddLandmarkForm(false);
                 setActiveRoomIdx(null);
                 setTemporaryRoom(null);
@@ -2757,6 +2753,16 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                     if (!rawPropArea) rawPropArea = rawPropCity.replace(/^(Kecamatan|Kec\.)\s+/i, '').trim();
                     rawPropCity = 'Makassar';
                 }
+
+                // If room types exist in self-listing property, keep textual specs (names, pricing, facilities) but clean room photos
+                const cleanRoomTypes = (dbPropertyRecord.room_types || []).map((rm: any) => ({
+                    ...rm,
+                    images: [],
+                    photoCategories: [],
+                    categorized_photos: {},
+                    categorizedPhotos: {}
+                }));
+
                 setKmListingForm({
                     title: dbPropertyRecord.title || req.kost_name,
                     description: dbPropertyRecord.description || '',
@@ -2768,12 +2774,12 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                     price: dbPropertyRecord.price || 0,
                     totalRooms: (dbPropertyRecord.total_rooms && dbPropertyRecord.total_rooms > 0) ? dbPropertyRecord.total_rooms : (initialTotalRooms || 0),
                     owner_uid: resolvedOwnerUid,
-                    roomTypes: [],
+                    roomTypes: cleanRoomTypes,
                     facilities: dbPropertyRecord.facilities || ['WiFi', 'Area Parkir'],
                     location: dbPropertyRecord.location || initialCoords,
                     rules: dbPropertyRecord.rules || ['Tidak boleh membawa hewan peliharaan', 'Tamu dilarang menginap'],
-                    image_urls: loadedPropImageUrls,
-                    photoCategories: loadedPropPhotoCategories,
+                    image_urls: [], // FRESH SLATE: Surveyor will take new survey photos
+                    photoCategories: freshDynamicCats,
                     campuses: dbPropertyRecord.campuses || [],
                     publicBathroomFacilities: dbPropertyRecord.metadata?.publicBathroomFacilities || [],
                     publicKitchenFacilities: dbPropertyRecord.metadata?.publicKitchenFacilities || [],
@@ -3133,6 +3139,66 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                 return { original: url, url: url, label: label };
             }).filter(Boolean);
 
+            // Find propertyId from transaction metadata if exists
+            let propertyIdToFetch = null;
+            if (isEditingKostManager.transaction_id) {
+                const { data: trxData } = await supabase
+                    .from('transactions')
+                    .select('metadata')
+                    .eq('id', isEditingKostManager.transaction_id)
+                    .maybeSingle();
+                const rawSavePropId = trxData?.metadata?.propertyId;
+                const uuidSavePat = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+                if (rawSavePropId && uuidSavePat.test(rawSavePropId)) {
+                    propertyIdToFetch = rawSavePropId;
+                }
+            }
+
+            // Fetch existing property for this user to edit
+            let query = supabase.from('properties').select('*');
+            const uuidSavePat2 = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+            let canQuerySaveProperties = false;
+            if (propertyIdToFetch) {
+                query = query.eq('id', propertyIdToFetch);
+                canQuerySaveProperties = true;
+            } else if (validOwnerUid && uuidSavePat2.test(validOwnerUid)) {
+                query = query.eq('owner_uid', validOwnerUid);
+                canQuerySaveProperties = true;
+            }
+            
+            const { data: existingProps } = canQuerySaveProperties
+                ? await query
+                : { data: null };
+
+            // Prioritize is_managed = true, otherwise take the first one found
+            const existingProp = existingProps?.find((p: any) => p.is_managed) || existingProps?.[0];
+
+            // Capture and preserve all original regular Mitra self-listing data (photos, room types, facilities, rules, description)
+            const existingSelfListingImages = existingProp?.metadata?.self_listing_images
+                || (existingProp && !existingProp.is_managed ? existingProp.image_urls : null)
+                || [];
+            const existingSelfListingRoomTypes = existingProp?.metadata?.self_listing_room_types
+                || (existingProp && !existingProp.is_managed ? existingProp.room_types : null)
+                || [];
+            const existingSelfListingFacilities = existingProp?.metadata?.self_listing_facilities
+                || (existingProp && !existingProp.is_managed ? existingProp.facilities : null)
+                || [];
+            const existingSelfListingRules = existingProp?.metadata?.self_listing_rules
+                || (existingProp && !existingProp.is_managed ? existingProp.rules : null)
+                || [];
+            const existingSelfListingDescription = existingProp?.metadata?.self_listing_description
+                || (existingProp && !existingProp.is_managed ? existingProp.description : null)
+                || '';
+            const existingSelfListingPhotosMeta = existingProp?.metadata?.self_listing_photos_meta
+                || (existingProp && !existingProp.is_managed ? existingProp.metadata?.photos_meta : null)
+                || [];
+            const existingSelfListingCategorizedPhotos = existingProp?.metadata?.self_listing_categorized_photos
+                || (existingProp && !existingProp.is_managed ? (existingProp.metadata?.categorized_photos || existingProp.categorized_photos) : null)
+                || {};
+            const existingSelfListingPhotoCategories = existingProp?.metadata?.self_listing_photo_categories
+                || (existingProp && !existingProp.is_managed ? (existingProp.metadata?.photo_categories || existingProp.photo_categories) : null)
+                || [];
+
             const propertyPayload = {
                 title: kmListingForm.title,
                 description: kmListingForm.description,
@@ -3152,49 +3218,26 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                 image_urls: roomPhotosList.length > 0 ? [...roomPhotosList, ...publicPhotosList] : publicPhotosList,
                 campuses: kmListingForm.campuses,
                 metadata: {
+                    ...(existingProp?.metadata || {}),
                     province: kmListingForm.province || '',
                     publicParkingFacilities: kmListingForm.publicParkingFacilities || ['Parkir Motor'],
                     publicKitchenFacilities: kmListingForm.publicKitchenFacilities || [],
                     publicBathroomFacilities: kmListingForm.publicBathroomFacilities || [],
                     addressNotes: kmListingForm.addressNotes || '',
                     signature_data: signatureData || null,
-                    agreed_to_terms: agreedToTerms
+                    agreed_to_terms: agreedToTerms,
+                    // ISOLATED SELF-LISTING BACKUP (preserved when KostManager subscription is cancelled/downgraded):
+                    self_listing_images: existingSelfListingImages.length > 0 ? existingSelfListingImages : (existingProp?.image_urls || []),
+                    self_listing_room_types: existingSelfListingRoomTypes.length > 0 ? existingSelfListingRoomTypes : (existingProp?.room_types || []),
+                    self_listing_facilities: existingSelfListingFacilities.length > 0 ? existingSelfListingFacilities : (existingProp?.facilities || []),
+                    self_listing_rules: existingSelfListingRules.length > 0 ? existingSelfListingRules : (existingProp?.rules || []),
+                    self_listing_description: existingSelfListingDescription || existingProp?.description || '',
+                    self_listing_photos_meta: existingSelfListingPhotosMeta.length > 0 ? existingSelfListingPhotosMeta : (existingProp?.metadata?.photos_meta || []),
+                    self_listing_categorized_photos: Object.keys(existingSelfListingCategorizedPhotos).length > 0 ? existingSelfListingCategorizedPhotos : (existingProp?.metadata?.categorized_photos || {}),
+                    self_listing_photo_categories: existingSelfListingPhotoCategories.length > 0 ? existingSelfListingPhotoCategories : (existingProp?.metadata?.photo_categories || []),
+                    kostmanager_survey_completed_at: new Date().toISOString()
                 }
             };
-
-            // Find propertyId from transaction metadata if exists
-            let propertyIdToFetch = null;
-            if (isEditingKostManager.transaction_id) {
-                const { data: trxData } = await supabase
-                    .from('transactions')
-                    .select('metadata')
-                    .eq('id', isEditingKostManager.transaction_id)
-                    .maybeSingle();
-                const rawSavePropId = trxData?.metadata?.propertyId;
-                const uuidSavePat = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-                if (rawSavePropId && uuidSavePat.test(rawSavePropId)) {
-                    propertyIdToFetch = rawSavePropId;
-                }
-            }
-
-            // Fetch existing property for this user to edit
-            let query = supabase.from('properties').select('id, is_managed');
-            const uuidSavePat2 = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-            let canQuerySaveProperties = false;
-            if (propertyIdToFetch) {
-                query = query.eq('id', propertyIdToFetch);
-                canQuerySaveProperties = true;
-            } else if (validOwnerUid && uuidSavePat2.test(validOwnerUid)) {
-                query = query.eq('owner_uid', validOwnerUid);
-                canQuerySaveProperties = true;
-            }
-            
-            const { data: existingProps } = canQuerySaveProperties
-                ? await query
-                : { data: null };
-
-            // Prioritize is_managed = true, otherwise take the first one found
-            const existingProp = existingProps?.find(p => p.is_managed) || existingProps?.[0];
 
             let savedProperty = null;
             if (existingProp) {

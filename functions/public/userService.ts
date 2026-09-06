@@ -266,14 +266,44 @@ export function sortPropertyImagesWithRoomCover(
 }
 
 export function transformPropertyRow(row: any): Kost {
-  const rawImages = row.image_urls || [];
+  const isManaged = Boolean(row.is_managed);
+
+  // If unmanaged (regular mitra or unsubscribed/cancelled from KostManager), fall back to backed up self_listing data
+  const fallbackImages = (!isManaged && Array.isArray(row.metadata?.self_listing_images) && row.metadata.self_listing_images.length > 0)
+    ? row.metadata.self_listing_images
+    : null;
+  const fallbackRoomTypes = (!isManaged && Array.isArray(row.metadata?.self_listing_room_types) && row.metadata.self_listing_room_types.length > 0)
+    ? row.metadata.self_listing_room_types
+    : null;
+  const fallbackFacilities = (!isManaged && Array.isArray(row.metadata?.self_listing_facilities) && row.metadata.self_listing_facilities.length > 0)
+    ? row.metadata.self_listing_facilities
+    : null;
+  const fallbackRules = (!isManaged && Array.isArray(row.metadata?.self_listing_rules) && row.metadata.self_listing_rules.length > 0)
+    ? row.metadata.self_listing_rules
+    : null;
+  const fallbackDescription = (!isManaged && typeof row.metadata?.self_listing_description === 'string' && row.metadata.self_listing_description)
+    ? row.metadata.self_listing_description
+    : null;
+
+  const rawImages = fallbackImages || row.image_urls || [];
   const rawVideos = row.video_urls || [];
   const videos = rawVideos.map(getDisplayVideoUrl).filter((u: string) => u !== '');
-  const roomTypes = row.room_types || [];
+  const roomTypes = fallbackRoomTypes || row.room_types || [];
+  const facilities = fallbackFacilities || row.facilities || [];
+  const rules = fallbackRules || row.rules || [];
+  const description = fallbackDescription || row.description || '';
 
-  const rawPhotoCategories = row.photo_categories || row.photoCategories || (row.metadata && (row.metadata.photo_categories || row.metadata.photoCategories)) || [];
-  const rawCategorizedPhotos = row.categorized_photos || row.categorizedPhotos || (row.metadata && (row.metadata.categorized_photos || row.metadata.categorizedPhotos)) || {};
-  const rawPhotosMeta = (row.metadata?.photos_meta || rawImages).map(getDisplayImageObject).filter(Boolean) as ImageUrlObject[];
+  const rawPhotoCategories = (!isManaged && Array.isArray(row.metadata?.self_listing_photo_categories) && row.metadata.self_listing_photo_categories.length > 0)
+    ? row.metadata.self_listing_photo_categories
+    : (row.photo_categories || row.photoCategories || (row.metadata && (row.metadata.photo_categories || row.metadata.photoCategories)) || []);
+
+  const rawCategorizedPhotos = (!isManaged && row.metadata?.self_listing_categorized_photos && Object.keys(row.metadata.self_listing_categorized_photos).length > 0)
+    ? row.metadata.self_listing_categorized_photos
+    : (row.categorized_photos || row.categorizedPhotos || (row.metadata && (row.metadata.categorized_photos || row.metadata.categorizedPhotos)) || {});
+
+  const rawPhotosMeta = (!isManaged && Array.isArray(row.metadata?.self_listing_photos_meta) && row.metadata.self_listing_photos_meta.length > 0)
+    ? (row.metadata.self_listing_photos_meta.map(getDisplayImageObject).filter(Boolean) as ImageUrlObject[])
+    : ((row.metadata?.photos_meta || rawImages).map(getDisplayImageObject).filter(Boolean) as ImageUrlObject[]);
 
   // 1. Urutkan rawImages dan rawPhotosMeta secara komprehensif (Foto Kamar Termahal di Index 0)
   const sortedRawImages = sortPropertyImagesWithRoomCover(rawImages, roomTypes, rawPhotoCategories, rawCategorizedPhotos, rawPhotosMeta);
@@ -323,9 +353,9 @@ export function transformPropertyRow(row: any): Kost {
     id: row.id,
     ownerUid: row.owner_uid,
     title: row.title || 'Tanpa Nama',
-    description: row.description || '',
-    price: row.price || (row.room_types && row.room_types.length > 0 ? row.room_types[0].price : 0),
-    facilities: row.facilities || [],
+    description: description,
+    price: row.price || (roomTypes.length > 0 ? roomTypes[0].price : 0),
+    facilities: facilities,
     address: row.address || '',
     province: row.province || row.metadata?.province || '',
     city: row.city || '',
@@ -333,7 +363,7 @@ export function transformPropertyRow(row: any): Kost {
     type: row.type || 'Campur',
     status: row.status || 'published',
     isVerified: row.is_verified ?? false,
-    isManaged: row.is_managed ?? false,
+    isManaged: isManaged,
     rating: row.rating || 0,
     location: row.location || { lat: 0, lng: 0 },
     imageUrls: images,
@@ -341,9 +371,9 @@ export function transformPropertyRow(row: any): Kost {
     videoUrls: videos,
     instagramUrl: row.instagram_url || '',
     tiktokUrl: row.tiktok_url || '',
-    roomTypes: row.room_types || [],
+    roomTypes: roomTypes,
     reviews: row.reviews || [],
-    rules: row.rules || [],
+    rules: rules,
     campuses: row.campuses || [],
     publicFacilities: row.public_facilities || [],
     virtualTourUrl: row.virtual_tour_url || '',
