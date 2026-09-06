@@ -2,6 +2,34 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 382. Resolusi Kartu Duplikat Pesanan Pendataan KostManager & Deduplikasi Multi-Layer (`adminService.ts`, `AgentDashboard.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna melaporkan bahwa saat pesanan pendataan KostManager ditugaskan kepada surveyor oleh Admin, muncul **dua kartu yang sama persis (duplikat)** untuk satu pesanan di tab **Permintaan** pada Dashboard Agen.
+  2. **Akar Masalah**:
+     - Pada fungsi `getAdminSurveyRequests()` di `functions/public/adminService.ts`, query join `request:kostmanager_request_id (...)` sebelumnya tidak memilih kolom `transaction_id`.
+     - Akibatnya, `ks.request?.transaction_id` bernilai `undefined`, sehingga Set ID transaksi KostManager `kmTxIds` menjadi kosong (`Set([])`).
+     - Filter `!kmTxIds.has(s.transaction_id)` gagal menyaring salinan data pendataan dari tabel `survey_requests` (yang dibuat untuk sinkronisasi kompatibilitas).
+     - Penggabungan array akhirnya menyatukan record dari `survey_requests` dan `kostmanager_surveys` ke dalam satu daftar tugas di Dashboard Agen.
+- **Implementasi Solusi**:
+  1. **Koreksi Pemetaan Query `transaction_id` di `adminService.ts`**:
+     - Menambahkan `transaction_id` secara eksplisit pada sub-query select `request:kostmanager_request_id` dan `kostmanager_requests`.
+     - Mengekstrak `transaction_id` dengan fallback komprehensif: `ks.request?.transaction_id || ks.request?.transaction?.id || ks.transaction_id || null`.
+  2. **Deduplikasi Multi-Layer yang Tangguh di `getAdminSurveyRequests`**:
+     - Mengumpulkan seluruh identifier dari `mappedKmSurveys`: `kmTxIds` (ID transaksi), `kmDeterministicSurveyIds` (`generateDeterministicUuid(trxId, 999)`), dan `kmReqIds` (ID request/survei).
+     - Menyaring dan membuang record duplikat dari `survey_requests` jika transaksi atau ID terkait sudah dicakup oleh KostManager.
+     - Menerapkan *final deduplication pass* pada `allSurveys` untuk memastikan tidak ada `id` atau `transaction_id` yang terduplikasi sebelum dikembalikan ke front-end.
+  3. **Sinkronisasi Multi-Tabel pada `updateSurveyRequest`**:
+     - Memastikan aksi konfirmasi (*Terima*) maupun penolakan (*Tolak*) tugas oleh surveyor memperbarui ketiga tabel (`kostmanager_requests`, `kostmanager_surveys`, dan `survey_requests`) secara serempak dan konsisten.
+  4. **Proteksi In-Memory Defensive Deduplication di `AgentDashboard.tsx`**:
+     - Menambahkan deduplikasi unik berbasis `req.id` dan `req.transaction_id` pada fungsi `renderTasks()` dan indikator badge tab sebagai lapisan proteksi tambahan dari kartu ganda.
+- **File Tersentuh**:
+  - `functions/public/adminService.ts`
+  - `functions/public/pages/AgentDashboard.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi build frontend Vite (`cmd /c npm run build` di `functions/public`) lulus 100% (`✓ 2511 modules transformed, built in 40.63s`, 0 error).
+
 ### 381. Isolasi Penugasan Survei & KostManager Eksklusif Berdasarkan ID Agen (`adminService.ts`) (September 2026)
 - **Permintaan & Masalah**:
   1. Pada query `getAdminSurveyRequests()` di `functions/public/adminService.ts`, saat pengguna login sebagai peran `survey_agent`, query masih menggunakan filter `.or('assigned_agent_id.eq.${user.id},assigned_agent_id.is.null,status.eq.PENDING_ASSIGNMENT')`.

@@ -5031,7 +5031,22 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
     );
 
     const renderTasks = () => {
-        const filteredRequests = surveyRequests.filter(req => {
+        // Defensive deduplication to ensure unique cards per task/transaction
+        const seenIds = new Set<string>();
+        const seenTx = new Set<string>();
+        const uniqueSurveyRequests: SurveyRequest[] = [];
+
+        for (const req of (surveyRequests || [])) {
+            if (!req || !req.id) continue;
+            if (seenIds.has(req.id)) continue;
+            if (req.transaction_id && seenTx.has(req.transaction_id)) continue;
+
+            seenIds.add(req.id);
+            if (req.transaction_id) seenTx.add(req.transaction_id);
+            uniqueSurveyRequests.push(req);
+        }
+
+        const filteredRequests = uniqueSurveyRequests.filter(req => {
             if (agentTab === 'pending') return ['PENDING_ASSIGNMENT', 'AGENT_ASSIGNED'].includes(req.status);
             if (agentTab === 'active') return ['HEADING_TO_LOCATION', 'SURVEYING', 'RESCHEDULED', 'SUBMITTED', 'REVISION_REQUIRED', 'NEED_REVISION'].includes(req.status) && !['COMPLETED', 'APPROVED', 'ACTIVE', 'CANCELLED'].includes(req.status);
             if (agentTab === 'history') return ['COMPLETED', 'CANCELLED', 'APPROVED', 'ACTIVE'].includes(req.status);
@@ -5057,7 +5072,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                         >
                             <span>{t.icon}</span>
                             {t.label}
-                            {surveyRequests.filter(r => {
+                            {uniqueSurveyRequests.filter(r => {
                                 if (t.id === 'pending') return ['PENDING_ASSIGNMENT', 'AGENT_ASSIGNED'].includes(r.status);
                                 if (t.id === 'active') return ['HEADING_TO_LOCATION', 'SURVEYING', 'RESCHEDULED', 'SUBMITTED', 'REVISION_REQUIRED', 'NEED_REVISION'].includes(r.status) && !['COMPLETED', 'APPROVED', 'ACTIVE', 'CANCELLED'].includes(r.status);
                                 if (t.id === 'history') return ['COMPLETED', 'CANCELLED', 'APPROVED', 'ACTIVE'].includes(r.status);
