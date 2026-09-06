@@ -2,6 +2,32 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 400. Optimalisasi Deteksi Auto-Sensor Banner / Spanduk Sewa Kamar & Peningkatan Resolusi AI Vision (`detect-contact-banner/index.ts`, `autoSensorService.ts`) (September 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna menanyakan mengapa fitur auto-sensor banner terkadang tidak bekerja di dashboard agen, terutama pada foto tampak depan/fasad di mana terdapat spanduk sewa kamar ("TERIMA KOST") atau plang kontak di pagar gerbang yang tetap terbaca jelas tanpa tersensor otomatis.
+  2. Pengguna menyetujui optimalisasi fungsi auto-sensor spanduk ini agar bekerja seoptimal dan seefisien mungkin.
+- **Akar Masalah**:
+  1. **Resolusi Downscale Input AI Terlalu Rendah**: Pada foto tampak depan / sudut lebar (*wide-shot*), spanduk fisik berukuran relatif kecil (~3-5% dari kanvas). Resolusi Base64 sebelumnya dibatasi kaku ke `1024px` dengan kualitas `65%`, sehingga huruf dan angka nomor kontak menjadi pecah/buram (*pixelated*) dan gagal dibaca oleh model Gemini AI Vision.
+  2. **Kekakuan Prompt AI Edge Function**: Prompt sebelumnya menuntut digit nomor telepon yang terbaca jelas secara eksplisit dan mengabaikan spanduk sewa kamar standar lapangan ("TERIMA KOST", "DISEWAKAN", "ADA KAMAR KOSONG", "HUBUNGI:") jika digit angkanya tampak kecil di kejauhan.
+  3. **Ambang Batas Heuristik Offline Kurang Peka**: Ambang batas warna dan kontras lokal pada algoritma heuristik fallback browser belum optimal mengenali kombinasi kontras plang hijau-putih, biru-putih, atau gelap-terang di pagar.
+- **Implementasi Solusi**:
+  1. **Peningkatan Resolusi Adaptif AI Vision (`autoSensorService.ts`)**:
+     - Menerapkan penskalaan adaptif: untuk kategori rentan spanduk (*Bangunan Depan, Fasad, Pintu Masuk, Gerbang, Pagar, Lingkungan*), resolusi dinaikkan ke `1600px` dengan kualitas `82%` pada `processPhotoWithAutoSensor` dan `processImageUrlWithAutoSensor`.
+     - Kategori non-spanduk tetap menggunakan resolusi ringan `1024px` (kualitas `65%`) untuk menghemat bandwidth.
+  2. **Penyempurnaan Prompt Gemini AI Vision (`detect-contact-banner/index.ts`)**:
+     - Menginstruksikan AI Vision untuk mendeteksi spanduk sewa, papan nama, plang, stiker sewa kost ("TERIMA KOST", "DISEWAKAN", "KOST PUTRA/PUTRI", "HUBUNGI:", dll.) baik ukuran besar maupun spanduk berukuran kecil di pagar/pilar gerbang.
+     - Mempertahankan aturan *ultra-tight bounding box* agar sensor menempel ketat di 4 sudut spanduk tanpa memblokir seluruh gerbang atau pagar.
+  3. **Penguatan Algoritma Heuristik Client-Side (`autoSensorService.ts`)**:
+     - Memperluas deteksi warna spanduk khas (*isBannerColor*) untuk mencakup plang hijau jenuh, merah, biru, serta plang putih berkontras tinggi dengan teks gelap atau plang gelap dengan teks terang.
+     - Menurunkan ambang batas sel energi kontras lokal agar lebih peka terhadap teks berbaris pada plang.
+- **File Tersentuh**:
+  - `supabase/functions/detect-contact-banner/index.ts`
+  - `functions/public/autoSensorService.ts`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi build frontend Vite (`npm.cmd run build` di `functions/public`) lulus 100% (2512 modul tertransformasi, `✓ built in 52.57s`, 0 error).
+
 ### 399. Perbaikan Pemulihan Draf Foto Survei KostManager & Isolasi Storage Antara KostManager dan Listing Mitra (`AgentDashboard.tsx`, `adminService.ts`) (September 2026)
 - **Permintaan & Masalah**:
   1. Pengguna melaporkan bahwa saat form pendataan KostManager (*ONBOARDING KOST - Survey Field App*) ditutup atau localhost sempat mati/refresh, seluruh foto yang sebelumnya telah diunggah oleh surveyor hilang dan kembali menampilkan `0 FOTO` (misal: *Bangunan Depan: 0 FOTO, Koridor: 0 FOTO, Lingkungan: 0 FOTO*), sehingga surveyor terpaksa mengunggah ulang dari awal padahal sistem sudah memiliki fitur draf berbasis database.

@@ -285,11 +285,14 @@ export function detectBannerRegionsClientSide(
                         const minC = Math.min(red, green, blue);
                         const sat = maxC > 0 ? (maxC - minC) / maxC : 0;
 
-                        // Ciri khas spanduk sewa/nomor HP:
-                        // 1. Spanduk kuning/oranye/merah
-                        // 2. Teks putih di atas spanduk hijau/biru/merah pekat
-                        // 3. Spanduk putih bersih dengan tulisan hitam/merah
-                        const isBannerColor = (sat > 0.35 && lum > 45) || (lum > 175 && (maxLum - minLum > 60));
+                        // Ciri khas spanduk sewa/nomor HP/papan nama kost:
+                        // 1. Spanduk hijau, merah, biru, oranye, atau kuning pekat (satuan saturasi tinggi)
+                        // 2. Plang putih bersih dengan teks gelap kontras tinggi
+                        // 3. Plang/spanduk gelap dengan teks terang
+                        const isBannerColor = 
+                            (sat > 0.28 && lum > 35 && lum < 225) ||
+                            (lum > 160 && (maxLum - minLum > 50)) ||
+                            (lum < 70 && (maxLum - minLum > 55));
                         if (isBannerColor) bannerColorPixels++;
                         totalPixels++;
                     }
@@ -298,9 +301,9 @@ export function detectBannerRegionsClientSide(
                 const lumDiff = maxLum - minLum;
                 // Skor energi: kontras lokal + proporsi warna spanduk
                 let cellEnergy = 0;
-                if (lumDiff > 70) cellEnergy += 1;
-                if (lumDiff > 110) cellEnergy += 1.5;
-                if ((bannerColorPixels / Math.max(1, totalPixels)) > 0.35) cellEnergy += 1;
+                if (lumDiff > 55) cellEnergy += 1;
+                if (lumDiff > 95) cellEnergy += 1.5;
+                if ((bannerColorPixels / Math.max(1, totalPixels)) > 0.28) cellEnergy += 1.2;
 
                 energyGrid[r][c] = cellEnergy;
             }
@@ -524,7 +527,10 @@ export async function processPhotoWithAutoSensor(
                         let boxesToApply: Array<{ x: number; y: number; width: number; height: number }> = [];
 
                         try {
-                            const lowResBase64 = await createLowResBase64ForAi(file, 1024, 0.65);
+                            // Gunakan resolusi 1600px (kualitas 0.82) untuk kategori rentan banner agar detail teks spanduk/plang kecil di kejauhan tajam terbaca AI
+                            const targetDim = shouldCheckBanner ? 1600 : 1024;
+                            const targetQuality = shouldCheckBanner ? 0.82 : 0.65;
+                            const lowResBase64 = await createLowResBase64ForAi(file, targetDim, targetQuality);
                             if (lowResBase64) {
                                 const aiResult = await detectPhotoContactBanner(lowResBase64, 'image/jpeg');
                                 if (aiResult.hasContact && aiResult.boxes && aiResult.boxes.length > 0) {
@@ -634,7 +640,10 @@ export async function processImageUrlWithAutoSensor(
                 if (boxesToApply.length === 0) {
                     // Pindai dengan AI jika tidak ada koordinat eksplisit
                     try {
-                        const lowResBase64 = await createLowResBase64ForAi(imageUrl, 1024, 0.65);
+                        const needAiScan = isBannerProneCategory(category);
+                        const targetDim = needAiScan ? 1600 : 1024;
+                        const targetQuality = needAiScan ? 0.82 : 0.65;
+                        const lowResBase64 = await createLowResBase64ForAi(imageUrl, targetDim, targetQuality);
                         if (lowResBase64) {
                             const aiResult = await detectPhotoContactBanner(lowResBase64, 'image/jpeg');
                             if (aiResult.hasContact && aiResult.boxes && aiResult.boxes.length > 0) {

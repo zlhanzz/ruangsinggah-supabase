@@ -37,30 +37,35 @@ serve(async (req) => {
     let contentsParts: any[] = [];
 
     const prompt = `
-Anda adalah AI vision inspeksi foto properti sewa khusus untuk platform RuangSinggah.id.
-Tugas Anda adalah mendeteksi secara SANGAT PRESISI (ULTRA-TIGHT BOUNDING BOX) objek:
-1. SPANDUK / BANNER / LEMBARAN KAIN / KERTAS yang memuat penawaran sewa kamar dan informasi kontak langsung (nomor HP/WhatsApp, kata "TERIMA KOST", "DISEWAKAN", "Hubungi", "Hub", "Telp", "WA", "CP", nomor telepon 08xx / +62xx).
-2. TEKS NOMOR TELEPON atau kontak langsung yang sengaja dipasang untuk transaksi di luar platform.
+Anda adalah AI vision inspeksi foto properti sewa kamar khusus untuk platform RuangSinggah.id.
+Tugas utama Anda adalah mendeteksi secara SANGAT AKURAT dan PRESISI (ULTRA-TIGHT BOUNDING BOX) objek:
+1. SPANDUK / BANNER / PAPAN NAMA / PLANG / LEMBARAN KAIN / KERTAS / STIKER yang memuat penawaran sewa kamar atau informasi kontak, seperti:
+   - Tulisan "TERIMA KOST", "TERIMA KOS", "DISEWAKAN", "MENERIMA KOST", "KOST PUTRA", "KOST PUTRI", "KOST KARYAWAN", "KOST CAMPUR", "ADA KAMAR KOSONG", "KAMAR DISEWAKAN".
+   - Tulisan instruksi kontak seperti "Hubungi:", "Hub:", "Telp:", "WA:", "CP:", "Informasi:".
+   - Nomor telepon genggam atau telepon rumah (format 08xx, +62xx, atau deretan angka kontak).
+   - Catatan: Deteksi objek ini BAIK YANG BERUKURAN BESAR MAUPUN BERUKURAN KECIL yang terpasang di pagar, pilar gerbang, dinding depan, atau pintu masuk (misal foto wide-angle/tampak depan dari seberang jalan).
 
-ATURAN KETAT PRESISI (ULTRA-TIGHT FIT):
-1. FOKUS HANYA PADA LEMBARAN SPANDUK / TEKS KONTAK:
-   - Koordinat bounding box (skala 0 sampai 1000: ymin, xmin, ymax, xmax) HARUS MENEMPEL PAS DI 4 SUDUT TEPI KAIN/LEMBARAN SPANDUK ITU SENDIRI.
-   - ymin: Garis batas tepi paling atas dari kain/kertas spanduk.
-   - ymax: Garis batas tepi paling bawah dari kain/kertas spanduk.
-   - xmin: Garis batas tepi paling kiri dari kain/kertas spanduk.
-   - xmax: Garis batas tepi paling kanan dari kain/kertas spanduk.
+2. TEKS NOMOR TELEPON atau kontak WhatsApp langsung yang sengaja dipajang untuk transaksi di luar platform.
 
-2. LARANGAN KERAS (NEGATIVE CONSTRAINTS):
-   - DILARANG KERAS menyertakan struktur pintu gerbang, jeruji pagar besi/kayu vertikal, dinding, lantai/aspal, tanaman/pot, kanopi atap baja ringan, tiang, atau langit-langit di atas/bawah/samping spanduk.
-   - Jika spanduk berukuran kecil terpasang pada pagar/gerbang kayu (seperti spanduk kecil di bagian bawah/tengah gerbang), KOTAK HANYA BOLEH MENUTUPI KAIN SPANDUK KECIL TERSEBUT! DILARANG menandai seluruh tinggi pintu gerbang atau atap di atasnya.
-   - JANGAN tandai tulisan nama gedung/kost permanen di dinding semen JIKA TIDAK MEMUAT nomor telepon kontak.
+ATURAN KETAT PRESISI BOUNDING BOX (ULTRA-TIGHT FIT):
+1. FOKUS HANYA PADA LEMBARAN SPANDUK / PAPAN PLANG ITU SENDIRI:
+   - Koordinat bounding box (skala 0 sampai 1000: ymin, xmin, ymax, xmax) HARUS MENEMPEL PAS DI 4 SUDUT TEPI KAIN/PAPAN/LEMBARAN SPANDUK ITU SENDIRI.
+   - ymin: Garis batas tepi paling atas dari spanduk/plang.
+   - ymax: Garis batas tepi paling bawah dari spanduk/plang.
+   - xmin: Garis batas tepi paling kiri dari spanduk/plang.
+   - xmax: Garis batas tepi paling kanan dari spanduk/plang.
 
-3. Jika foto bersih dari spanduk kontak atau nomor telepon, kembalikan "has_contact": false dan "boxes": [].
+2. NEGATIVE CONSTRAINTS (HINDARI OVER-BLUR):
+   - DILARANG menyertakan seluruh struktur pintu gerbang, jeruji pagar besi/kayu vertikal, dinding rumah besar, lantai/aspal, tanaman/pot, kanopi atap, atau langit-langit.
+   - Jika spanduk berukuran kecil terpasang pada pagar/gerbang kayu/besi (seperti plang kecil di pagar atau dinding pilar), KOTAK HANYA BOLEH MENUTUPI SPANDUK KECIL TERSEBUT! DILARANG menandai seluruh pagar atau pintu gerbang.
+   - JANGAN tandai plang nama instansi/kantor atau nomor alamat rumah permanen yang TIDAK MEMUAT penawaran sewa/nomor kontak.
 
-FORMAT OUTPUT (JSON SAJA, TANPA BACKTICKS):
+3. Jika foto bersih dari spanduk penawaran kost atau nomor kontak, kembalikan "has_contact": false dan "boxes": [].
+
+FORMAT OUTPUT (JSON MURNI SAJA, TANPA BACKTICKS/MARKDOWN):
 {
   "has_contact": true / false,
-  "detected_texts": ["daftar teks kontak atau tulisan spanduk"],
+  "detected_texts": ["daftar teks kontak atau tulisan spanduk yang terbaca"],
   "boxes": [
     {
       "ymin": 0-1000,
