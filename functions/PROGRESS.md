@@ -2,6 +2,35 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 398. Perbaikan Sinkronisasi Uncheck Fasilitas Induk, Pembersihan Sub-Fasilitas & Kategori Upload Foto Form Pendataan KostManager (`AgentDashboard.tsx`, `KostManagerPropertyFormModal.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna melaporkan bahwa saat fasilitas induk (seperti **WC Umum**) di-uncheck (dihapus centangnya) pada form pendataan KostManager, sub-fasilitas di dalamnya tidak ikut ter-uncheck dan kategori upload foto untuk sub-fasilitas tersebut (*KLOSET DUDUK*, *SHOWER*) masih tetap muncul di daftar upload foto area properti.
+  2. Saat fasilitas induk **WC Umum** dicentang kembali, kotak centang sub-fasilitas di dalamnya langsung tercentang otomatis membawa pilihan lama, alih-alih dimulai dari pilihan bersih.
+- **Akar Masalah**:
+  1. **Ketiadaan Reset Sub-State saat Uncheck Induk**: Pada handler `onChange` checkbox fasilitas di `AgentDashboard.tsx` dan `KostManagerPropertyFormModal.tsx`, ketika `hasIt` bernilai `true` (user melakukan uncheck), sistem hanya memfilter string fasilitas induk dari `facilities`, namun tidak mengosongkan state array sub-fasilitas (`publicBathroomFacilities: []`, `publicKitchenFacilities: []`, `publicParkingFacilities: []`) serta tidak membersihkan sinonim sub-fasilitas dari `facilities`.
+  2. **Filter `manualExtras` Menahan Sub-Fasilitas sebagai Kategori Kustom**: Pada `useEffect` sinkronisasi kategori foto dinamis (`photoCategories`), logika `manualExtras` hanya mengecualikan nama fasilitas induk (belum mengecualikan sub-fasilitas seperti `Kloset Duduk`, `Shower`, `Kompor`, `Kulkas`, `Parkir Motor`, dll.). Akibatnya, saat fasilitas induk di-uncheck, sistem keliru menganggap `Kloset Duduk` dan `Shower` sebagai kategori foto kustom manual buatan surveyor dan memasukkannya kembali ke daftar kategori foto.
+- **Implementasi Solusi**:
+  1. **Pembersihan Menyeluruh Sub-Fasilitas saat Uncheck Induk**:
+     - Memperluas kamus `synonyms` pada checkbox handler di `AgentDashboard.tsx` dan `KostManagerPropertyFormModal.tsx`.
+     - Saat **WC Umum** di-uncheck $\rightarrow$ `publicBathroomFacilities` di-reset ke `[]` dan seluruh sinonim sub-WC (`kloset duduk`, `kloset jongkok`, `shower`, `wastafel wc`, dll.) dibersihkan dari `facilities`.
+     - Saat **Dapur Bersama** di-uncheck $\rightarrow$ `publicKitchenFacilities` di-reset ke `[]` dan seluruh sinonim sub-dapur (`kompor`, `kulkas`, `dispenser`, `wastafel cuci piring`, dll.) dibersihkan dari `facilities`.
+     - Saat **Area Parkir** di-uncheck $\rightarrow$ `publicParkingFacilities` di-reset ke `[]` dan seluruh sinonim sub-parkir (`parkir motor`, `parkir mobil`, `parkir sepeda`, dll.) dibersihkan dari `facilities`.
+  2. **Inisialisasi Bersih saat Fasilitas Induk Dicentang**:
+     - Saat dicentang kembali dari kondisi uncheck:
+       - `Area Parkir` $\rightarrow$ default `['Parkir Motor']`.
+       - `Dapur Bersama` $\rightarrow$ default `['Kompor', 'Wastafel Cuci Piring']`.
+       - `WC Umum` $\rightarrow$ default `['Kloset Duduk', 'Shower']`.
+  3. **Penyempurnaan Filter `manualExtras` & Sinkronisasi Kategori Foto Dinamis**:
+     - Mendefinisikan `SYSTEM_MANAGED_PHOTO_CATEGORIES` yang mencakup seluruh fasilitas induk dan sub-fasilitas standar sistem.
+     - Memastikan `manualExtras` pada `useEffect` dan `openKostManagerListing` hanya mempertahankan kategori foto yang murni ditambahkan secara manual oleh pengguna (melalui tombol *"+ Kategori Area"*), sehingga kartu upload foto sub-fasilitas yang telah di-uncheck seketika hilang dari tampilan UI.
+- **File Tersentuh**:
+  - `functions/public/pages/AgentDashboard.tsx`
+  - `functions/public/components/admin/KostManagerPropertyFormModal.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi build frontend Vite (`npm run build` di `functions/public`) lulus 100% (2512 modul tertransformasi, `✓ built in 41.27s`, 0 error).
+
 ### 397. Penyempurnaan Kloning Fasilitas Listing Mitra & Fitur Kamar ke Formulir Pendataan KostManager (`AgentDashboard.tsx`) (September 2026)
 - **Permintaan & Masalah**:
   1. Pengguna melaporkan bahwa saat agen survei membuka formulir pendataan KostManager (*Onboarding Kost - Survey Field App*), beberapa fasilitas yang sebelumnya terdaftar saat masih menjadi listing mitra biasa tidak terkloning dengan lengkap ke data awal pendataan KostManager.

@@ -1,4 +1,4 @@
-# WALKTHROUGH - Isolasi Mutlak Data KostManager & Self-Listing Mitra serta Proteksi Permanen Foto Properti Asli
+# WALKTHROUGH - Perbaikan Sinkronisasi Uncheck Fasilitas Induk, Pembersihan Sub-Fasilitas & Kategori Foto Pendataan KostManager
 
 **Tanggal**: September 2026  
 **Status**: Selesai & Lulus Verifikasi Build (`0 Error`)  
@@ -8,16 +8,25 @@
 
 ## 📌 Ringkasan Masalah & Permintaan Pengguna
 
-Pengguna melaporkan bahwa ketika survei KostManager sedang dikerjakan atau diubah oleh agen survei, listing kost mitra reguler (*Self-Listing*) di Dashboard Mitra ikut terganggu:
-1. Foto properti di langkah 5 "Edit Listing" pada akun Mitra menjadi kosong (*"0 Foto Terpilih"*).
-2. Thumbnail kartu properti pada Dashboard Mitra kehilangan foto cover.
-3. Pengguna meminta keputusan arsitektural yang tegas: data KostManager dan Self-Listing Mitra wajib terpisah secara fisik dan tidak boleh saling menimpa, sehingga ketika langganan KostManager tidak diperpanjang, properti dapat secara otomatis kembali menjadi listing biasa dengan seluruh data foto dan kamar asli yang tetap utuh.
+Pengguna melaporkan bahwa saat fasilitas induk (seperti **WC Umum**) di-uncheck (dihapus centangnya) pada form pendataan KostManager:
+1. Sub-fasilitas di dalamnya tidak ikut ter-uncheck dan kategori upload foto untuk sub-fasilitas tersebut (*KLOSET DUDUK*, *SHOWER*) masih tetap muncul di daftar upload foto area properti.
+2. Saat fasilitas induk **WC Umum** dicentang kembali, kotak centang sub-fasilitas di dalamnya langsung tercentang otomatis membawa pilihan lama, alih-alih dimulai dari pilihan bersih.
 
 ---
 
-## 🔍 Akar Masalah Teknis
+## 🔍 Rincian Perbaikan
 
-1. **Mutasi Prematur Tabel `properties` saat Draf Survei Disimpan**:
+1. **Pembersihan Menyeluruh Sub-Fasilitas saat Uncheck Induk**:
+   - Menambahkan reset array `publicBathroomFacilities: []`, `publicKitchenFacilities: []`, dan `publicParkingFacilities: []` seketika saat fasilitas induk di-uncheck.
+   - Membersihkan seluruh sinonim sub-fasilitas dari `facilities`.
+
+2. **Inisialisasi Bersih & Default Standar saat Dicentang Kembali**:
+   - `Area Parkir` $\rightarrow$ `['Parkir Motor']`.
+   - `Dapur Bersama` $\rightarrow$ `['Kompor', 'Wastafel Cuci Piring']`.
+   - `WC Umum` $\rightarrow$ `['Kloset Duduk', 'Shower']`.
+
+3. **Penyempurnaan Sinkronisasi Kategori Upload Foto Dinamis**:
+   - Kategori upload foto sub-fasilitas yang dikelola sistem otomatis disembunyikan seketika saat fasilitas induk di-uncheck dan tidak tertahan lagi oleh filter `manualExtras`.
    - Fungsi `handleSaveDraftDirectly` di `AgentDashboard.tsx` sebelumnya melakukan pembaruan langsung ke tabel `properties` dengan array foto survei `[]` (yang masih kosong di awal survei). Ini menimpa kolom `image_urls` asli milik mitra.
 2. **Ketiadaan Fallback Cadangan pada `getOwnerProperties` & `KostFormMitra`**:
    - `getOwnerProperties` dan state inisialisasi form di `KostFormMitra.tsx` tidak membaca cadangan `metadata.self_listing_images` dan `metadata.self_listing_photos_meta`. Akibatnya, saat kolom utama `image_urls` kosong, Dashboard Mitra dan modal Edit Listing menampilkan 0 foto.

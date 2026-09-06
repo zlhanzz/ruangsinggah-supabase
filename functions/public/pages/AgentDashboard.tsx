@@ -1877,8 +1877,21 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                 kmListingForm.publicKitchenFacilities || [],
                 kmListingForm.publicBathroomFacilities || []
             );
+
+            const SYSTEM_MANAGED_PHOTO_CATEGORIES = [
+                'Bangunan Depan', 'Koridor', 'Lingkungan',
+                'Area Parkir', 'Parkiran', 'Parkir Motor', 'Parkir Mobil', 'Parkir Sepeda',
+                'Dapur Bersama', 'Dapur', 'Kompor', 'Kulkas', 'Dispenser', 'Wastafel Cuci Piring', 'Peralatan Masak', 'Meja Makan',
+                'WC Umum', 'Toilet Umum', 'Kamar Mandi Luar', 'Kloset Duduk', 'Kloset Jongkok', 'Shower', 'Wastafel', 'Bak Mandi', 'Water Heater',
+                'Ruang Tamu', 'CCTV', 'Laundry', 'Mushola', 'Area Jemuran', 'Security 24 Jam', 'Akses 24 Jam', 'Lift', 'Cleaning Service'
+            ].map(s => s.toLowerCase().trim());
+
             setPhotoCategories(prev => {
-                const manualExtras = prev.filter(c => !dynamicPublicCats.includes(c) && !['Bangunan Depan', 'Koridor', 'Lingkungan', 'Area Parkir', 'Parkiran', 'Dapur Bersama', 'Ruang Tamu', 'WC Umum', 'CCTV', 'Laundry'].includes(c));
+                const manualExtras = prev.filter(c => {
+                    const lc = (c || '').toLowerCase().trim();
+                    return !dynamicPublicCats.some(d => d.toLowerCase().trim() === lc) && 
+                           !SYSTEM_MANAGED_PHOTO_CATEGORIES.includes(lc);
+                });
                 return computeDynamicPublicPhotoCategories(
                     kmListingForm.facilities || [],
                     manualExtras,
@@ -2998,9 +3011,18 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                     setTemporaryRoom(parsed.temporaryRoom || null);
                     setActiveRoomIdx(parsed.activeRoomIdx !== undefined ? parsed.activeRoomIdx : null);
                     setKmActiveTab(parsed.kmActiveTab || 'info');
+                    const SYSTEM_MANAGED_CATS = [
+                        'Bangunan Depan', 'Koridor', 'Lingkungan',
+                        'Area Parkir', 'Parkiran', 'Parkir Motor', 'Parkir Mobil', 'Parkir Sepeda',
+                        'Dapur Bersama', 'Dapur', 'Kompor', 'Kulkas', 'Dispenser', 'Wastafel Cuci Piring', 'Peralatan Masak', 'Meja Makan',
+                        'WC Umum', 'Toilet Umum', 'Kamar Mandi Luar', 'Kloset Duduk', 'Kloset Jongkok', 'Shower', 'Wastafel', 'Bak Mandi', 'Water Heater',
+                        'Ruang Tamu', 'CCTV', 'Laundry', 'Mushola', 'Area Jemuran', 'Security 24 Jam', 'Akses 24 Jam', 'Lift', 'Cleaning Service'
+                    ].map(s => s.toLowerCase().trim());
+                    const extraManualDraftCats = (draftPhotoCats || []).filter((c: string) => !SYSTEM_MANAGED_CATS.includes((c || '').toLowerCase().trim()));
+
                     const dynamicDraftCats = computeDynamicPublicPhotoCategories(
                         mergedForm.facilities || ['WiFi', 'Area Parkir'],
-                        draftPhotoCats,
+                        extraManualDraftCats,
                         mergedForm.publicParkingFacilities || [],
                         mergedForm.publicKitchenFacilities || [],
                         mergedForm.publicBathroomFacilities || []
@@ -8160,13 +8182,29 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                                                                               const current = kmListingForm.facilities || [];
                                                                               const hasIt = checkHasFacility(current, fac);
                                                                               let updated;
+                                                                              let additionalFormUpdates: any = {};
+
                                                                               if (hasIt) {
                                                                                   const normalizedTarget = fac.toLowerCase().trim();
                                                                                   const synonyms: Record<string, string[]> = {
                                                                                       'wifi': ['wifi', 'wi-fi', 'internet'],
-                                                                                      'dapur bersama': ['dapur', 'dapur bersama', 'dapur umum'],
-                                                                                      'area parkir': ['parkir', 'parkiran', 'tempat parkir', 'area parkir', 'parkir motor', 'parkir mobil', 'parkir sepeda'],
-                                                                                      'wc umum': ['wc umum', 'toilet umum', 'kamar mandi luar', 'wc luar'],
+                                                                                      'dapur bersama': [
+                                                                                          'dapur', 'dapur bersama', 'dapur umum', 'kompor', 'kompor gas', 'gas',
+                                                                                          'kulkas', 'kulkas bersama', 'kulkas umum', 'lemari es', 'dispenser', 'dispenser air',
+                                                                                          'air minum', 'galon', 'wastafel cuci piring', 'wastafel dapur', 'cuci piring', 'sink',
+                                                                                          'sink cuci piring', 'peralatan masak', 'alat masak', 'kitchen set', 'meja makan',
+                                                                                          'meja makan bersama', 'ruang makan'
+                                                                                      ],
+                                                                                      'area parkir': [
+                                                                                          'parkir', 'parkiran', 'tempat parkir', 'area parkir', 'parkir motor', 'parkir mobil',
+                                                                                          'parkir sepeda', 'motor', 'mobil', 'sepeda', 'garasi mobil', 'carport'
+                                                                                      ],
+                                                                                      'wc umum': [
+                                                                                          'wc umum', 'toilet umum', 'kamar mandi luar', 'wc luar', 'kamar mandi umum',
+                                                                                          'kloset duduk', 'closet duduk', 'toilet duduk', 'kloset jongkok', 'closet jongkok',
+                                                                                          'toilet jongkok', 'shower', 'shower mandi', 'wastafel', 'wastafel wc', 'wastafel cuci tangan',
+                                                                                          'water heater', 'pemanas air', 'bak mandi', 'ember & gayung', 'gayung'
+                                                                                      ],
                                                                                       'ruang tamu': ['ruang tamu', 'ruang santai'],
                                                                                       'cctv': ['cctv', 'kamera keamanan'],
                                                                                       'laundry': ['laundry', 'mesin cuci', 'cuci'],
@@ -8182,13 +8220,23 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                                                                                       const nf = (f || '').toLowerCase().trim();
                                                                                       return !targetSyns.some(syn => nf === syn || nf.includes(syn) || syn.includes(nf));
                                                                                   });
+
+                                                                                  if (fac === 'Area Parkir') {
+                                                                                      additionalFormUpdates.publicParkingFacilities = [];
+                                                                                  } else if (fac === 'Dapur Bersama') {
+                                                                                      additionalFormUpdates.publicKitchenFacilities = [];
+                                                                                  } else if (fac === 'WC Umum') {
+                                                                                      additionalFormUpdates.publicBathroomFacilities = [];
+                                                                                  }
                                                                               } else {
                                                                                   updated = [...current, fac];
-                                                                              }
-                                                                              
-                                                                              let additionalFormUpdates: any = {};
-                                                                              if (fac === 'Area Parkir' && !hasIt && (!kmListingForm.publicParkingFacilities || kmListingForm.publicParkingFacilities.length === 0)) {
-                                                                                  additionalFormUpdates.publicParkingFacilities = ['Parkir Motor'];
+                                                                                  if (fac === 'Area Parkir' && (!kmListingForm.publicParkingFacilities || kmListingForm.publicParkingFacilities.length === 0)) {
+                                                                                      additionalFormUpdates.publicParkingFacilities = ['Parkir Motor'];
+                                                                                  } else if (fac === 'Dapur Bersama' && (!kmListingForm.publicKitchenFacilities || kmListingForm.publicKitchenFacilities.length === 0)) {
+                                                                                      additionalFormUpdates.publicKitchenFacilities = ['Kompor', 'Wastafel Cuci Piring'];
+                                                                                  } else if (fac === 'WC Umum' && (!kmListingForm.publicBathroomFacilities || kmListingForm.publicBathroomFacilities.length === 0)) {
+                                                                                      additionalFormUpdates.publicBathroomFacilities = ['Kloset Duduk', 'Shower'];
+                                                                                  }
                                                                               }
 
                                                                               setKmListingForm({ ...kmListingForm, facilities: updated, ...additionalFormUpdates });
