@@ -34,6 +34,7 @@ import {
     processPhotoWithAutoSensor,
     processImageUrlWithAutoSensor
 } from '../autoSensorService';
+import { PhotoSensorModal } from '../components/common/PhotoSensorModal';
 import { 
     findNearbyCuratedLandmarks, 
     calculateHaversineDistance,
@@ -1009,30 +1010,50 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
     const [isSearchingFacility, setIsSearchingFacility] = useState<Record<string, boolean>>({});
     const [reScanningPhotoUrl, setReScanningPhotoUrl] = useState<string | null>(null);
     const [kmBannerNotice, setKmBannerNotice] = useState<string | null>(null);
+    const [sensorModalData, setSensorModalData] = useState<{
+        isOpen: boolean;
+        imageUrl: string;
+        category: string;
+        photoIndex: number;
+        roomIndex?: number;
+        roomPhotoIndex?: number;
+    } | null>(null);
+
+    const handleOpenSensorModal = (photoIndex: number, currentUrl: string, category: string, roomIndex?: number, roomPhotoIndex?: number) => {
+        setSensorModalData({
+            isOpen: true,
+            imageUrl: currentUrl,
+            category,
+            photoIndex,
+            roomIndex,
+            roomPhotoIndex
+        });
+    };
+
+    const handleApplySensorModal = async (newUrl: string) => {
+        if (!sensorModalData) return;
+        const { photoIndex, category, roomIndex, roomPhotoIndex } = sensorModalData;
+
+        if (roomIndex !== undefined && roomPhotoIndex !== undefined) {
+            const updatedRooms = [...(kmListingForm.room_types || [])];
+            if (updatedRooms[roomIndex]) {
+                const rImages = [...(updatedRooms[roomIndex].image_urls || [])];
+                rImages[roomPhotoIndex] = newUrl;
+                updatedRooms[roomIndex].image_urls = rImages;
+                setKmListingForm((prev: any) => ({ ...prev, room_types: updatedRooms }));
+            }
+        } else {
+            const updatedImages = [...(kmListingForm.image_urls || [])];
+            updatedImages[photoIndex] = newUrl;
+            setKmListingForm((prev: any) => ({ ...prev, image_urls: updatedImages }));
+        }
+
+        setKmBannerNotice(`✅ Area spanduk / kontak pada foto "${category}" berhasil disensor & diperbarui!`);
+        setTimeout(() => setKmBannerNotice(null), 6000);
+    };
 
     const handleReScanPublicPhoto = async (photoIndex: number, currentUrl: string, category: string) => {
-        try {
-            setReScanningPhotoUrl(currentUrl);
-            setKmBannerNotice(`Sedang memindai dan memproses banner untuk kategori "${category}"...`);
-            const processedUrl = await processImageUrlWithAutoSensor(currentUrl, category, (file, path) => uploadFileAndGetURL(file, path));
-            if (processedUrl && processedUrl !== currentUrl) {
-                const updatedImages = [...(kmListingForm.image_urls || [])];
-                updatedImages[photoIndex] = processedUrl;
-                setKmListingForm((prev: any) => ({
-                    ...prev,
-                    image_urls: updatedImages
-                }));
-                setKmBannerNotice(`✅ Banner/nomor kontak pada foto "${category}" berhasil disensor otomatis!`);
-            } else {
-                setKmBannerNotice(`ℹ️ Tidak ditemukan banner baru yang memerlukan sensor.`);
-            }
-        } catch (err) {
-            console.error('Failed to rescan public photo:', err);
-            setKmBannerNotice(`⚠️ Gagal memindai ulang foto: ${(err as Error).message}`);
-        } finally {
-            setReScanningPhotoUrl(null);
-            setTimeout(() => setKmBannerNotice(null), 6000);
-        }
+        handleOpenSensorModal(photoIndex, currentUrl, category);
     };
 
     const isInvalidCampus = (name: string) => {
@@ -8409,10 +8430,9 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                                                                                         {isBannerProneCategory(label) && (
                                                                                             <button
                                                                                                 type="button"
-                                                                                                disabled={isThisScanning}
-                                                                                                onClick={() => handleReScanPublicPhoto(p.idx, p.url, label)}
+                                                                                                onClick={() => handleOpenSensorModal(p.idx, p.url, label)}
                                                                                                 className="absolute top-1 left-1 bg-amber-500/90 hover:bg-amber-600 text-white rounded px-1.5 py-0.5 text-[8px] font-bold shadow-sm transition-all flex items-center gap-1 z-10"
-                                                                                                title="Sensor ulang nomor HP/banner di foto ini"
+                                                                                                title="Sensor ulang / gambar kotak sensor manual di foto ini"
                                                                                             >
                                                                                                 <ShieldAlert className="w-2.5 h-2.5" />
                                                                                                 <span>Sensor Ulang</span>
@@ -8440,7 +8460,12 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                                                                                                 const newUrls = [];
                                                                                                 for (let f = 0; f < files.length; f++) {
                                                                                                     const folder = `kostmanager/public/${Date.now()}_${f}`;
-                                                                                                    const processedFile = await processPhotoWithAutoSensor(files[f], label);
+                                                                                                    const processedFile = await processPhotoWithAutoSensor(files[f], label, (detectedInfo) => {
+                                                                                                        if (detectedInfo && detectedInfo.detectedCount > 0) {
+                                                                                                            setKmBannerNotice(`🛡️ Auto-Sensor AI mendeteksi & menyensor ${detectedInfo.detectedCount} area kontak pada foto "${label}".`);
+                                                                                                            setTimeout(() => setKmBannerNotice(null), 8000);
+                                                                                                        }
+                                                                                                    });
                                                                                                     const publicUrl = await uploadFileAndGetURL(processedFile, folder);
                                                                                                     newUrls.push(publicUrl);
                                                                                                 }
@@ -10672,6 +10697,18 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                         </button>
                     </div>
                 </div>
+            )}
+
+            {/* Modal Editor Sensor Foto Interaktif */}
+            {sensorModalData && sensorModalData.isOpen && (
+                <PhotoSensorModal
+                    isOpen={sensorModalData.isOpen}
+                    imageUrl={sensorModalData.imageUrl}
+                    category={sensorModalData.category}
+                    onClose={() => setSensorModalData(null)}
+                    onApply={handleApplySensorModal}
+                    uploadFn={(file, path) => uploadFileAndGetURL(file, path)}
+                />
             )}
         </div>
     );

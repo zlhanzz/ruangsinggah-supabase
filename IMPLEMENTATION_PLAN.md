@@ -1,54 +1,79 @@
-# IMPLEMENTATION PLAN - Alur Penugasan Surveyor KostManager (Tab Permintaan vs Aktif)
+# IMPLEMENTATION PLAN - Perbaikan Fitur Auto Blur & Sensor Banner Foto Pendataan KostManager
 
-## Analisis Masalah
-Saat Admin menugaskan agen surveyor untuk orderan pendataan KostManager:
-1. **Penyebab Langsung Masuk ke Tab "Aktif"**:
-   - Di `adminService.ts` (`updateKostManagerRequest`), saat admin menetapkan surveyor, status di tabel `kostmanager_surveys` disetel/di-insert langsung sebagai `'SURVEYING'` (karena batasan check constraint database terdahulu).
-   - Pada fungsi `getAdminSurveyRequests()` di `adminService.ts`, pengecekan status mengevaluasi `ks.status === 'SURVEYING'` terlebih dahulu sebelum mengevaluasi status request `ks.request?.status === 'AGENT_ASSIGNED'`. Akibatnya, `computedStatus` selalu menjadi `'SURVEYING'`.
-   - Di `AgentDashboard.tsx`, item dengan status `'SURVEYING'` secara otomatis disaring masuk ke tab **"Aktif"** (dengan label button *"SEDANG SURVEY"*), melewati tab **"Permintaan"** (*"Permintaan / AGENT_ASSIGNED"*).
-2. **Kebutuhan Alur Bisnis yang Sebenarnya**:
-   - Ketika Admin menugaskan agen (baik via tabel inline maupun modal edit kelola), status pesanan harus menjadi **`AGENT_ASSIGNED`** (Tugas Baru / Menunggu Konfirmasi Agen).
-   - Di Dashboard Agen, tugas harus muncul pertama kali di tab **"Permintaan"** dengan 2 opsi tombol aksi:
-     - **Tombol "⚡ Terima & Konfirmasi Pendataan"**: Mengubah status menjadi `SURVEYING` dan memindahkan tugas ke tab **"Aktif"** untuk mulai melakukan survei lokasi.
-     - **Tombol "Tolak Tugas"**: Menghapus penugasan agen (`assigned_agent_id: null`), mengembalikan status pesanan di Admin menjadi `PENDING_ASSIGNMENT` (Menunggu Agen), dan menghapus item dari dashboard agen agar Admin dapat menugaskan surveyor lain.
+## Analisis Masalah & Kebutuhan
+Pada proses pengunggahan foto properti dan area umum di pendataan KostManager ([AgentDashboard.tsx](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/AgentDashboard.tsx) dan [KostManagerPropertyFormModal.tsx](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/components/admin/KostManagerPropertyFormModal.tsx)), fitur auto blur dan sensor banner belum bekerja dengan optimal:
+
+1. **Kelemahan Heuristik Offline `autoSensorService.ts`**:
+   - [autoSensorService.ts](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/autoSensorService.ts) saat ini hanya mengandalkan sampling kecerahan kasar (`maxLum - minLum > 130` dengan `consecutive >= 4`).
+   - Algoritma ini gagal mendeteksi spanduk dunia nyata seperti spanduk berwarna hijau-putih pada pagar/gerbang (seperti pada foto yang dilampirkan user), spanduk dengan kontras sedang, atau teks nomor HP yang terpotong oleh jeruji pagar.
+2. **Belum Terintegrasi dengan Edge Function AI Vision**:
+   - Sistem sudah memiliki Supabase Edge Function `detect-contact-banner` (berbasis Gemini Vision) dengan akurasi sangat tinggi untuk mendeteksi spanduk "TERIMA KOST", nomor WhatsApp/HP, dan papan kontak langsung, namun [autoSensorService.ts](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/autoSensorService.ts) belum memanfaatkannya secara terpadu.
+3. **Kesalahan Fallback Blind Blur pada "Sensor Ulang"**:
+   - Saat tombol "Sensor Ulang" ditekan dan algoritma heuristik lama gagal menemukan spanduk, sistem secara keliru memburamkan area langit di sepertiga atas foto (`y = height * 0.05`), bukan spanduk di pagar/gerbang/dinding.
+4. **Ketiadaan Alat Sensor Manual Interaktif**:
+   - Jika ada spanduk kecil, miring, atau tidak terdeteksi otomatis, agen surveyor tidak memiliki cara untuk menandai atau menggambar kotak sensor secara manual (*drag/touch to blur*) langsung pada foto sebelum disimpan.
 
 ---
 
 ## Dampak Perubahan
-File yang akan dimodifikasi:
-1. **`functions/public/adminService.ts`**:
-   - `getAdminSurveyRequests()`: Memprioritaskan status `AGENT_ASSIGNED` dari `ks.request?.status` di atas `SURVEYING` sehingga penugasan baru selalu terbaca sebagai `AGENT_ASSIGNED` (masuk ke tab Permintaan).
-   - `updateKostManagerRequest()`: Memastikan penugasan agen menetapkan status `AGENT_ASSIGNED` pada `kostmanager_requests`.
-   - `updateSurveyRequest()`: Menambah failsafe lookup pada `kostmanager_surveys` (bisa dicari via `id` maupun `kostmanager_request_id`) dan memastikan alur konfirmasi (menjadi `SURVEYING`) serta penolakan tugas (hapus baris survei & reset request ke `PENDING_ASSIGNMENT`).
-2. **`functions/public/components/admin/KostManagerManagement.tsx`**:
-   - Memastikan saat Admin memilih agen pada modal edit (`handleUpdateStatusAndAgent`), status request diubah menjadi `AGENT_ASSIGNED` (bukan tetap `PENDING_ASSIGNMENT`).
+File yang akan disentuh / dibuat:
+
+1. **`functions/public/autoSensorService.ts`**:
+   - Mengintegrasikan deteksi cerdas **Dual-Engine** (AI Gemini Edge Function `detect-contact-banner` sebagai prioritas utama + Multi-Pass Adaptive Edge & Energy Heuristic sebagai offline fallback).
+   - Memperbaiki rendering efek sensor: Mosaik pixelasi mikro rapat + Dark Frosted Glassmorphic Overlay + Branded Capsule Watermark `ruangsinggah.id`.
+   - Menjamin 100% kompresi gambar ke format **WebP murni** di sisi front-end (mematuhi Aturan Baku #5).
+   - Memperluas daftar kata kunci kategori foto rawan banner (`eksterior`, `pagar`, `gerbang`, `lingkungan`, `fasad`, `depan`, `akses`, `jalan`, dll.).
+
+2. **`functions/public/components/common/PhotoSensorModal.tsx` (Komponen Baru)**:
+   - Modal interaktif editor sensor foto dengan kanvas interaktif.
+   - Fitur:
+     - **Tarik / Gambar Kotak Manual**: Pengguna/agen dapat menarik kotak sensor secara bebas menggunakan mouse/touch langsung di atas spanduk/nomor kontak.
+     - **Pindai Ulang AI Otomatis**: Tombol pemicu pemindaian AI instan yang langsung menampilkan kotak-kotak rekomendasi sensor.
+     - **Hapus & Sesuaikan Kotak**: Menghapus atau mengatur ulang kotak sensor yang tidak diinginkan.
+     - **Terapkan & Simpan**: Membakar efek sensor langsung ke gambar, mengonversi ke `.webp`, mengunggah ke Supabase Storage, dan memperbarui foto secara instan.
+   - Menggunakan ikon SVG murni dari **`lucide-react`** (100% bebas FOUT).
+
 3. **`functions/public/pages/AgentDashboard.tsx`**:
-   - Memastikan sinkronisasi pemanggilan `updateSurveyRequest` saat tombol konfirmasi dan tolak tugas ditekan berjalan mulus dan me-refresh data secara instan.
+   - Menghubungkan tombol "Sensor Ulang" pada kartu foto ke modal editor sensor foto interaktif (`PhotoSensorModal`).
+   - Menyempurnakan alur upload foto area umum dan kamar dengan auto-sensor AI + WebP.
+
+4. **`functions/public/components/admin/KostManagerPropertyFormModal.tsx`**:
+   - Menghubungkan tombol "Sensor Ulang" ke modal sensor interaktif dan memastikan pemrosesan foto menggunakan auto-sensor terbaru.
 
 ---
 
 ## Langkah-Langkah Eksekusi
-1. **Modifikasi `adminService.ts`**:
-   - Pada `getAdminSurveyRequests()`, ubah urutan pengecekan status: letakkan pengecekan `AGENT_ASSIGNED` (pada `ks.request?.status` atau `ks.status`) sebelum `SURVEYING`.
-   - Perbaiki `updateSurveyRequest()` agar mendukung lookup id fleksibel (`id` atau `kostmanager_request_id`).
-2. **Modifikasi `KostManagerManagement.tsx`**:
-   - Pastikan logic update modal penetapan agen mengarahkan status ke `AGENT_ASSIGNED`.
-3. **Verifikasi & Uji Kompilasi**:
-   - Jalankan `npm run build` untuk memastikan tidak ada error tipe data atau sintaks.
-4. **Pencatatan Riwayat & Walkthrough**:
-   - Catat progres di `functions/PROGRESS.md` dan susun panduan pengujian di `WALKTHROUGH.md`.
+
+### Langkah 1: Refactor & Upgrade `autoSensorService.ts`
+- Tambahkan pemanggilan `detectPhotoContactBanner` dari `adminService.ts` untuk pemindaian berbasis AI Gemini Edge Function.
+- Perbarui algoritma fallback client-side dengan multi-scale edge gradient & color variance analysis agar mendeteksi spanduk non-kontras tinggi.
+- Terapkan fungsi pembakar sensor visual (`applySensorBoxesToCanvas`) yang rapi, elegan, dan menghasilkan file WebP terkompresi.
+
+### Langkah 2: Pembuatan Komponen `PhotoSensorModal.tsx`
+- Buat komponen modal di `functions/public/components/common/PhotoSensorModal.tsx`.
+- Sediakan kanvas interaktif dengan preview proporsional, event drag box selection, tombol quick AI scan, hapus box, dan tombol simpan WebP.
+
+### Langkah 3: Integrasi pada Dashboard Agen (`AgentDashboard.tsx`)
+- Import dan sediakan state modal sensor foto di `AgentDashboard.tsx`.
+- Saat tombol "Sensor Ulang" ditekan pada foto manapun di daftar foto area umum atau kamar, buka `PhotoSensorModal` dengan foto tersebut.
+- Update state foto pada form pendataan setelah sensor berhasil diterapkan.
+
+### Langkah 4: Integrasi pada Admin KostManager Modal (`KostManagerPropertyFormModal.tsx`)
+- Terapkan pemanggilan `PhotoSensorModal` pada modal admin KostManager agar admin dan surveyor memiliki pengalaman sensor yang seragam.
+
+### Langkah 5: Kompilasi & Verifikasi Build
+- Jalankan perintah `npm run build` untuk memvalidasi 0 error TypeScript / Vite bundling.
 
 ---
 
 ## Rencana Verifikasi
-1. **Kompilasi TypeScript & Build Frontend**: Menjalankan `npm run build` (harus exit code 0).
-2. **Skenario Penugasan Baru**:
-   - Admin menetapkan agen pada pesanan KostManager di Dashboard Admin.
-   - Login / buka Dashboard Agen dengan akun surveyor tersebut.
-   - **Verifikasi**: Tugas muncul di tab **"Permintaan"** dengan badge *"TUGAS BARU (PERLU KONFIRMASI)"* dan tombol *"⚡ Terima & Konfirmasi Pendataan"* serta *"Tolak Tugas"*.
-3. **Skenario Konfirmasi Agen**:
-   - Agen mengklik *"⚡ Terima & Konfirmasi Pendataan"*.
-   - **Verifikasi**: Tugas berpindah ke tab **"Aktif"** dengan status *"SEDANG SURVEY"*.
-4. **Skenario Tolak Tugas**:
-   - Agen mengklik *"Tolak Tugas"*.
-   - **Verifikasi**: Tugas hilang dari Dashboard Agen dan status di Dashboard Admin kembali menjadi *"Menunggu Agen"* (`PENDING_ASSIGNMENT`).
+1. **Verifikasi Build**: Menjalankan `npm run build` (harus sukses dengan exit code 0).
+2. **Uji Auto-Sensor Saat Upload**:
+   - Unggah foto bangunan depan / gerbang yang memuat spanduk nomor kontak.
+   - Pastikan auto-sensor AI / heuristic mendeteksi spanduk dan memburamkannya secara otomatis dengan watermark `ruangsinggah.id` dalam format `.webp`.
+3. **Uji Fitur "Sensor Ulang" & Editor Sensor Manual**:
+   - Klik tombol "Sensor Ulang" pada foto bertanda banner.
+   - Pastikan modal `PhotoSensorModal` terbuka menampilkan foto beresolusi penuh.
+   - Tarik kotak manual pada area spanduk di pagar/gerbang.
+   - Klik "Simpan & Terapkan Sensor".
+   - Pastikan foto langsung ter-update di antarmuka pendataan dengan area spanduk yang tersensor rapi.

@@ -9,6 +9,7 @@ import {
     processImageUrlWithAutoSensor,
     isBannerProneCategory
 } from '../../autoSensorService';
+import { PhotoSensorModal } from '../common/PhotoSensorModal';
 import { 
     Zap, Home, ClipboardList, Wallet, User, Users, ShieldCheck, 
     Menu, X, LogOut, Bell, MessageSquare, Search,
@@ -1012,6 +1013,44 @@ export const KostManagerPropertyFormModal: React.FC<KostManagerPropertyFormModal
     // Auto-Sensor Banner States
     const [kmBannerNotice, setKmBannerNotice] = useState<string | null>(null);
     const [reScanningPhotoUrl, setReScanningPhotoUrl] = useState<string | null>(null);
+    const [sensorModalData, setSensorModalData] = useState<{
+        isOpen: boolean;
+        imageUrl: string;
+        category: string;
+        photoIndex: number;
+    } | null>(null);
+
+    const handleOpenSensorModal = (photoIndex: number, currentUrl: string, category: string) => {
+        setSensorModalData({
+            isOpen: true,
+            imageUrl: currentUrl,
+            category,
+            photoIndex
+        });
+    };
+
+    const handleApplySensorModal = async (newUrl: string) => {
+        if (!sensorModalData) return;
+        const { photoIndex, category } = sensorModalData;
+
+        const updatedImages = [...(kmListingForm.image_urls || [])];
+        const updatedCats = [...(kmListingForm.photoCategories || [])];
+
+        if (typeof updatedImages[photoIndex] === 'object') {
+            updatedImages[photoIndex] = { ...updatedImages[photoIndex], url: newUrl, original: newUrl };
+        } else {
+            updatedImages[photoIndex] = newUrl;
+        }
+
+        setKmListingForm({
+            ...kmListingForm,
+            image_urls: updatedImages,
+            photoCategories: updatedCats
+        });
+
+        setKmBannerNotice(`✅ Sensor spanduk/kontak pada foto "${category}" berhasil diterapkan & diperbarui!`);
+        setTimeout(() => setKmBannerNotice(null), 6000);
+    };
 
     // Public Photo Upload Handler
     const handleUploadPublicPhoto = async (category: string, files: FileList | null) => {
@@ -1021,8 +1060,8 @@ export const KostManagerPropertyFormModal: React.FC<KostManagerPropertyFormModal
             const uploadedUrls: any[] = [];
             for (let i = 0; i < files.length; i++) {
                 const processedFile = await processPhotoWithAutoSensor(files[i], category, (detectedBanner) => {
-                    if (detectedBanner) {
-                        setKmBannerNotice(`⚠️ Auto-Sensor mendeteksi & memburamkan ${detectedBanner.detectedCount} area informasi kontak / banner pada foto "${category}".`);
+                    if (detectedBanner && detectedBanner.detectedCount > 0) {
+                        setKmBannerNotice(`🛡️ Auto-Sensor AI mendeteksi & memburamkan ${detectedBanner.detectedCount} area informasi kontak / banner pada foto "${category}".`);
                         setTimeout(() => setKmBannerNotice(null), 9000);
                     }
                 });
@@ -1042,38 +1081,7 @@ export const KostManagerPropertyFormModal: React.FC<KostManagerPropertyFormModal
 
     // Manual Re-Scan and Blur Public Photo
     const handleReScanPublicPhoto = async (photoIdx: number, currentUrl: string, category: string) => {
-        if (!currentUrl) return;
-        setReScanningPhotoUrl(currentUrl);
-        try {
-            const processedUrl = await processImageUrlWithAutoSensor(currentUrl, category, (file, path) => uploadFileAndGetURL(file, path));
-            if (processedUrl && processedUrl !== currentUrl) {
-                const updatedImages = [...(kmListingForm.image_urls || [])];
-                const updatedCats = [...(kmListingForm.photoCategories || [])];
-                
-                // Replace in place
-                if (typeof updatedImages[photoIdx] === 'object') {
-                    updatedImages[photoIdx] = { ...updatedImages[photoIdx], url: processedUrl, original: processedUrl };
-                } else {
-                    updatedImages[photoIdx] = processedUrl;
-                }
-                
-                setKmListingForm({
-                    ...kmListingForm,
-                    image_urls: updatedImages,
-                    photoCategories: updatedCats
-                });
-                setKmBannerNotice(`✅ Berhasil! Nomor kontak / banner pada foto ${category} telah otomatis disensor.`);
-                setTimeout(() => setKmBannerNotice(null), 6000);
-            } else {
-                setKmBannerNotice(`ℹ️ Tidak ditemukan nomor HP / teks banner berlebih pada foto ${category}.`);
-                setTimeout(() => setKmBannerNotice(null), 5000);
-            }
-        } catch (err: any) {
-            console.error('Error re-scanning photo:', err);
-            alert('Gagal memproses sensor foto: ' + err.message);
-        } finally {
-            setReScanningPhotoUrl(null);
-        }
+        handleOpenSensorModal(photoIdx, currentUrl, category);
     };
 
     const handleRemovePublicPhoto = (urlToRemove: string) => {
@@ -2516,10 +2524,9 @@ export const KostManagerPropertyFormModal: React.FC<KostManagerPropertyFormModal
                                                                         {isBannerProneCategory(label) && (
                                                                             <button
                                                                                 type="button"
-                                                                                disabled={isThisScanning}
-                                                                                onClick={() => handleReScanPublicPhoto(p.idx, p.url, label)}
+                                                                                onClick={() => handleOpenSensorModal(p.idx, p.url, label)}
                                                                                 className="absolute top-1.5 left-1.5 bg-amber-500/90 hover:bg-amber-600 text-white rounded px-2 py-0.5 text-[8px] font-bold shadow-sm transition-all flex items-center gap-1 z-10"
-                                                                                title="Sensor ulang nomor HP/banner di foto ini"
+                                                                                title="Sensor ulang / gambar kotak sensor manual di foto ini"
                                                                             >
                                                                                 <ShieldAlert className="w-3 h-3" />
                                                                                 <span>Sensor Ulang</span>
@@ -3531,6 +3538,18 @@ export const KostManagerPropertyFormModal: React.FC<KostManagerPropertyFormModal
                             </div>
                         </div>
                     </div>
+                )}
+
+                {/* Modal Editor Sensor Foto Interaktif */}
+                {sensorModalData && sensorModalData.isOpen && (
+                    <PhotoSensorModal
+                        isOpen={sensorModalData.isOpen}
+                        imageUrl={sensorModalData.imageUrl}
+                        category={sensorModalData.category}
+                        onClose={() => setSensorModalData(null)}
+                        onApply={handleApplySensorModal}
+                        uploadFn={(file, path) => uploadFileAndGetURL(file, path)}
+                    />
                 )}
             </div>
         </div>

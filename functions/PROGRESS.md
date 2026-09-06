@@ -2,6 +2,40 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 390. Peningkatan Dual-Engine Auto-Sensor AI & Editor Sensor Foto Interaktif Pendataan KostManager (`autoSensorService.ts`, `PhotoSensorModal.tsx`, `AgentDashboard.tsx`, `KostManagerPropertyFormModal.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna melaporkan bahwa fitur auto blur dan sensor banner pada pengunggahan foto di pendataan KostManager belum bekerja dengan baik (seperti pada foto "Bangunan Depan 1" di mana spanduk "TERIMA KOST / HUB" pada pagar/gerbang belum tersensor secara optimal).
+  2. Akar Masalah:
+     - `autoSensorService.ts` sebelumnya hanya menggunakan heuristik sampling kecerahan kasar (`maxLum - minLum > 130`, `consecutive >= 4`) yang tidak peka terhadap spanduk hijau/putih, spanduk ber-kontras sedang, atau teks nomor HP yang terpotong jeruji pagar.
+     - `autoSensorService.ts` belum terhubung dengan Edge Function AI `detect-contact-banner` (berbasis Gemini Vision).
+     - Tombol "Sensor Ulang" sebelumnya menjalankan algoritma yang sama dan jika gagal secara keliru memburamkan area langit di sepertiga atas foto, bukan spanduk di pagar/gerbang/dinding.
+     - Belum ada alat editor manual interaktif untuk menarik kotak sensor secara presisi pada foto.
+- **Implementasi Solusi**:
+  1. **Dual-Engine Auto-Sensor Cerdas (`autoSensorService.ts`)**:
+     - Mengintegrasikan Supabase Edge Function `detect-contact-banner` (Gemini Vision AI) sebagai detektor visual prioritas utama untuk mendeteksi spanduk "TERIMA KOST", nomor HP/WhatsApp, dan papan kontak langsung dengan koordinat bounding box presisi tinggi.
+     - Mengembangkan **Multi-Pass Adaptive Edge & Color Contrast Heuristic** sebagai mesin fallback offline jika koneksi AI terhambat.
+     - Menerapkan efek sensor profesional: Mosaik pixelasi mikro rapat + Dark Frosted Glassmorphism Overlay + Branded Capsule Watermark `ruangsinggah.id`.
+     - Menjamin 100% kompresi gambar ke format **WebP murni** di sisi front-end sebelum disimpan ke Supabase Storage.
+     - Memperluas kamus kata kunci kategori foto rawan banner (`eksterior`, `pagar`, `gerbang`, `lingkungan`, `fasad`, `depan`, `akses`, `jalan`, `bangunan`, dll.).
+  2. **Komponen Editor Sensor Foto Interaktif Baru (`PhotoSensorModal.tsx`)**:
+     - Modal visual interaktif beresolusi tinggi dengan kanvas responsif dan ikon murni `lucide-react` (bebas FOUT).
+     - **Tarik / Gambar Kotak Sensor Manual**: Pengguna/surveyor dapat langsung menarik kotak sensor dengan mouse/touch pada area spanduk di pagar/gerbang.
+     - **Pindai Ulang AI Instan**: Tombol untuk memicu pemindaian AI dan menampilkan kotak-kotak sensor rekomendasi.
+     - **Hapus & Reset Kotak**: Opsi menghapus kotak individual atau reset semua.
+     - **Simpan & Terapkan**: Membakar efek sensor langsung ke kanvas, mengonversi ke WebP, mengunggah ke Supabase Storage, dan memperbarui foto secara instan.
+  3. **Integrasi Penuh pada Form Surveyor & Admin Modal**:
+     - Mengintegrasikan `PhotoSensorModal` pada tombol "Sensor Ulang" di `AgentDashboard.tsx` dan `KostManagerPropertyFormModal.tsx`.
+     - Memberikan notifikasi toast real-time saat AI mendeteksi & menyensor spanduk pada saat upload foto.
+- **File Tersentuh**:
+  - `functions/public/autoSensorService.ts`
+  - `functions/public/components/common/PhotoSensorModal.tsx`
+  - `functions/public/pages/AgentDashboard.tsx`
+  - `functions/public/components/admin/KostManagerPropertyFormModal.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi build frontend Vite (`cmd /c npm run build` di `functions/public`) lulus 100% (`✓ 2512 modules transformed, built in 34.58s`, 0 error).
+
 ### 389. Sinkronisasi Cerdas & Normalisasi Fasilitas/Sub-Fasilitas Cloning Self-Listing Mitra ke Form Pendataan KostManager (`AgentDashboard.tsx`, `KostManagerPropertyFormModal.tsx`) (September 2026)
 - **Permintaan & Masalah**:
   1. Pengguna melaporkan ketidaksesuaian input fasilitas dan sub-fasilitas antara listing biasa (dashboard mitra) dan form pendataan survei KostManager (`AgentDashboard.tsx`).
