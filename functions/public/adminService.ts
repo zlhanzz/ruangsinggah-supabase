@@ -3387,10 +3387,11 @@ export async function getAdminSurveyRequests(): Promise<SurveyRequest[]> {
           computedStatus = 'REVISION_REQUIRED';
         } else if (ks.status === 'SUBMITTED' || ks.request?.status === 'PENDING_ONBOARDING') {
           computedStatus = 'SUBMITTED';
+        } else if (ks.request?.status === 'AGENT_ASSIGNED' || ks.status === 'AGENT_ASSIGNED') {
+          // Prioritaskan AGENT_ASSIGNED agar tugas yang baru ditugaskan admin masuk ke tab Permintaan (belum aktif)
+          computedStatus = 'AGENT_ASSIGNED';
         } else if (ks.status === 'SURVEYING' || ks.request?.status === 'SURVEYING') {
           computedStatus = 'SURVEYING';
-        } else if (ks.status === 'AGENT_ASSIGNED' || ks.request?.status === 'AGENT_ASSIGNED') {
-          computedStatus = 'AGENT_ASSIGNED';
         } else if (ks.status === 'PENDING_ASSIGNMENT' || ks.request?.status === 'PENDING_ASSIGNMENT') {
           computedStatus = 'PENDING_ASSIGNMENT';
         }
@@ -3400,7 +3401,7 @@ export async function getAdminSurveyRequests(): Promise<SurveyRequest[]> {
           task_type: 'kostmanager',
           kostmanager_survey_id: ks.id,
           kostmanager_request_id: ks.kostmanager_request_id,
-          assigned_agent_id: ks.assigned_agent_id,
+          assigned_agent_id: ks.assigned_agent_id || ks.request?.assigned_agent_id,
           status: computedStatus,
           result_drive_link: ks.result_drive_link,
           signature_data: ks.signature_data,
@@ -3420,6 +3421,77 @@ export async function getAdminSurveyRequests(): Promise<SurveyRequest[]> {
           transaction: ks.request?.transaction
         };
       });
+    }
+
+    // 2.b Fetch kostmanager_requests mandiri yang belum terhubung ke kostmanager_surveys
+    const existingKmReqIds = new Set(mappedKmSurveys.map((ks: any) => ks.kostmanager_request_id).filter(Boolean));
+    let kmReqQuery = supabase
+      .from('kostmanager_requests')
+      .select(`
+        *,
+        user:user_id (
+          name,
+          email,
+          phone,
+          photo_url
+        ),
+        transaction:transaction_id (
+          id,
+          amount,
+          status,
+          metadata,
+          created_at,
+          payment_method
+        )
+      `);
+    if (isAgent) {
+      kmReqQuery = kmReqQuery.or(`assigned_agent_id.eq.${user.id},assigned_agent_id.is.null,status.eq.PENDING_ASSIGNMENT`);
+    }
+    const { data: standaloneKmReqs } = await kmReqQuery.order('created_at', { ascending: false });
+    if (standaloneKmReqs) {
+      for (const kr of standaloneKmReqs) {
+        if (!existingKmReqIds.has(kr.id)) {
+          const rawStatus = kr.status || 'PENDING_ASSIGNMENT';
+          let computedStatus = rawStatus;
+          if (['ACTIVE', 'COMPLETED', 'APPROVED'].includes(rawStatus)) {
+            computedStatus = 'COMPLETED';
+          } else if (rawStatus === 'REVISION_REQUIRED' || rawStatus === 'NEED_REVISION') {
+            computedStatus = 'REVISION_REQUIRED';
+          } else if (rawStatus === 'PENDING_ONBOARDING' || rawStatus === 'SUBMITTED') {
+            computedStatus = 'SUBMITTED';
+          } else if (rawStatus === 'AGENT_ASSIGNED') {
+            computedStatus = 'AGENT_ASSIGNED';
+          } else if (rawStatus === 'SURVEYING') {
+            computedStatus = 'SURVEYING';
+          } else if (rawStatus === 'PENDING_ASSIGNMENT') {
+            computedStatus = 'PENDING_ASSIGNMENT';
+          }
+
+          mappedKmSurveys.push({
+            id: kr.id,
+            task_type: 'kostmanager',
+            kostmanager_survey_id: null,
+            kostmanager_request_id: kr.id,
+            assigned_agent_id: kr.assigned_agent_id,
+            status: computedStatus,
+            result_drive_link: kr.result_drive_link,
+            signature_data: kr.signature_data,
+            created_at: kr.created_at,
+            updated_at: kr.updated_at,
+            kost_id: kr.property_id,
+            user_id: kr.user_id,
+            transaction_id: kr.transaction_id,
+            kost_name: kr.kost_name || 'KostManager Listing',
+            kost_address: kr.kost_address || '',
+            kost_type: kr.kost_type || '',
+            empty_rooms: kr.empty_rooms || 0,
+            notes: kr.notes || '',
+            survey_date: kr.survey_date,
+            user: kr.user,
+            transaction: kr.transaction
+          });
+        }
+      }
     }
   }
 
@@ -3455,21 +3527,46 @@ export async function updateSurveyRequest(
   const isAdmin = role === 'admin';
   const isAgent = role === 'survey_agent';
 
-  // --- CHECK IF TARGET IS KOSTMANAGER SURVEY ---
-  const { data: existingKmSurvey } = await supabase
+  // --- CHECK IF TARGET IS KOSTMANAGER SURVEY / REQUEST ---
+  let existingKmSurvey: any = null;
+  const { data: bySurvId } = await supabase
     .from('kostmanager_surveys')
     .select('id, kostmanager_request_id')
     .eq('id', id)
     .maybeSingle();
 
+  if (bySurvId) {
+    existingKmSurvey = bySurvId;
+  } else {
+    const { data: byReqId } = await supabase
+      .from('kostmanager_surveys')
+      .select('id, kostmanager_request_id')
+      .eq('kostmanager_request_id', id)
+      .maybeSingle();
+    if (byReqId) {
+      existingKmSurvey = byReqId;
+    } else {
+      const { data: kmReqOnly } = await supabase
+        .from('kostmanager_requests')
+        .select('id, transaction_id')
+        .eq('id', id)
+        .maybeSingle();
+      if (kmReqOnly) {
+        existingKmSurvey = { id: null, kostmanager_request_id: kmReqOnly.id };
+      }
+    }
+  }
+
   if (existingKmSurvey) {
-    if (updates.assigned_agent_id === null) {
-      // Tolak / Deassign
-      const { error: delErr } = await supabase
-        .from('kostmanager_surveys')
-        .delete()
-        .eq('id', id);
-      if (delErr) throw delErr;
+    if (updates.assigned_agent_id === null || updates.status === 'PENDING_ASSIGNMENT') {
+      // Tolak / Deassign: Kembalikan tugas ke Admin
+      if (existingKmSurvey.id) {
+        const { error: delErr } = await supabase
+          .from('kostmanager_surveys')
+          .delete()
+          .eq('id', existingKmSurvey.id);
+        if (delErr) console.warn('Warning deleting kostmanager_surveys:', delErr);
+      }
 
       const { error: reqErr } = await supabase
         .from('kostmanager_requests')
@@ -3500,11 +3597,21 @@ export async function updateSurveyRequest(
     if (updates.assigned_agent_id !== undefined) kmSurveyUpdates.assigned_agent_id = updates.assigned_agent_id;
     if (updates.result_drive_link !== undefined) kmSurveyUpdates.result_drive_link = updates.result_drive_link;
 
-    const { error: kmSurveyErr } = await supabase
-      .from('kostmanager_surveys')
-      .update(kmSurveyUpdates)
-      .eq('id', id);
-    if (kmSurveyErr) throw kmSurveyErr;
+    if (existingKmSurvey.id) {
+      const { error: kmSurveyErr } = await supabase
+        .from('kostmanager_surveys')
+        .update(kmSurveyUpdates)
+        .eq('id', existingKmSurvey.id);
+      if (kmSurveyErr) throw kmSurveyErr;
+    } else {
+      kmSurveyUpdates.kostmanager_request_id = existingKmSurvey.kostmanager_request_id;
+      kmSurveyUpdates.status = 'SURVEYING';
+      kmSurveyUpdates.assigned_agent_id = updates.assigned_agent_id || user.id;
+      const { error: insErr } = await supabase
+        .from('kostmanager_surveys')
+        .insert([kmSurveyUpdates]);
+      if (insErr) console.warn('Warning inserting kostmanager_surveys:', insErr);
+    }
 
     const kmReqUpdates: any = { updated_at: new Date().toISOString() };
     if (updates.status) {
@@ -3705,14 +3812,21 @@ export async function updateKostManagerRequest(
         else if (updates.status === 'AGENT_ASSIGNED') kmSurveyPayload.status = 'SURVEYING';
       }
 
-      if (existingKmSurvey) {
+      if (updates.assigned_agent_id === null) {
+        if (existingKmSurvey) {
+          await supabase
+            .from('kostmanager_surveys')
+            .delete()
+            .eq('id', existingKmSurvey.id);
+        }
+      } else if (existingKmSurvey) {
         await supabase
           .from('kostmanager_surveys')
           .update(kmSurveyPayload)
           .eq('id', existingKmSurvey.id);
       } else if (updates.assigned_agent_id) {
         // Buat baru jika ada agen yang baru ditugaskan — mulai dari SURVEYING
-        // agar lolos check constraint, dan dinamis dimap ke PENDING_ASSIGNMENT di frontend/service
+        // agar lolos check constraint database
         kmSurveyPayload.status = 'SURVEYING';
         kmSurveyPayload.assigned_agent_id = updates.assigned_agent_id;
         await supabase
