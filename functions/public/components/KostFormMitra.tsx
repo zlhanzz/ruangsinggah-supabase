@@ -2169,6 +2169,76 @@ const computeActivePhotoCategories = (
 };
 
 // ── MAIN COMPONENT ────────────────────────────────────────────────────────────
+const extractKostInitialForm = (editingKost: Kost): Partial<Kost> => {
+    const selfListingImages = Array.isArray(editingKost.metadata?.self_listing_images) && editingKost.metadata.self_listing_images.length > 0
+        ? editingKost.metadata.self_listing_images
+        : null;
+    const selfListingPhotosMeta = Array.isArray(editingKost.metadata?.self_listing_photos_meta) && editingKost.metadata.self_listing_photos_meta.length > 0
+        ? editingKost.metadata.self_listing_photos_meta
+        : null;
+    const selfListingRoomTypes = Array.isArray(editingKost.metadata?.self_listing_room_types) && editingKost.metadata.self_listing_room_types.length > 0
+        ? editingKost.metadata.self_listing_room_types
+        : null;
+    const selfListingFacilities = Array.isArray(editingKost.metadata?.self_listing_facilities) && editingKost.metadata.self_listing_facilities.length > 0
+        ? editingKost.metadata.self_listing_facilities
+        : null;
+
+    const loadedImages = (editingKost.imageUrls && editingKost.imageUrls.length > 0)
+        ? editingKost.imageUrls
+        : (selfListingImages || []);
+
+    const loadedPhotosMeta = (editingKost.photosMeta && editingKost.photosMeta.length > 0)
+        ? editingKost.photosMeta
+        : (selfListingPhotosMeta || (loadedImages.length > 0 ? loadedImages.map((img: any) => typeof img === 'string' ? { original: img, url: img } : img) : []));
+
+    const loadedRoomTypes = (editingKost.roomTypes && editingKost.roomTypes.length > 0)
+        ? editingKost.roomTypes
+        : (selfListingRoomTypes || []);
+
+    const loadedFacilities = (editingKost.facilities && editingKost.facilities.length > 0)
+        ? editingKost.facilities
+        : (selfListingFacilities || []);
+
+    return {
+        ...initialForm,
+        ...editingKost,
+        imageUrls: loadedImages,
+        photosMeta: loadedPhotosMeta,
+        roomTypes: loadedRoomTypes,
+        facilities: loadedFacilities
+    };
+};
+
+const sanitizeLoadedForm = (formObj: Partial<Kost>): Partial<Kost> => {
+    const loadedForm = { ...formObj };
+    const garbagePatterns = [
+        'bimbel', 'bimbingan belajar', 'les ', 'kursus', 'training', 'kumon', 'gandhi',
+        'study club', 'daycare', 'kindergarten', 'paud', 'tk ', 'taman kanak',
+        'sd ', 'smp ', 'sma ', 'smk ', 'madrasah', 'driving school', 'kursus mengemudi',
+        'english course', 'lpk ', 'balai latihan', 'rektorat', 'fakultas', 'dekanat',
+        'prodi', 'jurusan', 'pintu ', 'gate ', 'danau ', 'gedung ', 'hall ', 'auditorium',
+        'asrama', 'rusunawa', 'kantin', 'parkiran', 'full bright',
+        'printer', 'service', 'servis', 'print', 'fotocopy', 'foto copy', 'percetakan', 'copy center',
+        'cuci motor', 'cuci mobil', 'car wash', 'steam', 'bengkel', 'tambal ban', 'sparepart',
+        'counter', 'konter', 'pulsa', 'cell', 'salon', 'barber'
+    ];
+    if (Array.isArray(loadedForm.campuses)) {
+        loadedForm.campuses = loadedForm.campuses.filter((c: any) => {
+            if (!c || !c.name) return false;
+            const lower = c.name.toLowerCase();
+            return !garbagePatterns.some(p => lower.includes(p));
+        });
+    }
+    if (Array.isArray(loadedForm.publicFacilities)) {
+        loadedForm.publicFacilities = loadedForm.publicFacilities.filter((f: any) => {
+            if (!f || !f.name) return false;
+            const lower = f.name.toLowerCase();
+            return !garbagePatterns.some(p => lower.includes(p));
+        });
+    }
+    return loadedForm;
+};
+
 interface KostFormMitraProps {
     user: User | null;
     editingKost: Kost | null;
@@ -2179,10 +2249,13 @@ interface KostFormMitraProps {
 
 const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClose, onSuccess, freshStart = false }) => {
     const isEditing = Boolean(editingKost);
-    const storageKey = useMemo(() => user?.id ? `kost_form_draft_${user.id}` : 'kost_form_draft_guest', [user?.id]);
+    const storageKey = useMemo(() => {
+        const prefix = isEditing && editingKost?.id ? `kost_edit_draft_${editingKost.id}` : 'kost_form_draft';
+        return user?.id ? `${prefix}_${user.id}` : `${prefix}_guest`;
+    }, [isEditing, editingKost?.id, user?.id]);
 
     const [step, setStep] = useState(() => {
-        if (isEditing || freshStart) return 0;
+        if (freshStart) return 0;
         try {
             const savedDraft = localStorage.getItem(storageKey);
             if (savedDraft) {
@@ -2196,8 +2269,7 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
     });
 
     const [managementOption, setManagementOption] = useState<'none' | 'self' | 'kostmanager'>(() => {
-        if (editingKost) return editingKost.managed_by || 'self';
-        if (freshStart) return 'self';
+        if (freshStart) return editingKost?.managed_by || 'self';
         try {
             const savedDraft = localStorage.getItem(storageKey);
             if (savedDraft) {
@@ -2205,17 +2277,24 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                 if (parsed.managementOption) return parsed.managementOption;
             }
         } catch {}
+        if (editingKost) return editingKost.managed_by || 'self';
         return 'self';
     });
 
-    const [restoredDraftInfo, setRestoredDraftInfo] = useState<{ savedAt?: string } | null>(() => {
-        if (isEditing || freshStart) return null;
+    const [restoredDraftInfo, setRestoredDraftInfo] = useState<{ savedAt?: string; isEditDraft?: boolean } | null>(() => {
+        if (freshStart) return null;
         try {
             const savedDraft = localStorage.getItem(storageKey);
             if (savedDraft) {
                 const parsed = JSON.parse(savedDraft);
-                if (parsed.form && (parsed.form.title || parsed.form.address || parsed.form.price || parsed.step > 0)) {
-                    return { savedAt: parsed.lastSaved };
+                if (isEditing) {
+                    if (parsed.form && (parsed.form.title || parsed.form.facilities || parsed.step > 0 || (parsed.form.roomTypes && parsed.form.roomTypes.length > 0))) {
+                        return { savedAt: parsed.lastSaved, isEditDraft: true };
+                    }
+                } else {
+                    if (parsed.form && (parsed.form.title || parsed.form.address || parsed.form.price || parsed.step > 0)) {
+                        return { savedAt: parsed.lastSaved, isEditDraft: false };
+                    }
                 }
             }
         } catch {}
@@ -2223,87 +2302,29 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
     });
 
     const [form, setForm] = useState<Partial<Kost>>(() => {
-        if (editingKost) {
-            const selfListingImages = Array.isArray(editingKost.metadata?.self_listing_images) && editingKost.metadata.self_listing_images.length > 0
-                ? editingKost.metadata.self_listing_images
-                : null;
-            const selfListingPhotosMeta = Array.isArray(editingKost.metadata?.self_listing_photos_meta) && editingKost.metadata.self_listing_photos_meta.length > 0
-                ? editingKost.metadata.self_listing_photos_meta
-                : null;
-            const selfListingRoomTypes = Array.isArray(editingKost.metadata?.self_listing_room_types) && editingKost.metadata.self_listing_room_types.length > 0
-                ? editingKost.metadata.self_listing_room_types
-                : null;
-            const selfListingFacilities = Array.isArray(editingKost.metadata?.self_listing_facilities) && editingKost.metadata.self_listing_facilities.length > 0
-                ? editingKost.metadata.self_listing_facilities
-                : null;
-
-            const loadedImages = (editingKost.imageUrls && editingKost.imageUrls.length > 0)
-                ? editingKost.imageUrls
-                : (selfListingImages || []);
-
-            const loadedPhotosMeta = (editingKost.photosMeta && editingKost.photosMeta.length > 0)
-                ? editingKost.photosMeta
-                : (selfListingPhotosMeta || (loadedImages.length > 0 ? loadedImages.map((img: any) => typeof img === 'string' ? { original: img, url: img } : img) : []));
-
-            const loadedRoomTypes = (editingKost.roomTypes && editingKost.roomTypes.length > 0)
-                ? editingKost.roomTypes
-                : (selfListingRoomTypes || []);
-
-            const loadedFacilities = (editingKost.facilities && editingKost.facilities.length > 0)
-                ? editingKost.facilities
-                : (selfListingFacilities || []);
-
-            return {
-                ...initialForm,
-                ...editingKost,
-                imageUrls: loadedImages,
-                photosMeta: loadedPhotosMeta,
-                roomTypes: loadedRoomTypes,
-                facilities: loadedFacilities
-            };
+        if (freshStart) {
+            return editingKost ? extractKostInitialForm(editingKost) : initialForm;
         }
-        if (freshStart) return initialForm;
         try {
             const savedDraft = localStorage.getItem(storageKey);
             if (savedDraft) {
                 const parsed = JSON.parse(savedDraft);
                 if (parsed.form && typeof parsed.form === 'object') {
-                    const loadedForm = { ...initialForm, ...parsed.form };
-                    // Bersihkan kampus/landmark sampah yang sempat tersimpan dari draft lama
-                    if (Array.isArray(loadedForm.campuses)) {
-                        const garbagePatterns = [
-                            'bimbel', 'bimbingan belajar', 'les ', 'kursus', 'training', 'kumon', 'gandhi',
-                            'study club', 'daycare', 'kindergarten', 'paud', 'tk ', 'taman kanak',
-                            'sd ', 'smp ', 'sma ', 'smk ', 'madrasah', 'driving school', 'kursus mengemudi',
-                            'english course', 'lpk ', 'balai latihan', 'rektorat', 'fakultas', 'dekanat',
-                            'prodi', 'jurusan', 'pintu ', 'gate ', 'danau ', 'gedung ', 'hall ', 'auditorium',
-                            'asrama', 'rusunawa', 'kantin', 'parkiran', 'full bright',
-                            'printer', 'service', 'servis', 'print', 'fotocopy', 'foto copy', 'percetakan', 'copy center',
-                            'cuci motor', 'cuci mobil', 'car wash', 'steam', 'bengkel', 'tambal ban', 'sparepart',
-                            'counter', 'konter', 'pulsa', 'cell', 'salon', 'barber'
-                        ];
-                        loadedForm.campuses = loadedForm.campuses.filter((c: any) => {
-                            if (!c || !c.name) return false;
-                            const lower = c.name.toLowerCase();
-                            return !garbagePatterns.some(p => lower.includes(p));
-                        });
-                        if (Array.isArray(loadedForm.publicFacilities)) {
-                            loadedForm.publicFacilities = loadedForm.publicFacilities.filter((f: any) => {
-                                if (!f || !f.name) return false;
-                                const lower = f.name.toLowerCase();
-                                return !garbagePatterns.some(p => lower.includes(p));
-                            });
-                        }
-                    }
-                    return loadedForm;
+                    const base = editingKost ? extractKostInitialForm(editingKost) : initialForm;
+                    const loadedForm = { ...base, ...parsed.form };
+                    return sanitizeLoadedForm(loadedForm);
                 }
             }
         } catch {}
+
+        if (editingKost) {
+            return extractKostInitialForm(editingKost);
+        }
         return initialForm;
     });
 
     const [newPhotoItems, setNewPhotoItems] = useState<NewPhotoItem[]>(() => {
-        if (isEditing || freshStart) return [];
+        if (freshStart) return [];
         try {
             const savedDraft = localStorage.getItem(storageKey);
             if (savedDraft) {
@@ -2375,9 +2396,38 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
 
     const isInitialMount = useRef(true);
 
-    // Auto-save draft to localStorage whenever form, step, or managementOption changes
+    // Instant save helper to guarantee reliable persistence
+    const saveDraftDirect = useCallback((currentForm: Partial<Kost>, currentStep: number, currentMgmt: 'none' | 'self' | 'kostmanager', photos: NewPhotoItem[]) => {
+        if (freshStart) return;
+        try {
+            const hasData = isEditing || currentForm.title || currentForm.address || currentForm.description || currentForm.city || currentStep > 0 || (currentForm.roomTypes && currentForm.roomTypes.length > 0) || (currentForm.facilities && currentForm.facilities.length > 0) || photos.length > 0;
+            if (hasData) {
+                const payload = {
+                    form: currentForm,
+                    step: currentStep,
+                    managementOption: currentMgmt,
+                    isEdit: isEditing,
+                    draftPhotos: photos.map(p => ({
+                        id: p.id,
+                        preview: p.preview,
+                        category: p.category,
+                        caption: p.caption,
+                        isBlurred: p.isBlurred,
+                        storagePath: p.storagePath
+                    })),
+                    lastSaved: new Date().toISOString()
+                };
+                localStorage.setItem(storageKey, JSON.stringify(payload));
+                window.dispatchEvent(new Event('kost_draft_updated'));
+            }
+        } catch (err) {
+            console.warn('Gagal menyimpan draft kost ke localStorage:', err);
+        }
+    }, [freshStart, isEditing, storageKey]);
+
+    // Auto-save draft to localStorage whenever form, step, managementOption, or newPhotoItems change
     useEffect(() => {
-        if (isEditing) return;
+        if (freshStart) return;
 
         // Skip saving on initial mount to avoid overwriting with defaults prematurely
         if (isInitialMount.current) {
@@ -2386,35 +2436,13 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
         }
 
         const timeoutId = setTimeout(() => {
-            try {
-                const hasData = form.title || form.address || form.description || form.city || step > 0 || (form.roomTypes && form.roomTypes.length > 0) || newPhotoItems.length > 0;
-                if (hasData) {
-                    const payload = {
-                        form,
-                        step,
-                        managementOption,
-                        draftPhotos: newPhotoItems.map(p => ({
-                            id: p.id,
-                            preview: p.preview,
-                            category: p.category,
-                            caption: p.caption,
-                            isBlurred: p.isBlurred,
-                            storagePath: p.storagePath
-                        })),
-                        lastSaved: new Date().toISOString()
-                    };
-                    localStorage.setItem(storageKey, JSON.stringify(payload));
-                    window.dispatchEvent(new Event('kost_draft_updated'));
-                }
-            } catch (err) {
-                console.warn('Gagal menyimpan draft kost ke localStorage:', err);
-            }
+            saveDraftDirect(form, step, managementOption, newPhotoItems);
         }, 400);
 
         return () => clearTimeout(timeoutId);
-    }, [form, step, managementOption, newPhotoItems, isEditing, storageKey]);
+    }, [form, step, managementOption, newPhotoItems, freshStart, saveDraftDirect]);
 
-    // Handle clear draft and start fresh
+    // Handle clear draft and start fresh for new listing
     const handleClearDraft = () => {
         try {
             const pathsToDelete = newPhotoItems.map(p => p.storagePath).filter(Boolean) as string[];
@@ -2438,6 +2466,36 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                 omnichannelContactType: 'owner',
                 contactSelection: 'profile'
             });
+        }
+    };
+    
+    // Handle reset edit draft to database original values
+    const handleResetToOriginal = () => {
+        if (!editingKost) return;
+        if (window.confirm('Batalkan perubahan draft lokal dan kembalikan form ke data asli properti?')) {
+            try {
+                localStorage.removeItem(storageKey);
+                window.dispatchEvent(new Event('kost_draft_updated'));
+            } catch {}
+            const originalForm = extractKostInitialForm(editingKost);
+            setForm(originalForm);
+            setStep(0);
+            setNewPhotoItems([]);
+            setRestoredDraftInfo(null);
+            setError('');
+        }
+    };
+
+    const handleCloseWithSave = () => {
+        saveDraftDirect(form, step, managementOption, newPhotoItems);
+        onClose();
+    };
+
+    const handlePrevStep = () => {
+        if (step > 0) {
+            const prevStep = step - 1;
+            saveDraftDirect(form, prevStep, managementOption, newPhotoItems);
+            setStep(prevStep);
         }
     };
     
@@ -4160,7 +4218,9 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
             return;
         }
         setError('');
-        setStep(s => s + 1);
+        const nextStep = step + 1;
+        saveDraftDirect(form, nextStep, managementOption, newPhotoItems);
+        setStep(nextStep);
     };
 
     // ── submit ──────────────────────────────────────────────────────────────────
@@ -4348,6 +4408,12 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                     pendingUploadPayload, 
                     []
                 );
+
+                // Bersihkan draft edit setelah berhasil diperbarui
+                try {
+                    localStorage.removeItem(storageKey);
+                    window.dispatchEvent(new Event('kost_draft_updated'));
+                } catch {}
 
                 alert('Perubahan berhasil disimpan! Data kost Anda telah diperbarui dan langsung aktif tayang pada listing publik.');
             } else {
@@ -6334,23 +6400,66 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                 <div>
                     <div className="flex items-center gap-2">
                         <h2 className="font-black text-gray-900 text-base">{isEditing ? 'Edit Listing' : 'Tambah Kost Baru'}</h2>
-                        {!isEditing && (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-emerald-50 border border-emerald-200/80 rounded-full text-[9px] font-bold text-emerald-700">
-                                <CheckCircle2 size={10} className="text-emerald-500" />
-                                <span>Draft Aktif</span>
-                            </span>
-                        )}
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-emerald-50 border border-emerald-200/80 rounded-full text-[9px] font-bold text-emerald-700">
+                            <CheckCircle2 size={10} className="text-emerald-500" />
+                            <span>Auto-Save Aktif</span>
+                        </span>
                     </div>
                     <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-0.5">Langkah {step + 1} dari {activeSteps.length}</p>
                 </div>
                 <button 
-                    onClick={onClose} 
-                    className="w-10 h-10 rounded-2xl hover:bg-gray-100 flex items-center justify-center text-gray-500 transition-colors"
+                    onClick={handleCloseWithSave} 
+                    className="w-10 h-10 rounded-2xl hover:bg-gray-100 flex items-center justify-center text-gray-500 transition-colors cursor-pointer"
                     title="Tutup Formulir (Draft Tersimpan Otomatis)"
                 >
                     <X size={20} />
                 </button>
             </div>
+
+            {/* Restored Draft Banner */}
+            {restoredDraftInfo && (
+                <div className="mx-5 mt-3 p-3 bg-emerald-50/90 border border-emerald-200/90 rounded-2xl flex items-center justify-between gap-3 shrink-0">
+                    <div className="flex items-center gap-2 min-w-0">
+                        <CheckCircle2 size={16} className="text-emerald-600 shrink-0" />
+                        <p className="text-xs font-bold text-emerald-800 truncate">
+                            {isEditing ? 'Draft editan lokal dipulihkan' : 'Draft formulir sebelumnya dipulihkan'}
+                            {restoredDraftInfo.savedAt && (
+                                <span className="text-[10px] text-emerald-600 font-semibold ml-1 hidden sm:inline">
+                                    (Tersimpan: {new Date(restoredDraftInfo.savedAt).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })})
+                                </span>
+                            )}
+                        </p>
+                    </div>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                        {isEditing ? (
+                            <button
+                                type="button"
+                                onClick={handleResetToOriginal}
+                                className="px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-rose-600 hover:bg-rose-100 rounded-lg transition-colors cursor-pointer"
+                                title="Batalkan draft editan lokal dan kembalikan ke data asli kost"
+                            >
+                                Reset ke Data Asli
+                            </button>
+                        ) : (
+                            <button
+                                type="button"
+                                onClick={handleClearDraft}
+                                className="px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-rose-600 hover:bg-rose-100 rounded-lg transition-colors cursor-pointer"
+                                title="Hapus draft pendaftaran dan mulai dari awal"
+                            >
+                                Mulai Awal
+                            </button>
+                        )}
+                        <button
+                            type="button"
+                            onClick={() => setRestoredDraftInfo(null)}
+                            className="w-6 h-6 rounded-lg flex items-center justify-center text-emerald-600 hover:bg-emerald-100 transition-colors cursor-pointer"
+                        >
+                            <X size={12} />
+                        </button>
+                    </div>
+                </div>
+            )}
 
             {/* Step Indicators */}
             <div className="px-5 pt-4 pb-2 shrink-0">
@@ -6362,6 +6471,7 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                                 onClick={() => {
                                     if (i < step) {
                                         setError('');
+                                        saveDraftDirect(form, i, managementOption, newPhotoItems);
                                         setStep(i);
                                     }
                                 }}
@@ -6384,14 +6494,12 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                 </div>
             </div>
 
-
-
             {/* Error Banner */}
             {error && (
                 <div className="mx-5 mt-2 p-3 bg-rose-50 border border-rose-200 rounded-2xl flex items-start gap-2 shrink-0">
                     <AlertCircle size={16} className="text-rose-500 shrink-0 mt-0.5" />
                     <p className="text-xs font-bold text-rose-600">{error}</p>
-                    <button onClick={() => setError('')} className="ml-auto text-rose-400"><X size={14}/></button>
+                    <button onClick={() => setError('')} className="ml-auto text-rose-400 cursor-pointer"><X size={14}/></button>
                 </div>
             )}
 
@@ -6404,8 +6512,8 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
             <div className="px-5 py-4 border-t border-gray-100 shrink-0 bg-white">
                 <div className="flex gap-3">
                     {step > 0 && (
-                        <button type="button" onClick={() => setStep(s => s - 1)}
-                            className="h-14 px-6 rounded-2xl border-2 border-gray-200 text-gray-600 font-black text-sm flex items-center gap-2 hover:border-gray-300 transition-colors shrink-0">
+                        <button type="button" onClick={handlePrevStep}
+                            className="h-14 px-6 rounded-2xl border-2 border-gray-200 text-gray-600 font-black text-sm flex items-center gap-2 hover:border-gray-300 transition-colors shrink-0 cursor-pointer">
                             <ChevronLeft size={18}/> Kembali
                         </button>
                     )}
@@ -6417,7 +6525,7 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                         </button>
                     ) : (
                         <button type="button" disabled={submitting} onClick={handleSubmit}
-                            className={`flex-1 h-14 rounded-2xl font-black text-sm flex items-center justify-center gap-2 shadow-lg transition-all active:scale-95 ${submitting ? 'bg-gray-300 text-gray-400' : 'bg-gray-900 text-white shadow-gray-200'}`}>
+                            className={`flex-1 h-14 rounded-2xl font-black text-sm flex items-center justify-center gap-2 shadow-lg transition-all active:scale-95 ${submitting ? 'bg-gray-300 text-gray-400' : 'bg-gray-900 text-white shadow-gray-200 cursor-pointer'}`}>
                             {submitting ? (
                                 <><Loader2 size={18} className="animate-spin" /> Menyimpan...</>
                             ) : (

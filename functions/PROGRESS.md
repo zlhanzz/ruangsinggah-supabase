@@ -2,6 +2,36 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 396. Perbaikan Auto-Save & Pemulihan Draft Form Listing & Edit Listing Mitra (`KostFormMitra.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna melaporkan bahwa form pendaftaran baru dan edit listing di Dashboard Mitra kembali bermasalah di mana draft isian tidak tersimpan otomatis ketika diisi, saat beralih tahap, maupun ketika modal form ditutup. Akibatnya, saat form dibuka kembali, pengguna harus mengisi ulang dari awal.
+  2. Masalah paling mencolok terjadi pada Langkah 4 (Fasilitas Gedung & Sub-Kelengkapan Parkir/Dapur/WC), di mana pilihan sub-fasilitas hilang dan memicu pesan validasi: *"Anda memilih fasilitas Area Parkir. Wajib memilih minimal satu sub-fasilitasnya (Parkir Motor atau Parkir Mobil)"*.
+- **Akar Masalah**:
+  1. **Auto-Save Dinonaktifkan Total Saat Edit Listing**: Terdapat batasan `if (isEditing) return;` di hook auto-save `useEffect` (`KostFormMitra.tsx`), sehingga setiap kali user mengedit listing yang sudah ada, tidak ada auto-save yang berjalan ke `localStorage`.
+  2. **Ketiadaan Isolasi Storage Key untuk Edit Listing**: Key penyimpanan `localStorage` sebelumnya hanya berupa `kost_form_draft_${user.id}`, sehingga jika edit listing menyimpan data, draf edit dan draf pendaftaran baru akan saling bertabrakan dan menimpa satu sama lain.
+  3. **Inisialisasi State Saat Edit Mengabaikan Draf**: Saat `editingKost` dimuat, inisialisasi state `form` dan `step` selalu membaca ulang dari data asli database dan memaksa `step` kembali ke 0 (`if (isEditing || freshStart) return 0;`), tanpa memeriksa draf lokal yang belum tersimpan ke server.
+  4. **Keterlambatan Debounce & Kehilangan Data saat Navigasi/Close**: Auto-save hanya mengandalkan `setTimeout(..., 400ms)`. Jika user mengklik "Lanjut", beralih langkah melalui tombol indikator, atau menutup form dengan tombol X sebelum timer selesai, data terakhir tidak tertulis ke `localStorage`.
+  5. **Pembersihan Draf Setelah Submit Edit Listing**: Blok `if (isEditing)` pada `handleSubmit` sebelumnya tidak memanggil `localStorage.removeItem(storageKey)`.
+- **Implementasi Solusi**:
+  1. **Isolasi Storage Key Khusus**:
+     - Mode Edit Listing: `kost_edit_draft_${editingKost.id}_${user.id}`
+     - Mode Pendaftaran Baru: `kost_form_draft_${user.id}`
+  2. **Pemulihan Cerdas Draf Edit & Tambah Listing**:
+     - Menginisialisasi `form`, `step`, `managementOption`, dan `newPhotoItems` untuk memeriksa dan memuat draf dari `localStorage` jika tersedia.
+     - Menyediakan fallback bersih ke data asli database jika tidak ada draf atau jika `freshStart` aktif.
+  3. **Instant Auto-Save saat Navigasi & Penutupan Form**:
+     - Menambahkan fungsi `saveDraftDirect` yang menyimpan data seketika tanpa jeda debounce saat user menekan "Lanjut" (`handleNextStep`), "Kembali" (`handlePrevStep`), tombol indikator langkah, maupun saat tombol silang X (`handleCloseWithSave`) ditekan.
+  4. **Banner Pemulihan Draf & Opsi Reset**:
+     - Menampilkan banner hijau informatif di bagian atas form saat draf lokal dimuat, dilengkapi tombol *"Reset ke Data Asli"* (untuk mode edit) dan *"Mulai Awal"* (untuk mode baru) serta waktu penyimpanan draf.
+  5. **Pembersihan Draf Tuntas saat Submit**:
+     - Memanggil `localStorage.removeItem(storageKey)` dan mendispatch event `kost_draft_updated` baik pada cabang pendaftaran baru maupun cabang edit listing setelah API berhasil menyimpan ke server.
+- **File Tersentuh**:
+  - `functions/public/components/KostFormMitra.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi build frontend Vite (`npm run build` di `functions/public`) lulus 100% (2512 modul tertransformasi, 0 error).
+
 ### 395. Isolasi Mutlak Data KostManager dan Self-Listing Mitra & Proteksi Permanen Foto Listing Asli (`userService.ts`, `KostFormMitra.tsx`, `AgentDashboard.tsx`) (September 2026)
 - **Permintaan & Masalah**:
   1. Pengguna melaporkan bahwa ketika agen survei membuka draf atau melakukan pendataan survei KostManager, listing mitra biasa (Self-Listing) di Dashboard Mitra ikut terganggu (foto properti di langkah 5 "Edit Listing" menjadi 0 foto dan thumbnail kartu listing mitra menjadi kosong).
