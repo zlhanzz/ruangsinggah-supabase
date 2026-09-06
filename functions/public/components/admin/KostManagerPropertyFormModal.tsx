@@ -146,6 +146,136 @@ const parseGoogleMapsUrl = (url: string) => {
     return null;
 };
 
+// Helper to dynamically normalize and separate public facilities & sub-facilities (Mitra & KostManager synchronization)
+const normalizeAndExtractPublicFacilities = (
+    rawFacilities: string[] = [],
+    existingKitchen: string[] = [],
+    existingParking: string[] = [],
+    existingBathroom: string[] = []
+) => {
+    const kitchenSet = new Set<string>((existingKitchen || []).map(k => k.trim()).filter(Boolean));
+    const parkingSet = new Set<string>((existingParking || []).map(p => p.trim()).filter(Boolean));
+    const bathroomSet = new Set<string>((existingBathroom || []).map(b => b.trim()).filter(Boolean));
+    const mainFacilitiesSet = new Set<string>();
+
+    const kitchenMap: Record<string, string> = {
+        'kompor': 'Kompor',
+        'kulkas': 'Kulkas',
+        'kulkas bersama': 'Kulkas',
+        'kulkas umum': 'Kulkas',
+        'dispenser': 'Dispenser',
+        'dispenser air': 'Dispenser',
+        'wastafel cuci piring': 'Wastafel Cuci Piring',
+        'wastafel dapur': 'Wastafel Cuci Piring',
+        'peralatan masak': 'Peralatan Masak',
+        'meja makan': 'Meja Makan',
+        'meja makan bersama': 'Meja Makan'
+    };
+
+    const parkingMap: Record<string, string> = {
+        'parkir motor': 'Parkir Motor',
+        'parkir mobil': 'Parkir Mobil',
+        'parkir sepeda': 'Parkir Sepeda'
+    };
+
+    const bathroomMap: Record<string, string> = {
+        'kloset duduk': 'Kloset Duduk',
+        'kloset jongkok': 'Kloset Jongkok',
+        'shower': 'Shower',
+        'wastafel': 'Wastafel',
+        'wastafel wc': 'Wastafel'
+    };
+
+    const standardMainMap: Record<string, string> = {
+        'wifi': 'WiFi',
+        'wi-fi': 'WiFi',
+        'internet': 'WiFi',
+        'area parkir': 'Area Parkir',
+        'parkir': 'Area Parkir',
+        'parkiran': 'Area Parkir',
+        'tempat parkir': 'Area Parkir',
+        'dapur': 'Dapur Bersama',
+        'dapur bersama': 'Dapur Bersama',
+        'dapur umum': 'Dapur Bersama',
+        'wc umum': 'WC Umum',
+        'toilet umum': 'WC Umum',
+        'kamar mandi luar': 'WC Umum',
+        'wc luar': 'WC Umum',
+        'ruang tamu': 'Ruang Tamu',
+        'ruang santai': 'Ruang Tamu',
+        'cctv': 'CCTV',
+        'kamera keamanan': 'CCTV',
+        'laundry': 'Laundry',
+        'mesin cuci': 'Laundry',
+        'cuci': 'Laundry',
+        'mushola': 'Mushola',
+        'musholla': 'Mushola',
+        'area jemuran': 'Area Jemuran',
+        'jemuran': 'Area Jemuran',
+        'tempat jemuran': 'Area Jemuran',
+        'security 24 jam': 'Security 24 Jam',
+        'security': 'Security 24 Jam',
+        'satpam': 'Security 24 Jam',
+        'penjaga kost': 'Security 24 Jam',
+        'akses 24 jam': 'Akses 24 Jam',
+        'bebas jam malam': 'Akses 24 Jam',
+        '24 jam': 'Akses 24 Jam',
+        'lift': 'Lift',
+        'cleaning service': 'Cleaning Service',
+        'pembersihan': 'Cleaning Service',
+        'kebersihan': 'Cleaning Service'
+    };
+
+    (rawFacilities || []).forEach(item => {
+        if (!item || typeof item !== 'string') return;
+        const trimmed = item.trim();
+        if (!trimmed) return;
+        const lower = trimmed.toLowerCase();
+
+        // 1. Kitchen sub-facility
+        if (kitchenMap[lower]) {
+            kitchenSet.add(kitchenMap[lower]);
+            mainFacilitiesSet.add('Dapur Bersama');
+            return;
+        }
+
+        // 2. Parking sub-facility
+        if (parkingMap[lower]) {
+            parkingSet.add(parkingMap[lower]);
+            mainFacilitiesSet.add('Area Parkir');
+            return;
+        }
+
+        // 3. Bathroom sub-facility
+        if (bathroomMap[lower]) {
+            bathroomSet.add(bathroomMap[lower]);
+            mainFacilitiesSet.add('WC Umum');
+            return;
+        }
+
+        // 4. Standard main facility
+        if (standardMainMap[lower]) {
+            mainFacilitiesSet.add(standardMainMap[lower]);
+            return;
+        }
+
+        // 5. Custom facility
+        mainFacilitiesSet.add(trimmed);
+    });
+
+    // If Area Parkir is selected but no parking sub-options chosen, default to 'Parkir Motor'
+    if (mainFacilitiesSet.has('Area Parkir') && parkingSet.size === 0) {
+        parkingSet.add('Parkir Motor');
+    }
+
+    return {
+        facilities: Array.from(mainFacilitiesSet),
+        publicKitchenFacilities: Array.from(kitchenSet),
+        publicParkingFacilities: Array.from(parkingSet),
+        publicBathroomFacilities: Array.from(bathroomSet)
+    };
+};
+
 // Check Has Facility Helper (with synonyms)
 const checkHasFacility = (facilityList: string[], target: string) => {
     if (!facilityList || !Array.isArray(facilityList)) return false;
@@ -155,17 +285,23 @@ const checkHasFacility = (facilityList: string[], target: string) => {
         'wifi': ['wifi', 'wi-fi', 'internet'],
         'dapur bersama': ['dapur', 'dapur bersama', 'dapur umum'],
         'area parkir': ['parkir', 'parkiran', 'tempat parkir', 'area parkir', 'parkir motor', 'parkir mobil', 'parkir sepeda'],
+        'wc umum': ['wc umum', 'toilet umum', 'kamar mandi luar', 'wc luar'],
         'ruang tamu': ['ruang tamu', 'ruang santai'],
         'cctv': ['cctv', 'kamera keamanan'],
         'laundry': ['laundry', 'mesin cuci', 'cuci'],
-        'wc umum': ['wc umum', 'toilet umum', 'kamar mandi luar', 'wc luar']
+        'mushola': ['mushola', 'musholla'],
+        'area jemuran': ['area jemuran', 'jemuran', 'tempat jemuran'],
+        'security 24 jam': ['security 24 jam', 'security', 'satpam', 'penjaga kost'],
+        'akses 24 jam': ['akses 24 jam', 'bebas jam malam', '24 jam'],
+        'lift': ['lift'],
+        'cleaning service': ['cleaning service', 'pembersihan', 'kebersihan']
     };
 
     const targetSyns = synonyms[normalizedTarget] || [normalizedTarget];
     
     return facilityList.some(f => {
         const nf = (f || '').toLowerCase().trim();
-        return targetSyns.some(syn => nf.includes(syn) || syn.includes(nf));
+        return targetSyns.some(syn => nf === syn || nf.includes(syn) || syn.includes(nf));
     });
 };
 
@@ -181,17 +317,34 @@ const computeDynamicPublicPhotoCategories = (facilities: string[] = [], manualEx
         'parkir motor': 'Area Parkir',
         'parkir mobil': 'Area Parkir',
         'dapur bersama': 'Dapur Bersama',
+        'dapur': 'Dapur Bersama',
+        'dapur umum': 'Dapur Bersama',
         'ruang tamu': 'Ruang Tamu',
         'wc umum': 'WC Umum',
         'cctv': 'CCTV',
-        'laundry': 'Laundry'
+        'laundry': 'Laundry',
+        'mushola': 'Mushola',
+        'musholla': 'Mushola',
+        'area jemuran': 'Area Jemuran',
+        'jemuran': 'Area Jemuran',
+        'lift': 'Lift'
     };
+
+    const nonPhotoFacs = [
+        'wifi', 'wi-fi', 'internet', 'security 24 jam', 'security', 'satpam', 'penjaga kost',
+        'akses 24 jam', 'bebas jam malam', '24 jam', 'cleaning service', 'pembersihan', 'kebersihan',
+        'kompor', 'kulkas', 'kulkas bersama', 'kulkas umum', 'dispenser', 'dispenser air',
+        'wastafel cuci piring', 'wastafel dapur', 'peralatan masak', 'meja makan', 'meja makan bersama',
+        'kloset duduk', 'kloset jongkok', 'shower', 'wastafel', 'wastafel wc',
+        'parkir sepeda'
+    ];
 
     (facilities || []).forEach(f => {
         const lower = (f || '').toLowerCase().trim();
+        if (!lower || nonPhotoFacs.includes(lower)) return;
         let mapped = '';
         for (const [k, v] of Object.entries(facMapping)) {
-            if (lower.includes(k) || k.includes(lower)) {
+            if (lower === k || lower.includes(k) || k.includes(lower)) {
                 mapped = v;
                 break;
             }
@@ -200,7 +353,7 @@ const computeDynamicPublicPhotoCategories = (facilities: string[] = [], manualEx
             if (!dynamic.includes(mapped) && !base.includes(mapped)) {
                 dynamic.push(mapped);
             }
-        } else if (lower && lower !== 'wifi') {
+        } else {
             const cleanName = f.trim();
             if (!dynamic.includes(cleanName) && !base.includes(cleanName) && cleanName !== 'Lingkungan') {
                 dynamic.push(cleanName);
@@ -383,6 +536,12 @@ export const KostManagerPropertyFormModal: React.FC<KostManagerPropertyFormModal
         const addr = newPropForm.address || '';
         const prov = newPropForm.province || detectProvinceFromAddress(addr) || 'Sulawesi Selatan';
         const initialRooms = Array.isArray(newPropForm.roomTypes) ? newPropForm.roomTypes : [];
+        const normalizedFacs = normalizeAndExtractPublicFacilities(
+            Array.isArray(newPropForm.facilities) && newPropForm.facilities.length > 0 ? newPropForm.facilities : ['WiFi', 'Area Parkir', 'Dapur Bersama'],
+            Array.isArray(newPropForm.publicKitchenFacilities) ? newPropForm.publicKitchenFacilities : [],
+            Array.isArray(newPropForm.publicParkingFacilities) ? newPropForm.publicParkingFacilities : ['Parkir Motor'],
+            Array.isArray(newPropForm.publicBathroomFacilities) ? newPropForm.publicBathroomFacilities : []
+        );
         return {
             title: newPropForm.title || '',
             description: newPropForm.description || '',
@@ -395,10 +554,10 @@ export const KostManagerPropertyFormModal: React.FC<KostManagerPropertyFormModal
             price: newPropForm.price || 0,
             owner_uid: newPropForm.owner_uid || (ownersList[0]?.id || ''),
             roomTypes: initialRooms,
-            publicBathroomFacilities: Array.isArray(newPropForm.publicBathroomFacilities) ? newPropForm.publicBathroomFacilities : [],
-            publicKitchenFacilities: Array.isArray(newPropForm.publicKitchenFacilities) ? newPropForm.publicKitchenFacilities : [],
-            publicParkingFacilities: Array.isArray(newPropForm.publicParkingFacilities) ? newPropForm.publicParkingFacilities : ['Parkir Motor'],
-            facilities: Array.isArray(newPropForm.facilities) && newPropForm.facilities.length > 0 ? newPropForm.facilities : ['WiFi', 'Area Parkir', 'Dapur Bersama'],
+            publicBathroomFacilities: normalizedFacs.publicBathroomFacilities,
+            publicKitchenFacilities: normalizedFacs.publicKitchenFacilities,
+            publicParkingFacilities: normalizedFacs.publicParkingFacilities,
+            facilities: normalizedFacs.facilities,
             location: newPropForm.location || { lat: -5.147665, lng: 119.432731 },
             rules: Array.isArray(newPropForm.rules) && newPropForm.rules.length > 0 ? newPropForm.rules : ['Tidak boleh membawa hewan peliharaan', 'Tamu dilarang menginap'],
             image_urls: Array.isArray(newPropForm.imageUrls) ? newPropForm.imageUrls : (Array.isArray(newPropForm.image_urls) ? newPropForm.image_urls : []),
@@ -506,9 +665,16 @@ export const KostManagerPropertyFormModal: React.FC<KostManagerPropertyFormModal
             return { original: url, url, label };
         }).filter((item): item is { original: string; url: string; label: string } => item !== null && Boolean(item.url));
 
-        const loadedFacilities = Array.isArray(newPropForm.facilities) && newPropForm.facilities.length > 0 
+        const rawLoadedFacilities = Array.isArray(newPropForm.facilities) && newPropForm.facilities.length > 0 
             ? newPropForm.facilities 
             : ['WiFi', 'Area Parkir', 'Dapur Bersama'];
+
+        const normalizedLoadedFacs = normalizeAndExtractPublicFacilities(
+            rawLoadedFacilities,
+            Array.isArray(newPropForm.publicKitchenFacilities) ? newPropForm.publicKitchenFacilities : [],
+            Array.isArray(newPropForm.publicParkingFacilities) ? newPropForm.publicParkingFacilities : ['Parkir Motor'],
+            Array.isArray(newPropForm.publicBathroomFacilities) ? newPropForm.publicBathroomFacilities : []
+        );
 
         // Auto-discover extra categories from existing photos
         const extraCatsFromPhotos = normalizedImgs.map((img: any) => img.label).filter(Boolean);
@@ -525,10 +691,10 @@ export const KostManagerPropertyFormModal: React.FC<KostManagerPropertyFormModal
             price: newPropForm.price || 0,
             owner_uid: newPropForm.owner_uid || (ownersList[0]?.id || ''),
             roomTypes: initialRooms,
-            publicBathroomFacilities: Array.isArray(newPropForm.publicBathroomFacilities) ? newPropForm.publicBathroomFacilities : [],
-            publicKitchenFacilities: Array.isArray(newPropForm.publicKitchenFacilities) ? newPropForm.publicKitchenFacilities : [],
-            publicParkingFacilities: Array.isArray(newPropForm.publicParkingFacilities) ? newPropForm.publicParkingFacilities : ['Parkir Motor'],
-            facilities: loadedFacilities,
+            publicBathroomFacilities: normalizedLoadedFacs.publicBathroomFacilities,
+            publicKitchenFacilities: normalizedLoadedFacs.publicKitchenFacilities,
+            publicParkingFacilities: normalizedLoadedFacs.publicParkingFacilities,
+            facilities: normalizedLoadedFacs.facilities,
             location: newPropForm.location || { lat: -5.147665, lng: 119.432731 },
             rules: Array.isArray(newPropForm.rules) && newPropForm.rules.length > 0 ? newPropForm.rules : ['Tidak boleh membawa hewan peliharaan', 'Tamu dilarang menginap'],
             image_urls: normalizedImgs,
@@ -539,7 +705,7 @@ export const KostManagerPropertyFormModal: React.FC<KostManagerPropertyFormModal
         });
 
         // Compute dynamic public photo categories including any extra categories from photos
-        const dynamicPublicCats = computeDynamicPublicPhotoCategories(loadedFacilities, extraCatsFromPhotos);
+        const dynamicPublicCats = computeDynamicPublicPhotoCategories(normalizedLoadedFacs.facilities, extraCatsFromPhotos);
         setPhotoCategories(dynamicPublicCats);
     }, [editingPropertyId, newPropForm]);
 
@@ -1876,7 +2042,7 @@ export const KostManagerPropertyFormModal: React.FC<KostManagerPropertyFormModal
                             <div className="flex flex-col gap-1.5 p-4 bg-white rounded-2xl border border-[#e0c0af] shadow-xs relative transition-all">
                                 <label className="text-[11px] font-bold text-[#584235] uppercase tracking-wider">FASILITAS UMUM</label>
                                 <div className="grid grid-cols-2 gap-2">
-                                    {['WiFi', 'Dapur Bersama', 'Area Parkir', 'Ruang Tamu', 'CCTV', 'Laundry', 'WC Umum'].map(fac => {
+                                    {['WiFi', 'Area Parkir', 'Dapur Bersama', 'WC Umum', 'Ruang Tamu', 'CCTV', 'Laundry', 'Mushola', 'Area Jemuran', 'Security 24 Jam', 'Akses 24 Jam', 'Lift', 'Cleaning Service'].map(fac => {
                                         const isChecked = checkHasFacility(kmListingForm.facilities, fac);
                                         return (
                                             <React.Fragment key={fac}>
@@ -1898,15 +2064,21 @@ export const KostManagerPropertyFormModal: React.FC<KostManagerPropertyFormModal
                                                                     'wifi': ['wifi', 'wi-fi', 'internet'],
                                                                     'dapur bersama': ['dapur', 'dapur bersama', 'dapur umum'],
                                                                     'area parkir': ['parkir', 'parkiran', 'tempat parkir', 'area parkir', 'parkir motor', 'parkir mobil', 'parkir sepeda'],
+                                                                    'wc umum': ['wc umum', 'toilet umum', 'kamar mandi luar', 'wc luar'],
                                                                     'ruang tamu': ['ruang tamu', 'ruang santai'],
                                                                     'cctv': ['cctv', 'kamera keamanan'],
                                                                     'laundry': ['laundry', 'mesin cuci', 'cuci'],
-                                                                    'wc umum': ['wc umum', 'toilet umum', 'kamar mandi luar', 'wc luar']
+                                                                    'mushola': ['mushola', 'musholla'],
+                                                                    'area jemuran': ['area jemuran', 'jemuran', 'tempat jemuran'],
+                                                                    'security 24 jam': ['security 24 jam', 'security', 'satpam', 'penjaga kost'],
+                                                                    'akses 24 jam': ['akses 24 jam', 'bebas jam malam', '24 jam'],
+                                                                    'lift': ['lift'],
+                                                                    'cleaning service': ['cleaning service', 'pembersihan', 'kebersihan']
                                                                 };
                                                                 const targetSyns = synonyms[normalizedTarget] || [normalizedTarget];
                                                                 updated = current.filter((f: string) => {
                                                                     const nf = (f || '').toLowerCase().trim();
-                                                                    return !targetSyns.some(syn => nf.includes(syn) || syn.includes(nf));
+                                                                    return !targetSyns.some(syn => nf === syn || nf.includes(syn) || syn.includes(nf));
                                                                 });
                                                             } else {
                                                                 updated = [...current, fac];
@@ -1985,7 +2157,7 @@ export const KostManagerPropertyFormModal: React.FC<KostManagerPropertyFormModal
                                                                     className="flex-grow h-[32px] px-2.5 border border-[#e0c0af] rounded-lg text-[11px] bg-white outline-none text-[#584235] font-bold"
                                                                 />
                                                                 <button 
-                                                                    type="button"
+                                                                    type="button" 
                                                                     onClick={() => {
                                                                         if (!customPublicKitchenFacilityInput.trim()) return;
                                                                         const current = kmListingForm.publicKitchenFacilities || [];
@@ -2064,7 +2236,7 @@ export const KostManagerPropertyFormModal: React.FC<KostManagerPropertyFormModal
                                                                     className="flex-grow h-[32px] px-2.5 border border-[#e0c0af] rounded-lg text-[11px] bg-white outline-none text-[#584235] font-bold"
                                                                 />
                                                                 <button 
-                                                                    type="button"
+                                                                    type="button" 
                                                                     onClick={() => {
                                                                         if (!customPublicParkingFacilityInput.trim()) return;
                                                                         const current = kmListingForm.publicParkingFacilities || [];
@@ -2143,7 +2315,7 @@ export const KostManagerPropertyFormModal: React.FC<KostManagerPropertyFormModal
                                                                     className="flex-grow h-[32px] px-2.5 border border-[#e0c0af] rounded-lg text-[11px] bg-white outline-none text-[#584235] font-bold"
                                                                 />
                                                                 <button 
-                                                                    type="button"
+                                                                    type="button" 
                                                                     onClick={() => {
                                                                         if (!customPublicBathroomFacilityInput.trim()) return;
                                                                         const current = kmListingForm.publicBathroomFacilities || [];
@@ -2166,27 +2338,48 @@ export const KostManagerPropertyFormModal: React.FC<KostManagerPropertyFormModal
                                 </div>
 
                                 {/* Custom Facilities Badges */}
-                                {kmListingForm.facilities && kmListingForm.facilities.filter((f: string) => !['wifi', 'dapur bersama', 'area parkir', 'ruang tamu', 'cctv', 'laundry', 'wc umum'].includes(f.toLowerCase().trim())).length > 0 && (
-                                    <div className="flex flex-wrap gap-1.5 mt-2">
-                                        {kmListingForm.facilities.filter((f: string) => !['wifi', 'dapur bersama', 'area parkir', 'ruang tamu', 'cctv', 'laundry', 'wc umum'].includes(f.toLowerCase().trim())).map((fac: string) => (
-                                            <span key={fac} className="inline-flex items-center gap-1.5 bg-[#eff4ff] text-[#264191] text-[10px] font-black uppercase tracking-wider px-2.5 py-1.5 rounded-lg border border-[#d3e4fe]">
-                                                <span>{fac}</span>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => {
-                                                        setKmListingForm({
-                                                            ...kmListingForm,
-                                                            facilities: kmListingForm.facilities.filter((f: string) => f !== fac)
-                                                        });
-                                                    }}
-                                                    className="text-red-500 hover:text-red-700 font-bold ml-1 text-[11px] leading-none cursor-pointer"
-                                                >
-                                                    &times;
-                                                </button>
-                                            </span>
-                                        ))}
-                                    </div>
-                                )}
+                                {(() => {
+                                    const STANDARD_AND_SUB_KEYS = [
+                                        'wifi', 'wi-fi', 'internet',
+                                        'area parkir', 'parkir', 'parkiran', 'tempat parkir', 'parkir motor', 'parkir mobil', 'parkir sepeda',
+                                        'dapur', 'dapur bersama', 'dapur umum', 'kompor', 'kulkas', 'kulkas bersama', 'kulkas umum', 'dispenser', 'dispenser air', 'wastafel cuci piring', 'wastafel dapur', 'peralatan masak', 'meja makan', 'meja makan bersama',
+                                        'wc umum', 'toilet umum', 'kamar mandi luar', 'wc luar', 'kloset duduk', 'kloset jongkok', 'shower', 'wastafel', 'wastafel wc',
+                                        'ruang tamu', 'ruang santai',
+                                        'cctv', 'kamera keamanan',
+                                        'laundry', 'mesin cuci', 'cuci',
+                                        'mushola', 'musholla',
+                                        'area jemuran', 'jemuran', 'tempat jemuran',
+                                        'security 24 jam', 'security', 'satpam', 'penjaga kost',
+                                        'akses 24 jam', 'bebas jam malam', '24 jam',
+                                        'lift',
+                                        'cleaning service', 'pembersihan', 'kebersihan'
+                                    ];
+                                    const customFacs = (kmListingForm.facilities || []).filter(
+                                        (f: string) => !STANDARD_AND_SUB_KEYS.includes((f || '').toLowerCase().trim())
+                                    );
+                                    if (customFacs.length === 0) return null;
+                                    return (
+                                        <div className="flex flex-wrap gap-1.5 mt-2">
+                                            {customFacs.map((fac: string) => (
+                                                <span key={fac} className="inline-flex items-center gap-1.5 bg-[#eff4ff] text-[#264191] text-[10px] font-black uppercase tracking-wider px-2.5 py-1.5 rounded-lg border border-[#d3e4fe]">
+                                                    <span>{fac}</span>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setKmListingForm({
+                                                                ...kmListingForm,
+                                                                facilities: (kmListingForm.facilities || []).filter((f: string) => f !== fac)
+                                                            });
+                                                        }}
+                                                        className="text-red-500 hover:text-red-700 font-bold ml-1 text-[11px] leading-none cursor-pointer"
+                                                    >
+                                                        &times;
+                                                    </button>
+                                                </span>
+                                            ))}
+                                        </div>
+                                    );
+                                })()}
 
                                 <div className="flex gap-2 mt-2">
                                     <input 

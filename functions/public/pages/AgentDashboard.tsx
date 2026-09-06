@@ -469,6 +469,136 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
     const [isDrawing, setIsDrawing] = useState(false);
     const canvasRef = useRef<HTMLCanvasElement>(null);
 
+    // Helper to dynamically normalize and separate public facilities & sub-facilities (Mitra & KostManager synchronization)
+    const normalizeAndExtractPublicFacilities = (
+        rawFacilities: string[] = [],
+        existingKitchen: string[] = [],
+        existingParking: string[] = [],
+        existingBathroom: string[] = []
+    ) => {
+        const kitchenSet = new Set<string>((existingKitchen || []).map(k => k.trim()).filter(Boolean));
+        const parkingSet = new Set<string>((existingParking || []).map(p => p.trim()).filter(Boolean));
+        const bathroomSet = new Set<string>((existingBathroom || []).map(b => b.trim()).filter(Boolean));
+        const mainFacilitiesSet = new Set<string>();
+
+        const kitchenMap: Record<string, string> = {
+            'kompor': 'Kompor',
+            'kulkas': 'Kulkas',
+            'kulkas bersama': 'Kulkas',
+            'kulkas umum': 'Kulkas',
+            'dispenser': 'Dispenser',
+            'dispenser air': 'Dispenser',
+            'wastafel cuci piring': 'Wastafel Cuci Piring',
+            'wastafel dapur': 'Wastafel Cuci Piring',
+            'peralatan masak': 'Peralatan Masak',
+            'meja makan': 'Meja Makan',
+            'meja makan bersama': 'Meja Makan'
+        };
+
+        const parkingMap: Record<string, string> = {
+            'parkir motor': 'Parkir Motor',
+            'parkir mobil': 'Parkir Mobil',
+            'parkir sepeda': 'Parkir Sepeda'
+        };
+
+        const bathroomMap: Record<string, string> = {
+            'kloset duduk': 'Kloset Duduk',
+            'kloset jongkok': 'Kloset Jongkok',
+            'shower': 'Shower',
+            'wastafel': 'Wastafel',
+            'wastafel wc': 'Wastafel'
+        };
+
+        const standardMainMap: Record<string, string> = {
+            'wifi': 'WiFi',
+            'wi-fi': 'WiFi',
+            'internet': 'WiFi',
+            'area parkir': 'Area Parkir',
+            'parkir': 'Area Parkir',
+            'parkiran': 'Area Parkir',
+            'tempat parkir': 'Area Parkir',
+            'dapur': 'Dapur Bersama',
+            'dapur bersama': 'Dapur Bersama',
+            'dapur umum': 'Dapur Bersama',
+            'wc umum': 'WC Umum',
+            'toilet umum': 'WC Umum',
+            'kamar mandi luar': 'WC Umum',
+            'wc luar': 'WC Umum',
+            'ruang tamu': 'Ruang Tamu',
+            'ruang santai': 'Ruang Tamu',
+            'cctv': 'CCTV',
+            'kamera keamanan': 'CCTV',
+            'laundry': 'Laundry',
+            'mesin cuci': 'Laundry',
+            'cuci': 'Laundry',
+            'mushola': 'Mushola',
+            'musholla': 'Mushola',
+            'area jemuran': 'Area Jemuran',
+            'jemuran': 'Area Jemuran',
+            'tempat jemuran': 'Area Jemuran',
+            'security 24 jam': 'Security 24 Jam',
+            'security': 'Security 24 Jam',
+            'satpam': 'Security 24 Jam',
+            'penjaga kost': 'Security 24 Jam',
+            'akses 24 jam': 'Akses 24 Jam',
+            'bebas jam malam': 'Akses 24 Jam',
+            '24 jam': 'Akses 24 Jam',
+            'lift': 'Lift',
+            'cleaning service': 'Cleaning Service',
+            'pembersihan': 'Cleaning Service',
+            'kebersihan': 'Cleaning Service'
+        };
+
+        (rawFacilities || []).forEach(item => {
+            if (!item || typeof item !== 'string') return;
+            const trimmed = item.trim();
+            if (!trimmed) return;
+            const lower = trimmed.toLowerCase();
+
+            // 1. Kitchen sub-facility
+            if (kitchenMap[lower]) {
+                kitchenSet.add(kitchenMap[lower]);
+                mainFacilitiesSet.add('Dapur Bersama');
+                return;
+            }
+
+            // 2. Parking sub-facility
+            if (parkingMap[lower]) {
+                parkingSet.add(parkingMap[lower]);
+                mainFacilitiesSet.add('Area Parkir');
+                return;
+            }
+
+            // 3. Bathroom sub-facility
+            if (bathroomMap[lower]) {
+                bathroomSet.add(bathroomMap[lower]);
+                mainFacilitiesSet.add('WC Umum');
+                return;
+            }
+
+            // 4. Standard main facility
+            if (standardMainMap[lower]) {
+                mainFacilitiesSet.add(standardMainMap[lower]);
+                return;
+            }
+
+            // 5. Custom facility
+            mainFacilitiesSet.add(trimmed);
+        });
+
+        // If Area Parkir is selected but no parking sub-options chosen, default to 'Parkir Motor'
+        if (mainFacilitiesSet.has('Area Parkir') && parkingSet.size === 0) {
+            parkingSet.add('Parkir Motor');
+        }
+
+        return {
+            facilities: Array.from(mainFacilitiesSet),
+            publicKitchenFacilities: Array.from(kitchenSet),
+            publicParkingFacilities: Array.from(parkingSet),
+            publicBathroomFacilities: Array.from(bathroomSet)
+        };
+    };
+
     // Helper to dynamically compute public photo categories based on checked facilities
     const computeDynamicPublicPhotoCategories = (facilities: string[] = [], manualExtras: string[] = []): string[] => {
         const base = ['Bangunan Depan', 'Koridor', 'Lingkungan'];
@@ -481,20 +611,37 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
             'parkir motor': 'Area Parkir',
             'parkir mobil': 'Area Parkir',
             'dapur bersama': 'Dapur Bersama',
+            'dapur': 'Dapur Bersama',
+            'dapur umum': 'Dapur Bersama',
             'ruang tamu': 'Ruang Tamu',
             'wc umum': 'WC Umum',
             'cctv': 'CCTV',
-            'laundry': 'Laundry'
+            'laundry': 'Laundry',
+            'mushola': 'Mushola',
+            'musholla': 'Mushola',
+            'area jemuran': 'Area Jemuran',
+            'jemuran': 'Area Jemuran',
+            'lift': 'Lift'
         };
+
+        const nonPhotoFacs = [
+            'wifi', 'wi-fi', 'internet', 'security 24 jam', 'security', 'satpam', 'penjaga kost',
+            'akses 24 jam', 'bebas jam malam', '24 jam', 'cleaning service', 'pembersihan', 'kebersihan',
+            'kompor', 'kulkas', 'kulkas bersama', 'kulkas umum', 'dispenser', 'dispenser air',
+            'wastafel cuci piring', 'wastafel dapur', 'peralatan masak', 'meja makan', 'meja makan bersama',
+            'kloset duduk', 'kloset jongkok', 'shower', 'wastafel', 'wastafel wc',
+            'parkir sepeda'
+        ];
 
         (facilities || []).forEach(f => {
             const lower = (f || '').toLowerCase().trim();
+            if (!lower || nonPhotoFacs.includes(lower)) return;
             const mapped = facMapping[lower];
             if (mapped) {
                 if (!dynamic.includes(mapped) && !base.includes(mapped)) {
                     dynamic.push(mapped);
                 }
-            } else if (lower && lower !== 'wifi') {
+            } else {
                 const cleanName = f.trim();
                 if (!dynamic.includes(cleanName) && !base.includes(cleanName)) {
                     dynamic.push(cleanName);
@@ -2645,6 +2792,12 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
 
                     // Merge draft with request data to ensure title and address are never lost
                     const resolvedInitialOwnerUid = resolveValidOwnerUid(parsed.kmListingForm.owner_uid || req.user_id, req, fetchedUser);
+                    const normalizedDraftFacs = normalizeAndExtractPublicFacilities(
+                        parsed.kmListingForm.facilities || ['WiFi', 'Area Parkir'],
+                        parsed.kmListingForm.publicKitchenFacilities || [],
+                        parsed.kmListingForm.publicParkingFacilities || [],
+                        parsed.kmListingForm.publicBathroomFacilities || []
+                    );
                     const mergedForm = {
                         ...parsed.kmListingForm,
                         image_urls: draftImageUrls,
@@ -2654,7 +2807,11 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                         title: parsed.kmListingForm.title || req.kost_name,
                         address: parsed.kmListingForm.address || req.kost_address,
                         province: parsed.kmListingForm.province || detectProvinceFromAddress(parsed.kmListingForm.address || req.kost_address),
-                        owner_uid: resolvedInitialOwnerUid
+                        owner_uid: resolvedInitialOwnerUid,
+                        facilities: normalizedDraftFacs.facilities,
+                        publicKitchenFacilities: normalizedDraftFacs.publicKitchenFacilities,
+                        publicParkingFacilities: normalizedDraftFacs.publicParkingFacilities,
+                        publicBathroomFacilities: normalizedDraftFacs.publicBathroomFacilities
                     };
                     setKmListingForm(mergedForm);
                     setKmStep(parsed.kmStep || 1);
@@ -2756,7 +2913,14 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                     categorizedPhotos: {}
                 }));
 
-                const dynamicKmCats = computeDynamicPublicPhotoCategories(dbKmProp.facilities || ['WiFi', 'Area Parkir'], loadedKmPhotoCategories);
+                const normalizedKmFacs = normalizeAndExtractPublicFacilities(
+                    dbKmProp.facilities || ['WiFi', 'Area Parkir'],
+                    dbKmProp.metadata?.publicKitchenFacilities || [],
+                    dbKmProp.metadata?.publicParkingFacilities || [],
+                    dbKmProp.metadata?.publicBathroomFacilities || []
+                );
+
+                const dynamicKmCats = computeDynamicPublicPhotoCategories(normalizedKmFacs.facilities || ['WiFi', 'Area Parkir'], loadedKmPhotoCategories);
                 setPhotoCategories(dynamicKmCats);
                 setShowAddLandmarkForm(false);
                 setActiveRoomIdx(null);
@@ -2781,15 +2945,15 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                     totalRooms: (dbKmProp.total_rooms && dbKmProp.total_rooms > 0) ? dbKmProp.total_rooms : (initialTotalRooms || 0),
                     owner_uid: resolvedOwnerUid,
                     roomTypes: cleanKmRoomTypes,
-                    facilities: dbKmProp.facilities || ['WiFi', 'Area Parkir'],
+                    facilities: normalizedKmFacs.facilities,
                     location: dbKmProp.location || initialCoords,
                     rules: dbKmProp.rules || ['Tidak boleh membawa hewan peliharaan', 'Tamu dilarang menginap'],
                     image_urls: loadedKmImageUrls,
                     photoCategories: loadedKmPhotoCategories,
                     campuses: dbKmProp.campuses || [],
-                    publicBathroomFacilities: dbKmProp.metadata?.publicBathroomFacilities || [],
-                    publicKitchenFacilities: dbKmProp.metadata?.publicKitchenFacilities || [],
-                    publicParkingFacilities: dbKmProp.metadata?.publicParkingFacilities || ['Parkir Motor']
+                    publicBathroomFacilities: normalizedKmFacs.publicBathroomFacilities,
+                    publicKitchenFacilities: normalizedKmFacs.publicKitchenFacilities,
+                    publicParkingFacilities: normalizedKmFacs.publicParkingFacilities
                 });
                 return;
             }
@@ -2801,9 +2965,16 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                 console.log("openKostManagerListing: fallback to loading from dbPropertyRecord (preserving original photos as self-listing only):", dbPropertyRecord.id);
                 kmOriginalLocationRef.current = dbPropertyRecord.location || null;
                 
+                const normalizedPropFacs = normalizeAndExtractPublicFacilities(
+                    dbPropertyRecord.facilities || ['WiFi', 'Area Parkir'],
+                    dbPropertyRecord.metadata?.publicKitchenFacilities || [],
+                    dbPropertyRecord.metadata?.publicParkingFacilities || [],
+                    dbPropertyRecord.metadata?.publicBathroomFacilities || []
+                );
+
                 // FRESH SLATE FOR PHOTOS: Do NOT copy self-listing photos into surveyor's form!
                 // The surveyor MUST take brand new, authentic on-site survey photos.
-                const freshDynamicCats = computeDynamicPublicPhotoCategories(dbPropertyRecord.facilities || ['WiFi', 'Area Parkir'], []);
+                const freshDynamicCats = computeDynamicPublicPhotoCategories(normalizedPropFacs.facilities || ['WiFi', 'Area Parkir'], []);
                 setPhotoCategories(freshDynamicCats);
                 setShowAddLandmarkForm(false);
                 setActiveRoomIdx(null);
@@ -2838,15 +3009,15 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                     totalRooms: (dbPropertyRecord.total_rooms && dbPropertyRecord.total_rooms > 0) ? dbPropertyRecord.total_rooms : (initialTotalRooms || 0),
                     owner_uid: resolvedOwnerUid,
                     roomTypes: cleanRoomTypes,
-                    facilities: dbPropertyRecord.facilities || ['WiFi', 'Area Parkir'],
+                    facilities: normalizedPropFacs.facilities,
                     location: dbPropertyRecord.location || initialCoords,
                     rules: dbPropertyRecord.rules || ['Tidak boleh membawa hewan peliharaan', 'Tamu dilarang menginap'],
                     image_urls: [], // FRESH SLATE: Surveyor will take new survey photos (0 Foto)
                     photoCategories: freshDynamicCats,
                     campuses: dbPropertyRecord.campuses || [],
-                    publicBathroomFacilities: dbPropertyRecord.metadata?.publicBathroomFacilities || [],
-                    publicKitchenFacilities: dbPropertyRecord.metadata?.publicKitchenFacilities || [],
-                    publicParkingFacilities: dbPropertyRecord.metadata?.publicParkingFacilities || ['Parkir Motor']
+                    publicBathroomFacilities: normalizedPropFacs.publicBathroomFacilities,
+                    publicKitchenFacilities: normalizedPropFacs.publicKitchenFacilities,
+                    publicParkingFacilities: normalizedPropFacs.publicParkingFacilities
                 });
                 return;
             }
@@ -3120,21 +3291,28 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
         if (!facilityList || !Array.isArray(facilityList)) return false;
         const normalizedTarget = target.toLowerCase().trim();
         
-        // Mapping synonyms
+        // Mapping synonyms across all standard facilities
         const synonyms: Record<string, string[]> = {
             'wifi': ['wifi', 'wi-fi', 'internet'],
             'dapur bersama': ['dapur', 'dapur bersama', 'dapur umum'],
-            'area parkir': ['parkir', 'parkiran', 'tempat parkir', 'area parkir', 'parkir motor', 'parkir mobil'],
+            'area parkir': ['parkir', 'parkiran', 'tempat parkir', 'area parkir', 'parkir motor', 'parkir mobil', 'parkir sepeda'],
+            'wc umum': ['wc umum', 'toilet umum', 'kamar mandi luar', 'wc luar'],
             'ruang tamu': ['ruang tamu', 'ruang santai'],
             'cctv': ['cctv', 'kamera keamanan'],
-            'laundry': ['laundry', 'mesin cuci', 'cuci']
+            'laundry': ['laundry', 'mesin cuci', 'cuci'],
+            'mushola': ['mushola', 'musholla'],
+            'area jemuran': ['area jemuran', 'jemuran', 'tempat jemuran'],
+            'security 24 jam': ['security 24 jam', 'security', 'satpam', 'penjaga kost'],
+            'akses 24 jam': ['akses 24 jam', 'bebas jam malam', '24 jam'],
+            'lift': ['lift'],
+            'cleaning service': ['cleaning service', 'pembersihan', 'kebersihan']
         };
 
         const targetSyns = synonyms[normalizedTarget] || [normalizedTarget];
         
         return facilityList.some(f => {
             const nf = (f || '').toLowerCase().trim();
-            return targetSyns.some(syn => nf.includes(syn) || syn.includes(nf));
+            return targetSyns.some(syn => nf === syn || nf.includes(syn) || syn.includes(nf));
         });
     };
 
@@ -7777,7 +7955,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                                                 )}
                                                 <label className="text-[11px] font-bold text-[#584235] uppercase tracking-wider">Fasilitas Umum</label>
                                                 <div className="grid grid-cols-2 gap-2">
-                                                    {['WiFi', 'Dapur Bersama', 'Area Parkir', 'Ruang Tamu', 'CCTV', 'Laundry', 'WC Umum'].map(fac => {
+                                                    {['WiFi', 'Area Parkir', 'Dapur Bersama', 'WC Umum', 'Ruang Tamu', 'CCTV', 'Laundry', 'Mushola', 'Area Jemuran', 'Security 24 Jam', 'Akses 24 Jam', 'Lift', 'Cleaning Service'].map(fac => {
                                                           const isChecked = checkHasFacility(kmListingForm.facilities, fac);
                                                           return (
                                                               <React.Fragment key={fac}>
@@ -7795,14 +7973,21 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                                                                                       'wifi': ['wifi', 'wi-fi', 'internet'],
                                                                                       'dapur bersama': ['dapur', 'dapur bersama', 'dapur umum'],
                                                                                       'area parkir': ['parkir', 'parkiran', 'tempat parkir', 'area parkir', 'parkir motor', 'parkir mobil', 'parkir sepeda'],
+                                                                                      'wc umum': ['wc umum', 'toilet umum', 'kamar mandi luar', 'wc luar'],
                                                                                       'ruang tamu': ['ruang tamu', 'ruang santai'],
                                                                                       'cctv': ['cctv', 'kamera keamanan'],
-                                                                                      'laundry': ['laundry', 'mesin cuci', 'cuci']
+                                                                                      'laundry': ['laundry', 'mesin cuci', 'cuci'],
+                                                                                      'mushola': ['mushola', 'musholla'],
+                                                                                      'area jemuran': ['area jemuran', 'jemuran', 'tempat jemuran'],
+                                                                                      'security 24 jam': ['security 24 jam', 'security', 'satpam', 'penjaga kost'],
+                                                                                      'akses 24 jam': ['akses 24 jam', 'bebas jam malam', '24 jam'],
+                                                                                      'lift': ['lift'],
+                                                                                      'cleaning service': ['cleaning service', 'pembersihan', 'kebersihan']
                                                                                   };
                                                                                   const targetSyns = synonyms[normalizedTarget] || [normalizedTarget];
                                                                                   updated = current.filter((f: string) => {
                                                                                       const nf = (f || '').toLowerCase().trim();
-                                                                                      return !targetSyns.some(syn => nf.includes(syn) || syn.includes(nf));
+                                                                                      return !targetSyns.some(syn => nf === syn || nf.includes(syn) || syn.includes(nf));
                                                                                   });
                                                                               } else {
                                                                                   updated = [...current, fac];
@@ -7815,7 +8000,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
 
                                                                               setKmListingForm({ ...kmListingForm, facilities: updated, ...additionalFormUpdates });
                                                                           }}
-                                                                          className="rounded text-[#ff7a00] focus:ring-[#ff7a00] border-gray-300 w-4 h-4"
+                                                                          className="rounded text-[#ff7a00] focus:ring-[#ff7a00] border-gray-300 w-4 h-4 cursor-pointer"
                                                                       />
                                                                       <span className="text-xs uppercase tracking-wider">{fac}</span>
                                                                   </label>
@@ -7834,12 +8019,12 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                                                                                               checked={!!isKChecked}
                                                                                               onChange={() => {
                                                                                                   const current = kmListingForm.publicKitchenFacilities || [];
-                                                                                                   const updated = current.includes(kfac)
+                                                                                                  const updated = current.includes(kfac)
                                                                                                       ? current.filter((f: string) => f !== kfac)
                                                                                                       : [...current, kfac];
                                                                                                   setKmListingForm({ ...kmListingForm, publicKitchenFacilities: updated });
                                                                                               }}
-                                                                                              className="rounded border-[#e0c0af] text-[#ff7a00] focus:ring-[#ff7a00] w-4.5 h-4.5"
+                                                                                              className="rounded border-[#e0c0af] text-[#ff7a00] focus:ring-[#ff7a00] w-4.5 h-4.5 cursor-pointer"
                                                                                           />
                                                                                           <span className="text-xs text-[#584235] uppercase tracking-wider font-bold">{kfac}</span>
                                                                                       </label>
@@ -7861,7 +8046,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                                                                                                           const current = kmListingForm.publicKitchenFacilities || [];
                                                                                                           setKmListingForm({ ...kmListingForm, publicKitchenFacilities: current.filter((f) => f !== fac) });
                                                                                                       }}
-                                                                                                      className="hover:text-orange-700 text-xs font-bold leading-none p-0.5"
+                                                                                                      className="hover:text-orange-700 text-xs font-bold leading-none p-0.5 cursor-pointer"
                                                                                                   >
                                                                                                       &times;
                                                                                                   </button>
@@ -7890,7 +8075,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                                                                                           }
                                                                                           setCustomPublicKitchenFacilityInput('');
                                                                                       }}
-                                                                                      className="h-[28px] px-3 bg-[#ff7a00] hover:bg-orange-600 text-white font-bold text-[10px] uppercase rounded flex items-center justify-center transition-colors shadow-sm"
+                                                                                      className="h-[28px] px-3 bg-[#ff7a00] hover:bg-orange-600 text-white font-bold text-[10px] uppercase rounded flex items-center justify-center transition-colors shadow-sm cursor-pointer"
                                                                                   >
                                                                                       +
                                                                                   </button>
@@ -7918,7 +8103,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                                                                                                       : [...current, pfac];
                                                                                                   setKmListingForm({ ...kmListingForm, publicParkingFacilities: updated });
                                                                                               }}
-                                                                                              className="rounded border-[#e0c0af] text-[#ff7a00] focus:ring-[#ff7a00] w-4.5 h-4.5"
+                                                                                              className="rounded border-[#e0c0af] text-[#ff7a00] focus:ring-[#ff7a00] w-4.5 h-4.5 cursor-pointer"
                                                                                           />
                                                                                           <span className="text-xs text-[#584235] uppercase tracking-wider font-bold">{pfac}</span>
                                                                                       </label>
@@ -7940,7 +8125,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                                                                                                           const current = kmListingForm.publicParkingFacilities || [];
                                                                                                           setKmListingForm({ ...kmListingForm, publicParkingFacilities: current.filter((f) => f !== fac) });
                                                                                                       }}
-                                                                                                      className="hover:text-orange-700 text-xs font-bold leading-none p-0.5"
+                                                                                                      className="hover:text-orange-700 text-xs font-bold leading-none p-0.5 cursor-pointer"
                                                                                                   >
                                                                                                       &times;
                                                                                                   </button>
@@ -7969,7 +8154,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                                                                                           }
                                                                                           setCustomPublicParkingFacilityInput('');
                                                                                       }}
-                                                                                      className="h-[28px] px-3 bg-[#ff7a00] hover:bg-orange-600 text-white font-bold text-[10px] uppercase rounded flex items-center justify-center transition-colors shadow-sm"
+                                                                                      className="h-[28px] px-3 bg-[#ff7a00] hover:bg-orange-600 text-white font-bold text-[10px] uppercase rounded flex items-center justify-center transition-colors shadow-sm cursor-pointer"
                                                                                   >
                                                                                       +
                                                                                   </button>
@@ -7997,7 +8182,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                                                                                                       : [...current, bfac];
                                                                                                   setKmListingForm({ ...kmListingForm, publicBathroomFacilities: updated });
                                                                                               }}
-                                                                                              className="rounded border-[#e0c0af] text-[#ff7a00] focus:ring-[#ff7a00] w-4.5 h-4.5"
+                                                                                              className="rounded border-[#e0c0af] text-[#ff7a00] focus:ring-[#ff7a00] w-4.5 h-4.5 cursor-pointer"
                                                                                           />
                                                                                           <span className="text-xs text-[#584235] uppercase tracking-wider font-bold">{bfac}</span>
                                                                                       </label>
@@ -8019,7 +8204,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                                                                                                           const current = kmListingForm.publicBathroomFacilities || [];
                                                                                                           setKmListingForm({ ...kmListingForm, publicBathroomFacilities: current.filter((f) => f !== fac) });
                                                                                                       }}
-                                                                                                      className="hover:text-orange-700 text-xs font-bold leading-none p-0.5"
+                                                                                                      className="hover:text-orange-700 text-xs font-bold leading-none p-0.5 cursor-pointer"
                                                                                                   >
                                                                                                       &times;
                                                                                                   </button>
@@ -8048,7 +8233,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                                                                                           }
                                                                                           setCustomPublicBathroomFacilityInput('');
                                                                                       }}
-                                                                                      className="h-[28px] px-3 bg-[#ff7a00] hover:bg-orange-600 text-white font-bold text-[10px] uppercase rounded flex items-center justify-center transition-colors shadow-sm"
+                                                                                      className="h-[28px] px-3 bg-[#ff7a00] hover:bg-orange-600 text-white font-bold text-[10px] uppercase rounded flex items-center justify-center transition-colors shadow-sm cursor-pointer"
                                                                                   >
                                                                                       +
                                                                                   </button>
@@ -8062,27 +8247,48 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                                                 </div>
 
                                                 {/* Custom Facilities Badges */}
-                                                {kmListingForm.facilities && kmListingForm.facilities.filter((f: string) => !['wifi', 'dapur bersama', 'area parkir', 'ruang tamu', 'cctv', 'laundry', 'wc umum'].includes(f.toLowerCase().trim())).length > 0 && (
-                                                    <div className="flex flex-wrap gap-1.5 mt-2">
-                                                        {kmListingForm.facilities.filter((f: string) => !['wifi', 'dapur bersama', 'area parkir', 'ruang tamu', 'cctv', 'laundry', 'wc umum'].includes(f.toLowerCase().trim())).map((fac: string) => (
-                                                            <span key={fac} className="inline-flex items-center gap-1.5 bg-[#eff4ff] text-[#264191] text-[10px] font-black uppercase tracking-wider px-2.5 py-1.5 rounded-lg border border-[#d3e4fe]">
-                                                                <span>{fac}</span>
-                                                                <button
-                                                                    type="button"
-                                                                    onClick={() => {
-                                                                        setKmListingForm({
-                                                                            ...kmListingForm,
-                                                                            facilities: kmListingForm.facilities.filter((f: string) => f !== fac)
-                                                                        });
-                                                                    }}
-                                                                    className="text-red-500 hover:text-red-700 font-bold ml-1 text-[11px] leading-none"
-                                                                >
-                                                                    &times;
-                                                                </button>
-                                                            </span>
-                                                        ))}
-                                                    </div>
-                                                )}
+                                                {(() => {
+                                                    const STANDARD_AND_SUB_KEYS = [
+                                                        'wifi', 'wi-fi', 'internet',
+                                                        'area parkir', 'parkir', 'parkiran', 'tempat parkir', 'parkir motor', 'parkir mobil', 'parkir sepeda',
+                                                        'dapur', 'dapur bersama', 'dapur umum', 'kompor', 'kulkas', 'kulkas bersama', 'kulkas umum', 'dispenser', 'dispenser air', 'wastafel cuci piring', 'wastafel dapur', 'peralatan masak', 'meja makan', 'meja makan bersama',
+                                                        'wc umum', 'toilet umum', 'kamar mandi luar', 'wc luar', 'kloset duduk', 'kloset jongkok', 'shower', 'wastafel', 'wastafel wc',
+                                                        'ruang tamu', 'ruang santai',
+                                                        'cctv', 'kamera keamanan',
+                                                        'laundry', 'mesin cuci', 'cuci',
+                                                        'mushola', 'musholla',
+                                                        'area jemuran', 'jemuran', 'tempat jemuran',
+                                                        'security 24 jam', 'security', 'satpam', 'penjaga kost',
+                                                        'akses 24 jam', 'bebas jam malam', '24 jam',
+                                                        'lift',
+                                                        'cleaning service', 'pembersihan', 'kebersihan'
+                                                    ];
+                                                    const customFacs = (kmListingForm.facilities || []).filter(
+                                                        (f: string) => !STANDARD_AND_SUB_KEYS.includes((f || '').toLowerCase().trim())
+                                                    );
+                                                    if (customFacs.length === 0) return null;
+                                                    return (
+                                                        <div className="flex flex-wrap gap-1.5 mt-2">
+                                                            {customFacs.map((fac: string) => (
+                                                                <span key={fac} className="inline-flex items-center gap-1.5 bg-[#eff4ff] text-[#264191] text-[10px] font-black uppercase tracking-wider px-2.5 py-1.5 rounded-lg border border-[#d3e4fe]">
+                                                                    <span>{fac}</span>
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => {
+                                                                            setKmListingForm({
+                                                                                ...kmListingForm,
+                                                                                facilities: (kmListingForm.facilities || []).filter((f: string) => f !== fac)
+                                                                            });
+                                                                        }}
+                                                                        className="text-red-500 hover:text-red-700 font-bold ml-1 text-[11px] leading-none cursor-pointer"
+                                                                    >
+                                                                        &times;
+                                                                    </button>
+                                                                </span>
+                                                            ))}
+                                                        </div>
+                                                    );
+                                                })()}
 
                                                 <div className="flex gap-2 mt-2">
                                                     <input 

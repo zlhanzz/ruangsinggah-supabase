@@ -2,6 +2,33 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 389. Sinkronisasi Cerdas & Normalisasi Fasilitas/Sub-Fasilitas Cloning Self-Listing Mitra ke Form Pendataan KostManager (`AgentDashboard.tsx`, `KostManagerPropertyFormModal.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna melaporkan ketidaksesuaian input fasilitas dan sub-fasilitas antara listing biasa (dashboard mitra) dan form pendataan survei KostManager (`AgentDashboard.tsx`).
+  2. Saat kost yang awalnya berstatus *self-listing* mitra didaftarkan ke KostManager, sub-fasilitas seperti pada kategori Dapur Bersama (*Kulkas Bersama*, *Dispenser Air*, *Kompor*, *Wastafel Cuci Piring*, dll.) dan Parkir (*Parkir Motor*, *Parkir Mobil*) tidak otomatis tercentang pada form surveyor, melainkan bocor dan tumpah ke bagian bawah sebagai *custom badges* biru bertanda silang (`PARKIR MOTOR x`, `KOMPOR x`, `KULKAS BERSAMA x`, dll.).
+  3. Grid fasilitas umum surveyor sebelumnya hanya menyediakan 7 fasilitas, sehingga 6 fasilitas standar lainnya dari mitra (*Mushola*, *Area Jemuran*, *Security 24 Jam*, *Akses 24 Jam*, *Lift*, *Cleaning Service*) ikut tumpah sebagai *tag* kustom.
+- **Implementasi Solusi**:
+  1. **Helper Normalisasi & Pemisahan Sub-Fasilitas (`normalizeAndExtractPublicFacilities`)**:
+     - Memetakan secara cerdas sub-fasilitas dapur (*Kulkas Bersama* $\rightarrow$ *Kulkas*, *Dispenser Air* $\rightarrow$ *Dispenser*, *Wastafel Cuci Piring*, *Peralatan Masak*, *Meja Makan Bersama* $\rightarrow$ *Meja Makan*) ke state `publicKitchenFacilities` dan otomatis mengaktifkan *Dapur Bersama*.
+     - Memetakan sub-fasilitas parkir (*Parkir Motor*, *Parkir Mobil*, *Parkir Sepeda*) ke `publicParkingFacilities` dan otomatis mengaktifkan *Area Parkir*.
+     - Memetakan sub-fasilitas WC umum (*Kloset Duduk*, *Kloset Jongkok*, *Shower*, *Wastafel*) ke `publicBathroomFacilities` dan otomatis mengaktifkan *WC Umum*.
+     - Menstandarkan nama fasilitas utama ke bentuk kanonikal (13 fasilitas standar).
+     - Menghapus sub-fasilitas dari array utama `facilities` agar data bersih dan tidak bocor ke *tag* kustom.
+  2. **Ekspansi Grid Fasilitas Utama (13 Fasilitas Standar)**:
+     - Form surveyor (`AgentDashboard.tsx`) dan modal admin portal (`KostManagerPropertyFormModal.tsx`) kini menampilkan 13 pilihan fasilitas utama lengkap: *WiFi*, *Area Parkir*, *Dapur Bersama*, *WC Umum*, *Ruang Tamu*, *CCTV*, *Laundry*, *Mushola*, *Area Jemuran*, *Security 24 Jam*, *Akses 24 Jam*, *Lift*, *Cleaning Service*.
+  3. **Penyempurnaan Filter Custom Facility Badges & Synonyms Matching**:
+     - *Custom badges* hanya menampilkan fasilitas yang benar-benar kustom (misal: *Kolam Renang*, *Gym*, dll.), dengan mengecualikan seluruh 13 fasilitas utama dan seluruh variasi sub-fasilitas.
+     - `checkHasFacility` diperluas dengan kamus sinonim lengkap 13 fasilitas.
+  4. **Optimasi Dynamic Photo Categories**:
+     - Memperbarui `computeDynamicPublicPhotoCategories` agar tidak lagi membuat kategori foto duplikat atau bocor dari sub-fasilitas yang diekstrak.
+- **File Tersentuh**:
+  - `functions/public/pages/AgentDashboard.tsx`
+  - `functions/public/components/admin/KostManagerPropertyFormModal.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi build frontend Vite (`cmd /c npm run build` di `functions/public`) lulus 100% (`✓ 2511 modules transformed, built in 46.28s`, 0 error).
+
 ### 388. Penguncian Mutlak Kepemilikan Properti (*Owner UID Locking*) & Ketahanan Data Self-Listing Mitra (`AgentDashboard.tsx`, `adminService.ts`, `userService.ts`) (September 2026)
 - **Permintaan & Masalah**:
   1. Pengguna menanyakan mengapa saat menghapus pesanan KostManager/survei dari Dashboard Admin (untuk keperluan simulasi ulang), listing properti mitra biasa di menu "Kost Saya" tiba-tiba hilang (0 unit).
