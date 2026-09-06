@@ -2,6 +2,22 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 394. Perbaikan Scope Variabel Temporal Dead Zone (TDZ) ReferenceError pada `openKostManagerListing` (`AgentDashboard.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna melaporkan console error runtime: `AgentDashboard.tsx:3077 Failed to parse saved draft: ReferenceError: Cannot access 'initialTotalRooms' before initialization at openKostManagerListing (AgentDashboard.tsx:3047:131)`.
+- **Akar Masalah**:
+  1. Variabel `initialTotalRooms`, `initialCoords`, `transactionMetadata`, dan `resolvedOwnerUid` dirujuk di bagian atas fungsi pada blok merger draf (`if (savedDraftData)`), namun deklarasi `let initialTotalRooms = 0;` dan `let initialCoords = ...` baru dideklarasikan di bagian bawah (Section 3).
+  2. Ini memicu *Temporal Dead Zone (TDZ)* error di JavaScript saat runtime browser, sehingga eksekusi terlempar ke `catch` block dan gagal memulihkan form pendataan dari draf maupun data properti.
+- **Implementasi Solusi**:
+  1. Memindahkan inisialisasi awal dan ekstraksi koordinat/jumlah kamar (`transactionMetadata`, `initialTotalRooms`, `initialCoords`, `resolvedOwnerUid`) ke bagian atas fungsi `openKostManagerListing` sebelum pemeriksaan `savedDraftData`.
+  2. Menjamin seluruh variabel sudah terdefinisi secara aman di seluruh blok scope fungsi.
+- **File Tersentuh**:
+  - `functions/public/pages/AgentDashboard.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi build frontend Vite (`cmd /c npm run build` di `functions/public`) lulus 100% (`✓ 2512 modules transformed, built in 1m 22s`, 0 error).
+
 ### 393. Pengembalian Sistem Cloning Otomatis Self-Listing Mitra & Modal Peringatan Verifikasi Surveyor Pendataan KostManager (`AgentDashboard.tsx`) (September 2026)
 - **Permintaan & Masalah**:
   1. Pengguna melaporkan: *"kok malah rusak ya? cloningan data yang bersumber dari saat masih listing menjadi mitra biasa kok tidak otomatis muncul dan terisi lagi. selain itu sebelumnya kita ada sistem peringatan ke agen survey jika sebuah kost adalah kost yang didaftarkan dari yang sudah listing sebagai mitra biasa, lalu kemudian didaftarkan kostmanager maka beberapa data otomatis terisi, jadi agen survey diminta untuk meverifikasi ulang untuk memastikan kesesuaiannya di lapangan, tapi kok semua itu hilang ya? tolong kemvbalikan bagian itu kembali kesistem kita"*.

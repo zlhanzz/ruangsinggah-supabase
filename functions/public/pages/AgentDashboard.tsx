@@ -2917,6 +2917,46 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
             return true;
         };
 
+        // Extract initial default room count, coordinates, and owner UID upfront (avoids Temporal Dead Zone in draft block)
+        let initialTotalRooms = 0;
+        let initialCoords = { lat: -5.147665, lng: 119.432731 };
+        const transactionMetadata = req.transaction?.metadata || {};
+        const parsedMetaRooms = transactionMetadata.total_rooms || transactionMetadata.totalRooms || transactionMetadata.jumlah_kamar || (req as any).total_rooms || (req as any).totalRooms;
+        if (parsedMetaRooms) {
+            initialTotalRooms = Number(parsedMetaRooms) || 0;
+        }
+        if (!initialTotalRooms && req.notes) {
+            const m = req.notes.match(/(?:total|jumlah)?\s*kamar\s*:\s*(\d+)/i);
+            if (m) {
+                initialTotalRooms = Number(m[1]) || 0;
+            }
+        }
+
+        const possibleLocationUrls = [
+            transactionMetadata.googleMapsLink,
+            transactionMetadata.google_maps_url,
+            req.kost_name,
+            req.notes
+        ];
+        for (const url of possibleLocationUrls) {
+            if (url) {
+                const parsed = extractCoordinates(url);
+                if (parsed) {
+                    initialCoords = parsed;
+                    break;
+                }
+            }
+        }
+        if (initialCoords.lat === -5.147665 && initialCoords.lng === 119.432731) {
+            const directLat = transactionMetadata.location?.lat || transactionMetadata.latitude || (req as any).latitude;
+            const directLng = transactionMetadata.location?.lng || transactionMetadata.longitude || (req as any).longitude;
+            if (directLat && directLng) {
+                initialCoords = { lat: Number(directLat), lng: Number(directLng) };
+            }
+        }
+
+        const resolvedOwnerUid = resolveValidOwnerUid(req.user_id, req, fetchedUser);
+
         // 2. Load draft from Cloud Database first, fallback to localStorage
         let savedDraftData: any = (req as any).evaluation_summary?.draft_data || (req as any).draft_data || null;
 
@@ -3079,53 +3119,10 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
         }
 
         // 3. Populate default form values using the already fetched database records if no draft exists
-        let initialTotalRooms = 0;
-        let initialCoords = { lat: -5.147665, lng: 119.432731 };
         setKmActiveTab('info');
         setKmStep(1);
 
-        const resolvedOwnerUid = resolveValidOwnerUid(req.user_id, req, fetchedUser);
-
         try {
-            // Find transaction metadata from the request object directly
-            const transactionMetadata = req.transaction?.metadata || {};
-
-            // Calculate Mitra's initial input for total rooms and coordinates from transaction metadata or notes
-            const parsedMetaRooms = transactionMetadata.total_rooms || transactionMetadata.totalRooms || transactionMetadata.jumlah_kamar || (req as any).total_rooms || (req as any).totalRooms;
-            if (parsedMetaRooms) {
-                initialTotalRooms = Number(parsedMetaRooms) || 0;
-            }
-            if (!initialTotalRooms && req.notes) {
-                const m = req.notes.match(/(?:total|jumlah)?\s*kamar\s*:\s*(\d+)/i);
-                if (m) {
-                    initialTotalRooms = Number(m[1]) || 0;
-                }
-            }
-
-            // Extract coordinates
-            const possibleLocationUrls = [
-                transactionMetadata.googleMapsLink,
-                transactionMetadata.google_maps_url,
-                req.kost_name,
-                req.notes
-            ];
-            for (const url of possibleLocationUrls) {
-                if (url) {
-                    const parsed = extractCoordinates(url);
-                    if (parsed) {
-                        initialCoords = parsed;
-                        break;
-                    }
-                }
-            }
-            if (initialCoords.lat === -5.147665 && initialCoords.lng === 119.432731) {
-                const directLat = transactionMetadata.location?.lat || transactionMetadata.latitude || (req as any).latitude;
-                const directLng = transactionMetadata.location?.lng || transactionMetadata.longitude || (req as any).longitude;
-                if (directLat && directLng) {
-                    initialCoords = { lat: Number(directLat), lng: Number(directLng) };
-                }
-            }
-
             // A. Try loading from dedicated `mitra_kostmanager` table record if exists
             if (dbKmProp) {
                 setIsExistingPropertyMigration(true);
