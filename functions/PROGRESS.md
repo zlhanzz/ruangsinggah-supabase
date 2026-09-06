@@ -2,6 +2,28 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 386. Sanitasi Total Foto Mitra Biasa & Inisialisasi Bersih (*0 Foto*) Form Onboarding KostManager (`AgentDashboard.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  1. Pada formulir Onboarding Kost (*Survey Field App* di `AgentDashboard.tsx`), foto-foto lama dari masa mitra biasa (*Bangunan Depan, Koridor, Lingkungan, Area Parkir, Dapur Bersama*) masih termuat ke dalam slot foto survei.
+  2. Hal ini disebabkan oleh residu draft `localStorage` (`km_draft_${req.id}`) dan sinkronisasi awal `dbKmProp.image_urls` yang sempat meng-copy URL foto properti mitra biasa sebelum dilakukan survei lapangan.
+  3. Pengguna menegaskan bahwa saat survei onboarding KostManager, seluruh foto wajib dimulai dari nol/kosong (`0 Foto`), dan yang di-clone dari data mitra biasa hanyalah metadata dasar non-foto (Nama kost, Jenis kost, Fasilitas umum, Titik lokasi GPS & Landmark kampus, Alamat, dan Aturan).
+- **Implementasi Solusi**:
+  1. **Deteksi & Isolasi Set Foto Mitra Biasa (`rawPropImagesSet` & `selfRoomImagesSet`)**:
+     - Mengumpulkan seluruh URL foto properti area umum dan foto kamar dari properti *self-listing* mitra biasa (`dbPropertyRecord.image_urls`, `metadata.self_listing_images`, `dbPropertyRecord.room_types`, `metadata.self_listing_room_types`).
+     - Menerapkan helper `isValidSurveyPhoto()` yang secara tegas menolak foto apapun yang berasal dari kolam mitra biasa atau tidak diunggah ke folder `kostmanager/`.
+  2. **Sanitasi Mendalam pada Draft `localStorage`**:
+     - Menyaring array `image_urls` dan `roomTypes[].images` pada draft browser surveyor dengan `isValidSurveyPhoto()`.
+     - Foto-foto lama mitra biasa otomatis dibersihkan saat form dibuka, mencegah kembalinya foto lawas ke formulir survei.
+  3. **Inisialisasi Bersih (*Fresh Slate: 0 Foto*) pada `dbKmProp` & `dbPropertyRecord`**:
+     - Memastikan `kmListingForm.image_urls` dan seluruh kamar `roomTypes[].images` diinisialisasi kosong (`[]` / `0 Foto`) dengan slot `+ TAMBAH FOTO` yang bersih.
+     - Meng-clone metadata non-foto secara aman dan terpisah (*shallow clone*) tanpa mencemari data asli mitra biasa.
+- **File Tersentuh**:
+  - `functions/public/pages/AgentDashboard.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi build frontend Vite (`cmd /c npm run build` di `functions/public`) lulus 100% (`✓ 2511 modules transformed, built in 30.73s`, 0 error).
+
 ### 385. Isolasi Total Data KostManager vs Data Self-Listing Mitra Biasa, Inisialisasi Foto Bersih Onboarding, & Fallback Otomatis (`AgentDashboard.tsx`, `userService.ts`) (September 2026)
 - **Permintaan & Masalah**:
   1. Pengguna meminta pemisahan tegas antara aset data kelolaan KostManager (foto surveyor, fasilitas audit lapangan, dan listing detail per unit kamar individu 101/102) dengan data *self-listing* milik mitra biasa (foto mitra, listing per tipe kamar umum Standard/VIP + jumlah kamar, fasilitas asli).

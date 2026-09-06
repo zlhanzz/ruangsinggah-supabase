@@ -2529,6 +2529,33 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
             setAgreedToTerms(false);
         }
 
+        // Define sets of existing regular Mitra self-listing photos to isolate and prevent cloning into KostManager surveyor form
+        const rawPropImagesSet = new Set<string>([
+            ...(Array.isArray(dbPropertyRecord?.image_urls) ? dbPropertyRecord.image_urls : []),
+            ...(Array.isArray(dbPropertyRecord?.metadata?.self_listing_images) ? dbPropertyRecord.metadata.self_listing_images : [])
+        ].map(getImageUrlString).filter(Boolean));
+
+        const selfRoomImagesSet = new Set<string>();
+        (dbPropertyRecord?.room_types || []).forEach((r: any) => {
+            (r.images || []).forEach((img: any) => {
+                const u = getImageUrlString(img);
+                if (u) selfRoomImagesSet.add(u);
+            });
+        });
+        (dbPropertyRecord?.metadata?.self_listing_room_types || []).forEach((r: any) => {
+            (r.images || []).forEach((img: any) => {
+                const u = getImageUrlString(img);
+                if (u) selfRoomImagesSet.add(u);
+            });
+        });
+
+        const isValidSurveyPhoto = (urlOrObj: any): boolean => {
+            const urlStr = getImageUrlString(urlOrObj);
+            if (!urlStr) return false;
+            if (rawPropImagesSet.has(urlStr) || selfRoomImagesSet.has(urlStr)) return false;
+            return urlStr.includes('kostmanager/') || urlStr.startsWith('blob:') || urlStr.startsWith('data:');
+        };
+
         // 2. Load draft from localStorage if exists
         const savedDraft = localStorage.getItem(draftKey);
         if (savedDraft) {
@@ -2541,14 +2568,25 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                     setAgreedToTerms(parsed.agreedToTerms);
                 }
                 if (parsed.kmListingForm) {
-                    // Load room types from draft, fallback to database if draft has none (helps heal corrupted drafts or empty states)
-                    let draftRoomTypes = parsed.kmListingForm.roomTypes || [];
+                    // Sanitize draft room types: remove all regular mitra self-listing photos
+                    let draftRoomTypes = (parsed.kmListingForm.roomTypes || []).map((rt: any) => ({
+                        ...rt,
+                        images: (rt.images || []).filter(isValidSurveyPhoto),
+                        photoCategories: [],
+                        categorized_photos: {},
+                        categorizedPhotos: {}
+                    }));
+
+                    // Fallback room definitions to database if draft has none (while keeping photos clean)
                     if (draftRoomTypes.length === 0) {
-                        const dbRooms = dbKmProp?.room_types || [];
-                        if (dbRooms.length > 0) {
-                            draftRoomTypes = dbRooms;
-                            console.log("openKostManagerListing: restored roomTypes from database into draft:", dbRooms);
-                        }
+                        const sourceRooms = dbKmProp?.room_types || dbPropertyRecord?.room_types || [];
+                        draftRoomTypes = sourceRooms.map((rm: any) => ({
+                            ...rm,
+                            images: (rm.images || []).filter(isValidSurveyPhoto),
+                            photoCategories: [],
+                            categorized_photos: {},
+                            categorizedPhotos: {}
+                        }));
                     }
                     parsed.kmListingForm.roomTypes = draftRoomTypes;
 
@@ -2558,27 +2596,17 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                         const dbCampuses = dbKmProp?.campuses || dbPropertyRecord?.campuses || [];
                         if (dbCampuses.length > 0) {
                             draftCampuses = dbCampuses;
-                            console.log("openKostManagerListing: restored campuses from database into draft:", dbCampuses);
                         }
                     }
 
-                    // Sanitize draft image_urls and photoCategories
-                    // If draft was saved from an old session where self-listing photos were auto-imported without surveyor taking fresh photos:
-                    const isPureSelfListingMigration = dbPropertyRecord && !dbKmProp && !dbPropertyRecord.is_managed;
-                    const rawPropImagesSet = new Set(
-                        (Array.isArray(dbPropertyRecord?.image_urls) ? dbPropertyRecord.image_urls : []).map(getImageUrlString).filter(Boolean)
-                    );
-
+                    // Sanitize draft public area images: strictly filter out any self-listing photo
                     const rawDraftImages = Array.isArray(parsed.kmListingForm.image_urls) ? parsed.kmListingForm.image_urls : [];
                     const draftImageUrls: string[] = [];
                     const draftPhotoCats: string[] = [];
                     rawDraftImages.forEach((img: any, idx: number) => {
                         const urlStr = getImageUrlString(img);
-                        if (!urlStr) return;
-                        // Strip legacy imported self-listing photos from draft so surveyor captures fresh survey photos
-                        if (isPureSelfListingMigration && rawPropImagesSet.has(urlStr) && !urlStr.includes('kostmanager/')) {
-                            return;
-                        }
+                        if (!urlStr || !isValidSurveyPhoto(urlStr)) return;
+                        
                         let cat = (typeof img === 'object' && img.label) 
                             ? img.label 
                             : (parsed.kmListingForm.photoCategories?.[idx] || parsed.photoCategories?.[idx] || (idx < 4 ? ['Bangunan Depan', 'Koridor', 'Area Parkir', 'Lingkungan'][idx] : `Foto Lainnya ${idx - 3}`));
@@ -2595,6 +2623,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                         ...parsed.kmListingForm,
                         image_urls: draftImageUrls,
                         photoCategories: draftPhotoCats,
+                        roomTypes: draftRoomTypes,
                         campuses: draftCampuses,
                         title: parsed.kmListingForm.title || req.kost_name,
                         address: parsed.kmListingForm.address || req.kost_address,
@@ -2606,7 +2635,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                     setTemporaryRoom(parsed.temporaryRoom || null);
                     setActiveRoomIdx(parsed.activeRoomIdx !== undefined ? parsed.activeRoomIdx : null);
                     setKmActiveTab(parsed.kmActiveTab || 'info');
-                    const dynamicDraftCats = computeDynamicPublicPhotoCategories(mergedForm.facilities || ['WiFi', 'Area Parkir'], draftPhotoCats.length > 0 ? draftPhotoCats : (parsed.photoCategories || []));
+                    const dynamicDraftCats = computeDynamicPublicPhotoCategories(mergedForm.facilities || ['WiFi', 'Area Parkir'], draftPhotoCats);
                     setPhotoCategories(dynamicDraftCats);
                     if (parsed.isExistingPropertyMigration !== undefined) {
                         setIsExistingPropertyMigration(parsed.isExistingPropertyMigration);
@@ -2614,7 +2643,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                     if (parsed.warningAccepted !== undefined) {
                         setWarningAccepted(parsed.warningAccepted);
                     }
-                    console.log("Loaded complete onboarding draft from localStorage on open");
+                    console.log("Loaded sanitized onboarding draft from localStorage on open");
                     return;
                 }
             } catch (e) {
@@ -2683,7 +2712,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
 
                 rawKmImages.forEach((img: any, idx: number) => {
                     const urlStr = getImageUrlString(img);
-                    if (!urlStr) return;
+                    if (!urlStr || !isValidSurveyPhoto(urlStr)) return;
                     let label = (typeof img === 'object' && img.label) ? img.label : '';
                     if (label.toLowerCase() === 'area umum' || label.toLowerCase() === 'parkiran' || label.toLowerCase() === 'parkir motor' || label.toLowerCase() === 'parkir mobil') label = 'Area Parkir';
                     if (!label) {
@@ -2692,6 +2721,14 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                     loadedKmImageUrls.push(urlStr);
                     loadedKmPhotoCategories.push(label);
                 });
+
+                const cleanKmRoomTypes = (dbKmProp.room_types || []).map((rm: any) => ({
+                    ...rm,
+                    images: (rm.images || []).filter(isValidSurveyPhoto),
+                    photoCategories: [],
+                    categorized_photos: {},
+                    categorizedPhotos: {}
+                }));
 
                 const dynamicKmCats = computeDynamicPublicPhotoCategories(dbKmProp.facilities || ['WiFi', 'Area Parkir'], loadedKmPhotoCategories);
                 setPhotoCategories(dynamicKmCats);
@@ -2717,7 +2754,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                     price: dbKmProp.price || 0,
                     totalRooms: (dbKmProp.total_rooms && dbKmProp.total_rooms > 0) ? dbKmProp.total_rooms : (initialTotalRooms || 0),
                     owner_uid: resolvedOwnerUid,
-                    roomTypes: dbKmProp.room_types || [],
+                    roomTypes: cleanKmRoomTypes,
                     facilities: dbKmProp.facilities || ['WiFi', 'Area Parkir'],
                     location: dbKmProp.location || initialCoords,
                     rules: dbKmProp.rules || ['Tidak boleh membawa hewan peliharaan', 'Tamu dilarang menginap'],
@@ -2778,7 +2815,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                     facilities: dbPropertyRecord.facilities || ['WiFi', 'Area Parkir'],
                     location: dbPropertyRecord.location || initialCoords,
                     rules: dbPropertyRecord.rules || ['Tidak boleh membawa hewan peliharaan', 'Tamu dilarang menginap'],
-                    image_urls: [], // FRESH SLATE: Surveyor will take new survey photos
+                    image_urls: [], // FRESH SLATE: Surveyor will take new survey photos (0 Foto)
                     photoCategories: freshDynamicCats,
                     campuses: dbPropertyRecord.campuses || [],
                     publicBathroomFacilities: dbPropertyRecord.metadata?.publicBathroomFacilities || [],
