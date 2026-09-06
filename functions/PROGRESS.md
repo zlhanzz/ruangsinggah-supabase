@@ -2,6 +2,23 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 384. Resolusi Runtime Error `TypeError: supabase...catch is not a function` pada `updateSurveyRequest` (`adminService.ts`) (September 2026)
+- **Permintaan & Masalah**:
+  1. Saat agen menolak atau memperbarui tugas di Dashboard Agen, muncul dialog pop-up error: `Gagal menolak tugas: supabase.from(...).update(...).eq(...).catch is not a function at updateSurveyRequest (adminService.ts:3689:12)`.
+  2. **Akar Masalah**:
+     - Objek query builder dari `@supabase/supabase-js` (`PostgrestFilterBuilder`) adalah objek *Promise-like* yang mengimplementasikan `.then()`, namun bukan instance `Promise` standar dan tidak memiliki method `.catch()`.
+     - Pemanggilan rantai method `.catch()` langsung pada query builder menyebabkan JavaScript melempar `TypeError: ...catch is not a function` di runtime.
+- **Implementasi Solusi**:
+  1. **Migrasi Seluruh Operasi Database ke Blok `try/catch` Standar**:
+     - Menghapus seluruh pemanggilan `.catch()` yang dirantai langsung ke query builder Supabase pada `adminService.ts` (khususnya pada operasi `kostmanager_surveys.delete()`, `survey_requests.update()` saat penolakan, serta sinkronisasi update status KostManager).
+     - Menggantinya dengan blok `try { const { error } = await supabase... } catch (e) { ... }` yang aman dan teruji.
+- **File Tersentuh**:
+  - `functions/public/adminService.ts`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi build frontend Vite (`cmd /c npm run build` di `functions/public`) lulus 100% (`✓ 2511 modules transformed, built in 30.99s`, 0 error).
+
 ### 383. Perbaikan Alur Konfirmasi & Penolakan Tugas Pendataan KostManager serta Ketahanan Notifikasi (`notificationService.ts`, `adminService.ts`, `AgentDashboard.tsx`) (September 2026)
 - **Permintaan & Masalah**:
   1. Pengguna melaporkan bahwa saat surveyor mencoba menolak penugasan pendataan KostManager, muncul notifikasi error **"Gagal menolak tugas."** padahal seharusnya status tugas kembali ke Admin (`PENDING_ASSIGNMENT`) untuk penetapan agen ulang.

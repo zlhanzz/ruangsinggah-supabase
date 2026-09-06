@@ -3652,11 +3652,15 @@ export async function updateSurveyRequest(
     if (updates.assigned_agent_id === null || updates.status === 'PENDING_ASSIGNMENT') {
       // Tolak / Deassign: Kembalikan tugas ke Admin di seluruh tabel
       if (existingKmSurvey.id) {
-        await supabase
-          .from('kostmanager_surveys')
-          .delete()
-          .eq('id', existingKmSurvey.id)
-          .catch(e => console.warn('Warning deleting kostmanager_surveys:', e));
+        try {
+          const { error: delErr } = await supabase
+            .from('kostmanager_surveys')
+            .delete()
+            .eq('id', existingKmSurvey.id);
+          if (delErr) console.warn('Warning deleting kostmanager_surveys:', delErr);
+        } catch (e) {
+          console.warn('Warning deleting kostmanager_surveys:', e);
+        }
       }
 
       const { error: reqErr } = await supabase
@@ -3675,31 +3679,39 @@ export async function updateSurveyRequest(
 
       // Sync to survey_requests
       if (kmTrxId) {
-        await supabase
-          .from('survey_requests')
-          .update({
-            assigned_agent_id: null,
-            agent_name: null,
-            agent_phone: null,
-            agent_photo_url: null,
-            status: 'PENDING_ASSIGNMENT',
-            updated_at: new Date().toISOString()
-          })
-          .eq('transaction_id', kmTrxId)
-          .catch(e => console.warn('Warning syncing survey_requests deassign:', e));
+        try {
+          const { error: syncErr } = await supabase
+            .from('survey_requests')
+            .update({
+              assigned_agent_id: null,
+              agent_name: null,
+              agent_phone: null,
+              agent_photo_url: null,
+              status: 'PENDING_ASSIGNMENT',
+              updated_at: new Date().toISOString()
+            })
+            .eq('transaction_id', kmTrxId);
+          if (syncErr) console.warn('Warning syncing survey_requests deassign:', syncErr);
+        } catch (e) {
+          console.warn('Warning syncing survey_requests deassign:', e);
+        }
       } else if (id) {
-        await supabase
-          .from('survey_requests')
-          .update({
-            assigned_agent_id: null,
-            agent_name: null,
-            agent_phone: null,
-            agent_photo_url: null,
-            status: 'PENDING_ASSIGNMENT',
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', id)
-          .catch(e => console.warn('Warning syncing survey_requests by id deassign:', e));
+        try {
+          const { error: syncErr } = await supabase
+            .from('survey_requests')
+            .update({
+              assigned_agent_id: null,
+              agent_name: null,
+              agent_phone: null,
+              agent_photo_url: null,
+              status: 'PENDING_ASSIGNMENT',
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', id);
+          if (syncErr) console.warn('Warning syncing survey_requests by id deassign:', syncErr);
+        } catch (e) {
+          console.warn('Warning syncing survey_requests by id deassign:', e);
+        }
       }
       return;
     }
@@ -3772,24 +3784,32 @@ export async function updateSurveyRequest(
       if (updates.agent_photo_url !== undefined) surveyUpdates.agent_photo_url = updates.agent_photo_url;
       if (updates.result_drive_link !== undefined) surveyUpdates.result_drive_link = updates.result_drive_link;
 
-      await supabase
-        .from('survey_requests')
-        .update(surveyUpdates)
-        .eq('transaction_id', kmTrxId)
-        .catch(e => console.warn('Warning syncing survey_requests on update:', e));
+      try {
+        const { error: syncErr } = await supabase
+          .from('survey_requests')
+          .update(surveyUpdates)
+          .eq('transaction_id', kmTrxId);
+        if (syncErr) console.warn('Warning syncing survey_requests on update:', syncErr);
+      } catch (e) {
+        console.warn('Warning syncing survey_requests on update:', e);
+      }
     } else if (id) {
-      await supabase
-        .from('survey_requests')
-        .update({
-          status: 'SURVEYING',
-          assigned_agent_id: updates.assigned_agent_id || user.id,
-          agent_name: updates.agent_name,
-          agent_phone: updates.agent_phone,
-          agent_photo_url: updates.agent_photo_url,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', id)
-        .catch(e => console.warn('Warning syncing survey_requests by id:', e));
+      try {
+        const { error: syncErr } = await supabase
+          .from('survey_requests')
+          .update({
+            status: 'SURVEYING',
+            assigned_agent_id: updates.assigned_agent_id || user.id,
+            agent_name: updates.agent_name,
+            agent_phone: updates.agent_phone,
+            agent_photo_url: updates.agent_photo_url,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', id);
+        if (syncErr) console.warn('Warning syncing survey_requests by id:', syncErr);
+      } catch (e) {
+        console.warn('Warning syncing survey_requests by id:', e);
+      }
     }
 
     return;
@@ -3851,23 +3871,29 @@ export async function updateSurveyRequest(
 
         if (kmReqRec) {
           if (updates.assigned_agent_id === null) {
-            await supabase
-              .from('kostmanager_surveys')
-              .delete()
-              .eq('kostmanager_request_id', kmReqRec.id)
-              .catch(() => {});
+            try {
+              await supabase
+                .from('kostmanager_surveys')
+                .delete()
+                .eq('kostmanager_request_id', kmReqRec.id);
+            } catch {
+              // ignore
+            }
           } else {
             const kmSurvStatus = (updates.status === 'COMPLETED' ? 'APPROVED' : (updates.status === 'SUBMITTED' ? 'SUBMITTED' : 'SURVEYING'));
-            await supabase
-              .from('kostmanager_surveys')
-              .update({
-                assigned_agent_id: updates.assigned_agent_id,
-                status: kmSurvStatus,
-                result_drive_link: updates.result_drive_link,
-                updated_at: new Date().toISOString()
-              })
-              .eq('kostmanager_request_id', kmReqRec.id)
-              .catch(() => {});
+            try {
+              await supabase
+                .from('kostmanager_surveys')
+                .update({
+                  assigned_agent_id: updates.assigned_agent_id,
+                  status: kmSurvStatus,
+                  result_drive_link: updates.result_drive_link,
+                  updated_at: new Date().toISOString()
+                })
+                .eq('kostmanager_request_id', kmReqRec.id);
+            } catch {
+              // ignore
+            }
           }
         }
       }
