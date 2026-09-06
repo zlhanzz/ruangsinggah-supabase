@@ -3248,11 +3248,11 @@ export async function getAdminSurveyRequests(): Promise<SurveyRequest[]> {
       )
     `);
     if (isAgent) {
-    query = query.or(`assigned_agent_id.eq.${user.id},assigned_agent_id.is.null,status.eq.PENDING_ASSIGNMENT`);
-  } else if (!isAdmin) {
-    // Regular user: only see their own requests
-    query = query.eq('user_id', user.id);
-  }
+      query = query.eq('assigned_agent_id', user.id);
+    } else if (!isAdmin) {
+      // Regular user: only see their own requests
+      query = query.eq('user_id', user.id);
+    }
 
   // Fetch active managed properties & active KostManager requests to auto-complete surveys that are already published
   const [propsRes, kmActiveReqsRes] = await Promise.all([
@@ -3365,7 +3365,7 @@ export async function getAdminSurveyRequests(): Promise<SurveyRequest[]> {
       `);
 
     if (isAgent) {
-      kmQuery = kmQuery.or(`assigned_agent_id.eq.${user.id},assigned_agent_id.is.null,status.eq.PENDING_ASSIGNMENT`);
+      kmQuery = kmQuery.eq('assigned_agent_id', user.id);
     }
 
     const { data: kmSurveys, error: kmErr } = await kmQuery.order('created_at', { ascending: false });
@@ -3445,7 +3445,7 @@ export async function getAdminSurveyRequests(): Promise<SurveyRequest[]> {
         )
       `);
     if (isAgent) {
-      kmReqQuery = kmReqQuery.or(`assigned_agent_id.eq.${user.id},assigned_agent_id.is.null,status.eq.PENDING_ASSIGNMENT`);
+      kmReqQuery = kmReqQuery.eq('assigned_agent_id', user.id);
     }
     const { data: standaloneKmReqs } = await kmReqQuery.order('created_at', { ascending: false });
     if (standaloneKmReqs) {

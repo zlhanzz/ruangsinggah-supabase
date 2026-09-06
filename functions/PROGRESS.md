@@ -2,6 +2,25 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 381. Isolasi Penugasan Survei & KostManager Eksklusif Berdasarkan ID Agen (`adminService.ts`) (September 2026)
+- **Permintaan & Masalah**:
+  1. Pada query `getAdminSurveyRequests()` di `functions/public/adminService.ts`, saat pengguna login sebagai peran `survey_agent`, query masih menggunakan filter `.or('assigned_agent_id.eq.${user.id},assigned_agent_id.is.null,status.eq.PENDING_ASSIGNMENT')`.
+  2. Hal ini menyebabkan pesanan survei atau pendataan KostManager yang belum ditugaskan (`PENDING_ASSIGNMENT`) atau yang ditolak oleh agen lain tetap bocor dan muncul di dashboard semua agen survey, bukannya hanya tugas yang secara spesifik telah ditugaskan oleh Admin kepada agen yang bersangkutan.
+- **Implementasi Solusi**:
+  1. **Penegakan Isolasi Query Berdasarkan `assigned_agent_id` di `adminService.ts`**:
+     - Mengubah filter pada tabel `survey_requests`: `if (isAgent) { query = query.eq('assigned_agent_id', user.id); }`.
+     - Mengubah filter pada tabel `kostmanager_surveys`: `if (isAgent) { kmQuery = kmQuery.eq('assigned_agent_id', user.id); }`.
+     - Mengubah filter pada tabel `kostmanager_requests`: `if (isAgent) { kmReqQuery = kmReqQuery.eq('assigned_agent_id', user.id); }`.
+  2. **Konsistensi Siklus Tolak & Tugas Ulang**:
+     - Ketika agen menolak tugas di `AgentDashboard.tsx` (`assigned_agent_id = null`, `status = 'PENDING_ASSIGNMENT'`), pesanan seketika hilang dari dashboard agen tersebut dan kembali ke dashboard Admin di tab "Menunggu Agen".
+     - Hanya agen yang dipilih/ditetapkan secara eksplisit oleh Admin yang akan menerima pesanan tersebut di tab "Permintaan" (`AGENT_ASSIGNED`).
+- **File Tersentuh**:
+  - `functions/public/adminService.ts`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi build frontend Vite (`tsc`) lulus 100% (exit code 0, 0 error).
+
 ### 380. Penonaktifan Pop-up & Banner Promo KostManager untuk Mitra Pengajuan / Terkelola (`MitraDashboard.tsx`) (September 2026)
 - **Permintaan & Masalah**:
   1. Pengguna melaporkan bahwa saat mitra sudah berada dalam tahap pengajuan KostManager (misal status `PENDING_ASSIGNMENT` / *"Menunggu survey lokasi"*) atau propertinya sudah resmi listing sebagai KostManager, pop-up modal banner promosi KostManager (*"Capek Kelola Kost Sendiri? Serahkan Operasional ke KostManager!"*) masih tetap muncul di layar Dashboard Mitra (*"seharusnya ketika mitra sudah dalam tahap pengajuan kostmanager, seharusnyaa banner itu tidak lagi muncul, apakagi ketika status kost mitra sudah resmi listing sebagai kostmanager"*).
