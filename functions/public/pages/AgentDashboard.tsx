@@ -1889,17 +1889,38 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
     const resolveValidOwnerUid = (
         formOwnerUid?: string,
         req?: SurveyRequest | null,
-        profile?: any
+        profile?: any,
+        existingOwnerUid?: string
     ): string => {
         const uuidPat = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+        // 1. Prioritas Tertinggi: Owner UID asli dari database properti yang sudah ada (bukan ID agen)
+        if (existingOwnerUid && uuidPat.test(existingOwnerUid) && existingOwnerUid !== user?.id && existingOwnerUid !== uid) {
+            return existingOwnerUid;
+        }
+        // 2. Request user_id (Mitra pemohon KostManager / survei)
+        if (req?.user_id && uuidPat.test(req.user_id) && req.user_id !== user?.id && req.user_id !== uid) {
+            return req.user_id;
+        }
         if (req?.user_id && uuidPat.test(req.user_id)) return req.user_id;
+        if (profile?.id && uuidPat.test(profile.id) && profile.id !== user?.id && profile.id !== uid) {
+            return profile.id;
+        }
         if (profile?.id && uuidPat.test(profile.id)) return profile.id;
+        if (req?.user?.id && uuidPat.test(req.user.id) && req.user.id !== user?.id && req.user.id !== uid) {
+            return req.user.id;
+        }
         if (req?.user?.id && uuidPat.test(req.user.id)) return req.user.id;
-        if (formOwnerUid && uuidPat.test(formOwnerUid) && formOwnerUid !== user?.id && formOwnerUid !== uid) return formOwnerUid;
+        // 3. Form owner UID jika bukan ID agen
+        if (formOwnerUid && uuidPat.test(formOwnerUid) && formOwnerUid !== user?.id && formOwnerUid !== uid) {
+            return formOwnerUid;
+        }
+        // 4. Fallback existingOwnerUid jika ada
+        if (existingOwnerUid && uuidPat.test(existingOwnerUid)) {
+            return existingOwnerUid;
+        }
+        // 5. Fallback formOwnerUid jika ada
         if (formOwnerUid && uuidPat.test(formOwnerUid)) return formOwnerUid;
-        if (user?.id && uuidPat.test(user.id)) return user.id;
-        if (uid && uuidPat.test(uid)) return uid;
-        return uid || '00000000-0000-0000-0000-000000000000';
+        return '00000000-0000-0000-0000-000000000000';
     };
 
     const handleSaveDraftDirectly = async (currentForm: any, silent = true) => {
@@ -1909,7 +1930,46 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                 ? Math.min(...currentForm.roomTypes.map((rt: any) => Number(rt.price)).filter((p: number) => p > 0))
                 : 0;
 
-            const validOwnerUid = resolveValidOwnerUid(currentForm.owner_uid, isEditingKostManager, mitraProfile);
+            // Find propertyId from memory or metadata
+            let propertyIdToFetch = null;
+            const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+            if (isEditingKostManager.kost_id && uuidPattern.test(isEditingKostManager.kost_id)) {
+                propertyIdToFetch = isEditingKostManager.kost_id;
+            } else if (isEditingKostManager.transaction_id) {
+                const { data: trxData } = await supabase
+                    .from('transactions')
+                    .select('metadata')
+                    .eq('id', isEditingKostManager.transaction_id)
+                    .maybeSingle();
+                const rawSavePropId = trxData?.metadata?.propertyId;
+                if (rawSavePropId && uuidPattern.test(rawSavePropId)) {
+                    propertyIdToFetch = rawSavePropId;
+                }
+            }
+
+            // Fetch existing property for this user to edit
+            let query = supabase.from('properties').select('id, is_managed, owner_uid, mitra_id');
+            let canQuerySaveProperties = false;
+            if (propertyIdToFetch) {
+                query = query.eq('id', propertyIdToFetch);
+                canQuerySaveProperties = true;
+            } else if (isEditingKostManager.user_id && uuidPattern.test(isEditingKostManager.user_id)) {
+                query = query.eq('owner_uid', isEditingKostManager.user_id);
+                canQuerySaveProperties = true;
+            }
+            
+            const { data: existingProps } = canQuerySaveProperties
+                ? await query
+                : { data: null };
+
+            const existingProp = existingProps?.find(p => p.is_managed) || existingProps?.[0];
+
+            const validOwnerUid = resolveValidOwnerUid(
+                currentForm.owner_uid, 
+                isEditingKostManager, 
+                mitraProfile, 
+                existingProp?.owner_uid || existingProp?.mitra_id
+            );
 
             // Urutkan tipe kamar berdasarkan harga bulanan tertinggi (paling mahal)
             const getRoomPrice = (r: any) => {
@@ -1973,40 +2033,6 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                     agreed_to_terms: agreedToTerms
                 }
             };
-
-            // Find propertyId from memory or metadata
-            let propertyIdToFetch = null;
-            const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-            if (isEditingKostManager.kost_id && uuidPattern.test(isEditingKostManager.kost_id)) {
-                propertyIdToFetch = isEditingKostManager.kost_id;
-            } else if (isEditingKostManager.transaction_id) {
-                const { data: trxData } = await supabase
-                    .from('transactions')
-                    .select('metadata')
-                    .eq('id', isEditingKostManager.transaction_id)
-                    .maybeSingle();
-                const rawSavePropId = trxData?.metadata?.propertyId;
-                if (rawSavePropId && uuidPattern.test(rawSavePropId)) {
-                    propertyIdToFetch = rawSavePropId;
-                }
-            }
-
-            // Fetch existing property for this user to edit
-            let query = supabase.from('properties').select('id, is_managed');
-            let canQuerySaveProperties = false;
-            if (propertyIdToFetch) {
-                query = query.eq('id', propertyIdToFetch);
-                canQuerySaveProperties = true;
-            } else if (isEditingKostManager.user_id && uuidPattern.test(isEditingKostManager.user_id)) {
-                query = query.eq('owner_uid', isEditingKostManager.user_id);
-                canQuerySaveProperties = true;
-            }
-            
-            const { data: existingProps } = canQuerySaveProperties
-                ? await query
-                : { data: null };
-
-            const existingProp = existingProps?.find(p => p.is_managed) || existingProps?.[0];
 
             let savedProperty = null;
             if (existingProp) {
@@ -3210,6 +3236,13 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
             // Prioritize is_managed = true, otherwise take the first one found
             const existingProp = existingProps?.find((p: any) => p.is_managed) || existingProps?.[0];
 
+            const effectiveOwnerUid = resolveValidOwnerUid(
+                validOwnerUid,
+                isEditingKostManager,
+                mitraProfile,
+                existingProp?.owner_uid || existingProp?.mitra_id
+            );
+
             // Capture and preserve all original regular Mitra self-listing data (photos, room types, facilities, rules, description)
             const existingSelfListingImages = existingProp?.metadata?.self_listing_images
                 || (existingProp && !existingProp.is_managed ? existingProp.image_urls : null)
@@ -3244,8 +3277,8 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                 area: kmListingForm.area,
                 type: kmListingForm.type,
                 price: finalPrice,
-                owner_uid: validOwnerUid,
-                mitra_id: validOwnerUid, // Add valid mitra_id for not-null DB constraint
+                owner_uid: effectiveOwnerUid,
+                mitra_id: effectiveOwnerUid, // Add valid mitra_id for not-null DB constraint
                 room_types: normalizedRoomTypesPayload,
                 status: 'published',
                 is_managed: true,
@@ -3291,7 +3324,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
             if (savedProperty) {
                 const kmPropertyPayload = {
                     property_id: savedProperty.id,
-                    owner_uid: validOwnerUid,
+                    owner_uid: effectiveOwnerUid,
                     title: propertyPayload.title,
                     description: propertyPayload.description,
                     price: propertyPayload.price,

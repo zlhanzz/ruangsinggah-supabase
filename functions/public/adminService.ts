@@ -4201,31 +4201,73 @@ export async function deleteKostManagerRequest(id: string): Promise<void> {
 
   if (!isAdmin) throw new Error('Access Denied');
 
-  // 1. Ambil transaction_id dari kostmanager_requests sebelum dihapus
-  //    agar kita bisa mencari survey_requests yang terhubung
+  // 1. Ambil detail tiket kostmanager_requests sebelum dihapus
   const { data: kmReq, error: fetchErr } = await supabase
     .from('kostmanager_requests')
-    .select('transaction_id')
+    .select('id, transaction_id, property_id, user_id, status')
     .eq('id', id)
     .maybeSingle();
 
   if (fetchErr) throw fetchErr;
 
-  // 2. Hapus survey_requests yang memiliki transaction_id yang sama
-  //    (ini yang muncul sebagai kartu di dashboard agen)
-  if (kmReq?.transaction_id) {
-    const { error: surveyDeleteErr } = await supabase
-      .from('survey_requests')
-      .delete()
-      .eq('transaction_id', kmReq.transaction_id);
+  // 2. Pulihkan kepemilikan dan status properti terkait (jika ada)
+  if (kmReq?.property_id) {
+    try {
+      const { data: linkedProp } = await supabase
+        .from('properties')
+        .select('id, owner_uid, mitra_id, is_managed')
+        .eq('id', kmReq.property_id)
+        .maybeSingle();
 
-    if (surveyDeleteErr) {
-      console.warn('Warning: gagal hapus survey_requests terkait:', surveyDeleteErr.message);
-      // Lanjutkan tetap hapus kostmanager_requests meskipun survey_requests gagal
+      if (linkedProp) {
+        const updatePropPayload: any = {};
+        // Pastikan owner_uid & mitra_id terkunci ke UID Mitra pemilik asli
+        if (kmReq.user_id && (linkedProp.owner_uid !== kmReq.user_id || linkedProp.mitra_id !== kmReq.user_id)) {
+          updatePropPayload.owner_uid = kmReq.user_id;
+          updatePropPayload.mitra_id = kmReq.user_id;
+        }
+        // Jika tiket belum berstatus aktif/resmi (misal baru pengajuan/survei lalu dibatalkan),
+        // kembalikan is_managed ke false agar kembali menjadi self-listing biasa
+        const kmStatus = (kmReq.status || '').toUpperCase();
+        if (!['ACTIVE', 'COMPLETED', 'APPROVED'].includes(kmStatus)) {
+          updatePropPayload.is_managed = false;
+        }
+
+        if (Object.keys(updatePropPayload).length > 0) {
+          await supabase
+            .from('properties')
+            .update(updatePropPayload)
+            .eq('id', linkedProp.id);
+        }
+      }
+    } catch (propErr) {
+      console.warn('Warning: gagal memulihkan kepemilikan properti saat hapus KM request:', propErr);
     }
   }
 
-  // 3. Hapus kostmanager_requests itu sendiri
+  // 3. Hapus survey_requests yang memiliki transaction_id yang sama
+  if (kmReq?.transaction_id) {
+    try {
+      await supabase
+        .from('survey_requests')
+        .delete()
+        .eq('transaction_id', kmReq.transaction_id);
+    } catch (surveyDeleteErr) {
+      console.warn('Warning: gagal hapus survey_requests terkait:', surveyDeleteErr);
+    }
+  }
+
+  // 4. Hapus kostmanager_surveys terkait jika ada
+  try {
+    await supabase
+      .from('kostmanager_surveys')
+      .delete()
+      .or(`kostmanager_request_id.eq.${id},id.eq.${id}${kmReq?.transaction_id ? `,transaction_id.eq.${kmReq.transaction_id}` : ''}`);
+  } catch (kmSurveyErr) {
+    console.warn('Warning: gagal hapus kostmanager_surveys terkait:', kmSurveyErr);
+  }
+
+  // 5. Hapus kostmanager_requests itu sendiri
   const { error } = await supabase
     .from('kostmanager_requests')
     .delete()

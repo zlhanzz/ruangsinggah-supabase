@@ -1333,7 +1333,7 @@ export async function getOwnerProperties(ownerUid: string): Promise<Kost[]> {
     const { data: directProps, error } = await supabase
       .from('properties')
       .select('*')
-      .eq('owner_uid', ownerUid)
+      .or(`owner_uid.eq.${ownerUid},mitra_id.eq.${ownerUid}`)
       .order('created_at', { ascending: false });
 
     if (error) throw error;

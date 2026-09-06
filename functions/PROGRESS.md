@@ -2,6 +2,33 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 388. Penguncian Mutlak Kepemilikan Properti (*Owner UID Locking*) & Ketahanan Data Self-Listing Mitra (`AgentDashboard.tsx`, `adminService.ts`, `userService.ts`) (September 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna menanyakan mengapa saat menghapus pesanan KostManager/survei dari Dashboard Admin (untuk keperluan simulasi ulang), listing properti mitra biasa di menu "Kost Saya" tiba-tiba hilang (0 unit).
+  2. **Akar Masalah**:
+     - Pada `AgentDashboard.tsx`, fungsi `resolveValidOwnerUid` sebelumnya memiliki fallback ke `user.id`/`uid` (yang merupakan UID milik Agen/Surveyor). Saat surveyor menyimpan draft atau listing pendataan KostManager, kolom `owner_uid` properti sempat tertimpa oleh ID agen.
+     - Di dashboard mitra, listing tersebut sebelumnya masih sempat terbaca berkat *fallback* `kostmanager_requests`. Ketika tiket pesanan KostManager dihapus di Admin Panel (`deleteKostManagerRequest`), baris tiket terhapus dan tautan kepemilikan terputus.
+- **Implementasi Solusi**:
+  1. **Penguncian Mutlak Kepemilikan Properti di `AgentDashboard.tsx` (`resolveValidOwnerUid`)**:
+     - Memprioritaskan `existingProp.owner_uid` (UID pemilik yang tersimpan di DB) dan `req.user_id` (UID mitra pemohon).
+     - Menghapus fallback ke UID surveyor/agen (`user?.id` / `uid`), sehingga data properti `owner_uid` dan `mitra_id` tidak pernah tertimpa oleh akun surveyor.
+     - Menerapkan `effectiveOwnerUid` pada `handleSaveDraftDirectly` dan `handleSaveKostManagerListing`.
+  2. **Penyempurnaan Pemulihan saat Hapus Pesanan di `adminService.ts` (`deleteKostManagerRequest`)**:
+     - Mengambil data tiket `kostmanager_requests` (termasuk `property_id` dan `user_id`).
+     - Memastikan `owner_uid` dan `mitra_id` pada properti terkait dipulihkan ke `kmReq.user_id` mitra.
+     - Mengembalikan status `is_managed = false` jika pesanan belum aktif/onboarding resmi, sehingga properti langsung pulih menjadi *self-listing* biasa.
+     - Membersihkan `survey_requests` dan `kostmanager_surveys` terkait secara bersih.
+  3. **Ketahanan Query Multi-Kolom di `userService.ts` (`getOwnerProperties`)**:
+     - Menggunakan query `.or('owner_uid.eq.${ownerUid},mitra_id.eq.${ownerUid}')` untuk menjamin seluruh properti milik mitra selalu berhasil di-fetch meskipun terjadi anomali migrasi data lama.
+- **File Tersentuh**:
+  - `functions/public/pages/AgentDashboard.tsx`
+  - `functions/public/adminService.ts`
+  - `functions/public/userService.ts`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi build frontend Vite (`cmd /c npm run build` di `functions/public`) lulus 100% (`✓ 2511 modules transformed, built in 38.15s`, 0 error).
+
 ### 387. Perbaikan Inisialisasi Langkah Modal Pendaftaran KostManager (Selalu Step 1: Metode) (`KostManagerLanding.tsx`) (September 2026)
 - **Permintaan & Masalah**:
   1. Pengguna melaporkan bahwa saat membuka formulir pendaftaran langganan KostManager dari landing page, modal terkadang langsung membuka **Step 2 (Data Properti)** dan melompati Step 1 (Pilihan Metode Registrasi).
