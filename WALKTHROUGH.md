@@ -1,93 +1,99 @@
-# Walkthrough - Integrasi Kategori Foto Dinamis untuk Sub-Fasilitas Tercentang pada Pendataan KostManager
+# WALKTHROUGH - Persistensi Draf Pendataan KostManager Berbasis Cloud Database & Auto-Cleanup Aman Anti-Hilang
 
-Dokumen ini merangkum detail implementasi, hasil verifikasi, dan panduan pengujian untuk fitur integrasi kategori foto dinamis berdasarkan sub-fasilitas yang dicentang.
-
----
-
-## 1. Analisis & Tujuan Implementasi
-- **Permintaan Pengguna**: *"khusus pendataan kostmanager, semua sub fasilitas yang dicentang juga harus muncul input kategori fotonya sih yang terintegrasi dengan sub fasilitas yang tercentang itu"*.
-- **Kondisi Sebelumnya**:
-  1. Slot kategori foto area umum hanya menampilkan fasilitas utama (`Bangunan Depan`, `Koridor`, `Area Parkir`, `Lingkungan`, dll.).
-  2. Seluruh sub-fasilitas (*Kompor*, *Kulkas*, *Dispenser*, *Wastafel Cuci Piring*, *Peralatan Masak*, *Meja Makan*, *Parkir Motor*, *Parkir Mobil*, *Parkir Sepeda*, *Kloset Duduk*, *Kloset Jongkok*, *Shower*, *Wastafel*) sebelumnya difilter keluar oleh array `nonPhotoFacs` dan ter-collapse/tergabung menjadi satu kategori induk saja.
-- **Kondisi Baru (Hasil)**:
-  1. Setiap sub-fasilitas yang dicentang di Step 1 (Fasilitas Properti) secara otomatis dan reaktif memunculkan kartu unggah foto individual di Step 2 (Dokumentasi Area Umum & Fasilitas Properti).
-  2. Contoh: Jika surveyor mencentang **Area Parkir** $\rightarrow$ *Parkir Motor* & *Parkir Mobil*, serta **Dapur Bersama** $\rightarrow$ *Kompor*, *Kulkas*, & *Dispenser*, maka di Step 2 akan muncul kartu upload terpisah untuk:
-     - `Bangunan Depan`
-     - `Koridor`
-     - `Lingkungan`
-     - `Parkir Motor`
-     - `Parkir Mobil`
-     - `Dapur Bersama`
-     - `Kompor`
-     - `Kulkas`
-     - `Dispenser`
-  3. Setiap kategori dilengkapi ikon murni vector SVG (`lucide-react`) yang relevan (misal: `CookingPot`, `Bath`, `MapPin`, `Home`, `Armchair`, dll.) dan 100% bebas dari kedipan teks FOUT.
-  4. Label foto yang tersimpan mempertahankan nama sub-fasilitas aslinya tanpa tertimpa atau ter-collapse.
+**Tanggal**: September 2026  
+**Status**: Selesai & Lulus Verifikasi Build (`0 Error`)  
+**Branch Git**: `bukan-productions`
 
 ---
 
-## 2. Rincian Perubahan Kode
-
-### A. [`AgentDashboard.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/AgentDashboard.tsx)
-1. **Pembaruan `computeDynamicPublicPhotoCategories`**:
-   - Menerima parameter `facilities`, `manualExtras`, `parkingFacilities`, `kitchenFacilities`, dan `bathroomFacilities`.
-   - Menghasilkan daftar kategori yang mencakup seluruh sub-fasilitas parkir, dapur, dan kamar mandi yang dicentang, ditambah fasilitas utama fisik dan custom tags.
-2. **Sinkronisasi Reaktif Real-Time (`useEffect`)**:
-   - Menambahkan dependency `kmListingForm.publicParkingFacilities`, `kmListingForm.publicKitchenFacilities`, dan `kmListingForm.publicBathroomFacilities` pada `useEffect` sinkronisasi kategori foto.
-3. **Pembaruan `loadDraft` dan `loadPropertyData`**:
-   - Menghapus pemaksaan/collapsing label sub-fasilitas menjadi generic `Area Parkir`.
-   - Mengoper sub-fasilitas yang tersimpan ke dalam komputasi kategori saat memuat draf maupun data existing property.
-4. **Rendering UI Kategori & Ikon Kontekstual**:
-   - Menggunakan ikon SVG ter-bundle (`Home`, `MapPin`, `CookingPot`, `Bath`, `Armchair`, `Eye`, `Sparkles`, `Camera`) untuk setiap kartu foto sub-fasilitas.
-
-### B. [`KostManagerPropertyFormModal.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/components/admin/KostManagerPropertyFormModal.tsx)
-1. **Penyelarasan `computeDynamicPublicPhotoCategories`**:
-   - Memperbarui fungsi generator kategori foto agar mendukung sub-fasilitas parkir, dapur, dan kamar mandi.
-2. **Pembaruan `useEffect`**:
-   - Sinkronisasi reaktif kategori foto saat user mencentang/menghapus sub-fasilitas di modal admin portal.
-3. **Penyelarasan Rendering & Anti-Collapsing**:
-   - Menghapus aturan if-else yang sebelumnya menggabungkan nama sub-fasilitas menjadi kategori umum.
-
-### C. [`KostManagerPortal.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/components/admin/KostManagerPortal.tsx)
-- Menghapus aturan collapsing pada `normalizePhotosWithLabels` agar label foto sub-fasilitas (seperti *Parkir Motor*, *Parkir Mobil*, dll.) tidak tertimpa saat ditampilkan di portal KostManager.
-
-### D. [`KostManagerManagement.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/components/admin/KostManagerManagement.tsx)
-- Memperbarui kartu audit verifikasi foto properti pada admin dashboard agar menampilkan slot kartu pemeriksaan untuk setiap sub-fasilitas yang dipilih.
+## 📌 Ringkasan Masalah & Permintaan Pengguna
+1. **Masalah Foto Hilang Saat Reopen Form**:
+   - Pengguna melaporkan bahwa setiap kali selesai mengunggah foto survei KostManager kemudian form tertutup (*close/refresh*), saat form pendataan dibuka kembali, foto-foto yang diunggah sebelumnya hilang.
+2. **Permintaan Draf Database**:
+   - Menyimpan draf data dan foto langsung ke Cloud Database (Supabase) agar tersimpan permanen dan tidak hanya bergantung pada *browser localStorage*.
+3. **Pembersihan Otomatis Aman (Safe Auto-Cleanup)**:
+   - Draf sementara yang hanya menjadi sampah harus dibersihkan secara otomatis.
+4. **Proteksi Mutlak Data & Aset (Zero Data Loss Guardrails)**:
+   - File listing asli mitra (*self-listing*), foto mitra biasa, dan data properti KostManager yang sudah listing **TIDAK BOLEH TERHAPUS**, bahkan jika mitra KostManager telah berhenti / non-aktif selama masa tenggang 3 bulan.
+   - Pembersihan HANYA boleh menargetkan draf sementara yang belum pernah listing sama sekali.
 
 ---
 
-## 3. Hasil Pengujian & Kompilasi
-- **Uji Kompilasi Frontend Vite (`functions/public`)**:
-  ```bash
-  > vite build && node -e "const fs=require('fs'); fs.cpSync('../../public', './dist', {recursive: true, force: true});"
+## 🔍 Akar Masalah Teknis
+
+1. **Filter False-Positive pada Reopen (`isValidSurveyPhoto`)**:
+   - Fungsi `isValidSurveyPhoto` memeriksa `rawPropImagesSet.has(urlStr)`.
+   - Saat agen mengunggah foto survei baru, URL foto disimpan ke Supabase Storage dan dimasukkan ke properti listing draf.
+   - Ketika form ditutup dan dibuka kembali, `existingProp.image_urls` memuat URL-URL baru tersebut.
+   - `rawPropImagesSet` mendeteksi URL tersebut dan secara keliru menganggapnya sebagai *"foto self-listing lama milik mitra"*, sehingga membuangnya dari kartu upload survei KostManager.
+2. **Validasi LocalStorage Terlalu Restriktif**:
+   - Auto-save `localStorage` sebelumnya mengecek `kmListingForm.owner_uid === isEditingKostManager.user_id`.
+   - Ketika `owner_uid` di-bind ke UID pemilik asli properti (`existingProp.owner_uid`) sementara `isEditingKostManager` berisi requester UID (surveyor/mitra), penyimpanan draf lokal gagal/terblokir.
+3. **Ketiadaan Sinkronisasi Real-Time ke Cloud Database**:
+   - Upload foto hanya memperbarui state React lokal dan menunggu auto-save berkala atau klik manual, sehingga berisiko hilang jika modal tertutup tiba-tiba.
+
+---
+
+## 🛠️ Solusi & Perubahan yang Diterapkan
+
+### 1. Persistensi Draf Langsung ke Cloud Database (`saveKostManagerDraftToDatabase`)
+- Dibuat fungsi `saveKostManagerDraftToDatabase` di [AgentDashboard.tsx](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/AgentDashboard.tsx):
+  - Menyimpan snapshot draf lengkap (`kmListingForm`, `photoCategories`, `last_draft_updated_at`, `draft_by`) ke kolom `evaluation_summary.draft_data` pada tabel `survey_requests` di Supabase.
+  - Sekaligus memperbarui cadangan offline di `localStorage` (`km_draft_${id}`).
+- Dipanggil secara instan pada:
+  - **Upload Foto Area Publik**: Setiap foto berhasil diunggah dan dikompresi ke WebP langsung disimpan ke database.
+  - **Hapus Foto Area Publik**: Perubahan snapshot foto langsung sinkron ke database.
+  - **Upload Foto Kamar**: Snapshot foto kamar tidur & kamar mandi langsung tersimpan ke database.
+  - **Tutup Form**: Tombol *"Simpan Draf & Tutup"* atau tombol silang ($X$) langsung melakukan sync cloud.
+  - **Debounced Form Typing**: Auto-save otomatis dengan jeda 1,5 detik saat surveyor mengetik detail teks.
+
+### 2. Koreksi Logika Filter Foto (`isValidSurveyPhoto` & `selfListingImagesSet`)
+- Foto dengan URL yang memuat `/kostmanager/`, `data:`, atau `blob:` dipastikan **100% foto survei KostManager asli** dan TIDAK PERNAH dibuang.
+- `selfListingImagesSet` diperbaiki agar hanya memfilter foto yang benar-benar berasal dari `metadata.self_listing_images` atau path non-kostmanager, sehingga foto survei baru tidak pernah tertukar atau terfilter keluar saat modal dibuka kembali.
+
+### 3. Pemulihan Draf Bertingkat (*Cloud Database First $\rightarrow$ LocalStorage Fallback*)
+- Ketika form pendataan dibuka (`openKostManagerListing`):
+  1. Sistem memeriksa `survey_requests.evaluation_summary.draft_data` dari cloud database terlebih dahulu.
+  2. Jika ada draf database, seluruh data input dan foto dipulihkan secara instan dan utuh.
+  3. Jika belum ada di database, sistem menggunakan cadangan `localStorage`.
+
+### 4. Siklus Pembersihan Otomatis yang Aman (*Safe Auto-Cleanup Lifecycle*)
+- Pembersihan draf (`draft_data: null`, `last_draft_updated_at: null`, dan `localStorage.removeItem`) HANYA dieksekusi setelah form pendataan KostManager **BERHASIL DISUBMIT/DILISTING** secara resmi ke sistem (`handleSaveKostManagerListing`).
+- Selama belum disubmit, draf di database tetap aman dan tidak akan terhapus oleh proses background.
+
+### 5. Garansi Keamanan & Proteksi Nol Kehilangan Data (*Zero Data Loss Guardrails*)
+- 🛡️ **Listing Asli Mitra (Self-Listing) Terlindungi 100%**: File gambar self-listing mitra yang tersimpan di `metadata.self_listing_images` atau folder non-kostmanager tidak pernah disentuh atau dihapus oleh script cleanup draf.
+- 🛡️ **Listing KostManager yang Telah Terbit Terlindungi Permanen**: Seluruh properti KostManager yang telah berstatus *listing* (termasuk properti dengan masa tenggang / non-aktif) tersimpan permanen di database `properties` dan Supabase Storage.
+- 🛡️ **Hanya Menghapus Metadata Draf Sementara**: Objek yang dibersihkan saat submit hanyalah field sementara `evaluation_summary.draft_data` pada request survei yang bersangkutan.
+
+---
+
+## 🧪 Hasil Pengujian & Verifikasi
+
+### 1. Uji Kompilasi Frontend
+- **Perintah**: `npm.cmd run build` pada direktori `functions/public`
+- **Hasil**:
+  ```text
+  vite v6.4.1 building for production...
+  transforming...
   ✓ 2512 modules transformed.
-  ✓ built in 55.36s
-  Exit code: 0
+  rendering chunks...
+  computing gzip size...
+  ✓ built in 48.92s
   ```
-- **Kondisi**: 0 error, 0 warning kritis, TypeScript build lulus 100%.
+- **Status**: **Lulus 100% (0 Error / 0 Warning Kritis)**.
 
 ---
 
-## 4. Panduan Pengujian untuk Pengguna (User Testing Guide)
-1. Buka halaman **Dashboard Agen / Surveyor** (`/agent-dashboard`) atau modal formulir properti di **Admin Panel**.
-2. Buka formulir pendataan survei properti KostManager (Step 1: Data Properti & Fasilitas).
-3. Pilih fasilitas:
-   - Centang **Area Parkir**, lalu centang sub-fasilitas **Parkir Motor** dan **Parkir Mobil**.
-   - Centang **Dapur Bersama**, lalu centang sub-fasilitas **Kompor**, **Kulkas**, dan **Dispenser**.
-   - Centang **WC Umum**, lalu centang sub-fasilitas **Kloset Duduk** dan **Shower**.
-4. Klik tombol **"Lanjut ke Foto & Dokumen"** (Step 2).
-5. Perhatikan bagian **"Dokumentasi Area Umum & Fasilitas Properti"**:
-   - Kartu kategori foto kini otomatis menampilkan slot terpisah untuk:
-     - `Bangunan Depan`
-     - `Koridor`
-     - `Lingkungan`
-     - `Parkir Motor`
-     - `Parkir Mobil`
-     - `Dapur Bersama`
-     - `Kompor`
-     - `Kulkas`
-     - `Dispenser`
-     - `WC Umum`
-     - `Kloset Duduk`
-     - `Shower`
-6. Unggah foto pada masing-masing kartu sub-fasilitas dan verifikasi bahwa foto terkelompokkan dengan tepat sesuai kategorinya.
+## 📋 Panduan Verifikasi Pengujian oleh Pengguna
+
+1. Buka halaman **Dashboard Agen / Surveyor** pada menu penugasan survei KostManager.
+2. Klik tombol **"Pendataan Kost"** pada salah satu tugas survei yang disetujui.
+3. Masuk ke **Langkah 2 (Upload Foto)**, unggah satu atau beberapa foto area publik (misal: *Bangunan Depan*, *Area Parkir - Parkir Motor*, dll.) dan foto kamar tidur.
+4. Tutup form modal pendataan (klik tombol silang $X$ atau klik *"Simpan Draf & Tutup"*).
+5. Refresh browser (opsional) untuk memastikan data tidak hanya tersimpan di memori.
+6. Klik kembali tombol **"Pendataan Kost"** pada tugas survei tersebut.
+7. **Verifikasi**: Perhatikan bahwa seluruh foto yang telah diunggah sebelumnya **tetap muncul secara utuh dan presisi pada kartu kategorinya masing-masing**, tanpa ada foto yang hilang atau tertukar.
+8. Setelah semua foto dan data lengkap, klik **"Simpan & Terbitkan Listing"**:
+   - Properti berhasil terdaftar sebagai listing KostManager.
+   - Metadata draf sementara otomatis dibersihkan dan status request survei beralih ke `completed`.

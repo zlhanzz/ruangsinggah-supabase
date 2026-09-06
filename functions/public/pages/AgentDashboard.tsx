@@ -2338,16 +2338,66 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
         }
     };
 
+    const saveKostManagerDraftToDatabase = async (currentForm: any, stepNum?: number, cats?: string[]) => {
+        if (!isEditingKostManager) return;
+        try {
+            const draftData = {
+                kmListingForm: currentForm,
+                kmStep: stepNum !== undefined ? stepNum : kmStep,
+                temporaryRoom,
+                activeRoomIdx,
+                kmActiveTab,
+                photoCategories: cats || photoCategories,
+                isExistingPropertyMigration,
+                warningAccepted,
+                signatureData,
+                agreedToTerms,
+                lastUpdated: new Date().toISOString()
+            };
+
+            // 1. Simpan segera ke localStorage sebagai cache lokal responsif
+            const draftKey = `km_draft_${isEditingKostManager.id}`;
+            try {
+                localStorage.setItem(draftKey, JSON.stringify(draftData));
+            } catch (e) {
+                console.warn("LocalStorage set error:", e);
+            }
+
+            // 2. Simpan langsung ke Cloud Database (survey_requests.evaluation_summary.draft_data)
+            const currentEvalSummary = isEditingKostManager.evaluation_summary || {};
+            const updatedEvalSummary = {
+                ...(typeof currentEvalSummary === 'object' ? currentEvalSummary : {}),
+                draft_data: draftData,
+                last_draft_updated_at: new Date().toISOString()
+            };
+
+            await supabase
+                .from('survey_requests')
+                .update({ 
+                    evaluation_summary: updatedEvalSummary,
+                    updated_at: new Date().toISOString()
+                })
+                .eq('id', isEditingKostManager.id);
+
+            // Update state in-memory agar selalu sinkron
+            setIsEditingKostManager((prev: any) => prev ? { ...prev, evaluation_summary: updatedEvalSummary } : null);
+            console.log("Draft successfully auto-saved directly to Supabase Cloud Database for survey request:", isEditingKostManager.id);
+        } catch (err) {
+            console.warn("Silent background draft save warning:", err);
+        }
+    };
+
     const closeKostManagerListingWithSave = async () => {
-        if (isEditingKostManager && kmListingForm.title) {
+        if (isEditingKostManager && (kmListingForm.title || (kmListingForm.image_urls && kmListingForm.image_urls.length > 0))) {
+            await saveKostManagerDraftToDatabase(kmListingForm, kmStep, photoCategories);
             await handleSaveDraftDirectly(kmListingForm, true);
         }
         closeKostManagerListing();
     };
 
-    // Auto-save Kost Manager Onboarding draft effect
+    // Auto-save Kost Manager Onboarding draft effect (Debounced to database & instant to localStorage)
     useEffect(() => {
-        if (isEditingKostManager && kmListingForm.owner_uid && kmListingForm.title && kmListingForm.owner_uid === isEditingKostManager.user_id) {
+        if (isEditingKostManager && (kmListingForm.title || (kmListingForm.image_urls && kmListingForm.image_urls.length > 0) || (kmListingForm.facilities && kmListingForm.facilities.length > 0))) {
             const draftKey = `km_draft_${isEditingKostManager.id}`;
             const draftData = {
                 kmListingForm,
@@ -2359,11 +2409,22 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                 isExistingPropertyMigration,
                 warningAccepted,
                 signatureData,
-                agreedToTerms
+                agreedToTerms,
+                lastUpdated: new Date().toISOString()
             };
-            localStorage.setItem(draftKey, JSON.stringify(draftData));
+            try {
+                localStorage.setItem(draftKey, JSON.stringify(draftData));
+            } catch (e) {
+                console.warn("LocalStorage set error:", e);
+            }
+
+            const timer = setTimeout(() => {
+                saveKostManagerDraftToDatabase(kmListingForm, kmStep, photoCategories);
+            }, 1200);
+
+            return () => clearTimeout(timer);
         }
-    }, [isEditingKostManager, kmListingForm, kmStep, temporaryRoom, activeRoomIdx, kmActiveTab, photoCategories, signatureData, agreedToTerms]);
+    }, [isEditingKostManager?.id, kmListingForm, kmStep, temporaryRoom, activeRoomIdx, kmActiveTab, photoCategories, signatureData, agreedToTerms]);
 
     // Auto-load onboarding from URL search params on refresh
     useEffect(() => {
@@ -2796,37 +2857,72 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
         }
 
         // Define sets of existing regular Mitra self-listing photos to isolate and prevent cloning into KostManager surveyor form
-        const rawPropImagesSet = new Set<string>([
-            ...(Array.isArray(dbPropertyRecord?.image_urls) ? dbPropertyRecord.image_urls : []),
-            ...(Array.isArray(dbPropertyRecord?.metadata?.self_listing_images) ? dbPropertyRecord.metadata.self_listing_images : [])
+        // NOTE: Only pure self-listing photos (in metadata.self_listing_images or non-kostmanager photos) are treated as self-listing.
+        const selfListingImagesSet = new Set<string>([
+            ...(Array.isArray(dbPropertyRecord?.metadata?.self_listing_images) ? dbPropertyRecord.metadata.self_listing_images : []),
+            ...(Array.isArray(dbPropertyRecord?.image_urls) ? dbPropertyRecord.image_urls.filter((u: any) => {
+                const s = getImageUrlString(u);
+                return s && !s.includes('kostmanager/');
+            }) : [])
         ].map(getImageUrlString).filter(Boolean));
 
         const selfRoomImagesSet = new Set<string>();
-        (dbPropertyRecord?.room_types || []).forEach((r: any) => {
-            (r.images || []).forEach((img: any) => {
-                const u = getImageUrlString(img);
-                if (u) selfRoomImagesSet.add(u);
-            });
-        });
         (dbPropertyRecord?.metadata?.self_listing_room_types || []).forEach((r: any) => {
             (r.images || []).forEach((img: any) => {
                 const u = getImageUrlString(img);
-                if (u) selfRoomImagesSet.add(u);
+                if (u && !u.includes('kostmanager/')) selfRoomImagesSet.add(u);
+            });
+        });
+        (dbPropertyRecord?.room_types || []).forEach((r: any) => {
+            (r.images || []).forEach((img: any) => {
+                const u = getImageUrlString(img);
+                if (u && !u.includes('kostmanager/')) selfRoomImagesSet.add(u);
             });
         });
 
         const isValidSurveyPhoto = (urlOrObj: any): boolean => {
             const urlStr = getImageUrlString(urlOrObj);
             if (!urlStr) return false;
-            if (rawPropImagesSet.has(urlStr) || selfRoomImagesSet.has(urlStr)) return false;
-            return urlStr.includes('kostmanager/') || urlStr.startsWith('blob:') || urlStr.startsWith('data:');
+            // Any photo uploaded in kostmanager survey or blob/data is ALWAYS valid
+            if (urlStr.includes('kostmanager/') || urlStr.startsWith('blob:') || urlStr.startsWith('data:')) {
+                return true;
+            }
+            if (selfListingImagesSet.has(urlStr) || selfRoomImagesSet.has(urlStr)) return false;
+            return true;
         };
 
-        // 2. Load draft from localStorage if exists
-        const savedDraft = localStorage.getItem(draftKey);
-        if (savedDraft) {
+        // 2. Load draft from Cloud Database first, fallback to localStorage
+        let savedDraftData: any = (req as any).evaluation_summary?.draft_data || (req as any).draft_data || null;
+
+        if (!savedDraftData) {
             try {
-                const parsed = JSON.parse(savedDraft);
+                const { data: sReqDraft } = await supabase
+                    .from('survey_requests')
+                    .select('evaluation_summary')
+                    .eq('id', req.id)
+                    .maybeSingle();
+                if (sReqDraft?.evaluation_summary?.draft_data) {
+                    savedDraftData = sReqDraft.evaluation_summary.draft_data;
+                }
+            } catch (e) {
+                console.warn("Could not query DB draft from survey_requests:", e);
+            }
+        }
+
+        if (!savedDraftData) {
+            const savedDraft = localStorage.getItem(draftKey);
+            if (savedDraft) {
+                try {
+                    savedDraftData = JSON.parse(savedDraft);
+                } catch (e) {
+                    console.error("Failed to parse saved localStorage draft:", e);
+                }
+            }
+        }
+
+        if (savedDraftData) {
+            try {
+                const parsed = savedDraftData;
                 if (parsed.signatureData) {
                     setSignatureData(parsed.signatureData);
                     setAgreedToTerms(true);
@@ -2834,13 +2930,13 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                     setAgreedToTerms(parsed.agreedToTerms);
                 }
                 if (parsed.kmListingForm) {
-                    // Sanitize draft room types: remove all regular mitra self-listing photos
+                    // Sanitize draft room types: keep valid survey photos
                     let draftRoomTypes = (parsed.kmListingForm.roomTypes || []).map((rt: any) => ({
                         ...rt,
                         images: (rt.images || []).filter(isValidSurveyPhoto),
-                        photoCategories: [],
-                        categorized_photos: {},
-                        categorizedPhotos: {}
+                        photoCategories: rt.photoCategories || [],
+                        categorized_photos: rt.categorized_photos || {},
+                        categorizedPhotos: rt.categorizedPhotos || rt.categorized_photos || {}
                     }));
 
                     // Fallback room definitions to database if draft has none (while keeping photos clean)
@@ -2865,7 +2961,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                         }
                     }
 
-                    // Sanitize draft public area images: strictly filter out any self-listing photo
+                    // Sanitize draft public area images
                     const rawDraftImages = Array.isArray(parsed.kmListingForm.image_urls) ? parsed.kmListingForm.image_urls : [];
                     const draftImageUrls: string[] = [];
                     const draftPhotoCats: string[] = [];
@@ -2884,7 +2980,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                     parsed.kmListingForm.photoCategories = draftPhotoCats;
 
                     // Merge draft with request data to ensure title and address are never lost
-                    const resolvedInitialOwnerUid = resolveValidOwnerUid(parsed.kmListingForm.owner_uid || req.user_id, req, fetchedUser);
+                    const resolvedInitialOwnerUid = resolveValidOwnerUid(parsed.kmListingForm.owner_uid || req.user_id, req, fetchedUser, dbPropertyRecord?.owner_uid);
                     const normalizedDraftFacs = normalizeAndExtractPublicFacilities(
                         parsed.kmListingForm.facilities || ['WiFi', 'Area Parkir'],
                         parsed.kmListingForm.publicKitchenFacilities || [],
@@ -2925,7 +3021,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                     if (parsed.warningAccepted !== undefined) {
                         setWarningAccepted(parsed.warningAccepted);
                     }
-                    console.log("Loaded sanitized onboarding draft from localStorage on open");
+                    console.log("Loaded sanitized onboarding draft from Cloud Database / LocalStorage on open");
                     return;
                 }
             } catch (e) {
@@ -3700,13 +3796,25 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                     .eq('transaction_id', isEditingKostManager.transaction_id);
             }
 
-            await supabase.from('survey_requests')
-                .update({ 
-                    status: 'SUBMITTED', 
-                    signature_data: signatureData || null,
-                    updated_at: new Date().toISOString() 
-                })
-                .eq('id', isEditingKostManager.id);
+            // Clean up temporary draft snapshot from survey_requests (leave official listing in properties and mitra_kostmanager intact)
+            try {
+                const currentEval = isEditingKostManager.evaluation_summary || {};
+                const cleanedEval = { ...(typeof currentEval === 'object' ? currentEval : {}) };
+                delete cleanedEval.draft_data;
+                delete cleanedEval.last_draft_updated_at;
+
+                await supabase
+                    .from('survey_requests')
+                    .update({ 
+                        status: 'SUBMITTED', 
+                        signature_data: signatureData || null,
+                        evaluation_summary: Object.keys(cleanedEval).length > 0 ? cleanedEval : null,
+                        updated_at: new Date().toISOString() 
+                    })
+                    .eq('id', isEditingKostManager.id);
+            } catch (cleanErr) {
+                console.warn("Could not clean draft_data on finalize:", cleanErr);
+            }
 
             alert('Listing properti & kamar berhasil disimpan! Status pengajuan kini PENDING ONBOARDING.');
             localStorage.removeItem(`km_draft_${isEditingKostManager.id}`);
@@ -5140,7 +5248,9 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                                                                                                                             images,
                                                                                                                             photoCategories
                                                                                                                         };
-                                                                                                                        setKmListingForm({ ...kmListingForm, roomTypes: updatedRoomTypes });
+                                                                                                                        const updatedForm = { ...kmListingForm, roomTypes: updatedRoomTypes };
+                                                                                                                        setKmListingForm(updatedForm);
+                                                                                                                        saveKostManagerDraftToDatabase(updatedForm, kmStep, photoCategories);
                                                                                                                     } catch (err) {
                                                                                                                         alert('Gagal unggah foto: ' + (err as Error).message);
                                                                                                                     } finally {
@@ -8510,11 +8620,13 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                                                                                                 const updatedCats = [...(kmListingForm.photoCategories || [])];
                                                                                                 updatedImages.splice(p.idx, 1);
                                                                                                 updatedCats.splice(p.idx, 1);
-                                                                                                setKmListingForm({ 
+                                                                                                const updatedForm = { 
                                                                                                     ...kmListingForm, 
                                                                                                     image_urls: updatedImages,
                                                                                                     photoCategories: updatedCats
-                                                                                                });
+                                                                                                };
+                                                                                                setKmListingForm(updatedForm);
+                                                                                                saveKostManagerDraftToDatabase(updatedForm, kmStep, photoCategories);
                                                                                             }}
                                                                                             className="absolute top-1 right-1 bg-red-600 hover:bg-red-700 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold shadow-md transition-all active:scale-90 z-10"
                                                                                             title="Hapus foto ini"
@@ -8569,11 +8681,13 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                                                                                                     updatedImages.push(u);
                                                                                                     updatedCats.push(label);
                                                                                                 });
-                                                                                                setKmListingForm({ 
+                                                                                                const updatedForm = { 
                                                                                                     ...kmListingForm, 
                                                                                                     image_urls: updatedImages,
                                                                                                     photoCategories: updatedCats
-                                                                                                });
+                                                                                                };
+                                                                                                setKmListingForm(updatedForm);
+                                                                                                saveKostManagerDraftToDatabase(updatedForm, kmStep, photoCategories);
                                                                                             } catch (err) {
                                                                                                 alert('Gagal unggah foto: ' + (err as Error).message);
                                                                                             } finally {

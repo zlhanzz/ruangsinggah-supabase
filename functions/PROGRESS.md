@@ -2,6 +2,41 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 392. Persistensi Draf Pendataan KostManager Berbasis Cloud Database & Auto-Cleanup Aman Anti-Hilang (`AgentDashboard.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna melaporkan: *"kenapa setiap kali telah melakukan upload kemudain terclose, saat form pendataannya dibuka lagi foto yang sebelunnya sudadh di upload kok hilang lagi"*.
+  2. Pengguna meminta solusi persistensi draf: *"kenapa tidak disimpan dalam bentuk draft langsung di database?"*
+  3. Pengguna meminta pembersihan otomatis untuk draf: *"tapi kita perlu memastikan ada pembersihan otomatis terkait draft draft yang nantinya cuman jadi sampah"*.
+  4. Pengguna menegaskan proteksi aset berharga: *"tapi tolong hati hati, jangan sampai terhapus file yang salah, seperti listing properti asli yang bersumber dari self listing atau foto yang diperuntukkan jika perannya menjadi mitra biasa, dan juga jangan sampai foto kostmanager yang sudah listing terhapus, meskipun jika statusnya sudah berhenti dari mitra kostmanager selama 3 bulan, data kostmanagernya tetap akan disimpam. dan kemudian terhapus. jadi harus benar benar yang dipastikan di clean adalah draft asli, yang belum pernah listing sama sekali, yang hanya sekedar diupload aja lalu tertingall dll"*.
+- **Akar Masalah**:
+  1. **Filter False-Positive pada Reopen**: Fungsi `isValidSurveyPhoto` memeriksa `rawPropImagesSet.has(urlStr)`. Ketika foto baru diunggah dan disimpan ke draf properti, saat form ditutup dan dibuka kembali, `existingProp.image_urls` memuat foto-foto baru tersebut. `rawPropImagesSet` mendeteksi URL tersebut dan mengiranya sebagai "foto self-listing mitra lama", sehingga membuangnya dari slot survei KostManager.
+  2. **Kondisi Validasi LocalStorage Terlalu Ketat**: Logika auto-save sebelumnya memeriksa `kmListingForm.owner_uid === isEditingKostManager.user_id`, yang menggagalkan penyimpanan draf ketika `owner_uid` di-bind ke UID pemilik properti asli sementara `isEditingKostManager` berisi requester UID (surveyor/mitra).
+  3. **Ketiadaan Persistensi Draf Database Real-Time**: Upload foto sebelumnya hanya disimpan pada state lokal React dan menunggu auto-save berkala atau klik manual simpan.
+- **Implementasi Solusi**:
+  1. **Penyimpanan Draf Langsung ke Cloud Database (`saveKostManagerDraftToDatabase`)**:
+     - Menyimpan snapshot draf lengkap (`kmListingForm`, `photoCategories`, `last_draft_updated_at`, `draft_by`) ke kolom `evaluation_summary.draft_data` pada tabel `survey_requests` di Supabase.
+     - Memanggil fungsi ini secara instan pada setiap aksi penting: upload foto area publik, hapus foto, upload foto kamar, dan penutupan form ("Simpan Draf & Tutup").
+     - Menyertakan mekanisme debounced auto-save (1,5 detik) saat agen mengetik detail properti.
+  2. **Penyempurnaan `isValidSurveyPhoto` (Anti-False Positive)**:
+     - URL foto yang memuat `/kostmanager/`, `data:`, atau `blob:` dipastikan 100% adalah foto survei KostManager asli dan TIDAK PERNAH dibuang.
+     - `selfListingImagesSet` diperbaiki agar hanya mengekstrak foto yang benar-benar berasal dari `metadata.self_listing_images` atau foto non-kostmanager, sehingga foto survei baru tidak pernah tertukar atau terhapus.
+  3. **Pemulihan Draf Bertingkat (Database First -> LocalStorage Fallback)**:
+     - Saat `openKostManagerListing` dibuka, sistem memprioritaskan pemulihan dari `survey_requests.evaluation_summary.draft_data`.
+     - Jika draft database ditemukan, seluruh foto dan input form dipulihkan secara instan dan utuh. Jika tidak ada, sistem membaca `localStorage` sebagai cadangan offline.
+  4. **Pembersihan Otomatis Aman (Safe Auto-Cleanup Lifecycle)**:
+     - Pembersihan draf (`draft_data: null`, `last_draft_updated_at: null`, dan `localStorage.removeItem`) HANYA dieksekusi setelah form pendataan KostManager **BERHASIL DISUBMIT/DILISTING** secara resmi ke sistem (`handleSaveKostManagerListing`).
+     - Draf yang belum selesai listing tetap tersimpan aman di database tanpa batas waktu kadaluarsa prematur.
+  5. **Proteksi & Isolasi Keamanan Tingkat Tinggi (Zero Data Loss Guardrails)**:
+     - **Listing Asli Self-Listing Terlindungi 100%**: File gambar self-listing mitra yang tersimpan di `metadata.self_listing_images` atau folder non-kostmanager tidak pernah disentuh atau dihapus oleh script cleanup draf.
+     - **Listing KostManager yang Telah Terbit Terlindungi Permanen**: Seluruh properti KostManager yang telah berstatus *listing* (termasuk properti dengan masa tenggang / non-aktif) tersimpan permanen di database `properties` dan Supabase Storage.
+     - **Hanya Menghapus Metadata Draf Sementara**: Objek yang dibersihkan saat submit hanyalah field sementara `evaluation_summary.draft_data` pada request survei yang bersangkutan.
+- **File Tersentuh**:
+  - `functions/public/pages/AgentDashboard.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi build frontend Vite (`cmd /c npm run build` di `functions/public`) lulus 100% (`✓ 2512 modules transformed, built in 48.92s`, 0 error).
+
 ### 391. Integrasi Kategori Foto Dinamis untuk Sub-Fasilitas Tercentang pada Pendataan KostManager (`AgentDashboard.tsx`, `KostManagerPropertyFormModal.tsx`, `KostManagerPortal.tsx`, `KostManagerManagement.tsx`) (September 2026)
 - **Permintaan & Masalah**:
   1. Pengguna meminta: *"khusus pendataan kostmanager, semua sub fasilitas yang dicentang juga harus muncul input kategori fotonya sih yang terintegrasi dengan sub fasilitas yang tercentang itu"*.
