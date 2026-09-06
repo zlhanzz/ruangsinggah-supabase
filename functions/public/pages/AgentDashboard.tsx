@@ -2759,45 +2759,64 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
         const draftKey = `km_draft_${req.id}`;
         
         // 1. Fetch existing Kost Manager property & room types first to assist in sanitizing drafts and prefilling
-        let kmRoomTypes = [];
-        let dbPropertyRecord = null;
-        let dbKmProp = null;
+        let kmRoomTypes: any[] = [];
+        let dbPropertyRecord: any = null;
+        let dbKmProp: any = null;
         try {
-            // Find propertyId from req.kost_id or transaction metadata if exists
-            let propertyIdToFetch = null;
+            // Find propertyId from req.kost_id, transaction metadata, or request properties
+            let propertyIdToFetch: string | null = null;
             const uuidPatDraft = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+            
             if (req.kost_id && uuidPatDraft.test(req.kost_id)) {
                 propertyIdToFetch = req.kost_id;
                 console.log("openKostManagerListing: resolved propertyIdToFetch from req.kost_id:", propertyIdToFetch);
+            } else if (req.transaction?.metadata?.propertyId && uuidPatDraft.test(req.transaction.metadata.propertyId)) {
+                propertyIdToFetch = req.transaction.metadata.propertyId;
+                console.log("openKostManagerListing: resolved propertyIdToFetch from req.transaction.metadata:", propertyIdToFetch);
+            } else if ((req as any).property_id && uuidPatDraft.test((req as any).property_id)) {
+                propertyIdToFetch = (req as any).property_id;
+            } else if ((req as any).propertyId && uuidPatDraft.test((req as any).propertyId)) {
+                propertyIdToFetch = (req as any).propertyId;
             } else if (req.transaction_id) {
                 const { data: trxData } = await supabase
                     .from('transactions')
                     .select('metadata')
                     .eq('id', req.transaction_id)
                     .maybeSingle();
-                if (trxData?.metadata?.propertyId) {
+                if (trxData?.metadata?.propertyId && uuidPatDraft.test(trxData.metadata.propertyId)) {
                     propertyIdToFetch = trxData.metadata.propertyId;
-                    console.log("openKostManagerListing: resolved propertyIdToFetch from transaction metadata:", propertyIdToFetch);
+                    console.log("openKostManagerListing: resolved propertyIdToFetch from transaction metadata query:", propertyIdToFetch);
                 }
             }
 
-            let query = supabase.from('properties').select('*');
+            let existingProps: any[] | null = null;
             if (propertyIdToFetch) {
-                query = query.eq('id', propertyIdToFetch);
-            } else if (req.user_id && uuidPatDraft.test(req.user_id)) {
-                query = query.eq('owner_uid', req.user_id);
-            } else {
-                console.warn('openKostManagerListing: no valid propertyId or user_id for draft fetch, skipping.');
-                throw new Error('skip_draft_fetch');
+                const { data } = await supabase.from('properties').select('*').eq('id', propertyIdToFetch);
+                existingProps = data;
             }
-            const { data: existingProps } = await query;
-            const existingProp = existingProps?.[0];
-            if (existingProp) {
-                dbPropertyRecord = existingProp;
+            
+            // Fallback search by owner_uid or mitra_id if not found or no propertyId
+            if ((!existingProps || existingProps.length === 0) && req.user_id && uuidPatDraft.test(req.user_id)) {
+                const { data } = await supabase
+                    .from('properties')
+                    .select('*')
+                    .or(`owner_uid.eq.${req.user_id},mitra_id.eq.${req.user_id}`);
+                existingProps = data;
+            }
+
+            // Find best matching property: by ID, by exact title, by partial title match, or first property
+            const matchedProp = existingProps?.find(p => p.id === propertyIdToFetch)
+                || existingProps?.find(p => p.title && req.kost_name && p.title.trim().toLowerCase() === req.kost_name.trim().toLowerCase())
+                || existingProps?.find(p => p.title && req.kost_name && (p.title.toLowerCase().includes(req.kost_name.toLowerCase()) || req.kost_name.toLowerCase().includes(p.title.toLowerCase())))
+                || existingProps?.[0];
+
+            if (matchedProp) {
+                dbPropertyRecord = matchedProp;
+                console.log("openKostManagerListing: matched existing property record for cloning:", dbPropertyRecord.id, dbPropertyRecord.title);
                 const { data: kmProp } = await supabase
                     .from('mitra_kostmanager')
                     .select('*')
-                    .eq('property_id', existingProp.id)
+                    .eq('property_id', matchedProp.id)
                     .maybeSingle();
                 if (kmProp) {
                     dbKmProp = kmProp;
@@ -2807,9 +2826,16 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                 }
             }
         } catch (e: any) {
-            if (e?.message !== 'skip_draft_fetch') {
-                console.error("Error pre-fetching room types for draft sanitization:", e);
-            }
+            console.error("Error pre-fetching property data for cloning & draft sanitization:", e);
+        }
+
+        // Set migration flag and always show verification warning modal on open
+        if (dbPropertyRecord || dbKmProp) {
+            setIsExistingPropertyMigration(true);
+            setWarningAccepted(false); // ALWAYS show "Peninjauan Ulang Data" warning to surveyor on opening
+        } else {
+            setIsExistingPropertyMigration(false);
+            setWarningAccepted(true);
         }
 
         // Extract existing signature data from multiple possible sources
@@ -2979,28 +3005,53 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                     parsed.kmListingForm.image_urls = draftImageUrls;
                     parsed.kmListingForm.photoCategories = draftPhotoCats;
 
-                    // Merge draft with request data to ensure title and address are never lost
+                    // Fallback and normalize facilities from database if draft facilities are empty or missing
+                    const sourceFacs = (parsed.kmListingForm.facilities && parsed.kmListingForm.facilities.length > 2)
+                        ? parsed.kmListingForm.facilities
+                        : (dbKmProp?.facilities || dbPropertyRecord?.facilities || parsed.kmListingForm.facilities || ['WiFi', 'Area Parkir', 'Dapur Bersama']);
+
+                    const sourceKitchen = (parsed.kmListingForm.publicKitchenFacilities && parsed.kmListingForm.publicKitchenFacilities.length > 0)
+                        ? parsed.kmListingForm.publicKitchenFacilities
+                        : (dbKmProp?.metadata?.publicKitchenFacilities || dbPropertyRecord?.metadata?.publicKitchenFacilities || []);
+
+                    const sourceParking = (parsed.kmListingForm.publicParkingFacilities && parsed.kmListingForm.publicParkingFacilities.length > 0)
+                        ? parsed.kmListingForm.publicParkingFacilities
+                        : (dbKmProp?.metadata?.publicParkingFacilities || dbPropertyRecord?.metadata?.publicParkingFacilities || ['Parkir Motor']);
+
+                    const sourceBathroom = (parsed.kmListingForm.publicBathroomFacilities && parsed.kmListingForm.publicBathroomFacilities.length > 0)
+                        ? parsed.kmListingForm.publicBathroomFacilities
+                        : (dbKmProp?.metadata?.publicBathroomFacilities || dbPropertyRecord?.metadata?.publicBathroomFacilities || []);
+
                     const resolvedInitialOwnerUid = resolveValidOwnerUid(parsed.kmListingForm.owner_uid || req.user_id, req, fetchedUser, dbPropertyRecord?.owner_uid);
                     const normalizedDraftFacs = normalizeAndExtractPublicFacilities(
-                        parsed.kmListingForm.facilities || ['WiFi', 'Area Parkir'],
-                        parsed.kmListingForm.publicKitchenFacilities || [],
-                        parsed.kmListingForm.publicParkingFacilities || [],
-                        parsed.kmListingForm.publicBathroomFacilities || []
+                        sourceFacs,
+                        sourceKitchen,
+                        sourceParking,
+                        sourceBathroom
                     );
+
                     const mergedForm = {
                         ...parsed.kmListingForm,
                         image_urls: draftImageUrls,
                         photoCategories: draftPhotoCats,
                         roomTypes: draftRoomTypes,
                         campuses: draftCampuses,
-                        title: parsed.kmListingForm.title || req.kost_name,
-                        address: parsed.kmListingForm.address || req.kost_address,
-                        province: parsed.kmListingForm.province || detectProvinceFromAddress(parsed.kmListingForm.address || req.kost_address),
+                        title: parsed.kmListingForm.title || dbKmProp?.title || dbPropertyRecord?.title || req.kost_name,
+                        description: parsed.kmListingForm.description || dbKmProp?.description || dbPropertyRecord?.description || '',
+                        address: parsed.kmListingForm.address || dbKmProp?.address || dbPropertyRecord?.address || req.kost_address,
+                        province: parsed.kmListingForm.province || dbKmProp?.province || dbPropertyRecord?.province || detectProvinceFromAddress(parsed.kmListingForm.address || req.kost_address),
+                        city: parsed.kmListingForm.city || dbKmProp?.city || dbPropertyRecord?.city || 'Makassar',
+                        area: parsed.kmListingForm.area || dbKmProp?.area || dbPropertyRecord?.area || '',
+                        type: parsed.kmListingForm.type || dbKmProp?.type || dbPropertyRecord?.type || 'Campur',
+                        price: parsed.kmListingForm.price || dbKmProp?.price || dbPropertyRecord?.price || 0,
+                        totalRooms: parsed.kmListingForm.totalRooms || dbKmProp?.total_rooms || dbPropertyRecord?.total_rooms || (initialTotalRooms || 0),
                         owner_uid: resolvedInitialOwnerUid,
                         facilities: normalizedDraftFacs.facilities,
                         publicKitchenFacilities: normalizedDraftFacs.publicKitchenFacilities,
                         publicParkingFacilities: normalizedDraftFacs.publicParkingFacilities,
-                        publicBathroomFacilities: normalizedDraftFacs.publicBathroomFacilities
+                        publicBathroomFacilities: normalizedDraftFacs.publicBathroomFacilities,
+                        location: parsed.kmListingForm.location || dbKmProp?.location || dbPropertyRecord?.location || initialCoords,
+                        rules: parsed.kmListingForm.rules || dbKmProp?.rules || dbPropertyRecord?.rules || ['Tidak boleh membawa hewan peliharaan', 'Tamu dilarang menginap']
                     };
                     setKmListingForm(mergedForm);
                     setKmStep(parsed.kmStep || 1);
@@ -3015,11 +3066,9 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                         mergedForm.publicBathroomFacilities || []
                     );
                     setPhotoCategories(dynamicDraftCats);
-                    if (parsed.isExistingPropertyMigration !== undefined) {
-                        setIsExistingPropertyMigration(parsed.isExistingPropertyMigration);
-                    }
-                    if (parsed.warningAccepted !== undefined) {
-                        setWarningAccepted(parsed.warningAccepted);
+                    if (dbPropertyRecord || dbKmProp) {
+                        setIsExistingPropertyMigration(true);
+                        setWarningAccepted(false); // ALWAYS prompt surveyor with warning modal on open
                     }
                     console.log("Loaded sanitized onboarding draft from Cloud Database / LocalStorage on open");
                     return;

@@ -2,6 +2,35 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 393. Pengembalian Sistem Cloning Otomatis Self-Listing Mitra & Modal Peringatan Verifikasi Surveyor Pendataan KostManager (`AgentDashboard.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna melaporkan: *"kok malah rusak ya? cloningan data yang bersumber dari saat masih listing menjadi mitra biasa kok tidak otomatis muncul dan terisi lagi. selain itu sebelumnya kita ada sistem peringatan ke agen survey jika sebuah kost adalah kost yang didaftarkan dari yang sudah listing sebagai mitra biasa, lalu kemudian didaftarkan kostmanager maka beberapa data otomatis terisi, jadi agen survey diminta untuk meverifikasi ulang untuk memastikan kesesuaiannya di lapangan, tapi kok semua itu hilang ya? tolong kemvbalikan bagian itu kembali kesistem kita"*.
+- **Akar Masalah**:
+  1. **Pencarian Property ID yang Terbatas**: `propertyIdToFetch` sebelumnya hanya membaca `req.kost_id` atau melakukan query `transactions` berdasarkan `req.transaction_id`. Jika `propertyId` tersimpan di `req.transaction?.metadata?.propertyId`, `(req as any).property_id`, atau jika properti terdaftar di tabel `properties` dengan `owner_uid` / `mitra_id` sesuai `req.user_id` dengan nama kost yang cocok, pencarian properti sebelumnya bisa terlewat jika format ID tidak cocok.
+  2. **Interferensi Draf Kosong / Prematur yang Memutus Alur Cloning**: Ketika implementasi persistensi draf database diterapkan pada pembaruan sebelumnya, saat form dibuka pertama kali, sebuah draf kosong/default sempat tersimpan ke `survey_requests.evaluation_summary.draft_data`. Pada pembukaan form berikutnya, `openKostManagerListing` mendeteksi adanya `savedDraftData` dan langsung melakukan `return` secara dini (*early return*), sehingga logika Section B (cloning dari `dbPropertyRecord`) tidak pernah dieksekusi.
+  3. **State `warningAccepted` Tersimpan `true` di Draf**: Draf sebelumnya menyimpan state `warningAccepted: true`. Ketika draf dimuat, `warningAccepted` menjadi `true`, sehingga modal peringatan `{isExistingPropertyMigration && !warningAccepted && (...)}` terlewati dan tidak tampil ke surveyor.
+- **Implementasi Solusi**:
+  1. **Multi-Kanal Resolusi Properti Eksisting (`openKostManagerListing`)**:
+     - Memeriksa `req.kost_id`, `req.transaction?.metadata?.propertyId`, `(req as any).property_id`, dan query `transactions` metadata.
+     - Melakukan fallback query ke tabel `properties` dengan filter `owner_uid.eq.user_id` ATAU `mitra_id.eq.user_id`.
+     - Memilih kecocokan terbaik berdasarkan ID, kesamaan nama kost (`title` $\leftrightarrow$ `kost_name`), atau properti pertama milik mitra.
+  2. **Pemulihan Mutlak Modal Peringatan Peninjauan Ulang Data**:
+     - Setiap kali `openKostManagerListing` dibuka dan `dbPropertyRecord` (atau `dbKmProp`) terdeteksi, sistem selalu mengaktifkan `setIsExistingPropertyMigration(true)` dan mereset `setWarningAccepted(false)`.
+     - Modal pop-up *"Peninjauan Ulang Data: Beberapa data secara otomatis sudah terisi, lakukan peninjauan ulang untuk memastikan kesesuaian data sudah benar."* dijamin selalu muncul saat surveyor membuka form tugas survei.
+  3. **Restorasi Penuh Cloning Data Self-Listing**:
+     - Mengisi otomatis seluruh informasi properti (`title`, `description`, `address`, `city`, `area`, `province`, `type`, `price`, `rules`, `campuses`, `location`).
+     - Mengisi otomatis seluruh fasilitas utama (13 fasilitas standar) dan sub-fasilitas parkir, dapur bersama, dan WC umum menggunakan `normalizeAndExtractPublicFacilities`.
+     - Mengomputasi kartu upload foto area publik terintegrasi via `computeDynamicPublicPhotoCategories`.
+     - Mengkloning spesifikasi seluruh tipe kamar (`room_types`) dari data mitra dengan slot foto bersih (0 foto) untuk siap diambil foto survei baru di lapangan.
+  4. **Sinkronisasi Cerdas Draf vs Properti Eksisting**:
+     - Jika draf tersimpan belum memuat fasilitas atau tipe kamar lengkap, sistem secara cerdas menggabungkan (*fallback merge*) data dari `dbPropertyRecord` agar form tidak pernah kosong.
+- **File Tersentuh**:
+  - `functions/public/pages/AgentDashboard.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi build frontend Vite (`cmd /c npm run build` di `functions/public`) lulus 100% (`✓ 2512 modules transformed, built in 53.18s`, 0 error).
+
 ### 392. Persistensi Draf Pendataan KostManager Berbasis Cloud Database & Auto-Cleanup Aman Anti-Hilang (`AgentDashboard.tsx`) (September 2026)
 - **Permintaan & Masalah**:
   1. Pengguna melaporkan: *"kenapa setiap kali telah melakukan upload kemudain terclose, saat form pendataannya dibuka lagi foto yang sebelunnya sudadh di upload kok hilang lagi"*.
