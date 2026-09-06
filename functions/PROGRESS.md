@@ -2,6 +2,35 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 401. Perbaikan Kestabilan Draf Form Pendataan KostManager: Eliminasi Destructive Re-merge Fasilitas & Pemulihan Foto Survei saat Modal Ditutup / Refresh (`AgentDashboard.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna melaporkan bahwa setiap kali modal pendataan KostManager (*ONBOARDING KOST - Survey Field App*) ditutup dan terjadi refresh browser, seluruh foto pendataan yang sebelumnya telah diunggah hilang kembali menjadi `0 FOTO` pada kartu area publik (seperti *Bangunan Depan, Koridor, Lingkungan*, dll.).
+  2. Seluruh perubahan fasilitas yang telah dilakukan sebelumnya (misal uncheck fasilitas tertentu, penambahan fasilitas baru) ter-reset dan kembali ke setelan awal saat pertama kali pesanan survei diterima oleh agen.
+  3. Pengguna mempertanyakan apakah sistem draf berbasis database tidak bekerja dan mengapa hal ini bisa terjadi.
+- **Akar Masalah**:
+  1. **Destructive Re-Merging Fasilitas**: Pada fungsi pembuka formulir `openKostManagerListing`, terdapat kode penggabungan union `Array.from(new Set([...draftFacilities, ...dbKmProp, ...dbPropertyRecord, ...transactionMetadata]))`. Logika ini secara agresif memaksa fasilitas asli dari database mitra/pesanan masuk kembali ke state form, sehingga setiap kali formulir dibuka ulang dari draf, fasilitas yang sengaja dihapus/di-uncheck oleh surveyor dihidupkan kembali secara paksa.
+  2. **Tipe Data ID UUID pada Auto-Load Refresh**: URL parameter query browser `onboarding_id` dibaca menggunakan `parseInt(onboardingIdStr, 10)`. Karena ID survei menggunakan format UUID v4 string (misal: `'01f8e223-...'`), pemanggilan `parseInt` menghasilkan `NaN`, menyebabkan pencarian `r.id === NaN` selalu bernilai `false`. Akibatnya, form draf gagal termuat secara otomatis saat halaman browser di-refresh.
+  3. **Sanitasi Foto Menghapus Foto Survei yang Valid**: Pada logika pembacaan foto draf, terdapat filter yang menghapus foto jika URL-nya pernah ada di metadata properti awal mitra, sehingga foto survei yang telah disimpan di draf tersingkir dari galeri.
+  4. **Penyimpanan Draf Synchronous Fallback**: Saat tombol Tutup / Keluar (X) ditekan, penulisan asinkron ke database berisiko terputus jika modal langsung ditutup sebelum network request selesai.
+- **Implementasi Solusi**:
+  1. **Prioritas Eksklusif Draf untuk Fasilitas**:
+     - Memperbarui `openKostManagerListing` di `AgentDashboard.tsx`: Jika `parsed.kmListingForm.facilities` sudah ada di dalam draf database / local, maka data fasilitas draf digunakan secara eksklusif tanpa melakukan union/re-merge dengan fasilitas awal `dbPropertyRecord` atau `transaction.metadata`.
+     - Fasilitas awal hanya digunakan sebagai modal dasar saat draf survei benar-benar baru pertama kali dibuka (*first-time onboarding*).
+  2. **Koreksi Tipe Data UUID & Fallback Direct Fetch Database**:
+     - Mengganti `parseInt` dengan pencocokan string UUID murni: `String(r.id) === String(onboardingIdStr)`.
+     - Menambahkan fallback *direct database fetch* via Supabase RPC/query jika in-memory `surveyRequests` belum selesai dimuat saat browser di-refresh, menjamin modal langsung terbuka seketika dengan data draf lengkap.
+  3. **Pemulihan & Sanitasi Foto Draf yang Utuh**:
+     - Memastikan seluruh foto survei yang tersimpan di `draftData.kmListingForm.image_urls` dan `draftData.photoCategories` dimuat kembali ke kartu masing-masing tanpa ada yang tereliminasi.
+     - Menyediakan sinkronisasi ganda: instan ke `localStorage` (sebagai redundansi offline) dan persistensi ke kolom `evaluation_summary.draft_data` di tabel `survey_requests`.
+  4. **Penyimpanan Instan Saat Tutup Modal**:
+     - Handler penutupan modal (*Keluar* & tombol silang *X*) kini memanggil `saveKostManagerDraftToDatabase` dan menyimpan ke `localStorage` sebelum mereset state, memastikan progres surveyor tidak pernah hilang.
+- **File Tersentuh**:
+  - `functions/public/pages/AgentDashboard.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi build frontend Vite (`npm.cmd run build` di `functions/public`) lulus 100% (2512 modul tertransformasi, `✓ built in 42.38s`, 0 error).
+
 ### 400. Optimalisasi Deteksi Auto-Sensor Banner / Spanduk Sewa Kamar & Peningkatan Resolusi AI Vision (`detect-contact-banner/index.ts`, `autoSensorService.ts`) (September 2026)
 - **Permintaan & Masalah**:
   1. Pengguna menanyakan mengapa fitur auto-sensor banner terkadang tidak bekerja di dashboard agen, terutama pada foto tampak depan/fasad di mana terdapat spanduk sewa kamar ("TERIMA KOST") atau plang kontak di pagar gerbang yang tetap terbaca jelas tanpa tersensor otomatis.

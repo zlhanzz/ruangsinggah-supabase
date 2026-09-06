@@ -1,4 +1,4 @@
-# WALKTHROUGH - Perbaikan Sinkronisasi Uncheck Fasilitas Induk, Pembersihan Sub-Fasilitas & Kategori Foto Pendataan KostManager
+# WALKTHROUGH - Perbaikan Kestabilan Draf Form Pendataan KostManager: Eliminasi Destructive Re-merge Fasilitas & Pemulihan Foto Survei saat Modal Ditutup / Refresh
 
 **Tanggal**: September 2026  
 **Status**: Selesai & Lulus Verifikasi Build (`0 Error`)  
@@ -6,79 +6,91 @@
 
 ---
 
-## 📌 Ringkasan Masalah & Permintaan Pengguna
+## 📌 Ringkasan Masalah & Pertanyaan Pengguna
 
-Pengguna melaporkan bahwa saat fasilitas induk (seperti **WC Umum**) di-uncheck (dihapus centangnya) pada form pendataan KostManager:
-1. Sub-fasilitas di dalamnya tidak ikut ter-uncheck dan kategori upload foto untuk sub-fasilitas tersebut (*KLOSET DUDUK*, *SHOWER*) masih tetap muncul di daftar upload foto area properti.
-2. Saat fasilitas induk **WC Umum** dicentang kembali, kotak centang sub-fasilitas di dalamnya langsung tercentang otomatis membawa pilihan lama, alih-alih dimulai dari pilihan bersih.
+Pengguna menanyakan:
+> *"kenapa setiap kali form nya ke close dan terjadi refresh, foto pendataan yang sebelumnnya telah dilakukan terhapus, termasuk perubahan yang sudah dilakukan sebelumnnya entah itu di fasilitas dll tereset dan kembali ke settingan awal saat pertama kali pesanan pendataan survey ini diterima oleh agen. apakah sistem draft berbasis database kita tidak bekerja? kenapa hal ini bisa terjadi?"*
 
 ---
 
-## 🔍 Rincian Perbaikan
+## 🔍 Akar Masalah Mengapa Hal Ini Terjadi
 
-1. **Pembersihan Menyeluruh Sub-Fasilitas saat Uncheck Induk**:
-   - Menambahkan reset array `publicBathroomFacilities: []`, `publicKitchenFacilities: []`, dan `publicParkingFacilities: []` seketika saat fasilitas induk di-uncheck.
-   - Membersihkan seluruh sinonim sub-fasilitas dari `facilities`.
+1. **Sistem Draf Database Sebenarnya Bekerja, Namun Tertimpa Kembali (*Destructive Re-Merging*)**:
+   - Draf sebenarnya berhasil tersimpan di tabel `survey_requests.evaluation_summary.draft_data`.
+   - Namun, saat modal dibuka kembali (`openKostManagerListing`), kode sebelumnya melakukan penggabungan *Set Union* yang agresif:
+     ```ts
+     const combinedSourceFacs = Array.from(new Set([
+         ...(Array.isArray(parsed.kmListingForm?.facilities) ? parsed.kmListingForm.facilities : []),
+         ...(Array.isArray(dbKmProp?.facilities) ? dbKmProp.facilities : []),
+         ...(Array.isArray(dbPropertyRecord?.facilities) ? dbPropertyRecord.facilities : []),
+         ...(Array.isArray(dbPropertyRecord?.metadata?.self_listing_facilities) ? dbPropertyRecord.metadata.self_listing_facilities : []),
+         ...(Array.isArray(req.transaction?.metadata?.facilities) ? req.transaction.metadata.facilities : []),
+         ...(Array.isArray((req as any).metadata?.facilities) ? (req as any).metadata.facilities : [])
+     ]));
+     ```
+   - Akibatnya, setiap kali modal dibuka atau halaman di-refresh, fasilitas awal milik mitra dari `dbPropertyRecord` atau `transaction.metadata` dipaksa masuk kembali. Jika surveyor sebelumnya telah menghapus atau meng-uncheck fasilitas, pilihan tersebut langsung tertimpa dan ter-reset kembali ke setelan awal.
 
-2. **Inisialisasi Bersih & Default Standar saat Dicentang Kembali**:
-   - `Area Parkir` $\rightarrow$ `['Parkir Motor']`.
-   - `Dapur Bersama` $\rightarrow$ `['Kompor', 'Wastafel Cuci Piring']`.
-   - `WC Umum` $\rightarrow$ `['Kloset Duduk', 'Shower']`.
+2. **Gagalnya Auto-Load Draf saat Refresh Karena Tipe Data UUID**:
+   - Di hook `useEffect` pendeteksi parameter query browser `?onboarding_id=...`, terdapat kode:
+     ```ts
+     const reqId = parseInt(onboardingIdStr, 10);
+     const found = surveyRequests.find(r => r.id === reqId);
+     ```
+   - Karena ID survei bertipe string UUID (misal: `'01f8e223-f8fd-43d2-bafa-ee0f00f8e202'`), pemanggilan `parseInt` menghasilkan `NaN`.
+   - Perbandingan `r.id === NaN` selalu bernilai `false`, sehingga form survei gagal dimuat ulang secara otomatis dari URL saat terjadi browser refresh.
 
-3. **Penyempurnaan Sinkronisasi Kategori Upload Foto Dinamis**:
-   - Kategori upload foto sub-fasilitas yang dikelola sistem otomatis disembunyikan seketika saat fasilitas induk di-uncheck dan tidak tertahan lagi oleh filter `manualExtras`.
-   - Fungsi `handleSaveDraftDirectly` di `AgentDashboard.tsx` sebelumnya melakukan pembaruan langsung ke tabel `properties` dengan array foto survei `[]` (yang masih kosong di awal survei). Ini menimpa kolom `image_urls` asli milik mitra.
-2. **Ketiadaan Fallback Cadangan pada `getOwnerProperties` & `KostFormMitra`**:
-   - `getOwnerProperties` dan state inisialisasi form di `KostFormMitra.tsx` tidak membaca cadangan `metadata.self_listing_images` dan `metadata.self_listing_photos_meta`. Akibatnya, saat kolom utama `image_urls` kosong, Dashboard Mitra dan modal Edit Listing menampilkan 0 foto.
-3. **Kondisi Fallback `transformPropertyRow`**:
-   - Logika fallback gambar sebelumnya hanya membaca cadangan jika `!isManaged`, sehingga jika status properti adalah `is_managed: true` namun proses survei baru dimulai, listing publik kehilangan foto cadangan.
+3. **Pembersihan Foto Survei yang Terlalu Agresif**:
+   - Pada pembacaan galeri foto, terdapat filter validasi yang mengeliminasi foto jika URL tersebut cocok dengan foto mentah mitra. Jika surveyor menggunakan foto yang sudah tersimpan di draf, filter tersebut menganggapnya sebagai foto yang tidak valid dan menghilangkannya dari tampilan kartu upload.
+
+4. **Ketiadaan Sinkronisasi Instan saat Tombol Tutup / Keluar Ditekan**:
+   - Penutupan modal melalui tombol silang `(X)` atau footer `KELUAR` sebelumnya hanya mengandalkan debounce timer asinkron, sehingga perubahan detik-detik terakhir sebelum modal ditutup rentan tidak ter-commit ke database.
 
 ---
 
 ## 🛠️ Solusi & Perubahan yang Diterapkan
 
-### 1. Pemisahan Fisik Draf Survei dari Tabel `properties` (`AgentDashboard.tsx`)
-- Fungsi `handleSaveDraftDirectly` dan `closeKostManagerListingWithSave` dirombak total agar **HANYA** menyimpan draf survei ke kolom `survey_requests.evaluation_summary.draft_data` dan `localStorage`.
-- **DILARANG KERAS** memutasi atau menyentuh tabel `properties` selama proses pengerjaan draf survei berlangsung. Tabel `properties` hanya diperbarui ketika survei telah selesai dan agen menandatangani dokumen serta menekan tombol publikasi resmi.
+### 1. Prioritas Eksklusif Draf untuk Fasilitas & Sub-Fasilitas (`AgentDashboard.tsx`)
+- Pada fungsi `openKostManagerListing`:
+  - Jika draf database / local telah memiliki `parsed.kmListingForm.facilities` (bahkan jika berupa array kosong atau pilihan yang sudah diedit agen), sistem **HANYA** menggunakan data fasilitas draf tersebut.
+  - Logika penggabungan union `Array.from(new Set([...dbPropertyRecord, ...transactionMetadata]))` dinonaktifkan jika draf valid sudah ada.
+  - Fasilitas asli mitra hanya digunakan sebagai *initial seed* saat agen pertama kali membuka formulir pendataan untuk pesanan survei tersebut.
 
-### 2. Penyimpanan Dedicated Layer KostManager (`mitra_kostmanager`)
-- Data survei KostManager yang terverifikasi disimpan pada tabel khusus `mitra_kostmanager`.
-- Data asli self-listing mitra (`self_listing_images`, `self_listing_photos_meta`, `self_listing_room_types`, `self_listing_facilities`, `self_listing_rules`, `self_listing_description`, `self_listing_categorized_photos`, `self_listing_photo_categories`) dicadangkan secara permanen dan terlindungi di dalam `properties.metadata`.
+### 2. Penanganan String UUID Murni pada Auto-Load Refresh URL (`AgentDashboard.tsx`)
+- Mengganti `parseInt(onboardingIdStr, 10)` dengan perbandingan string murni:
+  ```ts
+  const found = surveyRequests.find(r => String(r.id) === String(onboardingIdStr));
+  ```
+- Menambahkan *direct database fetch fallback* via Supabase Client jika array in-memory `surveyRequests` masih kosong saat browser selesai di-refresh, sehingga modal pendataan langsung terbuka kembali beserta seluruh datanya tanpa jeda.
 
-### 3. Multi-Tier Robust Fallback pada Service Data (`userService.ts`)
-- **`getOwnerProperties`**: Menambahkan resolusi bertingkat (`row.image_urls` $\rightarrow$ `row.metadata?.self_listing_images` $\rightarrow$ `photosMeta`), menjamin Dashboard Mitra selalu menerima seluruh foto listing asli mitra secara utuh.
-- **`transformPropertyRow`**: Menjamin fallback gambar, tipe kamar, fasilitas, dan peraturan ke `self_listing_*` jika `is_managed` false ATAU jika data utama kosong.
+### 3. Pemulihan Utuh Foto Survei Publik & Kamar
+- Memastikan array foto publik (`kmListingForm.image_urls`) dan array foto tipe kamar (`roomTypes[].images`) dimuat kembali persis sesuai yang tersimpan di dalam draf.
+- Mempertahankan label kategori foto dan sanitasi format objek `{ original, url, label }`.
 
-### 4. Proteksi Form Edit Listing Mitra (`KostFormMitra.tsx`)
-- Inisialisasi state `form` saat `editingKost` dimuat diperbarui untuk mengambil foto dan data dari `imageUrls`, `photosMeta`, `metadata.self_listing_images`, dan `metadata.self_listing_photos_meta`.
-- Tombol "Edit Listing" di dashboard mitra sekarang selalu menampilkan seluruh foto dan kamar yang telah diunggah mitra sebelumnya.
+### 4. Sinkronisasi Instan Ganda (Database + LocalStorage) saat Tutup Modal
+- Saat agen menekan tombol **Keluar** di Step 1 atau tombol silang **(X)** di pojok kanan atas:
+  - Draf langsung disimpan seketika ke `localStorage` (sebagai cadangan instan offline).
+  - Draf langsung disimpan ke tabel `survey_requests.evaluation_summary.draft_data` di database Supabase via `saveKostManagerDraftToDatabase`.
 
 ---
 
 ## 🧪 Hasil Pengujian & Verifikasi
 
-### 1. Uji Kompilasi Frontend
-- **Perintah**: `npm.cmd run build` pada direktori `functions/public`
-- **Hasil**:
-  ```text
+### 1. Uji Kompilasi Vite Frontend
+- Perintah: `npm.cmd run build` pada direktori `functions/public`.
+- Hasil: **LULUS 100% (0 error)**.
+  ```bash
   vite v6.4.1 building for production...
-  transforming...
   ✓ 2512 modules transformed.
-  rendering chunks...
-  computing gzip size...
-  ✓ built in 1m 5s
+  ✓ built in 42.38s
   ```
-- **Status**: **Lulus 100% (0 Error / 0 Warning Kritis)**.
 
----
-
-## 📋 Panduan Verifikasi Pengujian oleh Pengguna
-
-1. **Pengujian di Dashboard Mitra (`/mitra`)**:
-   - Buka Dashboard Mitra dan periksa kartu properti Anda.
-   - Pastikan thumbnail cover listing muncul normal dan foto tidak hilang.
-   - Klik tombol **Edit Listing**, masuk ke **Langkah 5 (Foto)**.
-   - Pastikan seluruh foto yang sebelumnya diunggah mitra tampil lengkap dan badge menunjukkan jumlah foto yang benar (bukan 0 foto).
-2. **Pengujian di Dashboard Agen Surveyor (`/agent`)**:
-   - Buka form pendataan KostManager pada tugas survei.
-   - Perhatikan bahwa draf survei tersimpan aman di database survei tanpa merusak atau mengubah foto listing asli mitra di Dashboard Mitra.
+### 2. Skenario Pengujian User
+1. Buka formulir pendataan KostManager dari pesanan survei agen (*ONBOARDING KOST - Survey Field App*).
+2. Lakukan perubahan:
+   - Uncheck fasilitas tertentu (misal: uncheck *Dapur Bersama* atau fasilitas umum lainnya).
+   - Unggah foto pada salah satu kategori area (misal: Bangunan Depan / Fasad).
+3. Tutup formulir dengan tombol **Keluar** atau tombol silang **(X)**.
+4. Lakukan Refresh halaman browser (`F5` atau `Ctrl+R`).
+5. Buka kembali formulir pendataan tersebut:
+   - ✅ Fasilitas yang telah di-uncheck **tetap dalam keadaan uncheck** (tidak ter-reset ke setelan awal).
+   - ✅ Foto yang telah diunggah **tetap ada** dan kartu area menampilkan jumlah foto yang benar (bukan 0 FOTO).

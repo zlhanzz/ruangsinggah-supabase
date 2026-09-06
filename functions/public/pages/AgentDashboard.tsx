@@ -2258,15 +2258,18 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                 lastUpdated: new Date().toISOString()
             };
 
-            // 1. Simpan segera ke localStorage sebagai cache lokal responsif
+            // 1. Simpan segera ke localStorage sebagai cache lokal responsif (ID & transaction_id)
             const draftKey = `km_draft_${isEditingKostManager.id}`;
             try {
                 localStorage.setItem(draftKey, JSON.stringify(draftData));
+                if (isEditingKostManager.transaction_id) {
+                    localStorage.setItem(`km_draft_trx_${isEditingKostManager.transaction_id}`, JSON.stringify(draftData));
+                }
             } catch (e) {
                 console.warn("LocalStorage set error:", e);
             }
 
-            // 2. Simpan langsung ke Cloud Database (survey_requests.evaluation_summary.draft_data)
+            // 2. Simpan langsung ke Cloud Database (survey_requests.evaluation_summary.draft_data) via Upsert
             const currentEvalSummary = isEditingKostManager.evaluation_summary || {};
             const updatedEvalSummary = {
                 ...(typeof currentEvalSummary === 'object' ? currentEvalSummary : {}),
@@ -2274,6 +2277,21 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                 last_draft_updated_at: new Date().toISOString()
             };
 
+            const draftPayload: any = {
+                id: isEditingKostManager.id,
+                evaluation_summary: updatedEvalSummary,
+                updated_at: new Date().toISOString()
+            };
+            if (isEditingKostManager.transaction_id) draftPayload.transaction_id = isEditingKostManager.transaction_id;
+            if (isEditingKostManager.user_id) draftPayload.user_id = isEditingKostManager.user_id;
+            if (isEditingKostManager.kost_name) draftPayload.kost_name = isEditingKostManager.kost_name;
+            if (isEditingKostManager.kost_address) draftPayload.kost_address = isEditingKostManager.kost_address;
+            if (isEditingKostManager.status) draftPayload.status = isEditingKostManager.status;
+            if (isEditingKostManager.assigned_agent_id || user?.id || uid) {
+                draftPayload.assigned_agent_id = isEditingKostManager.assigned_agent_id || user?.id || uid;
+            }
+
+            // Prioritaskan direct update pada id yang ada untuk menghindari penolakan RLS INSERT
             const { error: updateError } = await supabase
                 .from('survey_requests')
                 .update({ 
@@ -2283,20 +2301,43 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                 .eq('id', isEditingKostManager.id);
 
             if (updateError) {
-                console.warn("Error updating survey_requests draft in DB:", updateError);
+                console.warn("Direct update draft error, trying upsert fallback:", updateError);
+                const { error: upsertError } = await supabase
+                    .from('survey_requests')
+                    .upsert(draftPayload, { onConflict: 'id' });
+                if (upsertError) {
+                    console.warn("Error upserting survey_requests draft in DB:", upsertError);
+                } else {
+                    console.log("Draft successfully auto-saved via upsert to Supabase Cloud Database for survey request:", isEditingKostManager.id);
+                }
             } else {
-                console.log("Draft successfully auto-saved directly to Supabase Cloud Database for survey request:", isEditingKostManager.id);
+                console.log("Draft successfully auto-saved directly via update to Supabase Cloud Database for survey request:", isEditingKostManager.id);
+            }
+
+            // Sinkronkan juga jika ada baris terpisah dengan transaction_id yang sama
+            if (isEditingKostManager.transaction_id) {
+                await supabase
+                    .from('survey_requests')
+                    .update({ 
+                        evaluation_summary: updatedEvalSummary,
+                        updated_at: new Date().toISOString()
+                    })
+                    .eq('transaction_id', isEditingKostManager.transaction_id)
+                    .neq('id', isEditingKostManager.id);
             }
 
             // Update state in-memory agar selalu sinkron
             setIsEditingKostManager((prev: any) => prev ? { ...prev, evaluation_summary: updatedEvalSummary } : null);
+            if (setSurveyRequests) {
+                // optional setter
+            }
         } catch (err) {
             console.warn("Silent background draft save warning:", err);
         }
     };
 
     const closeKostManagerListingWithSave = async () => {
-        if (isEditingKostManager && (kmListingForm.title || (kmListingForm.image_urls && kmListingForm.image_urls.length > 0) || (kmListingForm.roomTypes && kmListingForm.roomTypes.length > 0))) {
+        if (isEditingKostManager && (kmListingForm.title || (kmListingForm.image_urls && kmListingForm.image_urls.length > 0) || (kmListingForm.roomTypes && kmListingForm.roomTypes.length > 0) || (kmListingForm.facilities && kmListingForm.facilities.length > 0))) {
             try {
                 await saveKostManagerDraftToDatabase(kmListingForm, kmStep, photoCategories);
             } catch (e) {
@@ -2325,6 +2366,9 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
             };
             try {
                 localStorage.setItem(draftKey, JSON.stringify(draftData));
+                if (isEditingKostManager.transaction_id) {
+                    localStorage.setItem(`km_draft_trx_${isEditingKostManager.transaction_id}`, JSON.stringify(draftData));
+                }
             } catch (e) {
                 console.warn("LocalStorage set error:", e);
             }
@@ -2340,7 +2384,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
     // Listener beforeunload untuk mengamankan draf saat reload atau browser ditutup
     useEffect(() => {
         const handleBeforeUnload = () => {
-            if (isEditingKostManager && (kmListingForm.title || (kmListingForm.image_urls && kmListingForm.image_urls.length > 0) || (kmListingForm.roomTypes && kmListingForm.roomTypes.length > 0))) {
+            if (isEditingKostManager && (kmListingForm.title || (kmListingForm.image_urls && kmListingForm.image_urls.length > 0) || (kmListingForm.roomTypes && kmListingForm.roomTypes.length > 0) || (kmListingForm.facilities && kmListingForm.facilities.length > 0))) {
                 const draftKey = `km_draft_${isEditingKostManager.id}`;
                 const draftData = {
                     kmListingForm,
@@ -2357,6 +2401,9 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                 };
                 try {
                     localStorage.setItem(draftKey, JSON.stringify(draftData));
+                    if (isEditingKostManager.transaction_id) {
+                        localStorage.setItem(`km_draft_trx_${isEditingKostManager.transaction_id}`, JSON.stringify(draftData));
+                    }
                 } catch (e) {
                     console.warn("LocalStorage beforeunload save error:", e);
                 }
@@ -2366,15 +2413,36 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
         return () => window.removeEventListener('beforeunload', handleBeforeUnload);
     }, [isEditingKostManager, kmListingForm, kmStep, temporaryRoom, activeRoomIdx, kmActiveTab, photoCategories, isExistingPropertyMigration, warningAccepted, signatureData, agreedToTerms]);
 
-    // Auto-load onboarding from URL search params on refresh
+    // Auto-load onboarding from URL search params on refresh (menggunakan string comparison UUID & direct fetch fallback)
     useEffect(() => {
         const onboardingIdStr = searchParams.get('onboarding_id');
-        if (onboardingIdStr && surveyRequests && surveyRequests.length > 0 && !isEditingKostManager) {
-            const reqId = parseInt(onboardingIdStr, 10);
-            const found = surveyRequests.find(r => r.id === reqId);
-            if (found) {
-                openKostManagerListing(found);
+        if (onboardingIdStr && !isEditingKostManager) {
+            if (surveyRequests && surveyRequests.length > 0) {
+                const found = surveyRequests.find(r => String(r.id) === String(onboardingIdStr));
+                if (found) {
+                    openKostManagerListing(found);
+                    return;
+                }
             }
+
+            // Fallback: Jika surveyRequests belum selesai dimuat atau berada di luar filter tab saat refresh, fetch langsung dari database
+            let isCancelled = false;
+            (async () => {
+                try {
+                    const { data: directReq, error } = await supabase
+                        .from('survey_requests')
+                        .select('*, transaction:transactions(*)')
+                        .eq('id', onboardingIdStr)
+                        .maybeSingle();
+                    if (!isCancelled && !error && directReq && !isEditingKostManager) {
+                        openKostManagerListing(directReq);
+                    }
+                } catch (e) {
+                    console.warn("Could not auto-fetch onboarding survey request directly:", e);
+                }
+            })();
+
+            return () => { isCancelled = true; };
         }
     }, [searchParams, surveyRequests, isEditingKostManager]);
 
@@ -2849,8 +2917,8 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
         const isValidSurveyPhoto = (urlOrObj: any): boolean => {
             const urlStr = getImageUrlString(urlOrObj);
             if (!urlStr) return false;
-            // Any photo uploaded in kostmanager survey or blob/data or drafts is ALWAYS valid
-            if (urlStr.includes('kostmanager/') || urlStr.includes('drafts/') || urlStr.startsWith('blob:') || urlStr.startsWith('data:')) {
+            // Any photo explicitly uploaded by surveyor in kostmanager survey or blob/data is ALWAYS valid
+            if (urlStr.includes('kostmanager/') || urlStr.startsWith('blob:') || urlStr.startsWith('data:')) {
                 return true;
             }
             if (selfListingImagesSet.has(urlStr) || selfRoomImagesSet.has(urlStr)) return false;
@@ -2900,6 +2968,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
         // 2. Load draft from Cloud Database first, fallback to in-memory request object and localStorage
         let savedDraftData: any = null;
         try {
+            // 2.a Coba cari di survey_requests by id
             const { data: sReqDraft } = await supabase
                 .from('survey_requests')
                 .select('evaluation_summary')
@@ -2908,6 +2977,17 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
             if (sReqDraft?.evaluation_summary?.draft_data) {
                 savedDraftData = sReqDraft.evaluation_summary.draft_data;
                 console.log("openKostManagerListing: loaded freshest draft from Supabase DB for survey:", req.id);
+            } else if (req.transaction_id) {
+                // 2.b Fallback cari di survey_requests by transaction_id
+                const { data: sReqTrxDraft } = await supabase
+                    .from('survey_requests')
+                    .select('evaluation_summary')
+                    .eq('transaction_id', req.transaction_id)
+                    .maybeSingle();
+                if (sReqTrxDraft?.evaluation_summary?.draft_data) {
+                    savedDraftData = sReqTrxDraft.evaluation_summary.draft_data;
+                    console.log("openKostManagerListing: loaded draft from Supabase DB via transaction_id:", req.transaction_id);
+                }
             }
         } catch (e) {
             console.warn("Could not query DB draft from survey_requests:", e);
@@ -2920,7 +3000,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
         }
 
         if (!savedDraftData) {
-            const savedDraft = localStorage.getItem(draftKey);
+            const savedDraft = localStorage.getItem(draftKey) || (req.transaction_id ? localStorage.getItem(`km_draft_trx_${req.transaction_id}`) : null);
             if (savedDraft) {
                 try {
                     savedDraftData = JSON.parse(savedDraft);
@@ -3003,36 +3083,42 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                     parsed.kmListingForm.image_urls = draftImageUrls;
                     parsed.kmListingForm.photoCategories = draftPhotoCats;
 
-                    // Merge and normalize all facilities from draft, database records, and transaction metadata
-                    const combinedSourceFacs = Array.from(new Set([
-                        ...(Array.isArray(parsed.kmListingForm?.facilities) ? parsed.kmListingForm.facilities : []),
-                        ...(Array.isArray(dbKmProp?.facilities) ? dbKmProp.facilities : []),
-                        ...(Array.isArray(dbPropertyRecord?.facilities) ? dbPropertyRecord.facilities : []),
-                        ...(Array.isArray(dbPropertyRecord?.metadata?.self_listing_facilities) ? dbPropertyRecord.metadata.self_listing_facilities : []),
-                        ...(Array.isArray(req.transaction?.metadata?.facilities) ? req.transaction.metadata.facilities : []),
-                        ...(Array.isArray((req as any).metadata?.facilities) ? (req as any).metadata.facilities : [])
-                    ]));
+                    // Respect surveyor's on-site changes: use draft facilities directly if present in draft!
+                    // Do NOT forcefully merge back with database/transaction records, so unselected facilities don't reappear.
+                    const draftHasFacilities = Array.isArray(parsed.kmListingForm?.facilities);
+                    const combinedSourceFacs = draftHasFacilities
+                        ? (parsed.kmListingForm.facilities || [])
+                        : Array.from(new Set([
+                            ...(Array.isArray(dbKmProp?.facilities) ? dbKmProp.facilities : []),
+                            ...(Array.isArray(dbPropertyRecord?.facilities) ? dbPropertyRecord.facilities : []),
+                            ...(Array.isArray(dbPropertyRecord?.metadata?.self_listing_facilities) ? dbPropertyRecord.metadata.self_listing_facilities : []),
+                            ...(Array.isArray(req.transaction?.metadata?.facilities) ? req.transaction.metadata.facilities : []),
+                            ...(Array.isArray((req as any).metadata?.facilities) ? (req as any).metadata.facilities : [])
+                        ]));
 
-                    const combinedKitchen = Array.from(new Set([
-                        ...(Array.isArray(parsed.kmListingForm?.publicKitchenFacilities) ? parsed.kmListingForm.publicKitchenFacilities : []),
-                        ...(Array.isArray(dbKmProp?.metadata?.publicKitchenFacilities) ? dbKmProp.metadata.publicKitchenFacilities : []),
-                        ...(Array.isArray(dbPropertyRecord?.metadata?.publicKitchenFacilities) ? dbPropertyRecord.metadata.publicKitchenFacilities : []),
-                        ...(Array.isArray(req.transaction?.metadata?.publicKitchenFacilities) ? req.transaction.metadata.publicKitchenFacilities : [])
-                    ]));
+                    const combinedKitchen = Array.isArray(parsed.kmListingForm?.publicKitchenFacilities)
+                        ? parsed.kmListingForm.publicKitchenFacilities
+                        : Array.from(new Set([
+                            ...(Array.isArray(dbKmProp?.metadata?.publicKitchenFacilities) ? dbKmProp.metadata.publicKitchenFacilities : []),
+                            ...(Array.isArray(dbPropertyRecord?.metadata?.publicKitchenFacilities) ? dbPropertyRecord.metadata.publicKitchenFacilities : []),
+                            ...(Array.isArray(req.transaction?.metadata?.publicKitchenFacilities) ? req.transaction.metadata.publicKitchenFacilities : [])
+                        ]));
 
-                    const combinedParking = Array.from(new Set([
-                        ...(Array.isArray(parsed.kmListingForm?.publicParkingFacilities) ? parsed.kmListingForm.publicParkingFacilities : []),
-                        ...(Array.isArray(dbKmProp?.metadata?.publicParkingFacilities) ? dbKmProp.metadata.publicParkingFacilities : []),
-                        ...(Array.isArray(dbPropertyRecord?.metadata?.publicParkingFacilities) ? dbPropertyRecord.metadata.publicParkingFacilities : []),
-                        ...(Array.isArray(req.transaction?.metadata?.publicParkingFacilities) ? req.transaction.metadata.publicParkingFacilities : [])
-                    ]));
+                    const combinedParking = Array.isArray(parsed.kmListingForm?.publicParkingFacilities)
+                        ? parsed.kmListingForm.publicParkingFacilities
+                        : Array.from(new Set([
+                            ...(Array.isArray(dbKmProp?.metadata?.publicParkingFacilities) ? dbKmProp.metadata.publicParkingFacilities : []),
+                            ...(Array.isArray(dbPropertyRecord?.metadata?.publicParkingFacilities) ? dbPropertyRecord.metadata.publicParkingFacilities : []),
+                            ...(Array.isArray(req.transaction?.metadata?.publicParkingFacilities) ? req.transaction.metadata.publicParkingFacilities : [])
+                        ]));
 
-                    const combinedBathroom = Array.from(new Set([
-                        ...(Array.isArray(parsed.kmListingForm?.publicBathroomFacilities) ? parsed.kmListingForm.publicBathroomFacilities : []),
-                        ...(Array.isArray(dbKmProp?.metadata?.publicBathroomFacilities) ? dbKmProp.metadata.publicBathroomFacilities : []),
-                        ...(Array.isArray(dbPropertyRecord?.metadata?.publicBathroomFacilities) ? dbPropertyRecord.metadata.publicBathroomFacilities : []),
-                        ...(Array.isArray(req.transaction?.metadata?.publicBathroomFacilities) ? req.transaction.metadata.publicBathroomFacilities : [])
-                    ]));
+                    const combinedBathroom = Array.isArray(parsed.kmListingForm?.publicBathroomFacilities)
+                        ? parsed.kmListingForm.publicBathroomFacilities
+                        : Array.from(new Set([
+                            ...(Array.isArray(dbKmProp?.metadata?.publicBathroomFacilities) ? dbKmProp.metadata.publicBathroomFacilities : []),
+                            ...(Array.isArray(dbPropertyRecord?.metadata?.publicBathroomFacilities) ? dbPropertyRecord.metadata.publicBathroomFacilities : []),
+                            ...(Array.isArray(req.transaction?.metadata?.publicBathroomFacilities) ? req.transaction.metadata.publicBathroomFacilities : [])
+                        ]));
 
                     const resolvedInitialOwnerUid = resolveValidOwnerUid(parsed.kmListingForm.owner_uid || req.user_id, req, fetchedUser, dbPropertyRecord?.owner_uid);
                     const normalizedDraftFacs = normalizeAndExtractPublicFacilities(
