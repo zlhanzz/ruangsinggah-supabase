@@ -2,6 +2,37 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 395. Isolasi Mutlak Data KostManager dan Self-Listing Mitra & Proteksi Permanen Foto Listing Asli (`userService.ts`, `KostFormMitra.tsx`, `AgentDashboard.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna melaporkan bahwa ketika agen survei membuka draf atau melakukan pendataan survei KostManager, listing mitra biasa (Self-Listing) di Dashboard Mitra ikut terganggu (foto properti di langkah 5 "Edit Listing" menjadi 0 foto dan thumbnail kartu listing mitra menjadi kosong).
+  2. Pengguna meminta arsitektur yang tegas dan terisolasi: *"sepertinya belum ada pemisahan data antara kostmanager dan juga kost self listing. kenapa sekarang ketika kita melakukan perbaikan atau terjadi masalah pada kostmanager, juga ikut berdampak pada listing kost yang sebelumnya ada pada dashboard mitra. kita perlu melakukan keputusan tegas, jangan buat struktur yang sifat nya abu abu begini... kalau perlu kita pisahkan tabel nya supaya lebih kuat secara data dan tidak saling sentuh begini"*.
+  3. KostManager adalah paket upgrade premium di atas listing reguler. Jika langganan KostManager berakhir atau tidak diperpanjang, properti harus dapat kembali menjadi listing biasa apa adanya tanpa kehilangan data foto atau konfigurasi kamar mitra sebelumnya.
+- **Akar Masalah**:
+  1. **Mutasi Prematur Tabel `properties` saat Draf Survei Berjalan**: Fungsi `handleSaveDraftDirectly` di `AgentDashboard.tsx` sebelumnya mengeksekusi `update` langsung ke baris tabel `properties` dengan array foto survei (yang masih kosong `[]` di awal survei), menimpa `image_urls` asli milik mitra.
+  2. **Kurangnya Fallback Cerdas pada `getOwnerProperties` & `KostFormMitra`**: Fungsi `getOwnerProperties` dan inisialisasi state `form` di `KostFormMitra.tsx` tidak memeriksa cadangan `metadata.self_listing_images` dan `metadata.self_listing_photos_meta`, sehingga jika kolom utama `image_urls` sempat kosong, UI Mitra Dashboard dan form edit listing menampilkan 0 foto.
+  3. **Kondisi Fallback `transformPropertyRow`**: Logika fallback gambar sebelumnya hanya membaca cadangan jika `!isManaged`, sehingga jika `is_managed: true` namun `image_urls` sedang dalam proses survei, listing publik kehilangan foto cadangan.
+- **Implementasi Solusi**:
+  1. **Pemisahan Fisik & Isolasi Total Draf Survei (`AgentDashboard.tsx`)**:
+     - Mengubah fungsi `handleSaveDraftDirectly` dan `closeKostManagerListingWithSave` agar **HANYA** menyimpan draf survei ke kolom `survey_requests.evaluation_summary.draft_data` dan `localStorage`.
+     - **DILARANG KERAS** memutasi atau menyentuh tabel `properties` selama proses pengerjaan draf survei berlangsung. Tabel `properties` hanya disentuh saat survei selesai dan agen menandatangani serta menekan tombol publikasi resmi.
+  2. **Penyimpanan Dedicated Layer KostManager (`mitra_kostmanager`)**:
+     - Menyimpan seluruh data terverifikasi hasil survei agen ke tabel khusus `mitra_kostmanager`.
+     - Menyimpan cadangan permanen dan tak tersentuh untuk seluruh data self-listing mitra (`self_listing_images`, `self_listing_photos_meta`, `self_listing_room_types`, `self_listing_facilities`, `self_listing_rules`, `self_listing_description`, `self_listing_categorized_photos`, `self_listing_photo_categories`) di dalam `properties.metadata`.
+  3. **Multi-Tier Robust Photo Fallback di `userService.ts` (`getOwnerProperties` & `transformPropertyRow`)**:
+     - Di `getOwnerProperties`: Mengimplementasikan resolusi bertingkat (`row.image_urls` $\rightarrow$ `row.metadata?.self_listing_images` $\rightarrow$ `photosMeta`), menjamin Dashboard Mitra selalu memuat seluruh foto listing asli mitra secara utuh.
+     - Di `transformPropertyRow`: Menjamin fallback gambar, tipe kamar, fasilitas, dan peraturan ke `self_listing_*` jika `is_managed` false ATAU jika data utama kosong.
+  4. **Proteksi Form Edit Listing Mitra (`KostFormMitra.tsx`)**:
+     - Memperbarui inisialisasi state `form` saat `editingKost` dimuat untuk mengambil foto dari `imageUrls`, `photosMeta`, `metadata.self_listing_images`, dan `metadata.self_listing_photos_meta`.
+     - Menjamin tombol "Edit Listing" di dashboard mitra selalu menampilkan jumlah dan pratinjau foto secara akurat.
+- **File Tersentuh**:
+  - `functions/public/userService.ts`
+  - `functions/public/components/KostFormMitra.tsx`
+  - `functions/public/pages/AgentDashboard.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi build frontend Vite (`cmd /c npm run build` di `functions/public`) lulus 100% (`✓ 2512 modules transformed, built in 1m 5s`, 0 error).
+
 ### 394. Perbaikan Scope Variabel Temporal Dead Zone (TDZ) ReferenceError pada `openKostManagerListing` (`AgentDashboard.tsx`) (September 2026)
 - **Permintaan & Masalah**:
   1. Pengguna melaporkan console error runtime: `AgentDashboard.tsx:3077 Failed to parse saved draft: ReferenceError: Cannot access 'initialTotalRooms' before initialization at openKostManagerListing (AgentDashboard.tsx:3047:131)`.

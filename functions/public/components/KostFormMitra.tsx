@@ -2223,7 +2223,45 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
     });
 
     const [form, setForm] = useState<Partial<Kost>>(() => {
-        if (editingKost) return { ...initialForm, ...editingKost };
+        if (editingKost) {
+            const selfListingImages = Array.isArray(editingKost.metadata?.self_listing_images) && editingKost.metadata.self_listing_images.length > 0
+                ? editingKost.metadata.self_listing_images
+                : null;
+            const selfListingPhotosMeta = Array.isArray(editingKost.metadata?.self_listing_photos_meta) && editingKost.metadata.self_listing_photos_meta.length > 0
+                ? editingKost.metadata.self_listing_photos_meta
+                : null;
+            const selfListingRoomTypes = Array.isArray(editingKost.metadata?.self_listing_room_types) && editingKost.metadata.self_listing_room_types.length > 0
+                ? editingKost.metadata.self_listing_room_types
+                : null;
+            const selfListingFacilities = Array.isArray(editingKost.metadata?.self_listing_facilities) && editingKost.metadata.self_listing_facilities.length > 0
+                ? editingKost.metadata.self_listing_facilities
+                : null;
+
+            const loadedImages = (editingKost.imageUrls && editingKost.imageUrls.length > 0)
+                ? editingKost.imageUrls
+                : (selfListingImages || []);
+
+            const loadedPhotosMeta = (editingKost.photosMeta && editingKost.photosMeta.length > 0)
+                ? editingKost.photosMeta
+                : (selfListingPhotosMeta || (loadedImages.length > 0 ? loadedImages.map((img: any) => typeof img === 'string' ? { original: img, url: img } : img) : []));
+
+            const loadedRoomTypes = (editingKost.roomTypes && editingKost.roomTypes.length > 0)
+                ? editingKost.roomTypes
+                : (selfListingRoomTypes || []);
+
+            const loadedFacilities = (editingKost.facilities && editingKost.facilities.length > 0)
+                ? editingKost.facilities
+                : (selfListingFacilities || []);
+
+            return {
+                ...initialForm,
+                ...editingKost,
+                imageUrls: loadedImages,
+                photosMeta: loadedPhotosMeta,
+                roomTypes: loadedRoomTypes,
+                facilities: loadedFacilities
+            };
+        }
         if (freshStart) return initialForm;
         try {
             const savedDraft = localStorage.getItem(storageKey);

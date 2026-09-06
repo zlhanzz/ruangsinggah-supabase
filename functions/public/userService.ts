@@ -268,20 +268,20 @@ export function sortPropertyImagesWithRoomCover(
 export function transformPropertyRow(row: any): Kost {
   const isManaged = Boolean(row.is_managed);
 
-  // If unmanaged (regular mitra or unsubscribed/cancelled from KostManager), fall back to backed up self_listing data
-  const fallbackImages = (!isManaged && Array.isArray(row.metadata?.self_listing_images) && row.metadata.self_listing_images.length > 0)
+  // If unmanaged (regular mitra or unsubscribed/cancelled from KostManager) or if current data is empty, fall back to backed up self_listing data
+  const fallbackImages = (Array.isArray(row.metadata?.self_listing_images) && row.metadata.self_listing_images.length > 0 && (!isManaged || !row.image_urls || row.image_urls.length === 0))
     ? row.metadata.self_listing_images
-    : null;
-  const fallbackRoomTypes = (!isManaged && Array.isArray(row.metadata?.self_listing_room_types) && row.metadata.self_listing_room_types.length > 0)
+    : (!isManaged && Array.isArray(row.metadata?.self_listing_images) && row.metadata.self_listing_images.length > 0 ? row.metadata.self_listing_images : null);
+  const fallbackRoomTypes = ((!isManaged || !row.room_types || row.room_types.length === 0) && Array.isArray(row.metadata?.self_listing_room_types) && row.metadata.self_listing_room_types.length > 0)
     ? row.metadata.self_listing_room_types
     : null;
-  const fallbackFacilities = (!isManaged && Array.isArray(row.metadata?.self_listing_facilities) && row.metadata.self_listing_facilities.length > 0)
+  const fallbackFacilities = ((!isManaged || !row.facilities || row.facilities.length === 0) && Array.isArray(row.metadata?.self_listing_facilities) && row.metadata.self_listing_facilities.length > 0)
     ? row.metadata.self_listing_facilities
     : null;
-  const fallbackRules = (!isManaged && Array.isArray(row.metadata?.self_listing_rules) && row.metadata.self_listing_rules.length > 0)
+  const fallbackRules = ((!isManaged || !row.rules || row.rules.length === 0) && Array.isArray(row.metadata?.self_listing_rules) && row.metadata.self_listing_rules.length > 0)
     ? row.metadata.self_listing_rules
     : null;
-  const fallbackDescription = (!isManaged && typeof row.metadata?.self_listing_description === 'string' && row.metadata.self_listing_description)
+  const fallbackDescription = ((!isManaged || !row.description) && typeof row.metadata?.self_listing_description === 'string' && row.metadata.self_listing_description)
     ? row.metadata.self_listing_description
     : null;
 
@@ -303,7 +303,7 @@ export function transformPropertyRow(row: any): Kost {
 
   const rawPhotosMeta = (!isManaged && Array.isArray(row.metadata?.self_listing_photos_meta) && row.metadata.self_listing_photos_meta.length > 0)
     ? (row.metadata.self_listing_photos_meta.map(getDisplayImageObject).filter(Boolean) as ImageUrlObject[])
-    : ((row.metadata?.photos_meta || rawImages).map(getDisplayImageObject).filter(Boolean) as ImageUrlObject[]);
+    : ((row.metadata?.photos_meta || (Array.isArray(row.metadata?.self_listing_photos_meta) && row.metadata.self_listing_photos_meta.length > 0 ? row.metadata.self_listing_photos_meta : rawImages)).map(getDisplayImageObject).filter(Boolean) as ImageUrlObject[]);
 
   // 1. Urutkan rawImages dan rawPhotosMeta secara komprehensif (Foto Kamar Termahal di Index 0)
   const sortedRawImages = sortPropertyImagesWithRoomCover(rawImages, roomTypes, rawPhotoCategories, rawCategorizedPhotos, rawPhotosMeta);
@@ -1369,23 +1369,54 @@ export async function getOwnerProperties(ownerUid: string): Promise<Kost[]> {
     if (!allProps || allProps.length === 0) return [];
 
     return allProps.map((row) => {
-      const rawImages = row.image_urls || [];
+      let rawImages = row.image_urls || [];
+      if ((!rawImages || rawImages.length === 0) && Array.isArray(row.metadata?.self_listing_images) && row.metadata.self_listing_images.length > 0) {
+        rawImages = row.metadata.self_listing_images;
+      }
       const images = rawImages.map(getDisplayImageUrl).filter((u: string) => u !== '');
-      const photosMeta = (row.metadata?.photos_meta || rawImages).map(getDisplayImageObject).filter(Boolean) as ImageUrlObject[];
+
+      let rawPhotosMeta = row.metadata?.photos_meta;
+      if ((!rawPhotosMeta || rawPhotosMeta.length === 0) && Array.isArray(row.metadata?.self_listing_photos_meta) && row.metadata.self_listing_photos_meta.length > 0) {
+        rawPhotosMeta = row.metadata.self_listing_photos_meta;
+      }
+      if (!rawPhotosMeta || rawPhotosMeta.length === 0) {
+        rawPhotosMeta = rawImages;
+      }
+      const photosMeta = (rawPhotosMeta || []).map(getDisplayImageObject).filter(Boolean) as ImageUrlObject[];
+
+      let roomTypes = row.room_types || [];
+      if ((!roomTypes || roomTypes.length === 0) && Array.isArray(row.metadata?.self_listing_room_types) && row.metadata.self_listing_room_types.length > 0) {
+        roomTypes = row.metadata.self_listing_room_types;
+      }
+
+      let facilities = row.facilities || [];
+      if ((!facilities || facilities.length === 0) && Array.isArray(row.metadata?.self_listing_facilities) && row.metadata.self_listing_facilities.length > 0) {
+        facilities = row.metadata.self_listing_facilities;
+      }
+
+      let rules = row.rules || [];
+      if ((!rules || rules.length === 0) && Array.isArray(row.metadata?.self_listing_rules) && row.metadata.self_listing_rules.length > 0) {
+        rules = row.metadata.self_listing_rules;
+      }
+
+      let description = row.description || '';
+      if (!description && typeof row.metadata?.self_listing_description === 'string' && row.metadata.self_listing_description) {
+        description = row.metadata.self_listing_description;
+      }
 
       const rawVideos = row.video_urls || [];
       const videos = rawVideos.map(getDisplayVideoUrl).filter((u: string) => u !== '');
 
-      const photoCategories = row.photo_categories || row.photoCategories || (row.metadata && (row.metadata.photo_categories || row.metadata.photoCategories)) || [];
-      const categorizedPhotos = row.categorized_photos || row.categorizedPhotos || (row.metadata && (row.metadata.categorized_photos || row.metadata.categorizedPhotos)) || {};
+      const photoCategories = row.photo_categories || row.photoCategories || (row.metadata && (row.metadata.photo_categories || row.metadata.photoCategories)) || (Array.isArray(row.metadata?.self_listing_photo_categories) ? row.metadata.self_listing_photo_categories : []);
+      const categorizedPhotos = row.categorized_photos || row.categorizedPhotos || (row.metadata && (row.metadata.categorized_photos || row.metadata.categorizedPhotos)) || (row.metadata?.self_listing_categorized_photos || {});
 
       return {
         id: row.id,
         ownerUid: row.owner_uid,
         title: row.title || 'Tanpa Nama',
-        description: row.description || '',
+        description,
         price: row.price || 0,
-        facilities: row.facilities || [],
+        facilities,
         address: row.address || '',
         province: row.province || row.metadata?.province || '',
         city: row.city || '',
@@ -1401,9 +1432,9 @@ export async function getOwnerProperties(ownerUid: string): Promise<Kost[]> {
         videoUrls: videos,
         instagramUrl: row.instagram_url || '',
         tiktokUrl: row.tiktok_url || '',
-        roomTypes: row.room_types || [],
+        roomTypes,
         reviews: row.reviews || [],
-        rules: row.rules || [],
+        rules,
         campuses: row.campuses || [],
         publicFacilities: row.public_facilities || [],
         virtualTourUrl: row.virtual_tour_url || '',
