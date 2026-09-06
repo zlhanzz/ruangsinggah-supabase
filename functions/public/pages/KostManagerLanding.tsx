@@ -390,11 +390,16 @@ const KostManagerLanding: React.FC<KostManagerLandingProps> = ({ user, onBack, i
 
   const handleOpenRegistration = () => {
     if (!checkIdentityVerification()) return;
-    if (userKosts.length > 0) {
-      setModalStep('method');
-    } else {
-      setModalStep('form');
+    setModalStep('method'); // SELALU mulai dari Step 1 (Pilih Metode Registrasi)
+    if (userKosts.length === 0) {
       setIsManualInput(true);
+      setSelectedKostId('NEW');
+    } else {
+      if (!selectedKostId || selectedKostId === 'NEW') {
+        setIsManualInput(false);
+        setSelectedKostId(userKosts[0].id);
+        handleKostSelection(userKosts[0].id);
+      }
     }
     setIsModalOpen(true);
   };
@@ -1011,6 +1016,12 @@ const KostManagerLanding: React.FC<KostManagerLandingProps> = ({ user, onBack, i
                       role="button"
                       tabIndex={0}
                       onClick={() => {
+                        if (userKosts.length === 0) {
+                          setIsManualInput(true);
+                          handleKostSelection('NEW');
+                          alert('Anda belum memiliki listing properti terdaftar. Silakan pilih opsi "Daftar Kost Baru".');
+                          return;
+                        }
                         setIsManualInput(false);
                         if (userKosts.length > 0 && !selectedKostId) {
                           handleKostSelection(userKosts[0].id);
@@ -1023,6 +1034,12 @@ const KostManagerLanding: React.FC<KostManagerLandingProps> = ({ user, onBack, i
                       onKeyDown={(e) => {
                         if (e.key === 'Enter' || e.key === ' ') {
                           e.preventDefault();
+                          if (userKosts.length === 0) {
+                            setIsManualInput(true);
+                            handleKostSelection('NEW');
+                            alert('Anda belum memiliki listing properti terdaftar. Silakan pilih opsi "Daftar Kost Baru".');
+                            return;
+                          }
                           setIsManualInput(false);
                           if (userKosts.length > 0) handleKostSelection(userKosts[0].id);
                         }

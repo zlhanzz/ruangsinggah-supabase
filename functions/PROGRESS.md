@@ -2,6 +2,23 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 387. Perbaikan Inisialisasi Langkah Modal Pendaftaran KostManager (Selalu Step 1: Metode) (`KostManagerLanding.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna melaporkan bahwa saat membuka formulir pendaftaran langganan KostManager dari landing page, modal terkadang langsung membuka **Step 2 (Data Properti)** dan melompati Step 1 (Pilihan Metode Registrasi).
+  2. **Akar Masalah**: Pada `handleOpenRegistration` di `KostManagerLanding.tsx`, terdapat pengecekan kondisional `if (userKosts.length === 0) setModalStep('form')` yang memaksa modal membuka Step 2 jika pengguna belum memiliki listing properti atau saat data properti masih dalam proses loading *asynchronous*.
+- **Implementasi Solusi**:
+  1. **Penetapan Inisialisasi Selalu Step 1 (`setModalStep('method')`)**:
+     - Mengubah fungsi `handleOpenRegistration` agar selalu mengeset `modalStep = 'method'` (Step 1) tanpa pengecualian.
+     - Jika mitra belum memiliki properti terdaftar (`userKosts.length === 0`), sistem menginisialisasi pilihan default ke *"Daftar Kost Baru"* di dalam Step 1, dan pengguna melangkah ke Step 2 secara terstruktur hanya saat menekan tombol *"Lanjut ke Data Properti"*.
+  2. **Penanganan Interaksi Kartu Metode Registrasi**:
+     - Menambahkan proteksi pada opsi *"Pilih dari Kost Saya"* agar menginformasikan pengguna dengan ramah jika belum ada properti terdaftar, dan mengarahkannya ke opsi *"Daftar Kost Baru"*.
+- **File Tersentuh**:
+  - `functions/public/pages/KostManagerLanding.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi build frontend Vite (`cmd /c npm run build` di `functions/public`) lulus 100% (`✓ 2511 modules transformed, built in 31.82s`, 0 error).
+
 ### 386. Sanitasi Total Foto Mitra Biasa & Inisialisasi Bersih (*0 Foto*) Form Onboarding KostManager (`AgentDashboard.tsx`) (September 2026)
 - **Permintaan & Masalah**:
   1. Pada formulir Onboarding Kost (*Survey Field App* di `AgentDashboard.tsx`), foto-foto lama dari masa mitra biasa (*Bangunan Depan, Koridor, Lingkungan, Area Parkir, Dapur Bersama*) masih termuat ke dalam slot foto survei.
