@@ -2,6 +2,27 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 403. Pembatasan Eksklusif Badge 'TERVERIFIKASI' Hanya untuk Properti Berstatus KostManager (`KostCard.tsx`, `Home.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna meminta agar kartu properti yang memiliki badge biru `TERVERIFIKASI` (seperti pada hasil pencarian dan katalog publik) hanya ditampilkan untuk properti yang berstatus KostManager (`isManaged: true` / `is_managed: true`).
+  2. Sebelumnya, properti reguler / self-listing non-KostManager (misal: "Kost Apalah Daya" dan "Kost Putri Tunggal") ikut menampilkan badge `TERVERIFIKASI` karena kondisi rendering memeriksa `(kost.isVerified || kost.isManaged)`.
+- **Akar Masalah**:
+  1. **Logika Kondisi Longgar pada `KostCard.tsx`**: Baris 108 menggunakan operator logika OR `(kost.isVerified || kost.isManaged)`. Nilai `isVerified` berasal dari kolom `is_verified` database (misal verifikasi data mitra/centang biru lama), sehingga properti mitra biasa yang belum terdaftar paket survei & manajemen KostManager ikut mendapatkan badge `TERVERIFIKASI`.
+- **Implementasi Solusi**:
+  1. **Pengetatan Logika Badge pada `KostCard.tsx`**:
+     - Mengubah kondisi rendering badge biru `TERVERIFIKASI` menjadi eksklusif: `Boolean(kost.isManaged || (kost as any).is_managed)`.
+     - Menjamin bahwa seluruh listing reguler/self-listing mitra tidak lagi menampilkan badge ini, menjaga integritas reputasi dan simbol mutu KostManager.
+  2. **Penyelarasan Rekomendasi di `Home.tsx`**:
+     - Memperbarui hook `useMemo` untuk `featuredKosts` di halaman utama agar memprioritaskan properti kelolaan KostManager.
+- **File Tersentuh**:
+  - `functions/public/components/KostCard.tsx`
+  - `functions/public/pages/Home.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi build frontend Vite (`npm.cmd run build` di `functions/public`) lulus 100% (2512 modul tertransformasi, `✓ built in 34.85s`, 0 error).
+  - Terverifikasi bahwa kartu properti biasa tidak lagi menampilkan badge `TERVERIFIKASI`, dan hanya properti kelolaan KostManager yang memiliki badge biru tersebut.
+
 ### 402. Optimasi Performa Vite Dev Server & Eliminasi Loading Terus-Menerus di Localhost:5173 (Pembersihan 7.126 File Usang, Scoping Tailwind v4 @source, & Watcher Ignore) (September 2026)
 - **Permintaan & Masalah**:
   1. Pengguna melaporkan bahwa saat mengakses `localhost:5173` terasa sangat lambat dan berat, dengan loading terus-menerus tanpa henti (*white screen* dengan spinner tab berputar), serta startup Vite dev server memakan waktu hingga `10887 ms` (~11 detik).

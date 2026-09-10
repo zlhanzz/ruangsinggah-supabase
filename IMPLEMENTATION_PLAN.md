@@ -1,81 +1,77 @@
-# IMPLEMENTATION PLAN: Perbaikan Performa Vite Dev Server & Eliminasi Loading Terus-Menerus di Localhost:5173
+# IMPLEMENTATION PLAN: Pembatasan Eksklusif Badge 'TERVERIFIKASI' Hanya untuk Properti Berstatus KostManager
 
-Dokumen ini disusun untuk menganalisis dan menyelesaikan masalah mengapa akses ke `localhost:5173` terasa sangat berat, mengalami loading terus-menerus (*white screen* tanpa henti), dan startup Vite memakan waktu hingga **10.887 ms (hampir 11 detik)**.
+Dokumen ini disusun untuk merencanakan penyesuaian tampilan badge status `TERVERIFIKASI` pada katalog dan kartu properti, agar **eksklusif hanya ditampilkan pada properti yang telah terdaftar dan berstatus KostManager** (`isManaged: true` / `is_managed: true`).
 
 ---
 
-## 1. Analisis Masalah & Akar Penyebab
+## 1. Analisis Masalah & Kebutuhan
 
-Berdasarkan investigasi mendalam terhadap proses runtime Node.js, file watcher, dan arsitektur repositori:
-
-### 🔴 Akar Masalah 1: Penumpukan 7.126 File Build Usang (352 MB) di `functions/public/dist`
-- Pada `functions/public/package.json`, skrip build saat ini adalah:
-  ```json
-  "build": "vite build && node -e \"const fs=require('fs'); fs.cpSync('../../public', './dist', {recursive: true, force: true});\""
+### Konteks & Masalah
+- Pada tampilan saat ini (seperti pada halaman Hasil Pencarian / Katalog), kartu properti [`KostCard.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/components/KostCard.tsx#L108) menampilkan badge biru `TERVERIFIKASI` dengan kondisi:
+  ```tsx
+  {(kost.isVerified || kost.isManaged) && (
+    <span className="bg-[#2563eb] text-white px-2.5 py-1 rounded-md text-[10px] font-extrabold uppercase tracking-wider shadow-xs">
+      TERVERIFIKASI
+    </span>
+  )}
   ```
-- `fs.cpSync` hanya menimpa atau menambahkan file baru tanpa menghapus isi direktori `./dist` terlebih dahulu.
-- Karena Vite memberi hash unik acak pada setiap chunk hasil kompilasi (misal: `About-1ThFlUfd.js`, `Dashboard-0escf-li.js`, dll.), setiap kali build dijalankan selama 400+ pembaruan fitur sebelumnya, file-file chunk baru terus bertambah dan **tidak pernah dihapus**.
-- **Dampaknya**: Terdapat **7.126 file** dengan ukuran total **352 MB** di dalam folder `functions/public/dist/assets`.
+- Karena kondisi menggunakan operator OR `(kost.isVerified || kost.isManaged)`, setiap properti yang memiliki nilai kolom `is_verified = true` (misal properti self-listing mitra biasa yang sempat diverifikasi admin atau memiliki centang biru lama) ikut memunculkan badge `TERVERIFIKASI`.
+- Akibatnya, pada halaman pencarian, properti biasa non-KostManager (seperti contoh pada screenshot: *"Kost Apalah Daya"* dan *"Kost Putri Tunggal"*) ikut memiliki badge `TERVERIFIKASI`.
 
-### 🔴 Akar Masalah 2: Pemindaian Rekursif Tailwind CSS v4 & Vite Dependency Scanner Membakar CPU 100%
-- Proyek menggunakan `@tailwindcss/vite` v4.3.0 (`@import "tailwindcss";` di `index.css`).
-- Mesin deteksi Tailwind v4 dan dependency scanner esbuild Vite secara default memindai seluruh direktori proyek untuk menemukan class CSS dan impor dependency.
-- Karena folder `dist` berada di dalam root proyek frontend (`functions/public`), setiap kali server dev menyala atau menerima request pertama browser ke `http://localhost:5173`:
-  - Tailwind v4 dan Vite memindai seluruh **7.126 file JavaScript minified (352 MB)**.
-  - Event loop Node.js mengalami saturasi total (*freeze*) dan menggunakan **100% satu core CPU** (tercatat CPU time proses telah melampaui **868 detik** nonstop).
-  - Akibat event loop terkunci, Vite tidak sempat mengirim respons HTTP ke browser. Uji coba koneksi `curl.exe -I http://localhost:5173/` mengalami *timeout/hang* total.
-  - Browser Chrome menampilkan layar putih polos dengan spinner loading tab berputar tanpa henti.
-
-### 🔴 Akar Masalah 3: Ketiadaan Watcher Ignore & Scoping Source
-- `vite.config.ts` belum mengabaikan folder `dist`, `scratch`, dan folder sementara dari sistem watch Vite (`server.watch.ignored`).
-- `index.css` belum menetapkan direktori `@source` spesifik untuk Tailwind v4, sehingga Tailwind memindai seluruh folder kerja tanpa batasan.
-
-### 🔴 Akar Masalah 4: Potensi Reload Loop di `index.tsx`
-- Di `index.tsx` terdapat listener `error` dan `unhandledrejection` yang langsung memanggil `window.location.reload()` tanpa batas/cooldown jika chunk lambat termuat saat dev server sedang macet, memperparah sensasi loading berulang-ulang di browser.
+### Kebutuhan Pengguna
+- Pengguna meminta: *"saya ingin agar yang memiliki badge terverifikasi hanya yang berstatus kostmanager"*.
+- Badge `TERVERIFIKASI` adalah simbol kepercayaan mutu tinggi yang dihasilkan dari survei fisik langsung lapangan oleh surveyor resmi KostManager.
+- Properti yang bukan merupakan kelolaan / paket KostManager (`!isManaged`) **TIDAK BOLEH** menampilkan badge `TERVERIFIKASI`.
 
 ---
 
 ## 2. Dampak Perubahan (Files to be Modified)
 
-1. **Pembersihan Bersih (Clean-up)**:
-   - Menghapus 7.126 file build usang di `functions/public/dist` sehingga hanya file aktif yang tersisa / bersih.
-2. **`functions/public/vite.config.ts`**:
-   - Menambahkan konfigurasi `server.watch.ignored` untuk mengabaikan `dist`, `scratch`, `.firebase`, dan file sementara lainnya dari pengawasan Vite.
-3. **`functions/public/index.css`**:
-   - Menambahkan direktori `@source` yang eksplisit (`./index.html`, `./index.tsx`, `./App.tsx`, `./pages`, `./components`, dll.) dan mengecualikan `dist` (`!./dist`), sehingga Tailwind v4 hanya memindai source code murni, bukan ribuan file build.
-4. **`functions/public/package.json`**:
-   - Memperbaiki skrip `build` agar membersihkan `./dist` sebelum melakukan penyalinan (`fs.rmSync('./dist', ...)`), mencegah penumpukan file usang di masa mendatang.
-5. **`functions/public/index.tsx`**:
-   - Menambahkan *throttle / cooldown guard* pada interceptor error chunk load (10 detik) agar tidak memicu reload tanpa henti saat dev server sedang inisialisasi.
+1. **`functions/public/components/KostCard.tsx`**:
+   - Memperbarui kondisi rendering badge dari `(kost.isVerified || kost.isManaged)` menjadi eksklusif memeriksa status KostManager: `Boolean(kost.isManaged || (kost as any).is_managed)`.
+2. **`functions/public/pages/Home.tsx`**:
+   - Menyelaraskan filter rekomendasi `featuredKosts` pada beranda agar memprioritaskan properti yang berstatus KostManager (`k.isManaged`), dengan fallback ke listing lain jika jumlah KostManager kurang dari 3 agar beranda tetap proporsional.
+3. **`functions/public/pages/KostDetail.tsx`**:
+   - Memastikan badge dan label "Terverifikasi RuangSinggah" di halaman detail tetap konsisten hanya muncul pada properti `kost.isManaged` (sudah sesuai, diverifikasi ulang).
 
 ---
 
 ## 3. Langkah-Langkah Eksekusi (Setelah Approval)
 
-1. **Langkah 1: Matikan Proses Node.js Hang & Bersihkan Folder `dist`**:
-   - Menghentikan proses Vite yang sedang membakar CPU 100% (PID 37116).
-   - Mengosongkan folder `functions/public/dist` dari 7.126 file usang.
-2. **Langkah 2: Optimasi `vite.config.ts`**:
-   - Tambahkan `server.watch.ignored: ['**/dist/**', '**/scratch/**', '**/.firebase/**']`.
-   - Tambahkan opsi `optimizeDeps` yang rapi.
-3. **Langkah 3: Optimasi `index.css` dengan Tailwind v4 `@source` Scoping**:
-   - Batasi pemindaian class Tailwind hanya pada folder source (`./pages`, `./components`, `./index.tsx`, `./App.tsx`), mengabaikan `dist`.
-4. **Langkah 4: Perbaiki Skrip Build di `package.json`**:
-   - Pastikan auto-clean `./dist` aktif setiap kali build dijalankan.
-5. **Langkah 5: Beri Proteksi Reload Guard di `index.tsx`**:
-   - Cegah infinite reload loop dengan `sessionStorage` cooldown timer.
-6. **Langkah 6: Validasi & Pengujian**:
-   - Uji coba jalankan Vite dev server baru: waktu start harus turun dari 10.887 ms menjadi < 500 ms.
-   - Uji respon HTTP `http://localhost:5173/` via `curl.exe`: harus merespon dalam milidetik (Status 200 OK).
-   - Jalankan `npm run build` untuk memastikan kompilasi tetap 100% lulus tanpa kendala.
+1. **Langkah 1: Modifikasi `functions/public/components/KostCard.tsx`**:
+   - Mengubah baris 108:
+     ```tsx
+     // Sebelum:
+     {(kost.isVerified || kost.isManaged) && (
+       <span className="bg-[#2563eb] ...">TERVERIFIKASI</span>
+     )}
+
+     // Sesudah:
+     {Boolean(kost.isManaged || (kost as any).is_managed) && (
+       <span className="bg-[#2563eb] text-white px-2.5 py-1 rounded-md text-[10px] font-extrabold uppercase tracking-wider shadow-xs">
+         TERVERIFIKASI
+       </span>
+     )}
+     ```
+2. **Langkah 2: Penyelarasan Rekomendasi di `functions/public/pages/Home.tsx`**:
+   - Memperbarui `featuredKosts` agar mengutamakan properti `isManaged`.
+3. **Langkah 3: Pengujian & Validasi Kompilasi**:
+   - Menjalankan `npm run build` di `functions/public` untuk memastikan 0 error kompilasi TypeScript/Vite.
+   - Menguji tampilan visual kartu listing di browser untuk memastikan properti reguler/self-listing tidak lagi memiliki badge `TERVERIFIKASI`, dan hanya properti kelolaan KostManager yang menampilkannya.
+4. **Langkah 4: Pencatatan Progres & Git Push**:
+   - Mencatat pembaruan ke `functions/PROGRESS.md`.
+   - Membuat laporan detail `WALKTHROUGH.md`.
+   - Melakukan commit dan push ke branch `bukan-productions`.
 
 ---
 
 ## 4. Rencana Verifikasi
 
-1. **Kecepatan Startup Vite**:
-   - Menjalankan `npm run dev` dan memverifikasi terminal menampilkan waktu siap (*ready*) di bawah 1 detik (jauh lebih cepat dibanding 10.887 ms sebelumnya).
-2. **Koneksi Localhost 5173**:
-   - Menguji permintaan HTTP ke `http://localhost:5173/` dan memastikan halaman langsung merespons dengan status 200 OK secara instan tanpa loading berputar tanpa henti.
-3. **Kompilasi Build**:
-   - Menjalankan `npm run build` di `functions/public` untuk memastikan seluruh fitur aplikasi tetap berfungsi normal dan 0 error kompilasi.
+1. **Verifikasi Tampilan Katalog (`/listings` & Hasil Pencarian)**:
+   - Membuka halaman pencarian properti dan memeriksa kartu-kartu listing:
+     - Properti reguler / self-listing mitra $\rightarrow$ **TIDAK** menampilkan badge biru `TERVERIFIKASI`.
+     - Properti KostManager (`is_managed: true`) $\rightarrow$ **MENAMPILKAN** badge biru `TERVERIFIKASI`.
+2. **Verifikasi Halaman Detail (`/kost/:id`)**:
+   - Memastikan badge verifikasi di halaman detail konsisten hanya ada pada properti KostManager.
+3. **Verifikasi Build**:
+   - Memastikan `npm run build` lulus 100% tanpa error.

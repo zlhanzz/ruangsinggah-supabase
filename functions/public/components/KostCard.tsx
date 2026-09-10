@@ -105,7 +105,7 @@ const KostCard: React.FC<KostCardProps> = ({ kost, onClick, onDelete }) => {
           } text-white shadow-xs`}>
             KOST {kost.type.toUpperCase()}
           </span>
-          {(kost.isVerified || kost.isManaged) && (
+          {Boolean(kost.isManaged || (kost as any).is_managed) && (
             <span className="bg-[#2563eb] text-white px-2.5 py-1 rounded-md text-[10px] font-extrabold uppercase tracking-wider shadow-xs">
               TERVERIFIKASI
             </span>
