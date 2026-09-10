@@ -198,6 +198,69 @@ export const detectProvinceFromAddress = (addr?: string | null): string => {
     return 'Sulawesi Selatan';
 };
 
+export const detectCityFromAddress = (addr?: string | null): string => {
+    if (!addr) return 'Makassar';
+    const clean = addr.trim();
+    // Cari pola eksplisit "Kota Makassar", "Kabupaten Gowa", "Kab. Maros"
+    const cityMatch = clean.match(/(?:Kota|Kabupaten|Kab\.)\s+([A-Za-z\s]+?)(?:,|$|\.|\d)/i);
+    if (cityMatch && cityMatch[1]) {
+        const foundCity = cityMatch[1].trim();
+        if (foundCity.length > 2) return foundCity;
+    }
+    const lower = clean.toLowerCase();
+    if (lower.includes('makassar')) return 'Makassar';
+    if (lower.includes('gowa') || lower.includes('sungguminasa')) return 'Gowa';
+    if (lower.includes('maros')) return 'Maros';
+    if (lower.includes('takalar')) return 'Takalar';
+    if (lower.includes('bone')) return 'Bone';
+    if (lower.includes('palopo')) return 'Palopo';
+    if (lower.includes('parepare') || lower.includes('pare-pare')) return 'Parepare';
+    if (lower.includes('jakarta')) return 'Jakarta';
+    if (lower.includes('bandung')) return 'Bandung';
+    if (lower.includes('surabaya')) return 'Surabaya';
+    if (lower.includes('yogyakarta') || lower.includes('jogja') || lower.includes('sleman')) return 'Yogyakarta';
+    if (lower.includes('denpasar')) return 'Denpasar';
+    if (lower.includes('semarang')) return 'Semarang';
+    if (lower.includes('medan')) return 'Medan';
+    return 'Makassar';
+};
+
+export const detectAreaFromAddress = (addr?: string | null): string => {
+    if (!addr) return '';
+    const clean = addr.trim();
+    
+    // 1. Explicit pattern match: "Kecamatan Tamalanrea", "Kec. Biringkanaya", "Kecamatan Rappocini"
+    const kecMatch = clean.match(/(?:Kecamatan|Kec\.)\s+([A-Za-z0-9\s]+?)(?:,|$|\.|\d)/i);
+    if (kecMatch && kecMatch[1]) {
+        const parsed = kecMatch[1].trim().replace(/^(Kecamatan|Kec\.)\s+/i, '');
+        if (parsed.length > 1) return parsed;
+    }
+
+    // 2. Kamus Kecamatan Populer (Makassar & sekitarnya, plus kota-kota besar)
+    const lower = clean.toLowerCase();
+    const subdistricts = [
+        // Makassar
+        'Tamalanrea', 'Biringkanaya', 'Panakkukang', 'Rappocini', 'Manggala',
+        'Tamalate', 'Mariso', 'Mamajang', 'Makassar', 'Ujung Pandang',
+        'Wajo', 'Bontoala', 'Tallo', 'Ujung Tanah', 'Kepulauan Sangkarrang',
+        // Gowa & Maros
+        'Somba Opu', 'Pallangga', 'Barombong', 'Bontomarannu', 'Turikale', 'Mandai', 'Moncongloe',
+        // Kampus / Area Populer Makassar
+        'BTP', 'Antang', 'Sudiang', 'Daya', 'Perintis',
+        // Jabodetabek & Jawa Populer
+        'Coblong', 'Sukajadi', 'Dago', 'Grogol', 'Setiabudi', 'Tebet', 'Kebayoran', 'Depok', 'Sleman'
+    ];
+
+    for (const sub of subdistricts) {
+        const pattern = new RegExp(`\\b${sub}\\b`, 'i');
+        if (pattern.test(lower)) {
+            return sub;
+        }
+    }
+
+    return '';
+};
+
 export const parseEvaluationData = (notesText?: string | null, status?: string | null): EvaluationData => {
     const rawNotes = (notesText || '').trim();
     const lower = rawNotes.toLowerCase();
@@ -1092,6 +1155,10 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
         campuses: []
     });
     const [kmActiveTab, setKmActiveTab] = useState<'info' | 'rooms'>('info');
+    const kmListingFormRef = useRef<any>(kmListingForm);
+    useEffect(() => {
+        kmListingFormRef.current = kmListingForm;
+    }, [kmListingForm]);
     const [isExistingPropertyMigration, setIsExistingPropertyMigration] = useState(false);
     const [warningAccepted, setWarningAccepted] = useState(false);
     const hasAutoGeocodedRef = useRef<Record<string, boolean>>({});
@@ -1126,17 +1193,26 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
         const { photoIndex, category, roomIndex, roomPhotoIndex } = sensorModalData;
 
         if (roomIndex !== undefined && roomPhotoIndex !== undefined) {
-            const updatedRooms = [...(kmListingForm.room_types || [])];
-            if (updatedRooms[roomIndex]) {
-                const rImages = [...(updatedRooms[roomIndex].image_urls || [])];
-                rImages[roomPhotoIndex] = newUrl;
-                updatedRooms[roomIndex].image_urls = rImages;
-                setKmListingForm((prev: any) => ({ ...prev, room_types: updatedRooms }));
-            }
+            setKmListingForm((prev: any) => {
+                const updatedRooms = [...(prev.room_types || prev.roomTypes || [])];
+                if (updatedRooms[roomIndex]) {
+                    const rImages = [...(updatedRooms[roomIndex].image_urls || updatedRooms[roomIndex].images || [])];
+                    rImages[roomPhotoIndex] = newUrl;
+                    updatedRooms[roomIndex].image_urls = rImages;
+                    updatedRooms[roomIndex].images = rImages;
+                }
+                const nextForm = { ...prev, roomTypes: updatedRooms, room_types: updatedRooms };
+                kmListingFormRef.current = nextForm;
+                return nextForm;
+            });
         } else {
-            const updatedImages = [...(kmListingForm.image_urls || [])];
-            updatedImages[photoIndex] = newUrl;
-            setKmListingForm((prev: any) => ({ ...prev, image_urls: updatedImages }));
+            setKmListingForm((prev: any) => {
+                const updatedImages = [...(prev.image_urls || [])];
+                updatedImages[photoIndex] = newUrl;
+                const nextForm = { ...prev, image_urls: updatedImages };
+                kmListingFormRef.current = nextForm;
+                return nextForm;
+            });
         }
 
         setKmBannerNotice(`✅ Area spanduk / kontak pada foto "${category}" berhasil disensor & diperbarui!`);
@@ -2241,23 +2317,25 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
         }
     };
 
-    const saveKostManagerDraftToDatabase = async (currentForm: any, stepNum?: number, cats?: string[]) => {
+    const saveKostManagerDraftToDatabase = async (currentForm?: any, stepNum?: number, cats?: string[]) => {
         if (!isEditingKostManager) return;
         try {
+            // Gunakan snapshot form paling mutakhir (kmListingFormRef.current) agar data dari proses paralel tidak tertimpa
+            const formToUse = kmListingFormRef.current || currentForm || kmListingForm;
             // Normalisasi dan sanitasi format foto publik agar selalu membawa label kategori eksplisit
             const currentCats = cats || photoCategories || [];
-            const sanitizedImages = (currentForm?.image_urls || []).map((img: any, idx: number) => {
+            const sanitizedImages = (formToUse?.image_urls || []).map((img: any, idx: number) => {
                 const url = getImageUrlString(img);
                 let label = (typeof img === 'object' && img.label)
                     ? img.label
-                    : (currentForm?.photoCategories?.[idx] || currentCats[idx] || 'Bangunan Depan');
+                    : (formToUse?.photoCategories?.[idx] || currentCats[idx] || 'Bangunan Depan');
                 if (label.toLowerCase() === 'area umum' || label.toLowerCase() === 'parkiran') label = 'Area Parkir';
                 return { original: url, url, label };
             }).filter((item: any) => Boolean(item.url));
 
             const draftData = {
                 kmListingForm: {
-                    ...currentForm,
+                    ...formToUse,
                     image_urls: sanitizedImages,
                     photoCategories: sanitizedImages.map((s: any) => s.label)
                 },
@@ -2352,9 +2430,10 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
     };
 
     const closeKostManagerListingWithSave = async () => {
-        if (isEditingKostManager && (kmListingForm.title || (kmListingForm.image_urls && kmListingForm.image_urls.length > 0) || (kmListingForm.roomTypes && kmListingForm.roomTypes.length > 0) || (kmListingForm.facilities && kmListingForm.facilities.length > 0))) {
+        const formToSave = kmListingFormRef.current || kmListingForm;
+        if (isEditingKostManager && (formToSave.title || (formToSave.image_urls && formToSave.image_urls.length > 0) || (formToSave.roomTypes && formToSave.roomTypes.length > 0) || (formToSave.facilities && formToSave.facilities.length > 0))) {
             try {
-                await saveKostManagerDraftToDatabase(kmListingForm, kmStep, photoCategories);
+                await saveKostManagerDraftToDatabase(formToSave, kmStep, photoCategories);
             } catch (e) {
                 console.warn("Error saving draft before closing modal:", e);
             }
@@ -2364,10 +2443,11 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
 
     // Auto-save Kost Manager Onboarding draft effect (Debounced to database & instant to localStorage)
     useEffect(() => {
-        if (isEditingKostManager && (kmListingForm.title || (kmListingForm.image_urls && kmListingForm.image_urls.length > 0) || (kmListingForm.facilities && kmListingForm.facilities.length > 0) || (kmListingForm.roomTypes && kmListingForm.roomTypes.length > 0))) {
+        const formToSave = kmListingFormRef.current || kmListingForm;
+        if (isEditingKostManager && (formToSave.title || (formToSave.image_urls && formToSave.image_urls.length > 0) || (formToSave.facilities && formToSave.facilities.length > 0) || (formToSave.roomTypes && formToSave.roomTypes.length > 0))) {
             const draftKey = `km_draft_${isEditingKostManager.id}`;
             const draftData = {
-                kmListingForm,
+                kmListingForm: formToSave,
                 kmStep,
                 temporaryRoom,
                 activeRoomIdx,
@@ -2389,7 +2469,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
             }
 
             const timer = setTimeout(() => {
-                saveKostManagerDraftToDatabase(kmListingForm, kmStep, photoCategories);
+                saveKostManagerDraftToDatabase(formToSave, kmStep, photoCategories);
             }, 1000);
 
             return () => clearTimeout(timer);
@@ -2399,10 +2479,11 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
     // Listener beforeunload untuk mengamankan draf saat reload atau browser ditutup
     useEffect(() => {
         const handleBeforeUnload = () => {
-            if (isEditingKostManager && (kmListingForm.title || (kmListingForm.image_urls && kmListingForm.image_urls.length > 0) || (kmListingForm.roomTypes && kmListingForm.roomTypes.length > 0) || (kmListingForm.facilities && kmListingForm.facilities.length > 0))) {
+            const formToSave = kmListingFormRef.current || kmListingForm;
+            if (isEditingKostManager && (formToSave.title || (formToSave.image_urls && formToSave.image_urls.length > 0) || (formToSave.roomTypes && formToSave.roomTypes.length > 0) || (formToSave.facilities && formToSave.facilities.length > 0))) {
                 const draftKey = `km_draft_${isEditingKostManager.id}`;
                 const draftData = {
-                    kmListingForm,
+                    kmListingForm: formToSave,
                     kmStep,
                     temporaryRoom,
                     activeRoomIdx,

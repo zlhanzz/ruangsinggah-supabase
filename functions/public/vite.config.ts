@@ -10,6 +10,12 @@ export default defineConfig({
   ],
   server: {
     port: 5173,
+    watch: {
+      ignored: ['**/dist/**', '**/scratch/**', '**/.firebase/**', '**/*.log'],
+    },
+  },
+  optimizeDeps: {
+    entries: ['./index.html', './index.tsx', './App.tsx'],
   },
   build: {
     outDir: '../../public',

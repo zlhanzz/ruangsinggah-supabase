@@ -6,6 +6,23 @@ import App from './App';
 import { BrowserRouter } from 'react-router-dom';
 import { HelmetProvider } from 'react-helmet-async';
 
+// Helper to safely reload on chunk errors without infinite looping
+const triggerSafeReloadOnChunkError = (reason: string) => {
+  console.warn(`Chunk load error detected (${reason}). Checking cooldown before reloading...`);
+  try {
+    const lastReload = Number(sessionStorage.getItem('rs_last_chunk_reload') || 0);
+    const now = Date.now();
+    if (now - lastReload > 15000) {
+      sessionStorage.setItem('rs_last_chunk_reload', String(now));
+      window.location.reload();
+    } else {
+      console.warn('Chunk reload suppressed to prevent infinite reload loop.');
+    }
+  } catch {
+    window.location.reload();
+  }
+};
+
 // Global error handler to intercept Chunk Load Errors (caused by new deployments replacing old hashed files)
 window.addEventListener('error', (e) => {
   const msg = e.message || '';
@@ -14,8 +31,7 @@ window.addEventListener('error', (e) => {
     msg.includes('error loading dynamically imported module') ||
     msg.includes('ChunkLoadError')
   ) {
-    console.warn('Chunk load error detected. Forcing page refresh to load new assets...');
-    window.location.reload();
+    triggerSafeReloadOnChunkError('window.error');
   }
 });
 
@@ -26,8 +42,7 @@ window.addEventListener('unhandledrejection', (e) => {
     msg.includes('error loading dynamically imported module') ||
     msg.includes('ChunkLoadError')
   ) {
-    console.warn('Unhandled promise rejection (chunk load error) detected. Forcing page refresh...');
-    window.location.reload();
+    triggerSafeReloadOnChunkError('unhandledrejection');
   }
 });
 

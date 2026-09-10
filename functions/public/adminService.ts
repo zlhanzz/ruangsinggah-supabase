@@ -3319,7 +3319,10 @@ export async function getAdminSurveyRequests(): Promise<SurveyRequest[]> {
 
     let finalStatus = s.status;
     if (isAlreadyManagedAndActive && ['SUBMITTED', 'ACTIVE', 'APPROVED'].includes(s.status)) {
-      finalStatus = 'COMPLETED';
+      // KostManager WAJIB melalui verifikasi admin; jangan auto-complete jika survei KostManager belum berstatus ACTIVE/APPROVED resmi di kostmanager_requests
+      if (!isKostManager || activeKmTxIds.has(s.transaction_id) || (s.kost_id && activeKmPropIds.has(s.kost_id))) {
+        finalStatus = 'COMPLETED';
+      }
     }
 
     return {
@@ -3372,21 +3375,20 @@ export async function getAdminSurveyRequests(): Promise<SurveyRequest[]> {
     const { data: kmSurveys, error: kmErr } = await kmQuery.order('created_at', { ascending: false });
     if (!kmErr && kmSurveys) {
       mappedKmSurveys = kmSurveys.map((ks: any) => {
-        const kmTitle = (ks.request?.kost_name || '').trim().toLowerCase();
         const rawStatus = ks.status || ks.request?.status || 'PENDING_ASSIGNMENT';
-        const isKmManagedAndActive =
+        const isKmExplicitlyApproved =
           ks.request?.status === 'ACTIVE' ||
+          ks.request?.status === 'APPROVED' ||
           ks.status === 'COMPLETED' ||
-          ks.status === 'APPROVED' ||
-          (ks.request?.property_id && managedPropIds.has(ks.request?.property_id) && ['SUBMITTED', 'ACTIVE', 'APPROVED', 'COMPLETED'].includes(rawStatus)) ||
-          (kmTitle && managedPropTitles.has(kmTitle) && ['SUBMITTED', 'ACTIVE', 'APPROVED', 'COMPLETED'].includes(rawStatus));
+          ks.status === 'APPROVED';
 
         let computedStatus = rawStatus;
-        if (isKmManagedAndActive && ['SUBMITTED', 'ACTIVE', 'APPROVED', 'COMPLETED'].includes(rawStatus)) {
+        if (isKmExplicitlyApproved) {
           computedStatus = 'COMPLETED';
         } else if (ks.status === 'REVISION_REQUIRED' || ks.request?.status === 'REVISION_REQUIRED') {
           computedStatus = 'REVISION_REQUIRED';
-        } else if (ks.status === 'SUBMITTED' || ks.request?.status === 'PENDING_ONBOARDING') {
+        } else if (ks.status === 'SUBMITTED' || ks.request?.status === 'PENDING_ONBOARDING' || rawStatus === 'SUBMITTED' || rawStatus === 'PENDING_ONBOARDING') {
+          // Tetap berstatus SUBMITTED (menunggu review admin) dan jangan langsung loncat ke COMPLETED
           computedStatus = 'SUBMITTED';
         } else if (ks.request?.status === 'AGENT_ASSIGNED' || ks.status === 'AGENT_ASSIGNED') {
           // Prioritaskan AGENT_ASSIGNED agar tugas yang baru ditugaskan admin masuk ke tab Permintaan (belum aktif)
@@ -3507,12 +3509,35 @@ export async function getAdminSurveyRequests(): Promise<SurveyRequest[]> {
       .map((s: any) => s.transaction_id)
   );
 
+  // Kumpulkan index dari mappedSurveys untuk mentransfer evaluation_summary dan survey_request_id ke mappedKmSurveys
+  const surveyByTx = new Map<string, any>();
+  const surveyById = new Map<string, any>();
+  mappedSurveys.forEach((s: any) => {
+    if (s.transaction_id) surveyByTx.set(s.transaction_id, s);
+    if (s.id) surveyById.set(s.id, s);
+  });
+
   // Kumpulkan seluruh identifier KostManager dari mappedKmSurveys untuk deduplikasi multi-layer yang presisi
   const kmTxIds = new Set<string>();
   const kmDeterministicSurveyIds = new Set<string>();
   const kmReqIds = new Set<string>();
 
   mappedKmSurveys.forEach((ks: any) => {
+    const matched = (ks.transaction_id && surveyByTx.get(ks.transaction_id)) || (ks.id && surveyById.get(ks.id));
+    if (matched) {
+      if (!ks.evaluation_summary || Object.keys(ks.evaluation_summary).length === 0) {
+        ks.evaluation_summary = matched.evaluation_summary;
+      }
+      if (!ks.survey_request_id) {
+        ks.survey_request_id = matched.id;
+      }
+    }
+    if (!ks.survey_request_id && ks.transaction_id) {
+      try {
+        ks.survey_request_id = generateDeterministicUuid(ks.transaction_id, 999);
+      } catch (e) {}
+    }
+
     if (ks.transaction_id) {
       kmTxIds.add(ks.transaction_id);
       try {

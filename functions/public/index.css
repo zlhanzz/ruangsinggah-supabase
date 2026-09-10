@@ -1,6 +1,23 @@
 @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800;900&display=swap');
 @import "tailwindcss";
 
+@source "./index.html";
+@source "./index.tsx";
+@source "./App.tsx";
+@source "./pages";
+@source "./components";
+@source "./constants";
+@source "./utils";
+@source "./adminService.ts";
+@source "./userService.ts";
+@source "./chatService.ts";
+@source "./autoSensorService.ts";
+@source "./notificationBridge.ts";
+@source "./notificationService.ts";
+@source "./rentBillingService.ts";
+@source "./whatsappService.ts";
+@source "./emailService.ts";
+
 @theme {
   --font-sans: 'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
   --font-serif: 'Plus Jakarta Sans', sans-serif;

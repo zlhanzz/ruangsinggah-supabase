@@ -1,92 +1,81 @@
-# IMPLEMENTATION PLAN - Perbaikan Bug Modal Pendataan KostManager Tidak Bisa Ditutup (Re-Opening Loop)
+# IMPLEMENTATION PLAN: Perbaikan Performa Vite Dev Server & Eliminasi Loading Terus-Menerus di Localhost:5173
 
-**Tanggal Pengajuan**: September 2026  
-**Status Dokumen**: Menunggu Persetujuan User (RequestFeedback: true)  
-**Target File**: `functions/public/pages/AgentDashboard.tsx`
+Dokumen ini disusun untuk menganalisis dan menyelesaikan masalah mengapa akses ke `localhost:5173` terasa sangat berat, mengalami loading terus-menerus (*white screen* tanpa henti), dan startup Vite memakan waktu hingga **10.887 ms (hampir 11 detik)**.
 
 ---
 
 ## 1. Analisis Masalah & Akar Penyebab
 
-### Masalah yang Terjadi
-Setiap kali agen survei mencoba menutup modal pendataan KostManager (*ONBOARDING KOST - Survey Field App*), baik dengan:
-- Mengklik tombol silang **(X)** di pojok kanan atas,
-- Mengklik tombol **KELUAR** di bagian bawah,
-- Maupun mengklik area luar modal (backdrop gelap),
-modal tersebut sekejap tertutup namun langsung terbuka kembali secara otomatis. Agen terjebak di dalam modal dan tidak bisa kembali ke tampilan utama dashboard agen.
+Berdasarkan investigasi mendalam terhadap proses runtime Node.js, file watcher, dan arsitektur repositori:
 
-### Mengapa Hal Ini Terjadi (*Root Cause Analysis*)
-1. **Looping Trap pada Hook Auto-Load Refresh (`useEffect`)**:
-   - Di file `functions/public/pages/AgentDashboard.tsx` (baris 2417–2447), terdapat `useEffect` yang bertugas memuat draf survei secara otomatis jika ada parameter query URL `?onboarding_id=...`:
-     ```tsx
-     useEffect(() => {
-         const onboardingIdStr = searchParams.get('onboarding_id');
-         if (onboardingIdStr && !isEditingKostManager) {
-             const found = surveyRequests.find(r => String(r.id) === String(onboardingIdStr));
-             if (found) {
-                 openKostManagerListing(found);
-                 return;
-             }
-             ...
-         }
-     }, [searchParams, surveyRequests, isEditingKostManager]);
-     ```
-2. **Kondisi Balapan (*Race Condition*) saat Modal Ditutup**:
-   - Ketika tombol **Keluar** atau **(X)** diklik, fungsi `closeKostManagerListing()` dijalankan:
-     ```ts
-     setIsEditingKostManager(null);
-     const cleanupParams = new URLSearchParams(searchParams);
-     cleanupParams.delete('onboarding_id');
-     setSearchParams(cleanupParams);
-     ```
-   - Pemanggilan `setIsEditingKostManager(null)` memicu re-render instan pada komponen React `AgentDashboard`.
-   - Namun, pembaruan URL melalui `setSearchParams` dari React Router berjalan secara asinkron di tick terpisah.
-   - Pada siklus render di mana `isEditingKostManager` baru saja berubah menjadi `null`, nilai `searchParams.get('onboarding_id')` **masih berisi ID survei lama**.
-   - Karena `isEditingKostManager` masuk ke dalam *dependency array* `useEffect`, efek tersebut **langsung terpicu seketika** begitu `isEditingKostManager` bernilai `null`.
-   - Kondisi `if (onboardingIdStr && !isEditingKostManager)` terpenuhi (`true`), sehingga sistem **langsung memanggil kembali `openKostManagerListing(found)`**!
-   - Fungsi `openKostManagerListing` kembali mengisi `isEditingKostManager(found)` dan menaruh kembali `onboarding_id` di URL.
-   - Terjadilah siklus tertutup (*infinite re-opening trap*) yang membuat modal selalu muncul kembali setiap kali ditutup.
+### 🔴 Akar Masalah 1: Penumpukan 7.126 File Build Usang (352 MB) di `functions/public/dist`
+- Pada `functions/public/package.json`, skrip build saat ini adalah:
+  ```json
+  "build": "vite build && node -e \"const fs=require('fs'); fs.cpSync('../../public', './dist', {recursive: true, force: true});\""
+  ```
+- `fs.cpSync` hanya menimpa atau menambahkan file baru tanpa menghapus isi direktori `./dist` terlebih dahulu.
+- Karena Vite memberi hash unik acak pada setiap chunk hasil kompilasi (misal: `About-1ThFlUfd.js`, `Dashboard-0escf-li.js`, dll.), setiap kali build dijalankan selama 400+ pembaruan fitur sebelumnya, file-file chunk baru terus bertambah dan **tidak pernah dihapus**.
+- **Dampaknya**: Terdapat **7.126 file** dengan ukuran total **352 MB** di dalam folder `functions/public/dist/assets`.
+
+### 🔴 Akar Masalah 2: Pemindaian Rekursif Tailwind CSS v4 & Vite Dependency Scanner Membakar CPU 100%
+- Proyek menggunakan `@tailwindcss/vite` v4.3.0 (`@import "tailwindcss";` di `index.css`).
+- Mesin deteksi Tailwind v4 dan dependency scanner esbuild Vite secara default memindai seluruh direktori proyek untuk menemukan class CSS dan impor dependency.
+- Karena folder `dist` berada di dalam root proyek frontend (`functions/public`), setiap kali server dev menyala atau menerima request pertama browser ke `http://localhost:5173`:
+  - Tailwind v4 dan Vite memindai seluruh **7.126 file JavaScript minified (352 MB)**.
+  - Event loop Node.js mengalami saturasi total (*freeze*) dan menggunakan **100% satu core CPU** (tercatat CPU time proses telah melampaui **868 detik** nonstop).
+  - Akibat event loop terkunci, Vite tidak sempat mengirim respons HTTP ke browser. Uji coba koneksi `curl.exe -I http://localhost:5173/` mengalami *timeout/hang* total.
+  - Browser Chrome menampilkan layar putih polos dengan spinner loading tab berputar tanpa henti.
+
+### 🔴 Akar Masalah 3: Ketiadaan Watcher Ignore & Scoping Source
+- `vite.config.ts` belum mengabaikan folder `dist`, `scratch`, dan folder sementara dari sistem watch Vite (`server.watch.ignored`).
+- `index.css` belum menetapkan direktori `@source` spesifik untuk Tailwind v4, sehingga Tailwind memindai seluruh folder kerja tanpa batasan.
+
+### 🔴 Akar Masalah 4: Potensi Reload Loop di `index.tsx`
+- Di `index.tsx` terdapat listener `error` dan `unhandledrejection` yang langsung memanggil `window.location.reload()` tanpa batas/cooldown jika chunk lambat termuat saat dev server sedang macet, memperparah sensasi loading berulang-ulang di browser.
 
 ---
 
-## 2. Dampak Perubahan
+## 2. Dampak Perubahan (Files to be Modified)
 
-Hanya 1 file kode yang akan disentuh secara terisolasi tanpa mengubah logika bisnis perhitungan data survei:
-- **`functions/public/pages/AgentDashboard.tsx`**:
-  - Mengisolasi eksekusi auto-load dari URL agar hanya berjalan **satu kali saat halaman pertama kali dibuka / di-refresh** (*one-time mount evaluation*).
-  - Menambahkan ref pelindung penutupan (`isExplicitlyClosedRef`) agar penutupan manual oleh user tidak memicu pembukaan kembali.
-  - Memastikan parameter URL `onboarding_id` langsung dibersihkan secara instan dari `window.history` dan `searchParams` saat tombol Keluar/(X) ditekan.
-  - Menghapus ketergantungan `isEditingKostManager` dari dependency array auto-load effect untuk memutus loop.
+1. **Pembersihan Bersih (Clean-up)**:
+   - Menghapus 7.126 file build usang di `functions/public/dist` sehingga hanya file aktif yang tersisa / bersih.
+2. **`functions/public/vite.config.ts`**:
+   - Menambahkan konfigurasi `server.watch.ignored` untuk mengabaikan `dist`, `scratch`, `.firebase`, dan file sementara lainnya dari pengawasan Vite.
+3. **`functions/public/index.css`**:
+   - Menambahkan direktori `@source` yang eksplisit (`./index.html`, `./index.tsx`, `./App.tsx`, `./pages`, `./components`, dll.) dan mengecualikan `dist` (`!./dist`), sehingga Tailwind v4 hanya memindai source code murni, bukan ribuan file build.
+4. **`functions/public/package.json`**:
+   - Memperbaiki skrip `build` agar membersihkan `./dist` sebelum melakukan penyalinan (`fs.rmSync('./dist', ...)`), mencegah penumpukan file usang di masa mendatang.
+5. **`functions/public/index.tsx`**:
+   - Menambahkan *throttle / cooldown guard* pada interceptor error chunk load (10 detik) agar tidak memicu reload tanpa henti saat dev server sedang inisialisasi.
 
 ---
 
-## 3. Langkah-Langkah Eksekusi (Fase 2 Setelah di-ACC)
+## 3. Langkah-Langkah Eksekusi (Setelah Approval)
 
-1. **Membuat Flag Ref Penanda Auto-Load & Penutupan Eksplisit**:
-   - Di `AgentDashboard.tsx`, buat `const hasAutoLoadedOnboardingRef = useRef(false);` dan `const isClosingKostManagerRef = useRef(false);`.
-2. **Memperbaiki Hook Auto-Load `useEffect`**:
-   - Batasi evaluasi auto-load dari query URL: jika `hasAutoLoadedOnboardingRef.current === true` ATAU `isClosingKostManagerRef.current === true`, segera batalkan/hentikan eksekusi (*early return*).
-   - Setelah survei pertama kali berhasil dimuat dari URL query saat refresh, tandai `hasAutoLoadedOnboardingRef.current = true`.
-   - Hapus `isEditingKostManager` dari *dependency array* effect tersebut agar perubahan status modal terbuka/tertutup tidak lagi memicu auto-load dari URL.
-3. **Menyempurnakan `closeKostManagerListing`**:
-   - Di awal fungsi `closeKostManagerListing`, set `isClosingKostManagerRef.current = true`.
-   - Bersihkan parameter `onboarding_id` seketika menggunakan `window.history.replaceState` dan `setSearchParams(cleanupParams, { replace: true })`.
-   - Di dalam `openKostManagerListing` (yang dipicu saat agen sengaja mengklik tombol di kartu survei), reset kembali `isClosingKostManagerRef.current = false`.
+1. **Langkah 1: Matikan Proses Node.js Hang & Bersihkan Folder `dist`**:
+   - Menghentikan proses Vite yang sedang membakar CPU 100% (PID 37116).
+   - Mengosongkan folder `functions/public/dist` dari 7.126 file usang.
+2. **Langkah 2: Optimasi `vite.config.ts`**:
+   - Tambahkan `server.watch.ignored: ['**/dist/**', '**/scratch/**', '**/.firebase/**']`.
+   - Tambahkan opsi `optimizeDeps` yang rapi.
+3. **Langkah 3: Optimasi `index.css` dengan Tailwind v4 `@source` Scoping**:
+   - Batasi pemindaian class Tailwind hanya pada folder source (`./pages`, `./components`, `./index.tsx`, `./App.tsx`), mengabaikan `dist`.
+4. **Langkah 4: Perbaiki Skrip Build di `package.json`**:
+   - Pastikan auto-clean `./dist` aktif setiap kali build dijalankan.
+5. **Langkah 5: Beri Proteksi Reload Guard di `index.tsx`**:
+   - Cegah infinite reload loop dengan `sessionStorage` cooldown timer.
+6. **Langkah 6: Validasi & Pengujian**:
+   - Uji coba jalankan Vite dev server baru: waktu start harus turun dari 10.887 ms menjadi < 500 ms.
+   - Uji respon HTTP `http://localhost:5173/` via `curl.exe`: harus merespon dalam milidetik (Status 200 OK).
+   - Jalankan `npm run build` untuk memastikan kompilasi tetap 100% lulus tanpa kendala.
 
 ---
 
 ## 4. Rencana Verifikasi
 
-1. **Uji Kompilasi & Build Frontend**:
-   - Jalankan `npm.cmd run build` di direktori `functions/public`.
-   - Memastikan build Vite lulus 100% tanpa error TypeScript.
-2. **Uji Skenario Penutupan Modal**:
-   - Buka modal pendataan KostManager.
-   - Klik tombol **(X)** di pojok kanan atas $\rightarrow$ Modal tertutup sempurna dan tetap tertutup, kembali ke dashboard agen.
-   - Buka kembali modal pendataan KostManager.
-   - Klik tombol **KELUAR** di bagian bawah $\rightarrow$ Modal tertutup sempurna dan tidak terbuka lagi.
-   - Klik backdrop abu-abu di luar modal $\rightarrow$ Modal tertutup dengan baik.
-3. **Uji Skenario Refresh Tetap Berjalan**:
-   - Saat modal terbuka, tekan tombol `F5` / Refresh browser.
-   - Karena URL memiliki `onboarding_id`, modal tetap otomatis terbuka memulihkan draf seperti yang diharapkan.
-   - Kemudian setelah terbuka, klik **KELUAR** $\rightarrow$ Modal tertutup dan parameter URL bersih.
+1. **Kecepatan Startup Vite**:
+   - Menjalankan `npm run dev` dan memverifikasi terminal menampilkan waktu siap (*ready*) di bawah 1 detik (jauh lebih cepat dibanding 10.887 ms sebelumnya).
+2. **Koneksi Localhost 5173**:
+   - Menguji permintaan HTTP ke `http://localhost:5173/` dan memastikan halaman langsung merespons dengan status 200 OK secara instan tanpa loading berputar tanpa henti.
+3. **Kompilasi Build**:
+   - Menjalankan `npm run build` di `functions/public` untuk memastikan seluruh fitur aplikasi tetap berfungsi normal dan 0 error kompilasi.

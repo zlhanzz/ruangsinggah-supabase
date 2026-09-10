@@ -2,6 +2,38 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 402. Optimasi Performa Vite Dev Server & Eliminasi Loading Terus-Menerus di Localhost:5173 (Pembersihan 7.126 File Usang, Scoping Tailwind v4 @source, & Watcher Ignore) (September 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna melaporkan bahwa saat mengakses `localhost:5173` terasa sangat lambat dan berat, dengan loading terus-menerus tanpa henti (*white screen* dengan spinner tab berputar), serta startup Vite dev server memakan waktu hingga `10887 ms` (~11 detik).
+- **Akar Masalah**:
+  1. **Penumpukan 7.126 File Usang (352 MB) di `dist`**: Skrip build sebelumnya menyalin file build ke `./dist` menggunakan `fs.cpSync` tanpa membersihkan folder `./dist` terlebih dahulu. Selama 400+ build sebelumnya, setiap file chunk JS dengan hash unik acak terakumulasi terus-menerus hingga mencapai 7.126 file (352 MB).
+  2. **Event Loop Node.js Terkunci 100% CPU**: Tailwind CSS v4 (`@tailwindcss/vite`) dan Vite dependency scanner memindai seluruh folder kerja secara rekursif untuk mendeteksi class utility CSS. Memindai 7.126 file JS minified saat runtime dev server menguras 100% core CPU (CPU time melampaui 860 detik), sehingga request HTTP `GET /` ke port 5173 tidak pernah terlayani (*deadlock/hang*).
+  3. **Ketiadaan Watcher Ignore & Scoping Source**: `vite.config.ts` belum mengabaikan `dist` dan folder scratch dari file watcher, serta `index.css` belum memiliki direktori `@source` eksplisit.
+  4. **Potensi Reload Loop pada Chunk Load Error**: Interceptor error di `index.tsx` langsung memicu `window.location.reload()` tanpa batas/cooldown ketika chunk lambat direspons oleh dev server yang sedang macet.
+- **Implementasi Solusi**:
+  1. **Pembersihan Masif 7.126 File Build Usang**: Menghapus tuntas seluruh file usang di `functions/public/dist` sehingga hanya file aktif yang tersisa (102 file).
+  2. **Optimasi `vite.config.ts`**:
+     - Menambahkan konfigurasi `server.watch.ignored: ['**/dist/**', '**/scratch/**', '**/.firebase/**', '**/*.log']`.
+     - Mengonfigurasi `optimizeDeps.entries` untuk membatasi pemindaian dependency hanya pada berkas entry point utama (`index.html`, `index.tsx`, `App.tsx`).
+  3. **Scoping Eksplisit Tailwind CSS v4 `@source` (`index.css`)**:
+     - Menambahkan direktori `@source` spesifik (`./pages`, `./components`, `./constants`, `./utils`, `./index.tsx`, `./App.tsx`, dll.) agar mesin Tailwind v4 hanya memindai source code murni dan 100% mengabaikan direktori build.
+  4. **Pembersihan Otomatis pada Skrip Build (`package.json`)**:
+     - Memperbarui skrip `"build"` agar secara otomatis membersihkan `./dist` (`if (fs.existsSync('./dist')) fs.rmSync('./dist', {recursive: true, force: true})`) sebelum menyalin hasil build baru, menjamin file lama tidak akan pernah menumpuk lagi.
+  5. **Throttle Cooldown Interceptor Chunk Error (`index.tsx`)**:
+     - Menambahkan mekanisme cooldown 15 detik berbasis `sessionStorage` pada interceptor error chunk load, mencegah infinite reload loop di browser pengguna.
+- **File Tersentuh**:
+  - `functions/public/vite.config.ts`
+  - `functions/public/index.css`
+  - `functions/public/package.json`
+  - `functions/public/index.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - `functions/public/dist` terpangkas dari 7.126 file (352 MB) menjadi 102 file bersih.
+  - Startup Vite turun drastis dari `10887 ms` menjadi `2970 ms`.
+  - Uji respons HTTP `localhost:5173` via curl (`/`, `/index.tsx`, `/index.css`, `/App.tsx`) langsung merespons Status 200 OK dalam hitungan milidetik (0 detik delay) tanpa *hanging* atau *white screen*.
+  - Kompilasi produksi `npm run build` lulus 100% (2512 modul tertransformasi, 0 error).
+
 ### 401. Perbaikan Kestabilan Draf Form Pendataan KostManager: Eliminasi Destructive Re-merge Fasilitas & Pemulihan Foto Survei saat Modal Ditutup / Refresh (`AgentDashboard.tsx`) (September 2026)
 - **Permintaan & Masalah**:
   1. Pengguna melaporkan bahwa setiap kali modal pendataan KostManager (*ONBOARDING KOST - Survey Field App*) ditutup dan terjadi refresh browser, seluruh foto pendataan yang sebelumnya telah diunggah hilang kembali menjadi `0 FOTO` pada kartu area publik (seperti *Bangunan Depan, Koridor, Lingkungan*, dll.).
