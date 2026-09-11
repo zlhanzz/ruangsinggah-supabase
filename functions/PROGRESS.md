@@ -2,6 +2,27 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 404. Pemulihan Tautan Menu Navigasi 'Article' pada Kolom Perusahaan di Footer (`Footer.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna menanyakan mengapa menu artikel di footer menghilang pada UI/UX saat ini.
+  2. Pengguna meminta investigasi mendalam apakah sistem dan struktur kodenya masih ada serta apakah artikel yang diterbitkan sebelumnya masih tersimpan di database.
+  3. Pengguna meminta agar tautan menu tersebut dimunculkan kembali di footer dengan nama "Article" agar pengunjung dapat mengaksesnya kembali.
+- **Hasil Investigasi**:
+  1. **Struktur Kode & Routing (100% Utuh)**: Rute publik `/artikel` dan `/artikel/:slug` di `App.tsx`, enum navigasi `Page.ARTICLES` di `types.ts`, komponen halaman penuh `Articles.tsx` (929 baris) beserta optimasi SEO `Helmet`/`Schema.org`, serta CMS admin `ArticleManagement.tsx` masih utuh dan berfungsi penuh.
+  2. **Database Supabase (Data Masih Ada)**: Telah dilakukan query langsung ke database Supabase `supabase.from('articles').select('*')` dan terkonfirmasi bahwa tabel `articles` aktif dan artikel yang diterbitkan (*"Mengenal Ruang Singgah: Transformasi Digital Manajemen dan Pencarian Kost."*) masih tersimpan dengan aman.
+  3. **Penyebab Hilang**: Saat pembaruan grid footer 12 kolom sebelumnya, item tautan artikel secara tidak sengaja terlewatkan dari daftar tautan kolom `PERUSAHAAN`.
+- **Implementasi Solusi**:
+  1. **Penambahan Menu 'Article' di `Footer.tsx`**:
+     - Menambahkan tombol navigasi berlabel `"Article"` di bawah kolom `PERUSAHAAN` yang memicu `onPageChange(Page.ARTICLES)`.
+     - Menggunakan styling transisi modern (`hover:text-[#ff7a00] hover:underline underline-offset-4 transition-colors cursor-pointer text-left`) yang seragam dengan elemen footer lainnya.
+- **File Tersentuh**:
+  - `functions/public/components/Footer.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi produksi `npm.cmd run build` di `functions/public` lulus 100% (2512 modul tertransformasi, `✓ built in 52.62s`, 0 error).
+  - Tautan "Article" terhubung ke rute `/artikel` dan menampilkan artikel dari Supabase serta artikel statis bawaan.
+
 ### 403. Pembatasan Eksklusif Badge 'TERVERIFIKASI' Hanya untuk Properti Berstatus KostManager (`KostCard.tsx`, `Home.tsx`) (September 2026)
 - **Permintaan & Masalah**:
   1. Pengguna meminta agar kartu properti yang memiliki badge biru `TERVERIFIKASI` (seperti pada hasil pencarian dan katalog publik) hanya ditampilkan untuk properti yang berstatus KostManager (`isManaged: true` / `is_managed: true`).

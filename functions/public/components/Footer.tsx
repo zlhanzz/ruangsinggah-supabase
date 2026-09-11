@@ -90,6 +90,14 @@ const Footer: React.FC<FooterProps> = ({ onPageChange }) => {
               </li>
               <li>
                 <button 
+                  onClick={() => onPageChange(Page.ARTICLES)} 
+                  className="hover:text-[#ff7a00] hover:underline underline-offset-4 transition-colors cursor-pointer text-left"
+                >
+                  Article
+                </button>
+              </li>
+              <li>
+                <button 
                   onClick={() => onPageChange(Page.CONTACT)} 
                   className="hover:text-[#ff7a00] hover:underline underline-offset-4 transition-colors cursor-pointer text-left"
                 >
