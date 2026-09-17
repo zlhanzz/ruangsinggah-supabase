@@ -1,7 +1,7 @@
 import { supabase } from './supabase';
 import { Kost, DatabaseProduct, ImageUrlObject, VideoUrlObject, SurveyRequest, Banner, KostManagerPackage, MitraPromoPopupSetting, KostManagerFeeSettings, KostManagerFeeLogEntry } from './types';
 import { notifyAdminStatusUpdate, sendMitraPublishedEmailBrevoDirect, sendAgentKostManagerAssignmentEmailBrevoDirect } from './emailService';
-import { ensureAbsoluteUrl, getDisplayImageUrl, getDisplayImageObject, sortPropertyImagesWithRoomCover } from './userService';
+import { ensureAbsoluteUrl, getDisplayImageUrl, getDisplayImageObject, sortPropertyImagesWithRoomCover, invalidatePropertiesCache } from './userService';
 export { sortPropertyImagesWithRoomCover };
 import { getCurrentDate } from './utils/timeUtils';
 
@@ -4217,6 +4217,212 @@ export async function triggerKostManagerAgentAssignmentEmail(requestId: string, 
   }
 }
 
+/**
+ * De-aktivasi properti kelolaan KostManager dan pulihkan ke status Mitra Biasa (Self-Listing).
+ * Memulihkan seluruh data foto mandiri mitra asli (bukan foto agen survey),
+ * tipe kamar asli, fasilitas, aturan, deskripsi, serta menghapus dari portofolio KostManager.
+ */
+export async function deactivateKostManagerAndRestoreSelfListing(propertyId: string): Promise<{ success: boolean; message: string }> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('Unauthorized');
+
+  const role = await getUserRole(user.id);
+  if (role !== 'admin') throw new Error('Access Denied: Hanya admin yang berwenang menonaktifkan status KostManager');
+
+  // 1. Ambil data properti saat ini
+  const { data: prop, error: propErr } = await supabase
+    .from('properties')
+    .select('*')
+    .eq('id', propertyId)
+    .single();
+
+  if (propErr || !prop) throw new Error('Properti tidak ditemukan: ' + (propErr?.message || ''));
+
+  const meta = prop.metadata || {};
+
+  // 2. Pulihkan Foto Mandiri Mitra
+  let restoredImages: any[] = [];
+  if (Array.isArray(meta.self_listing_images) && meta.self_listing_images.length > 0) {
+    restoredImages = meta.self_listing_images;
+  } else {
+    // Fallback cerdas: cari foto mandiri di bucket storage drafts milik owner_uid
+    if (prop.owner_uid) {
+      try {
+        const { data: draftFiles } = await supabase.storage
+          .from('properties')
+          .list(`drafts/${prop.owner_uid}`);
+        if (draftFiles && draftFiles.length > 0) {
+          const { data: { publicUrl } } = supabase.storage
+            .from('properties')
+            .getPublicUrl(`drafts/${prop.owner_uid}`);
+          restoredImages = draftFiles
+            .filter(f => f.name.match(/\.(webp|jpg|jpeg|png)$/i))
+            .map(f => ({
+              url: `${publicUrl}/${f.name}`,
+              original: `${publicUrl}/${f.name}`,
+              label: 'Foto Properti'
+            }));
+        }
+      } catch (e) {
+        console.warn('Fallback storage drafts lookup failed:', e);
+      }
+    }
+    // Jika masih kosong, ambil foto saat ini tapi singkirkan foto hasil survey agen (kostmanager/drafts)
+    if (restoredImages.length === 0 && Array.isArray(prop.image_urls)) {
+      restoredImages = prop.image_urls.filter((img: any) => {
+        const urlStr = typeof img === 'string' ? img : (img?.url || img?.original || '');
+        return !urlStr.includes('/kostmanager/drafts/') && !urlStr.includes('/survey/');
+      });
+    }
+  }
+
+  // 3. Pulihkan Tipe Kamar Mandiri Mitra
+  let restoredRoomTypes: any[] = [];
+  if (Array.isArray(meta.self_listing_room_types) && meta.self_listing_room_types.length > 0) {
+    restoredRoomTypes = meta.self_listing_room_types;
+  } else {
+    // Reconstruct tipe kamar ringkas dari tipe unit kamar yang ada
+    const distinctTypes = Array.from(new Set(
+      (prop.room_types || []).map((r: any) => r.type?.trim() || r.roomTypeName?.trim() || r.name?.trim() || 'Standard')
+    ));
+    if (distinctTypes.length > 0) {
+      restoredRoomTypes = distinctTypes.map((tName: any) => {
+        const matchingRooms = (prop.room_types || []).filter((r: any) => (r.type?.trim() || r.roomTypeName?.trim() || r.name?.trim()) === tName);
+        const sampleRoom = matchingRooms[0] || {};
+        return {
+          name: tName,
+          type: tName,
+          roomTypeName: tName,
+          size: sampleRoom.size || '3x3',
+          price: sampleRoom.price || prop.price || 800000,
+          isAvailable: true,
+          availableRoomCount: matchingRooms.filter((r: any) => r.isAvailable !== false && r.status?.toLowerCase() !== 'terisi').length || 1,
+          features: sampleRoom.features || ['Kamar Mandi Dalam', 'Kasur', 'Lemari'],
+          roomFacilities: sampleRoom.roomFacilities || ['Kasur', 'Lemari'],
+          bathroomFacilities: sampleRoom.bathroomFacilities || ['Kloset Duduk', 'Shower'],
+          images: sampleRoom.images || []
+        };
+      });
+    } else {
+      restoredRoomTypes = [{
+        name: 'Standard',
+        type: 'Standard',
+        roomTypeName: 'Standard',
+        size: '3x3',
+        price: prop.price || 800000,
+        isAvailable: true,
+        availableRoomCount: 1,
+        features: ['Kamar Mandi Dalam', 'Kasur', 'Lemari'],
+        roomFacilities: ['Kasur', 'Lemari'],
+        bathroomFacilities: ['Kloset Duduk', 'Shower'],
+        images: restoredImages.slice(0, 5)
+      }];
+    }
+  }
+
+  // 4. Pulihkan Fasilitas, Aturan, dan Deskripsi
+  const restoredFacilities = (Array.isArray(meta.self_listing_facilities) && meta.self_listing_facilities.length > 0)
+    ? meta.self_listing_facilities
+    : (prop.facilities || ['WiFi', 'Area Parkir', 'Kamar Mandi Dalam']);
+
+  const restoredRules = (Array.isArray(meta.self_listing_rules) && meta.self_listing_rules.length > 0)
+    ? meta.self_listing_rules
+    : (prop.rules || ['Akses 24 Jam', 'Dilarang Merokok di Dalam Kamar']);
+
+  const restoredDescription = meta.self_listing_description || prop.description || '';
+
+  // 5. Bersihkan Metadata dari Flag KostManager
+  const cleanMetadata = { ...meta };
+  if (meta.self_listing_categorized_photos) {
+    cleanMetadata.categorized_photos = meta.self_listing_categorized_photos;
+  }
+  if (meta.self_listing_photo_categories) {
+    cleanMetadata.photo_categories = meta.self_listing_photo_categories;
+  }
+  if (meta.self_listing_photos_meta) {
+    cleanMetadata.photos_meta = meta.self_listing_photos_meta;
+  }
+  if (cleanMetadata.omnichannelContactName?.includes('KostManager')) {
+    delete cleanMetadata.omnichannelContactName;
+    delete cleanMetadata.omnichannelContactPhone;
+  }
+  cleanMetadata.km_deactivated_at = new Date().toISOString();
+
+  // 6. Update Tabel `properties` ke Self-Listing Non-Managed
+  const { error: updatePropErr } = await supabase
+    .from('properties')
+    .update({
+      is_managed: false,
+      status: 'published', // Properti langsung tayang normal sebagai listing mitra biasa
+      image_urls: restoredImages,
+      room_types: restoredRoomTypes,
+      facilities: restoredFacilities,
+      rules: restoredRules,
+      description: restoredDescription,
+      metadata: cleanMetadata,
+      updated_at: new Date().toISOString()
+    })
+    .eq('id', propertyId);
+
+  if (updatePropErr) throw updatePropErr;
+
+  // 7. Hapus dari Tabel Dedicated `mitra_kostmanager`
+  try {
+    await supabase
+      .from('mitra_kostmanager')
+      .delete()
+      .eq('property_id', propertyId);
+  } catch (mkmErr) {
+    console.warn('Warning: gagal hapus dari mitra_kostmanager:', mkmErr);
+  }
+
+  // 8. Update Tiket `kostmanager_requests` Terkait Menjadi INACTIVE
+  try {
+    await supabase
+      .from('kostmanager_requests')
+      .update({
+        status: 'INACTIVE',
+        notes: (meta.notes ? meta.notes + '\n' : '') + `[Dinonaktifkan dari KostManager & Dikembalikan ke Mitra Biasa pada ${new Date().toLocaleString('id-ID')}]`,
+        updated_at: new Date().toISOString()
+      })
+      .or(`property_id.eq.${propertyId},and(user_id.eq.${prop.owner_uid},kost_name.ilike.${prop.title})`);
+  } catch (kmReqErr) {
+    console.warn('Warning: gagal update status kostmanager_requests:', kmReqErr);
+  }
+
+  // 9. Kembalikan `mitra.subscription_status` ke 'reguler' jika tidak ada properti terkelola lain
+  if (prop.owner_uid) {
+    try {
+      const { data: otherManaged } = await supabase
+        .from('properties')
+        .select('id')
+        .eq('owner_uid', prop.owner_uid)
+        .eq('is_managed', true)
+        .neq('id', propertyId);
+
+      if (!otherManaged || otherManaged.length === 0) {
+        await supabase
+          .from('mitra')
+          .update({
+            subscription_status: 'reguler',
+            updated_at: new Date().toISOString()
+          })
+          .eq('user_id', prop.owner_uid);
+      }
+    } catch (mitraErr) {
+      console.warn('Warning: gagal update subscription_status mitra:', mitraErr);
+    }
+  }
+
+  // 10. Bersihkan Cache Properti
+  invalidatePropertiesCache();
+
+  return {
+    success: true,
+    message: `Properti "${prop.title}" berhasil dinonaktifkan dari KostManager dan dipulihkan sepenuhnya menjadi Mitra Biasa (Self-Listing) beserta seluruh data dan foto aslinya.`
+  };
+}
+
 export async function deleteKostManagerRequest(id: string): Promise<void> {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error('Unauthorized');
@@ -4245,24 +4451,21 @@ export async function deleteKostManagerRequest(id: string): Promise<void> {
         .maybeSingle();
 
       if (linkedProp) {
-        const updatePropPayload: any = {};
-        // Pastikan owner_uid & mitra_id terkunci ke UID Mitra pemilik asli
-        if (kmReq.user_id && (linkedProp.owner_uid !== kmReq.user_id || linkedProp.mitra_id !== kmReq.user_id)) {
-          updatePropPayload.owner_uid = kmReq.user_id;
-          updatePropPayload.mitra_id = kmReq.user_id;
-        }
-        // Jika tiket belum berstatus aktif/resmi (misal baru pengajuan/survei lalu dibatalkan),
-        // kembalikan is_managed ke false agar kembali menjadi self-listing biasa
-        const kmStatus = (kmReq.status || '').toUpperCase();
-        if (!['ACTIVE', 'COMPLETED', 'APPROVED'].includes(kmStatus)) {
-          updatePropPayload.is_managed = false;
-        }
-
-        if (Object.keys(updatePropPayload).length > 0) {
-          await supabase
-            .from('properties')
-            .update(updatePropPayload)
-            .eq('id', linkedProp.id);
+        if (linkedProp.is_managed) {
+          // Jika properti berstatus managed, pulihkan secara penuh ke self-listing
+          await deactivateKostManagerAndRestoreSelfListing(linkedProp.id);
+        } else {
+          // Pastikan owner_uid & mitra_id terkunci ke UID Mitra pemilik asli
+          if (kmReq.user_id && (linkedProp.owner_uid !== kmReq.user_id || linkedProp.mitra_id !== kmReq.user_id)) {
+            await supabase
+              .from('properties')
+              .update({
+                owner_uid: kmReq.user_id,
+                mitra_id: kmReq.user_id,
+                updated_at: new Date().toISOString()
+              })
+              .eq('id', linkedProp.id);
+          }
         }
       }
     } catch (propErr) {

@@ -1,129 +1,110 @@
-# Implementation Plan - Penyelarasan Holistik Siklus Listing Kamar Kosong KostManager (Survey Lapangan -> ACC Admin -> Dashboard Mitra -> Publikasi Katalog User)
+# Rencana Implementasi: De-aktivasi Properti KostManager & Pemulihan ke Mitra Biasa (Self-Listing) dengan Restorasi Foto & Data Mandiri Mitra
 
-Dokumen ini disusun untuk menganalisis dan menyelesaikan secara tuntas kendala di mana properti KostManager yang telah disurvei oleh agen dan disetujui (ACC) oleh admin sudah aktif di Portal KostManager, namun di Dashboard Mitra masih berstatus *'Sedang Ditinjau'* dan kamar kosongnya belum muncul sama sekali di katalog pencarian user.
+## 1. Analisis Kebutuhan & Masalah
 
----
+### A. Konteks & Kebutuhan Pengguna
+Pengguna menginstruksikan:
+> *"saya ingin agar, jika sebuah list properti terkelola kostmanager, yang sebelumnnya adalah listing kost biasa self listing, jika dinonaktifkan dari list properti terkelola kostmanager, itu akan kembali menjadi mitra biasa atau self listing, dan kembali ke tampilan saat masih menjadi mitra biasa atau self listing. seluruh data-datanya kembali ke informasi dan foto yang diupload secara mandiri oleh mitra bukan hasil dari pendataan agen"*
 
-## 1. Analisis Masalah & Investigasi Mendalam
-
-Berdasarkan pemeriksaan komprehensif pada database Supabase, kode backend, dan antarmuka frontend:
-
-### A. Temuan Kondisi Saat Ini (Berdasarkan 4 Bukti Tangkapan Layar)
-1. **Screenshot 1 (Moderasi Onboarding Admin)**:
-   - Permintaan pendaftaran onboarding KostManager (ID `#F8E426DC` / `f8e426dc-b9be-4c74-b41b-e3c1099b9a76`) untuk **"Kost Apalah Daya"** berstatus `AKTIF (AUTO-PILOT)` setelah admin menekan tombol persetujuan *"Setujui & Aktifkan"*.
-2. **Screenshot 2 (Portal KostManager)**:
-   - Kost Apalah Daya tercatat sebagai properti terkelola aktif (10 unit kamar: 8 terisi, 2 kosong siap huni) dengan tingkat okupansi 80%.
-3. **Screenshot 3 (Dashboard Mitra - Kost Saya)**:
-   - Pemilik kost (Sulhan) melihat kartu kostnya masih berstatus badge oranye `SEDANG DITINJAU`, header menampilkan `0 PROPERTI TAYANG • 1 MENUNGGU REVIEW`, dan terdapat banner evaluasi: `TAHAP PENINJAUAN ADMIN (ESTIMASI 1×24 JAM)`.
-4. **Screenshot 4 (Katalog Pencarian User `/listings`)**:
-   - Katalog publik hanya menampilkan 9 unit properti mitra lain. **Kost Apalah Daya sama sekali tidak muncul**, sehingga 2 kamar kosong yang siap disewa tidak dapat ditemukan maupun dipesan oleh mahasiswa/pencari kost.
-
----
-
-### B. Akar Masalah Utama (Root Causes)
-
-1. **Inkonsistensi Nilai Status Properti pada Eksekusi ACC Admin (`KostManagerManagement.tsx` baris 654)**:
-   - Ketika Admin menekan tombol *"Setujui seluruh hasil pendataan dan aktifkan layanan Auto-Pilot"* di fungsi `handleApproveAndActivate`, kode memperbarui tabel `properties` dengan:
-     ```typescript
-     await supabase.from('properties').update({
-         status: 'active', // <--- BUG UTAMA: Menyetel 'active' alih-alih 'published'
-         is_managed: true,
-         owner_uid: req.user_id || prop?.owner_uid,
-         updated_at: new Date().toISOString()
-     }).eq('id', propId);
-     ```
-   - Di database Supabase saat ini, properti `Kost Apalah Daya` (`bb6b0ccc-6d9e-494a-b972-aa7dd9cbd81f`) tercatat dengan nilai `status = 'active'`.
-
-2. **Penyaringan Ketat Query Katalog Publik (`userService.ts` baris 421 & 468)**:
-   - Fungsi penarik data katalog publik `getPublishedProperties()` dan `getFilteredProperties()` melakukan filter ketat:
-     ```typescript
-     query = query.eq('status', 'published');
-     ```
-   - Karena `Kost Apalah Daya` berstatus `'active'`, query database PostgreSQL secara otomatis mengecualikan properti ini. Listing tidak pernah dikirimkan ke browser user.
-
-3. **Logika Penentuan Status di Dashboard Mitra (`MitraDashboard.tsx` baris 1555, 1699, 1858)**:
-   - Komponen `MitraDashboard.tsx` hanya menganggap properti tayang publik jika `p.status === 'published'`:
-     ```tsx
-     const publishedCount = properties.filter(p => p.status === 'published').length;
-     const inReviewCount = properties.filter(p => p.status !== 'published' && p.status !== 'suspended').length;
-     ...
-     {p.status === 'published' ? <CheckCircle2 /> Tayang Publik : ... : <Clock /> Sedang Ditinjau}
-     ```
-   - Karena properti bernilai `'active'`, kartu properti secara keliru mengasumsikan properti masih menunggu verifikasi admin.
-
-4. **Kesiapan Pemasaran Kamar Kosong di Antarmuka User**:
-   - Di database, data kamar kosong (`Kamar 8` dan `Kamar 9` berstatus `Kosong`, `isAvailable: true`, dengan foto dan fasilitas lengkap) sudah ada.
-   - Halaman detail `KostDetail.tsx` sudah siap menampilkan grup tipe kamar dan unit kamar kosong yang dapat dipilih dan dibooking.
-   - Namun, kartu katalog `KostCard.tsx` belum memiliki indikator visual yang menonjolkan ketersediaan kamar kosong (misal: badge `2 Kamar Kosong` siap huni), padahal informasi ini sangat penting untuk menarik minat pencari kost.
+### B. Akar Masalah Teknis Saat Ini
+1. **Ketiadaan Aksi De-aktivasi / Lepas Kelola di Portal KostManager (`KostManagerPortal.tsx`)**:
+   - Pada tabel **Properti Terkelola** (`/dashboard-admin/km_properties`), aksi yang tersedia saat ini hanya:
+     - *Bekukan Properti / Banned* (`ShieldAlert`): hanya mengubah status menjadi `'suspended'`.
+     - *Hapus Properti Permanen* (`Trash2`): menghapus total rekaman properti dari database.
+   - Belum tersedia tombol atau alur **"Nonaktifkan KostManager & Kembalikan ke Mitra Biasa"** yang bertugas melepas kelolaan tanpa menghapus properti dari sistem.
+2. **Penimpaan Data Saat Onboarding Surveyor**:
+   - Saat agen surveyor menyelesaikan pendataan lapangan, properti di tabel `properties` diperbarui dengan unit kamar individual (kamar 1-10) dan foto-foto survei lapangan (`properties/kostmanager/drafts/...`).
+   - Jika layanan KostManager dihentikan, sistem belum memiliki alur otomatis untuk me-restore kolom `image_urls`, `room_types`, `facilities`, dan `metadata` kembali ke data mandiri asli yang diunggah mitra.
+3. **Data Properti Aktif ("Kost Apalah Daya")**:
+   - Properti `bb6b0ccc-6d9e-494a-b972-aa7dd9cbd81f` dibuat sebagai self-listing pada 2 September 2026 dan memiliki 33 berkas foto asli mandiri di Supabase Storage (`properties/drafts/a29dd46f-7754-4da4-904e-6b90176bc15d/`).
+   - Karena disurvei sebelum mekanisme backup `self_listing_*` diterapkan, properti ini perlu di-backfill cadangannya di kolom `metadata` agar kapan saja dinonaktifkan, seluruh foto mandiri mitra langsung pulih 100%.
 
 ---
 
 ## 2. Dampak Perubahan (File yang Tersentuh)
 
-Perubahan dilakukan secara terukur, komprehensif, dan bertahap:
+1. **`functions/public/adminService.ts`**:
+   - Membuat fungsi `deactivateKostManagerAndRestoreSelfListing(propertyId: string)` yang menangani:
+     - Restorasi `image_urls`, `room_types`, `facilities`, `rules`, dan `description` ke data mandiri mitra.
+     - Penyetelan `is_managed = false` dan `status = 'published'` pada tabel `properties`.
+     - Penonaktifan record di tabel `mitra_kostmanager` (`status = 'inactive'` atau penghapusan record kelolaan).
+     - Pengubahan status tiket di `kostmanager_requests` menjadi `'TERMINATED'` / `'INACTIVE'`.
+     - Pengembalian `subscription_status` mitra ke `'reguler'` jika tidak ada properti terkelola lain.
+     - Pembersihan cache properti publik via `invalidatePropertiesCache()`.
+   - Memperbarui fungsi `deleteKostManagerRequest(id: string)` agar terintegrasi dengan pemulihan ini jika tiket yang dihapus berstatus aktif.
 
-1. **`functions/public/components/admin/KostManagerManagement.tsx`**:
-   - Mengubah `status: 'active'` menjadi `status: 'published'` pada fungsi `handleApproveAndActivate`.
-   - Menambahkan pemanggilan `invalidatePropertiesCache()` agar cache data katalog publik langsung diperbarui saat admin melakukan ACC.
+2. **`functions/public/components/admin/KostManagerPortal.tsx`**:
+   - Menambahkan tombol aksi operasional baru: **"Kembalikan ke Mitra Biasa (Self-Listing)"** (ikon `RotateCcw` / `Building2` berwarna oranye/amber) pada setiap baris properti terkelola.
+   - Menambahkan modal dialog konfirmasi konseptual:
+     - Menjelaskan bahwa properti akan keluar dari portofolio KostManager.
+     - Menampilkan pratinjau bahwa foto surveyor akan digantikan kembali oleh foto mandiri mitra.
+     - Menampilkan tombol aksi konfirmasi: *"Kembalikan ke Mitra Biasa"*.
 
-2. **`functions/public/userService.ts`**:
-   - Memperkuat filter query `getPublishedProperties` dan `getFilteredProperties` dengan mekanisme fail-safe:
-     `.or('status.eq.published,and(status.eq.active,is_managed.eq.true)')`.
-   - Menjamin bahwa setiap properti kelolaan KostManager yang aktif akan selalu otomatis lolos dan tampil di katalog publik, bahkan jika di masa lalu ada data dengan nilai status `'active'`.
+3. **`functions/public/components/admin/KostManagerManagement.tsx`**:
+   - Menambahkan tombol *"Nonaktifkan Layanan & Kembalikan ke Self-Listing"* pada drawer/modal detail peninjauan kelolaan tiket KostManager.
 
-3. **`functions/public/pages/MitraDashboard.tsx`**:
-   - Menyelaraskan perhitungan `publishedCount`, `inReviewCount`, badge kartu properti, serta banner peringatan peninjauan agar mengenali properti KostManager (`p.status === 'published' || (p.isManaged && p.status === 'active')`).
-   - Hasilnya, pemilik kost langsung melihat status hijau `Tayang Publik` dan kotak "Tahap Peninjauan Admin" otomatis hilang saat properti telah disetujui.
-
-4. **`functions/public/components/KostCard.tsx`**:
-   - Menghitung jumlah kamar kosong riil (`vacantRoomsCount`) dari kamar-kamar yang berstatus kosong (`isAvailable: true`).
-   - Menambahkan badge dinamis di kartu listing (misal: badge hijau `2 Kamar Kosong` dengan animasi pulse halus, atau badge `Penuh` jika seluruh kamar terisi) untuk memaksimalkan daya tarik pemasaran.
-
-5. **Sinkronisasi Database Supabase**:
-   - Memperbarui status data baris `Kost Apalah Daya` (`bb6b0ccc-6d9e-494a-b972-aa7dd9cbd81f`) dari `status = 'active'` menjadi `status = 'published'` secara langsung di Supabase.
+4. **Sinkronisasi Database Supabase (Backfill Data "Kost Apalah Daya")**:
+   - Memastikan properti `bb6b0ccc-6d9e-494a-b972-aa7dd9cbd81f` memiliki cadangan `self_listing_images` (dari 33 foto asli di storage `properties/drafts/a29dd46f-7754-4da4-904e-6b90176bc15d/`), `self_listing_room_types` (Tipe Standard & Premium), dan fasilitas awal mitra.
 
 ---
 
-## 3. Langkah-Langkah Eksekusi (Fase 2 - Setelah di-ACC)
+## 3. Langkah-Langkah Eksekusi (Fase 2)
 
-1. **Langkah 1: Sinkronisasi Status Data di Database Supabase**:
-   - Menjalankan perintah update langsung pada database untuk mengubah `Kost Apalah Daya` menjadi `status: 'published'`.
+```mermaid
+flowchart TD
+    A[Admin Klik 'Kembalikan ke Mitra Biasa' di KostManagerPortal / KostManagerManagement] --> B[Tampilkan Modal Konfirmasi & Ringkasan Restorasi Data]
+    B --> C{Admin Konfirmasi?}
+    C -->|Batal| D[Tutup Modal, Properti Tetap Terkelola]
+    C -->|Ya| E[Panggil deactivateKostManagerAndRestoreSelfListing]
+    E --> F[Ambil Backup self_listing_* / Storage Drafts Mitra Asli]
+    F --> G[Update properties: is_managed=false, image_urls=foto_mitra, room_types=tipe_mitra]
+    G --> H[Update/Hapus record mitra_kostmanager & Update kostmanager_requests ke INACTIVE]
+    H --> I[Update subscription_status Mitra ke 'reguler' jika tidak ada properti terkelola lain]
+    I --> J[Invalidate Properties Cache]
+    J --> K[Selesai: Properti Kembali Menjadi Self-Listing Mitra Biasa]
+```
 
-2. **Langkah 2: Perbaikan Logika Persetujuan Admin (`KostManagerManagement.tsx`)**:
-   - Mengubah penetapan status pada saat Admin menekan "Setujui & Aktifkan" menjadi `status: 'published'`.
-   - Mengimpor dan memanggil `invalidatePropertiesCache()`.
+### Langkah 1: Backfill Data Mandiri Properti "Kost Apalah Daya"
+- Menyiapkan script backfill untuk mengisi `metadata.self_listing_images`, `metadata.self_listing_room_types`, dan `metadata.self_listing_facilities` pada properti `bb6b0ccc-6d9e-494a-b972-aa7dd9cbd81f` menggunakan foto mandiri asli yang ada di storage `drafts/a29dd46f-7754-4da4-904e-6b90176bc15d`.
 
-3. **Langkah 3: Penguatan Query Publik (`userService.ts`)**:
-   - Memperbarui query katalog agar mendukung `or('status.eq.published,and(status.eq.active,is_managed.eq.true)')`.
+### Langkah 2: Pembuatan Fungsi Restorasi di `adminService.ts`
+- Mengimplementasikan `deactivateKostManagerAndRestoreSelfListing(propertyId)`:
+  - Mengambil data properti dan mengekstrak `metadata.self_listing_*`.
+  - Jika backup kosong, menggunakan fallback pencarian berkas mandiri mitra di storage `drafts/${ownerUid}` dan memfilter keluar seluruh URL yang mengandung `kostmanager/drafts/`.
+  - Mengembalikan `is_managed = false` dan menyimpan data mandiri ke tabel `properties`.
+  - Menghapus/menonaktifkan entri terkait di `mitra_kostmanager` dan memperbarui `kostmanager_requests`.
+  - Memanggil `invalidatePropertiesCache()`.
 
-4. **Langkah 4: Penyelarasan Status di Dashboard Mitra (`MitraDashboard.tsx`)**:
-   - Memperbarui pengecekan status kartu, badge, dan counter properti tayang.
+### Langkah 3: Integrasi UI pada `KostManagerPortal.tsx`
+- Menambahkan tombol aksi operasional di tabel `activeTab === 'properties'`.
+- Menambahkan state modal konfirmasi `propToDeactivate` dan handler eksekusi yang aman dengan indikator loading.
+- Memperbarui state lokal agar properti yang dinonaktifkan langsung keluar dari tabel Properti Terkelola.
 
-5. **Langkah 5: Pemasaran Visual Kamar Kosong di Kartu Listing (`KostCard.tsx`)**:
-   - Menambahkan perhitungan kamar kosong dan menampilkan badge ketersediaan kamar pada setiap kartu properti.
+### Langkah 4: Integrasi UI pada `KostManagerManagement.tsx`
+- Menambahkan tombol de-aktivasi pada modal drawer review permintaan tiket aktif.
+- Menyesuaikan handler penghapusan tiket agar menawarkan opsi pemulihan listing ke mitra biasa.
 
-6. **Langkah 6: Pengujian Build & Kompilasi**:
-   - Menjalankan `npm.cmd run build` di `functions/public` untuk memastikan 0 error kompilasi TypeScript.
-
-7. **Langkah 7: Dokumentasi & Git Push**:
-   - Mencatat progres di `functions/PROGRESS.md` (Entri 405).
-   - Menyusun laporan di `WALKTHROUGH.md`.
-   - Commit dan push ke branch `bukan-productions`.
+### Langkah 5: Uji Kompilasi & Verifikasi
+- Menjalankan `npm.cmd run build` di `functions/public` untuk memastikan 0 error kompilasi.
+- Menguji fungsi de-aktivasi dan memastikan tampilan di Dashboard Mitra dan Katalog Publik kembali normal sebagai listing reguler.
 
 ---
 
 ## 4. Rencana Verifikasi
 
-1. **Verifikasi Database**:
-   - Memastikan properti `bb6b0ccc-6d9e-494a-b972-aa7dd9cbd81f` di tabel `properties` telah berstatus `'published'`.
-2. **Verifikasi Dashboard Mitra (`/dashboard-mitra/properties`)**:
-   - Header menampilkan: `1 Properti Tayang • 0 Menunggu Review`.
-   - Kartu `Kost Apalah Daya` menampilkan badge hijau `TAYANG PUBLIK` (bukan *Sedang Ditinjau*).
-   - Banner *Tahap Peninjauan Admin (Estimasi 1x24 Jam)* tidak lagi muncul.
-   - Box ketersediaan unit menampilkan `2 dari 10 Kamar Kosong`.
-3. **Verifikasi Katalog Publik User (`/listings` & Home)**:
-   - `Kost Apalah Daya` muncul di hasil pencarian publik (total bertambah dari 9 unit menjadi 10 unit).
-   - Menampilkan badge `TERVERIFIKASI`, `2 TIPE`, badge ketersediaan `2 Kamar Kosong`, serta rentang harga `Rp 800.000 - Rp 1.300.000 /bln`.
-4. **Verifikasi Detail Kost (`/kost/kost-apalah-daya`)**:
-   - Seksian fasilitas menampilkan 2 tipe kamar kosong yang siap huni (Tipe Standard dan Tipe Premium) dengan ketersediaan masing-masing 1 kamar kosong.
-   - Form booking dan tombol chat siap menerima transaksi sewa kamar kosong dari calon penyewa.
+1. **Uji Kompilasi**:
+   - Menjalankan `npm.cmd run build` di direktori `functions/public`.
+   - Memastikan tidak ada error TypeScript maupun bundling Vite.
+2. **Verifikasi Tampilan & Data Setelah De-aktivasi**:
+   - **Di Portal KostManager (`/dashboard-admin/km_properties`)**: Properti tidak lagi muncul dalam daftar Properti Terkelola.
+   - **Di Dashboard Mitra (`/dashboard-mitra/properties`)**:
+     - Badge oranye "KostManager Auto-Pilot" hilang.
+     - Properti tampil sebagai listing mandiri biasa dengan kontrol ketersediaan kamar reguler.
+     - Foto yang tampil adalah foto mandiri yang diunggah oleh mitra, bukan foto agen surveyor.
+   - **Di Katalog Publik (`/listings` dan Beranda)**:
+     - Badge biru "TERVERIFIKASI" (khusus KostManager) hilang.
+     - Tipe kamar dan harga kembali ke format self-listing mitra biasa.
+3. **Dokumentasi & Git**:
+   - Mencatat progres ke `functions/PROGRESS.md`.
+   - Membuat `WALKTHROUGH.md`.
+   - Melakukan commit dan push ke branch `bukan-productions`.

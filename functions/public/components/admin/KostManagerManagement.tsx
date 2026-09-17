@@ -24,7 +24,8 @@ import {
     deleteKostManagerRequest, 
     getSurveyAgents,
     generateManualDriveFolder,
-    triggerKostManagerAgentAssignmentEmail
+    triggerKostManagerAgentAssignmentEmail,
+    deactivateKostManagerAndRestoreSelfListing
 } from '../../adminService';
 import { invalidatePropertiesCache } from '../../userService';
 import { notifySurveyRevisionRequested } from '../../notificationService';
@@ -73,6 +74,7 @@ import {
     Eye,
     Folder,
     UserCheck,
+    RotateCcw,
     Compass,
     ExternalLink,
     MessageSquare
@@ -956,7 +958,7 @@ const KostManagerManagement: React.FC<KostManagerManagementProps> = ({
     };
 
     const handleDelete = async (id: string, name: string) => {
-        if (!window.confirm(`Apakah Anda yakin ingin menghapus permintaan KostManager untuk "${name}"?`)) return;
+        if (!window.confirm(`Apakah Anda yakin ingin menghapus permintaan KostManager untuk "${name}"?\n\nJika properti sudah aktif terkelola, properti akan secara otomatis dikembalikan statusnya menjadi Mitra Biasa (Self-Listing) dan seluruh data serta foto mandiri asli mitra akan dipulihkan.`)) return;
         setIsSubmitting(true);
         try {
             await deleteKostManagerRequest(id);
@@ -3592,8 +3594,36 @@ const KostManagerManagement: React.FC<KostManagerManagementProps> = ({
                                     </button>
                                 </div>
                             ) : (
-                                <div className="px-4 py-2 bg-green-100 border border-green-200 text-green-900 rounded-xl text-xs font-black uppercase tracking-wider flex items-center gap-1.5">
-                                    <Check size={14}/> Layanan Sedang Aktif di Platform
+                                <div className="flex flex-wrap items-center gap-2">
+                                    <div className="px-4 py-2 bg-green-100 border border-green-200 text-green-900 rounded-xl text-xs font-black uppercase tracking-wider flex items-center gap-1.5">
+                                        <Check size={14}/> Layanan Sedang Aktif di Platform
+                                    </div>
+                                    <button
+                                        type="button"
+                                        disabled={isSubmitting}
+                                        onClick={async () => {
+                                            if (!window.confirm(`Apakah Anda yakin ingin menonaktifkan layanan KostManager untuk "${reviewRequest.kost_name}" dan mengembalikannya ke Mitra Biasa (Self-Listing)?\n\nSeluruh foto dan informasi mandiri asli mitra akan dipulihkan secara otomatis.`)) return;
+                                            setIsSubmitting(true);
+                                            try {
+                                                const propId = reviewProperty?.id || reviewRequest.property_id;
+                                                if (!propId) throw new Error('ID Properti tidak ditemukan');
+                                                const res = await deactivateKostManagerAndRestoreSelfListing(propId);
+                                                alert(`✅ ${res.message}`);
+                                                setReviewModalOpen(false);
+                                                await loadData();
+                                                refreshData();
+                                            } catch (err: any) {
+                                                console.error('Error deactivating:', err);
+                                                alert('Gagal menonaktifkan layanan: ' + (err.message || 'Terjadi kesalahan sistem'));
+                                            } finally {
+                                                setIsSubmitting(false);
+                                            }
+                                        }}
+                                        className="px-4 py-2 bg-orange-50 hover:bg-orange-100 text-orange-700 border border-orange-200 rounded-xl text-xs font-black uppercase tracking-wider flex items-center gap-1.5 cursor-pointer transition-all shadow-2xs"
+                                        title="Nonaktifkan KostManager dan Pulihkan ke Mitra Biasa"
+                                    >
+                                        <RotateCcw size={13} /> Kembalikan ke Mitra Biasa
+                                    </button>
                                 </div>
                             )}
                         </div>

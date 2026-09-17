@@ -2,6 +2,46 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 406. Fitur De-aktivasi Properti KostManager & Pemulihan Bersih ke Mitra Biasa (Self-Listing) dengan Restorasi Foto & Data Mandiri Asli Mitra (`adminService.ts`, `KostManagerPortal.tsx`, `KostManagerManagement.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna meminta agar properti terkelola KostManager yang sebelumnya berasal dari listing kost biasa (self-listing), jika dinonaktifkan dari portofolio kelolaan KostManager, dapat kembali menjadi mitra biasa atau self-listing.
+  2. Seluruh tampilan dan datanya harus kembali ke tampilan saat masih menjadi mitra biasa: foto-foto kembali ke foto mandiri yang diunggah oleh mitra (bukan foto hasil survei agen), tipe kamar dan fasilitas kembali ke data mandiri asli mitra, dan kontrol ketersediaan kamar dikembalikan ke dashboard mitra.
+- **Akar Masalah**:
+  1. **Ketiadaan Tombol/Alur Deaktivasi di Portal KostManager (`KostManagerPortal.tsx`)**:
+     - Sebelumnya, opsi yang ada pada tabel Properti Terkelola hanya "Bekukan (Ban)" atau "Hapus Permanen". Jika dihapus, seluruh record properti musnah dari database. Belum ada aksi untuk mengembalikan status properti ke mitra biasa tanpa menghapusnya.
+  2. **Penimpaan Foto & Kamar saat Survei Lapangan**:
+     - Onboarding KostManager memperbarui tabel `properties` dengan unit kamar individual dan foto-foto survei lapangan (`properties/kostmanager/drafts/...`). Belum ada service terpusat yang me-restore `image_urls`, `room_types`, `facilities`, `rules`, dan `metadata` kembali ke foto dan data mandiri mitra.
+  3. **Data Legacy Tanpa Backup Otomatis**:
+     - Properti seperti "Kost Apalah Daya" yang telah disurvei sebelum mekanisme backup `self_listing_*` otomatis diterapkan belum memiliki snapshot cadangan data mandiri di kolom `metadata`.
+- **Implementasi Solusi**:
+  1. **Pembuatan Service Terpusat `deactivateKostManagerAndRestoreSelfListing` (`adminService.ts`)**:
+     - Mengambil snapshot `self_listing_images`, `self_listing_room_types`, `self_listing_facilities`, `self_listing_rules`, `self_listing_description`, dan metadata foto mandiri.
+     - Menyediakan fallback cerdas: jika metadata cadangan kosong, sistem membaca file mandiri mitra dari folder storage `drafts/${owner_uid}` dan menyaring keluar seluruh URL foto surveyor (`/kostmanager/drafts/` & `/survey/`).
+     - Memperbarui tabel `properties`: menyetel `is_managed: false`, `status: 'published'`, memulihkan foto mandiri, tipe kamar mitra, fasilitas, dan deskripsi mandiri.
+     - Menghapus record dari tabel dedicated `mitra_kostmanager` agar properti langsung keluar dari tabel Properti Terkelola.
+     - Memperbarui tiket `kostmanager_requests` terkait menjadi `INACTIVE`.
+     - Mengembalikan `subscription_status` mitra ke `'reguler'` jika mitra tidak memiliki properti terkelola lain.
+     - Memanggil `invalidatePropertiesCache()` agar perubahan langsung terdistribusi ke seluruh browser klien.
+  2. **Penyelarasan Handler Hapus Tiket `deleteKostManagerRequest` (`adminService.ts`)**:
+     - Jika tiket KostManager yang dihapus terhubung dengan properti yang aktif terkelola, sistem secara otomatis mengeksekusi pemulihan data mandiri mitra terlebih dahulu.
+  3. **Penambahan Aksi & Modal Konfirmasi di Portal KostManager (`KostManagerPortal.tsx`)**:
+     - Menambahkan tombol aksi operasional baru: *"Nonaktifkan KostManager & Kembalikan ke Mitra Biasa"* (`RotateCcw`) berwarna amber/oranye pada tabel properti terkelola.
+     - Menambahkan modal dialog konfirmasi elegan yang menerangkan bahwa properti akan keluar dari auto-pilot dan foto-foto surveyor akan digantikan kembali oleh foto mandiri asli milik mitra.
+  4. **Integrasi pada Manajemen Permintaan KostManager (`KostManagerManagement.tsx`)**:
+     - Menambahkan tombol *"Kembalikan ke Mitra Biasa"* pada drawer peninjauan permintaan onboarding aktif.
+     - Memperbarui dialog konfirmasi hapus tiket agar menginformasikan pemulihan data mandiri mitra.
+  5. **Backfill Data Asli Mandiri "Kost Apalah Daya"**:
+     - Melakukan sinkronisasi 33 berkas foto asli mandiri mitra dari storage `drafts/a29dd46f-7754-4da4-904e-6b90176bc15d/` beserta tipe kamar (Standard & Premium) ke dalam `metadata.self_listing_*` properti Kost Apalah Daya (`bb6b0ccc-6d9e-494a-b972-aa7dd9cbd81f`), sehingga siap dipulihkan kapan pun jika dinonaktifkan.
+- **File Tersentuh**:
+  - `functions/public/adminService.ts`
+  - `functions/public/components/admin/KostManagerPortal.tsx`
+  - `functions/public/components/admin/KostManagerManagement.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi produksi `npm.cmd run build` di `functions/public` lulus 100% (2512 modul tertransformasi, `✓ built in 29.93s`, 0 error).
+  - Database Supabase terverifikasi: `metadata.self_listing_*` pada properti "Kost Apalah Daya" berhasil terisi lengkap dengan 33 foto asli mandiri mitra.
+
 ### 405. Penyelarasan Alur & Siklus KostManager: Dari Pendataan Surveyor, Approval Admin, Dashboard Mitra, hingga Listing Publik & Pemasaran Kamar Kosong (`KostManagerManagement.tsx`, `userService.ts`, `MitraDashboard.tsx`, `KostCard.tsx`) (September 2026)
 - **Permintaan & Masalah**:
   1. Pengguna melaporkan bahwa kost pendaftar KostManager ("Kost Apalah Daya", ID `bb6b0ccc-6d9e-494a-b972-aa7dd9cbd81f`) yang sudah didata lengkap oleh agen surveyor (10 kamar: 8 terisi, 2 kosong/tersedia), sudah di-ACC oleh admin, dan sudah aktif di Portal KostManager, masih mengalami inkonsistensi status pada sistem:

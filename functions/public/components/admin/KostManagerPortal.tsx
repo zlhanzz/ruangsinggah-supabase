@@ -79,6 +79,7 @@ import {
     ClipboardList,
     UserCheck,
     UserX,
+    RotateCcw,
     Wrench,
     Percent,
     Calculator,
@@ -105,7 +106,8 @@ import {
     freezeProperty,
     unfreezeProperty,
     deleteProperty,
-    updatePropertyStatus
+    updatePropertyStatus,
+    deactivateKostManagerAndRestoreSelfListing
 } from '../../adminService';
 import { 
     getKostManagerChatSessions, 
@@ -1313,6 +1315,9 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
     const [propToDelete, setPropToDelete] = useState<ManagedProperty | null>(null);
     const [confirmDeleteInput, setConfirmDeleteInput] = useState<string>('');
     const [isSubmittingDelete, setIsSubmittingDelete] = useState<boolean>(false);
+
+    const [propToDeactivate, setPropToDeactivate] = useState<ManagedProperty | null>(null);
+    const [isSubmittingDeactivate, setIsSubmittingDeactivate] = useState<boolean>(false);
 
     // --- CHAT STATE ---
     const [chatSessions, setChatSessions] = useState<ChatSession[]>([]);
@@ -2613,6 +2618,23 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
             alert('Gagal memulihkan properti: ' + err.message);
         } finally {
             setIsSubmittingUnban(false);
+        }
+    };
+
+    const handleConfirmDeactivate = async () => {
+        if (!propToDeactivate) return;
+        setIsSubmittingDeactivate(true);
+        try {
+            const res = await deactivateKostManagerAndRestoreSelfListing(propToDeactivate.id);
+            setProperties(prev => prev.filter(p => p.id !== propToDeactivate.id));
+            setPropToDeactivate(null);
+            alert(`✅ ${res.message}`);
+            loadAllData(false);
+        } catch (err: any) {
+            console.error('Error deactivating KostManager property:', err);
+            alert('Gagal menonaktifkan status KostManager: ' + (err.message || 'Terjadi kesalahan sistem'));
+        } finally {
+            setIsSubmittingDeactivate(false);
         }
     };
 
@@ -4206,7 +4228,17 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
                                                                             </button>
                                                                         )}
 
-                                                                        {/* Tombol 8: Hapus Properti Permanen */}
+                                                                        {/* Tombol 8: Nonaktifkan KostManager & Kembalikan ke Mitra Biasa */}
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() => setPropToDeactivate(p)}
+                                                                            className="p-2 rounded-xl bg-orange-50 hover:bg-orange-100 text-orange-600 border border-orange-200/80 transition-all cursor-pointer shadow-2xs"
+                                                                            title="Nonaktifkan KostManager & Kembalikan ke Mitra Biasa (Self-Listing)"
+                                                                        >
+                                                                            <RotateCcw size={13} />
+                                                                        </button>
+
+                                                                        {/* Tombol 9: Hapus Properti Permanen */}
                                                                         <button
                                                                             type="button"
                                                                             onClick={() => {
@@ -4850,6 +4882,96 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
                                                         <>
                                                             <CheckCircle2 size={14} />
                                                             <span>Konfirmasi Pulihkan</span>
+                                                        </>
+                                                    )}
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* ========================================================= */}
+                                {/* MODAL: NONAKTIFKAN KOSTMANAGER & KEMBALIKAN KE MITRA BIASA */}
+                                {/* ========================================================= */}
+                                {propToDeactivate && (
+                                    <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-[110] flex items-center justify-center p-4 animate-in fade-in">
+                                        <div className="bg-white rounded-[2rem] shadow-2xl max-w-lg w-full overflow-hidden flex flex-col border border-slate-100 animate-in zoom-in-95" onClick={e => e.stopPropagation()}>
+                                            {/* Header */}
+                                            <div className="p-6 border-b border-orange-100 flex justify-between items-center bg-orange-50/70 shrink-0">
+                                                <div className="flex items-center gap-3">
+                                                    <div className="w-10 h-10 rounded-2xl bg-orange-100 text-orange-600 flex items-center justify-center">
+                                                        <RotateCcw size={20} />
+                                                    </div>
+                                                    <div>
+                                                        <h3 className="text-base font-black text-slate-900 uppercase tracking-tight">Kembalikan ke Mitra Biasa</h3>
+                                                        <p className="text-[10px] text-orange-600 font-bold">Nonaktifkan KostManager & Pulihkan Data Mandiri</p>
+                                                    </div>
+                                                </div>
+                                                <button
+                                                    onClick={() => setPropToDeactivate(null)}
+                                                    disabled={isSubmittingDeactivate}
+                                                    className="p-2 hover:bg-slate-200/70 rounded-full text-slate-400 transition-colors cursor-pointer"
+                                                >
+                                                    <X size={16} />
+                                                </button>
+                                            </div>
+
+                                            {/* Body */}
+                                            <div className="p-6 space-y-4">
+                                                <div className="p-3 bg-amber-50 rounded-xl border border-amber-200/70 flex items-start gap-2.5">
+                                                    <AlertCircle size={18} className="text-amber-600 shrink-0 mt-0.5" />
+                                                    <div className="text-[11px] text-amber-900 space-y-1">
+                                                        <p className="font-bold">Penjelasan Pengembalian Status:</p>
+                                                        <p>
+                                                            Properti ini akan dikeluarkan dari portofolio <strong>KostManager Auto-Pilot</strong> dan dikembalikan menjadi listing mitra biasa (Self-Listing).
+                                                        </p>
+                                                    </div>
+                                                </div>
+
+                                                <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-100">
+                                                    <p className="text-xs font-black text-slate-900">{propToDeactivate.title}</p>
+                                                    <p className="text-[10px] text-slate-500">{propToDeactivate.address || 'Alamat properti'}</p>
+                                                    <p className="text-[10px] text-slate-400 font-mono mt-0.5">ID: {propToDeactivate.id}</p>
+                                                </div>
+
+                                                <div className="p-3.5 bg-emerald-50/60 rounded-2xl border border-emerald-200/60 text-emerald-950 text-xs space-y-2">
+                                                    <p className="font-black flex items-center gap-1.5 text-emerald-800 uppercase tracking-wider text-[10px]">
+                                                        <Check size={14} className="text-emerald-600" /> Data yang akan dipulihkan secara otomatis:
+                                                    </p>
+                                                    <ul className="list-disc list-inside text-[11px] space-y-1 text-emerald-900/90 font-medium pl-1">
+                                                        <li>Foto-foto mandiri asli yang diunggah mitra (bukan foto agen surveyor)</li>
+                                                        <li>Format tipe kamar dan kuota kamar mandiri mitra</li>
+                                                        <li>Status listing tetap <strong>Tayang Publik</strong> sebagai kost reguler</li>
+                                                        <li>Kontrol ketersediaan kamar kembali ke mitra pemilik di Dashboard Mitra</li>
+                                                    </ul>
+                                                </div>
+                                            </div>
+
+                                            {/* Footer */}
+                                            <div className="p-4 border-t border-slate-100 bg-slate-50/70 flex justify-end gap-2 shrink-0">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setPropToDeactivate(null)}
+                                                    disabled={isSubmittingDeactivate}
+                                                    className="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-200/70 transition-all cursor-pointer"
+                                                >
+                                                    Batal
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={handleConfirmDeactivate}
+                                                    disabled={isSubmittingDeactivate}
+                                                    className="px-5 py-2 rounded-xl bg-orange-500 hover:bg-orange-600 text-white text-xs font-black uppercase tracking-wider transition-all cursor-pointer shadow-md flex items-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed"
+                                                >
+                                                    {isSubmittingDeactivate ? (
+                                                        <>
+                                                            <RotateCw size={12} className="animate-spin" />
+                                                            <span>Memulihkan data...</span>
+                                                        </>
+                                                    ) : (
+                                                        <>
+                                                            <RotateCcw size={12} />
+                                                            <span>Konfirmasi Kembalikan ke Mitra Biasa</span>
                                                         </>
                                                     )}
                                                 </button>
