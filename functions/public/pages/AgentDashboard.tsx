@@ -4027,6 +4027,19 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                 || (existingProp && !existingProp.is_managed ? (existingProp.metadata?.photo_categories || existingProp.photo_categories) : null)
                 || [];
 
+            const allLandmarkCandidates = Array.isArray(kmListingForm.campuses) ? kmListingForm.campuses : [];
+            const cleanTrueCampuses = allLandmarkCandidates.filter((item: any) => {
+                const cat = (item.category || '').toLowerCase();
+                const name = (item.name || '').toLowerCase();
+                return cat === 'campus' || ((name.includes('universitas') || name.includes('institut') || name.includes('politeknik')) && !name.includes('rsup') && !name.includes('mall'));
+            });
+            const cleanTruePublic = allLandmarkCandidates.filter((item: any) => {
+                const name = (item.name || '').toLowerCase();
+                const isCampus = cleanTrueCampuses.some((c: any) => c.name.toLowerCase() === name);
+                const isInternal = ['parkir motor', 'kompor', 'wastafel cuci piring'].includes(name) && !item.lat;
+                return !isCampus && !isInternal;
+            });
+
             const propertyPayload = {
                 title: kmListingForm.title,
                 description: kmListingForm.description,
@@ -4040,11 +4053,17 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                 room_types: normalizedRoomTypesPayload,
                 status: 'published',
                 is_managed: true,
-                facilities: kmListingForm.facilities,
+                facilities: Array.from(new Set([
+                    ...(kmListingForm.facilities || []),
+                    ...(kmListingForm.publicParkingFacilities || []),
+                    ...(kmListingForm.publicKitchenFacilities || []),
+                    ...(kmListingForm.publicBathroomFacilities || [])
+                ])),
                 location: kmListingForm.location,
                 rules: kmListingForm.rules,
                 image_urls: roomPhotosList.length > 0 ? [...roomPhotosList, ...publicPhotosList] : publicPhotosList,
-                campuses: kmListingForm.campuses,
+                campuses: cleanTrueCampuses,
+                public_facilities: cleanTruePublic,
                 metadata: {
                     ...(existingProp?.metadata || {}),
                     province: kmListingForm.province || '',

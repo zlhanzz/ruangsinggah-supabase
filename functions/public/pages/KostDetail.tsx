@@ -85,7 +85,11 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
   const kostPrice = kost.price ? FORMAT_CURRENCY(kost.price) : '';
   const kostGender = (kost as any).gender === 'putra' ? 'Putra' : (kost as any).gender === 'putri' ? 'Putri' : (kost as any).gender === 'campur' ? 'Campur' : '';
   const genderLabel = kostGender ? ` Kost ${kostGender}` : ' Kost';
-  const campusNearby = kost.campuses?.[0]?.name || '';
+  const campusNearby = (kost.campuses || []).find((c: any) => {
+    const cat = (c?.category || '').toLowerCase();
+    const n = (c?.name || '').toLowerCase();
+    return cat === 'campus' || n.includes('universitas') || n.includes('institut') || n.includes('politeknik') || n.includes('unhas') || n.includes('uim') || n.includes('pnup');
+  })?.name || kost.campuses?.[0]?.name || '';
   const campusLabel = campusNearby ? ` Dekat ${campusNearby}` : '';
 
   const seoTitle = `${kostName}${campusLabel} - ${kostArea} | RuangSinggah.id`;
@@ -1064,51 +1068,147 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
   // Check if location data is valid (non-zero coordinates)
   const hasValidLocation = kost.location && (kost.location.lat !== 0 || kost.location.lng !== 0);
 
-  // Pisahkan dan hilangkan duplikasi fasilitas publik dan kampus terdekat (Universal Safe Normalizer)
-  const publicFacilitiesList = useMemo(() => {
-    const raw = kost.publicFacilities || [];
-    return raw
-      .map((item: any) => {
-        if (!item) return null;
-        if (typeof item === 'string' && item.trim().length > 0) {
-          return { name: item.trim(), distance: '-', walkDuration: '', motoDuration: '', carDuration: '' };
+  // --- UNIVERSAL SMART SEGREGATOR: PISAHKAN TEGAS KAMPUS vs FASILITAS PUBLIK EKSTERNAL ---
+  const { segregatedCampuses, segregatedPublicFacilities } = useMemo(() => {
+    // 1. Kumpulkan semua entitas kandidat dari kost.campuses dan kost.publicFacilities
+    const rawCampuses = Array.isArray(kost.campuses) ? kost.campuses : [];
+    const rawPublicFacilities = Array.isArray(kost.publicFacilities) ? kost.publicFacilities : [];
+    
+    // Gabungkan seluruh item kandidat
+    const allCandidates: any[] = [];
+    
+    const pushItem = (item: any) => {
+      if (!item) return;
+      if (typeof item === 'string') {
+        const trimmed = item.trim();
+        if (trimmed.length > 0) {
+          allCandidates.push({ name: trimmed, distance: '-', walkDuration: '', motoDuration: '', carDuration: '' });
         }
-        if (typeof item === 'object' && item.name && typeof item.name === 'string' && item.name.trim().length > 0) {
-          return {
-            ...item,
-            name: item.name.trim()
-          };
+      } else if (typeof item === 'object' && item.name) {
+        const trimmed = String(item.name).trim();
+        if (trimmed.length > 0) {
+          allCandidates.push({ ...item, name: trimmed });
         }
-        return null;
-      })
-      .filter((item): item is NonNullable<typeof item> => Boolean(item && item.name));
-  }, [kost.publicFacilities]);
+      }
+    };
 
-  const campusList = useMemo(() => {
-    const raw = kost.campuses || [];
-    const normalized = raw
-      .map((item: any) => {
-        if (!item) return null;
-        if (typeof item === 'string' && item.trim().length > 0) {
-          return { name: item.trim(), distance: '-', walkDuration: '', motoDuration: '', carDuration: '' };
-        }
-        if (typeof item === 'object' && item.name && typeof item.name === 'string' && item.name.trim().length > 0) {
-          return {
-            ...item,
-            name: item.name.trim()
-          };
-        }
-        return null;
-      })
-      .filter((item): item is NonNullable<typeof item> => Boolean(item && item.name));
+    rawCampuses.forEach(pushItem);
+    rawPublicFacilities.forEach(pushItem);
 
-    if (publicFacilitiesList.length === 0) return normalized;
-    const publicNames = new Set(
-      publicFacilitiesList.map(p => (p.name || '').toLowerCase().trim())
-    );
-    return normalized.filter(c => !publicNames.has((c.name || '').toLowerCase().trim()));
-  }, [kost.campuses, publicFacilitiesList]);
+    // 2. Daftar kata kunci fasilitas internal gedung kost (bukan landmark luar lingkungan)
+    const INTERNAL_AMENITY_PATTERNS = [
+      'parkir motor', 'parkir mobil', 'parkir sepeda', 'garasi motor', 'garasi mobil', 'area parkir', 'parkir',
+      'kompor', 'dapur bersama', 'dapur umum', 'dapur', 'wastafel cuci piring', 'wastafel', 'kulkas bersama', 'kulkas',
+      'dispenser air', 'dispenser', 'peralatan masak', 'meja makan bersama', 'meja makan', 'kitchen set', 'rice cooker',
+      'microwave', 'tabung gas', 'peralatan makan',
+      'wc umum', 'toilet umum', 'kamar mandi luar', 'wc luar', 'kloset duduk', 'kloset jongkok', 'shower', 'bak mandi', 'gayung',
+      'ruang tamu', 'ruang bersama', 'ruang santai', 'sofa', 'tv bersama', 'meja tamu', 'kursi santai',
+      'wifi', 'cctv', 'cctv 24 jam', 'akses 24 jam', 'ruang jemur', 'jemuran', 'mesin cuci', 'listrik umum',
+      'ac', 'kasur', 'lemari', 'meja belajar', 'kursi belajar', 'ventilasi', 'jendela'
+    ];
 
+    const isInternalKostFacility = (item: any): boolean => {
+      const name = (item.name || '').toLowerCase().trim();
+      if (!name) return true;
+      // Jika memiliki kategori eksternal resmi (misal: 'laundry', 'gas_station', 'minimarket', 'mall', 'hospital'), bukan fasilitas kost
+      const cat = (item.category || '').toLowerCase().trim();
+      const validExternalCats = [
+        'minimarket', 'supermarket', 'mall', 'hospital', 'gas_station', 'spbu',
+        'mosque', 'church', 'laundry', 'transport', 'industrial', 'atm', 'bank',
+        'pharmacy', 'restaurant', 'cafe', 'culinary', 'campus', 'university', 'school'
+      ];
+      if (cat && validExternalCats.includes(cat)) {
+        return false;
+      }
+      // Jika memiliki koordinat valid dan live Google API serta namanya bukan persis perabot kost
+      if (item.lat && item.lng && item.isLiveGoogleApi && !['parkir motor', 'kompor', 'wastafel cuci piring'].includes(name)) {
+        return false;
+      }
+      // Cocokkan dengan daftar fasilitas internal kost
+      return INTERNAL_AMENITY_PATTERNS.some(p => name === p || name.startsWith(p + ' ') || name.endsWith(' ' + p));
+    };
+
+    // 3. Helper deteksi Kampus Murni (Perguruan Tinggi)
+    const isCampus = (item: any): boolean => {
+      if (isInternalKostFacility(item)) return false;
+      const cat = (item.category || '').toLowerCase().trim();
+      if (cat === 'campus' || cat === 'kampus' || cat === 'universitas' || cat === 'university' || cat === 'college') {
+        return true;
+      }
+      const name = (item.name || '').toLowerCase().trim();
+      // Blacklist non-kampus (rumah sakit, mall, minimarket, tempat ibadah, SPBU, laundry, dll.)
+      const nonCampusKeywords = [
+        'rsup', 'rumah sakit', 'rs ', 'klinik', 'puskesmas',
+        'mall', 'square', 'plaza', 'town square',
+        'indomaret', 'alfamart', 'alfamidi', 'mart', 'supermarket',
+        'spbu', 'pertamina', 'shell',
+        'masjid', 'musholla', 'gereja', 'pura', 'vihara',
+        'laundry', 'express',
+        'terminal', 'stasiun', 'pelabuhan', 'bandara',
+        'kima', 'kawasan industri', 'industri', 'pabrik'
+      ];
+      if (nonCampusKeywords.some(nc => name.includes(nc))) {
+        return false;
+      }
+      const campusKeywords = [
+        'universitas', 'univ', 'institut', 'politeknik', 'akademi',
+        'stie', 'stikes', 'stmik', 'sekolah tinggi', 'fakultas',
+        'unhas', 'uim', 'pnup', 'unm', 'umi', 'uin', 'atmajaya', 'bosowa'
+      ];
+      return campusKeywords.some(ck => name.includes(ck));
+    };
+
+    // 4. Pisahkan ke 2 kategori terpisah tanpa tumpang tindih
+    const seenCampusNames = new Set<string>();
+    const campusResult: any[] = [];
+
+    const seenPublicNames = new Set<string>();
+    const publicResult: any[] = [];
+
+    allCandidates.forEach(item => {
+      // Buang fasilitas internal kost dari seksi landmark eksternal
+      if (isInternalKostFacility(item)) return;
+
+      const normName = (item.name || '').toLowerCase().trim();
+
+      if (isCampus(item)) {
+        if (!seenCampusNames.has(normName)) {
+          seenCampusNames.add(normName);
+          campusResult.push(item);
+        }
+      } else {
+        // Fasilitas Publik Eksternal (Landmark sekitar lingkungan kost)
+        // Hanya masukkan jika memiliki koordinat nyata atau jarak nyata yang bukan '-'
+        const hasDistance = item.distance && item.distance !== '-';
+        const hasCoords = item.lat && item.lng;
+        if ((hasDistance || hasCoords) && !seenPublicNames.has(normName)) {
+          seenPublicNames.add(normName);
+          publicResult.push(item);
+        }
+      }
+    });
+
+    // Urutkan berdasarkan jarak (km) terdekat jika memungkinkan
+    const sortByDistance = (a: any, b: any) => {
+      const getKm = (str?: string) => {
+        if (!str) return 999;
+        const match = str.match(/[\d.]+/);
+        return match ? parseFloat(match[0]) : 999;
+      };
+      return getKm(a.distance) - getKm(b.distance);
+    };
+
+    campusResult.sort(sortByDistance);
+    publicResult.sort(sortByDistance);
+
+    return {
+      segregatedCampuses: campusResult,
+      segregatedPublicFacilities: publicResult
+    };
+  }, [kost.campuses, kost.publicFacilities]);
+
+  const campusList = segregatedCampuses;
+  const publicFacilitiesList = segregatedPublicFacilities;
   const hasCampuses = campusList.length > 0;
   const hasPublicFacilities = publicFacilitiesList.length > 0;
   const hasLocationSection = hasValidLocation || hasCampuses || hasPublicFacilities;
@@ -1249,13 +1349,17 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
 
   const structuredPublicFacilities = useMemo(() => {
     const rawFacilities = kost.facilities || [];
-    const extraKitchen = (kost as any).publicKitchenFacilities || (kost as any).public_kitchen_facilities || [];
-    const extraParking = (kost as any).publicParkingFacilities || (kost as any).public_parking_facilities || [];
+    const extraKitchen = (kost as any).publicKitchenFacilities || (kost as any).public_kitchen_facilities || (kost.metadata && (kost.metadata.publicKitchenFacilities || (kost.metadata as any).public_kitchen_facilities)) || [];
+    const extraParking = (kost as any).publicParkingFacilities || (kost as any).public_parking_facilities || (kost.metadata && (kost.metadata.publicParkingFacilities || (kost.metadata as any).public_parking_facilities)) || [];
+    const rawPublicStrings = (Array.isArray(kost.publicFacilities) ? kost.publicFacilities : [])
+      .filter((item: any) => typeof item === 'string' && item.trim().length > 0)
+      .map((item: string) => item.trim());
 
     const allFacilities = Array.from(new Set([
       ...rawFacilities,
       ...extraKitchen,
-      ...extraParking
+      ...extraParking,
+      ...rawPublicStrings
     ])).filter(f => f && typeof f === 'string' && f.trim().length > 0);
 
     const matchedItems = new Set<string>();
@@ -1380,7 +1484,7 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
     });
 
     return { groups, standalones, totalCount: allFacilities.length };
-  }, [kost.facilities, (kost as any).publicKitchenFacilities, (kost as any).publicParkingFacilities]);
+  }, [kost.facilities, (kost as any).publicKitchenFacilities, (kost as any).publicParkingFacilities, kost.metadata, kost.publicFacilities]);
 
 
   const getGroupStructuredFacilities = (group: ParentRoomGroup) => {

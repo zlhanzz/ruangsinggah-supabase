@@ -1411,6 +1411,23 @@ export const KostManagerPropertyFormModal: React.FC<KostManagerPropertyFormModal
                 ? [...roomPhotosPayload, ...publicImageUrls]
                 : publicImageUrls;
 
+            // Pisahkan secara bersih antara Kampus Terdekat dan Fasilitas Publik Eksternal
+            const allLandmarkCandidates = [
+                ...(Array.isArray(kmListingForm.campuses) ? kmListingForm.campuses : []),
+                ...(Array.isArray(kmListingForm.publicFacilities) ? kmListingForm.publicFacilities.filter((f: any) => typeof f === 'object' && f && f.name) : [])
+            ];
+            const cleanTrueCampuses = allLandmarkCandidates.filter((item: any) => {
+                const cat = (item.category || '').toLowerCase();
+                const name = (item.name || '').toLowerCase();
+                return cat === 'campus' || ((name.includes('universitas') || name.includes('institut') || name.includes('politeknik')) && !name.includes('rsup') && !name.includes('mall'));
+            });
+            const cleanTruePublic = allLandmarkCandidates.filter((item: any) => {
+                const name = (item.name || '').toLowerCase();
+                const isCampus = cleanTrueCampuses.some((c: any) => c.name.toLowerCase() === name);
+                const isInternal = ['parkir motor', 'kompor', 'wastafel cuci piring'].includes(name) && !item.lat;
+                return !isCampus && !isInternal;
+            });
+
             const propertyPayload: any = {
                 title: kmListingForm.title.trim(),
                 description: kmListingForm.description || '',
@@ -1423,15 +1440,15 @@ export const KostManagerPropertyFormModal: React.FC<KostManagerPropertyFormModal
                 is_managed: true,
                 status: 'published',
                 location: kmListingForm.location || { lat: -5.147665, lng: 119.432731 },
-                facilities: kmListingForm.facilities || [],
-                public_facilities: Array.from(new Set([
-                    ...(kmListingForm.publicFacilities || []),
+                facilities: Array.from(new Set([
+                    ...(kmListingForm.facilities || []),
                     ...(kmListingForm.publicParkingFacilities || []),
                     ...(kmListingForm.publicKitchenFacilities || []),
                     ...(kmListingForm.publicBathroomFacilities || [])
                 ])),
+                public_facilities: cleanTruePublic,
                 rules: kmListingForm.rules || [],
-                campuses: kmListingForm.campuses || [],
+                campuses: cleanTrueCampuses,
                 image_urls: finalImageUrls,
                 room_types: normalizedRoomTypesPayload,
                 total_rooms: kmListingForm.totalRooms || kmListingForm.roomTypes.length,

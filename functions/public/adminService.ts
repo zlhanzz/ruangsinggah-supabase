@@ -4391,6 +4391,25 @@ export async function deactivateKostManagerAndRestoreSelfListing(propertyId: str
   }
   cleanMetadata.km_deactivated_at = new Date().toISOString();
 
+  // 6b. Pastikan campuses dan public_facilities tersegregasi bersih
+  const rawCampuses = Array.isArray(prop.campuses) ? prop.campuses : [];
+  const rawPubFacs = Array.isArray(prop.public_facilities) ? prop.public_facilities : [];
+  const allLandmarks = [...rawCampuses, ...rawPubFacs];
+  
+  const trueCampuses = allLandmarks.filter((item: any) => {
+    if (!item || typeof item !== 'object') return false;
+    const cat = (item.category || '').toLowerCase();
+    const name = (item.name || '').toLowerCase();
+    return cat === 'campus' || ((name.includes('universitas') || name.includes('institut') || name.includes('politeknik')) && !name.includes('rsup') && !name.includes('mall'));
+  });
+  const truePublic = allLandmarks.filter((item: any) => {
+    if (!item || typeof item !== 'object') return false;
+    const name = (item.name || '').toLowerCase();
+    const isCamp = trueCampuses.some((c: any) => c.name.toLowerCase() === name);
+    const isInternal = ['parkir motor', 'kompor', 'wastafel cuci piring'].includes(name) && !item.lat;
+    return !isCamp && !isInternal && (item.distance || item.lat);
+  });
+
   // 7. Update Tabel `properties` ke Self-Listing Non-Managed
   const { error: updatePropErr } = await supabase
     .from('properties')
@@ -4399,7 +4418,14 @@ export async function deactivateKostManagerAndRestoreSelfListing(propertyId: str
       status: 'published', // Properti langsung tayang normal sebagai listing mitra biasa
       image_urls: restoredImages,
       room_types: restoredRoomTypes,
-      facilities: restoredFacilities,
+      facilities: Array.from(new Set([
+        ...restoredFacilities,
+        ...(meta.publicParkingFacilities || []),
+        ...(meta.publicKitchenFacilities || []),
+        ...(meta.publicBathroomFacilities || [])
+      ])),
+      campuses: trueCampuses.length > 0 ? trueCampuses : (prop.campuses || []),
+      public_facilities: truePublic.length > 0 ? truePublic : (prop.public_facilities || []),
       rules: restoredRules,
       description: restoredDescription,
       metadata: cleanMetadata,

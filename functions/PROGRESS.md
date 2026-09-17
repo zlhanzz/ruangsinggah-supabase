@@ -2,6 +2,47 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 410. Pemisahan Tegas & Normalisasi Kampus Terdekat vs Fasilitas Publik Sekitar Kost pada Detail Listing (`KostDetail.tsx`, Database Supabase, `adminService.ts`, `KostManagerPropertyFormModal.tsx`, `AgentDashboard.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  1. Pada halaman detail listing kost pengguna (`KostDetail.tsx`), sistem salah dan gagal mengelompokkan antara kampus dan fasilitas publik.
+  2. Pada bagian **"KAMPUS TERDEKAT (12 Lokasi)"**, seluruh 12 landmark sekitar kost dicampuradukkan ke dalam daftar kampus (termasuk Makassar Town Square / MToS, RSUP Dr. Wahidin Sudirohusodo, KIMA Daya, Terminal Regional Daya, Indomaret Bung, sity laundry express, SPBU Pertamina, Masjid Al-Furqan, dan Gereja Katolik), padahal kampus yang sesungguhnya hanya ada 3 lokasi (UIM, UNHAS, PNUP).
+  3. Pada bagian **"FASILITAS PUBLIK (3 Lokasi)"**, sistem keliru menampilkan fasilitas internal milik kost itu sendiri (*"Parkir Motor"*, *"Kompor"*, *"Wastafel Cuci Piring"*) dengan jarak dummy `'-'` dan durasi berjalan/berkendara `15m • 4m • 6m`. Hal ini sangat fatal karena seksi fasilitas publik seharusnya menyajikan landmark publik di lingkungan sekitar kost, bukan perabotan/fasilitas di dalam gedung kost.
+- **Akar Masalah**:
+  1. Pada form modal KostManager dan survei lama, kolom `public_facilities` pada tabel database `properties` diisi oleh fasilitas internal dapur/parkir bersama kost (`['Parkir Motor', 'Kompor', 'Wastafel Cuci Piring']`).
+  2. Pada saat pemindaian landmark oleh agen, seluruh landmark luar (kampus, mall, RS, SPBU, dll.) digabung ke dalam kolom `campuses`.
+  3. Pada `KostDetail.tsx`, `publicFacilitiesList` merender mentah apa yang ada di kolom `public_facilities`, menghasilkan item perabot dengan jarak dummy `'-'`. Dan `campusList` hanya membuang item yang namanya persis sama dengan item di `publicFacilitiesList`. Karena nama perabot berbeda dengan nama kampus/landmark eksternal, seluruh 12 landmark eksternal tetap teronggok di bawah "Kampus Terdekat".
+- **Implementasi Solusi**:
+  1. **Penerapan Universal Smart Segregator di `KostDetail.tsx`**:
+     - Mengumpulkan seluruh kandidat landmark dari `kost.campuses` dan `kost.publicFacilities`.
+     - **Blacklist Fasilitas Internal Kost**: Memblokir fasilitas gedung kost (`parkir motor`, `kompor`, `wastafel`, `dapur`, `wifi`, `cctv`, `kloset`, `kasur`, dll.) agar **0% muncul di seksi landmark publik/peta**.
+     - **Filter Kampus Murni (`isCampus`)**: Hanya meloloskan entitas berkategori `'campus'` atau nama perguruan tinggi (Universitas, Institut, Politeknik, Akademi, STIE, STIKES, UNHAS, UIM, PNUP, dll.) dan mengecualikan non-kampus (mall, RS, SPBU, tempat ibadah, laundry, terminal, industri).
+     - **Filter Fasilitas Publik Murni**: Meloloskan landmark lingkungan luar sekitar kost yang memiliki koordinat GPS dan jarak riil terverifikasi.
+     - **Integrasi Fasilitas Kost**: Memastikan fasilitas perabot internal (`Parkir Motor`, `Kompor`, `Wastafel Cuci Piring`) dari `metadata` dan `public_facilities` lama otomatis terintegrasi ke dalam seksi **"Fasilitas Kost"** (`structuredPublicFacilities` pada grup *Area Parkir* dan *Dapur Bersama*).
+     - **Optimasi Meta Tag SEO**: Memperbarui `campusNearby` agar selalu memilih nama perguruan tinggi asli (bukan mall atau minimarket).
+  2. **Sanitasi Basis Data Supabase Properti Kost Apalah Daya (`bb6b0ccc-6d9e-494a-b972-aa7dd9cbd81f`)**:
+     - Memperbarui baris properti menggunakan service role:
+       - `campuses`: Tepat **3 kampus murni** (*Universitas Islam Makassar* 1.9 km, *Universitas Hasanuddin* 2.0 km, *Politeknik Negeri Ujung Pandang* 2.9 km).
+       - `public_facilities`: Tepat **9 fasilitas publik eksternal** (*Indomaret Bung*, *sity laundry express*, *Masjid Al-Furqan*, *SPBU Pertamina*, *Gereja Katolik Maria Ratu Rosario*, *Makassar Town Square*, *RSUP Dr. Wahidin Sudirohusodo*, *Terminal Regional Daya*, *KIMA Daya*) lengkap dengan jarak riil, durasi rute, dan koordinat GPS.
+       - `facilities`: Mengamankan seluruh fasilitas kost (*WiFi*, *Area Parkir*, *Dapur Bersama*, *CCTV 24 Jam*, *Akses 24 Jam*, *Ruang Jemur*, *Parkir Motor*, *Kompor*, *Wastafel Cuci Piring*).
+       - Menyelaraskan `metadata.archived_kostmanager_data` agar data arsip tetap tersegregasi bersih.
+  3. **Harmonisasi Penyimpanan di `KostManagerPropertyFormModal.tsx`, `AgentDashboard.tsx`, dan `adminService.ts`**:
+     - Memastikan proses penyimpanan properti (saat disurvei, diedit oleh admin, atau dideaktivasi kembali ke mitra biasa) memisahkan landmark eksternal ke `campuses` (kampus) dan `public_facilities` (fasilitas publik luar), serta menyimpan fasilitas bersama gedung ke `facilities`.
+- **File Tersentuh**:
+  - `functions/public/pages/KostDetail.tsx`
+  - `functions/public/components/admin/KostManagerPropertyFormModal.tsx`
+  - `functions/public/pages/AgentDashboard.tsx`
+  - `functions/public/adminService.ts`
+  - Database Supabase (tabel `properties`)
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Pengujian kompilasi produksi `npm.cmd run build` di `functions/public` sukses 100% (2512 modul tertransformasi, `✓ built in 33.11s`, 0 error).
+  - Skrip verifikasi Node.js langsung ke database Supabase mengonfirmasi Kost Apalah Daya memiliki `campuses: 3` (UIM, UNHAS, PNUP) dan `public_facilities: 9` (MToS, RS Wahidin, KIMA Daya, Terminal Daya, Indomaret, Laundry, SPBU, Masjid, Gereja).
+  - Simulasi `KostDetail.tsx` mengonfirmasi:
+    - **Kampus Terdekat**: Tepat 3 lokasi.
+    - **Fasilitas Publik**: Tepat 9 lokasi dengan tombol rute aktif.
+    - **Fasilitas Kost**: Menampilkan fasilitas bersama lengkap tanpa campur aduk.
+
 ### 409. Normalisasi Total Status & Banner Kemitraan Mitra Biasa (Self-Listing) Pasca Deaktivasi KostManager (`MitraDashboard.tsx`, `MitraProfile.tsx`) (September 2026)
 - **Permintaan & Masalah**:
   1. Meskipun sebuah kost (seperti Kost Apalah Daya) telah dikembalikan menjadi mitra biasa (self-listing) dengan seluruh data mandiri asli mitra, pada tampilan Dashboard Mitra di menu "Kost Saya" masih muncul banner hijau autopilot *"KostManager Auto-Pilot Aktif • Properti Anda Dikelola Penuh oleh RuangSinggah"*.
