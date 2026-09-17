@@ -194,7 +194,10 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
 
     const isVerified = user?.verification_status === 'verified';
 
-    // Cek apakah mitra berstatus KostManager, memiliki properti KostManager, atau sedang berlangganan / dalam proses pengajuan KostManager
+    // Helper status permohonan KostManager yang telah selesai/inaktif/batal/ditutup
+    const CLOSED_KM_STATUSES = useMemo(() => ['COMPLETED', 'ACTIVE', 'INACTIVE', 'CANCELLED', 'REJECTED', 'CLOSED', 'TERMINATED'], []);
+
+    // Cek apakah mitra berstatus KostManager aktif (langganan atau memiliki properti aktif terkelola)
     const isKostManager = useMemo(() => {
         if (user?.subscription_status === 'kostmanager' || mitraSubscriptionStatus === 'kostmanager' || (user as any)?.is_managed === true || (user as any)?.is_kostmanager === true) {
             return true;
@@ -202,14 +205,23 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
         if (properties.some((p: any) => p.is_managed === true || p.isManaged === true || p.managed_by === 'kostmanager' || p.kost_manager_status === 'ACTIVE' || p.kostManager?.status === 'ACTIVE' || (p as any)?.is_managed_active === true)) {
             return true;
         }
-        if (kmRequests.some((r: any) => {
-            const s = (r.status || '').toUpperCase();
-            return s && !['CANCELLED', 'REJECTED'].includes(s);
-        })) {
-            return true;
-        }
         return false;
-    }, [user, mitraSubscriptionStatus, properties, kmRequests]);
+    }, [user, mitraSubscriptionStatus, properties]);
+
+    // Cek apakah ada permohonan KostManager yang sedang aktif dalam proses (bukan yang sudah inaktif/ditolak/dibatalkan/selesai)
+    const hasPendingKmRequest = useMemo(() => {
+        return kmRequests.some((r: any) => {
+            const s = (r.status || '').toUpperCase();
+            return s && !CLOSED_KM_STATUSES.includes(s);
+        });
+    }, [kmRequests, CLOSED_KM_STATUSES]);
+
+    const activeKmRequest = useMemo(() => {
+        return kmRequests.find((r: any) => {
+            const s = (r.status || '').toUpperCase();
+            return s && !CLOSED_KM_STATUSES.includes(s);
+        }) || null;
+    }, [kmRequests, CLOSED_KM_STATUSES]);
 
     const handleMenuChange = (menu: MenuKey) => {
         if (!loading && !isKostManager && (menu === 'overview' || menu === 'properties')) {
@@ -903,11 +915,9 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
     };
 
     const renderKostManagerBanner = () => {
-        const hasKmActive = isKostManager || properties.some((p: any) => p.isManaged || p.is_managed || p.managed_by === 'kostmanager') || kmRequests.some((r: any) => {
-            const s = (r.status || '').toUpperCase();
-            return s && !['CANCELLED', 'REJECTED'].includes(s);
-        });
+        const hasKmActive = isKostManager || properties.some((p: any) => p.isManaged || p.is_managed || p.managed_by === 'kostmanager');
 
+        // KASUS 1: PROPERTI AKTIF DIKELOLA KOSTMANAGER
         if (hasKmActive) {
             return (
                 <div className="bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 rounded-3xl p-5 lg:p-6 relative overflow-hidden shadow-md border border-emerald-500/20 text-white">
@@ -938,8 +948,92 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
             );
         }
 
-        // Halaman bersih tanpa banner statis inline bagi mitra biasa (karena digantikan oleh modal pop-up iklan)
-        return null;
+        // KASUS 2: SEDANG DALAM PROSES PENGAJUAN / ONBOARDING KOSTMANAGER
+        if (hasPendingKmRequest && activeKmRequest) {
+            return (
+                <div className="bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 rounded-3xl p-5 lg:p-6 relative overflow-hidden shadow-md border border-amber-400/30 text-white">
+                    <div className="relative z-10 flex flex-col md:flex-row gap-4 items-center justify-between">
+                        <div className="text-left flex-1">
+                            <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 bg-white/20 rounded-full mb-2 shadow-sm backdrop-blur-sm">
+                                <Clock size={11} className="text-white animate-pulse" />
+                                <span className="text-[9px] font-black uppercase tracking-widest text-amber-100">Upgrade KostManager Sedang Diproses</span>
+                            </div>
+                            <h3 className="text-base lg:text-lg font-black tracking-tight leading-tight">
+                                Permohonan Onboarding: {activeKmRequest.kost_name || 'Properti Anda'}
+                            </h3>
+                            <p className="text-xs text-orange-100 leading-relaxed max-w-2xl mt-1 font-medium font-sans">
+                                Pengajuan Anda sedang dalam tahap verifikasi atau penjadwalan survei lapangan oleh tim agen RuangSinggah.
+                            </p>
+                        </div>
+                        <div className="flex gap-2 w-full md:w-auto">
+                            <button
+                                onClick={() => navigate('/dashboard-mitra/profile/km-progress')}
+                                className="bg-white hover:bg-orange-50 text-orange-800 px-5 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-widest transition-transform active:scale-95 shadow-md shrink-0 flex items-center justify-center gap-1.5 w-full md:w-auto cursor-pointer"
+                            >
+                                <TrendingUp size={14} /> Pantau Progress
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        // KASUS 3: BANNER PROMOSI & PENAWARAN OTOMATIS KOSTMANAGER (UNTUK MITRA BIASA / REGULER)
+        return (
+            <div className="bg-gradient-to-r from-orange-600 via-amber-600 to-rose-600 rounded-3xl p-5 lg:p-7 relative overflow-hidden shadow-lg shadow-orange-500/10 border border-orange-400/30 text-white animate-in fade-in duration-500">
+                {/* Decorative Glow Orbs */}
+                <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full blur-3xl pointer-events-none -mr-10 -mt-10"></div>
+                <div className="absolute bottom-0 left-1/3 w-48 h-48 bg-amber-400/10 rounded-full blur-2xl pointer-events-none"></div>
+
+                <div className="relative z-10 flex flex-col lg:flex-row gap-6 items-start lg:items-center justify-between">
+                    <div className="text-left flex-1">
+                        <div className="inline-flex items-center gap-2 px-3 py-1 bg-white/20 rounded-full mb-3 shadow-sm backdrop-blur-md border border-white/20">
+                            <Sparkles size={12} className="text-amber-300 animate-pulse" />
+                            <span className="text-[10px] font-black uppercase tracking-widest text-amber-200">
+                                Solusi Auto-Pilot • KostManager RuangSinggah
+                            </span>
+                        </div>
+                        <h3 className="text-lg sm:text-xl lg:text-2xl font-black tracking-tight leading-snug text-white">
+                            Capek Kelola Kost Sendiri? Serahkan Operasional ke KostManager!
+                        </h3>
+                        <p className="text-xs sm:text-sm text-orange-100/90 leading-relaxed max-w-2xl mt-1.5 font-medium">
+                            Terima beres tanpa repot! Tim profesional RuangSinggah siap mengelola penagihan sewa otomatis via WhatsApp, pemasaran prioritas, penanganan hunian, hingga rekap finansial bulanan transparan.
+                        </p>
+
+                        {/* Feature Highlights Quick-Pills */}
+                        <div className="flex flex-wrap gap-2 mt-4">
+                            <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-black/15 backdrop-blur-sm rounded-xl text-[10px] sm:text-[11px] font-bold text-white border border-white/10">
+                                <ShieldCheck size={13} className="text-amber-300" />
+                                <span>Operasional Terima Beres</span>
+                            </div>
+                            <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-black/15 backdrop-blur-sm rounded-xl text-[10px] sm:text-[11px] font-bold text-white border border-white/10">
+                                <Zap size={13} className="text-amber-300" />
+                                <span>Tagihan WA Otomatis</span>
+                            </div>
+                            <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-black/15 backdrop-blur-sm rounded-xl text-[10px] sm:text-[11px] font-bold text-white border border-white/10">
+                                <TrendingUp size={13} className="text-amber-300" />
+                                <span>Pemasaran Prioritas</span>
+                            </div>
+                            <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-black/15 backdrop-blur-sm rounded-xl text-[10px] sm:text-[11px] font-bold text-white border border-white/10">
+                                <FileText size={13} className="text-amber-300" />
+                                <span>Laporan Keuangan Bulanan</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* CTA Button */}
+                    <div className="w-full lg:w-auto flex flex-col sm:flex-row items-center gap-3 shrink-0 pt-2 lg:pt-0">
+                        <button
+                            onClick={() => handlePromoNavigate(Page.KOSTMANAGER)}
+                            className="w-full sm:w-auto bg-white hover:bg-orange-50 active:scale-95 text-orange-700 hover:text-orange-800 font-black px-6 py-3.5 rounded-2xl text-xs uppercase tracking-widest transition-all shadow-xl shadow-orange-950/20 flex items-center justify-center gap-2 group cursor-pointer"
+                        >
+                            <span>Pelajari & Ajukan Sekarang</span>
+                            <ArrowRight size={15} className="group-hover:translate-x-1 transition-transform text-orange-600" />
+                        </button>
+                    </div>
+                </div>
+            </div>
+        );
     };
 
     const handleQuickUpdateRooms = async (kostId: string, newAvailableCount: number, roomTypeIndex: number = 0) => {

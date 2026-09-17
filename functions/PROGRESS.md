@@ -2,6 +2,35 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 409. Normalisasi Total Status & Banner Kemitraan Mitra Biasa (Self-Listing) Pasca Deaktivasi KostManager (`MitraDashboard.tsx`, `MitraProfile.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  1. Meskipun sebuah kost (seperti Kost Apalah Daya) telah dikembalikan menjadi mitra biasa (self-listing) dengan seluruh data mandiri asli mitra, pada tampilan Dashboard Mitra di menu "Kost Saya" masih muncul banner hijau autopilot *"KostManager Auto-Pilot Aktif • Properti Anda Dikelola Penuh oleh RuangSinggah"*.
+  2. Selain itu, pada halaman Profil Mitra di bagian "Status Program & Layanan" masih muncul status oranye *"Upgrade KostManager (Sedang Diproses) • Proses: Kost Apalah Daya • Menunggu survey lokasi"*.
+  3. Pengguna meminta agar seluruh sistem memperlakukan kost dan mitra tersebut secara murni sebagai mitra biasa (self-listing), termasuk memulihkan banner promosi penawaran otomatis KostManager jika mitra belum berlangganan dan tidak sedang dalam proses pengajuan.
+- **Akar Masalah**:
+  1. Pada `MitraDashboard.tsx`, pengecekan riwayat `kmRequests` hanya mengecualikan status `'CANCELLED'` dan `'REJECTED'`. Karena tiket deaktivasi berstatus `'INACTIVE'`, kondisi `!['CANCELLED', 'REJECTED'].includes('INACTIVE')` menghasilkan `true`, yang membuat `isKostManager` dan `hasKmActive` bernilai `true` sehingga memicu banner hijau autopilot.
+  2. Pada `MitraProfile.tsx`, pengecekan status kartu hanya memeriksa `status !== 'COMPLETED'`. Karena tiket lama berstatus `'INACTIVE'`, kondisi tersebut menghasilkan `true`, sehingga sistem salah menduga pengajuan masih aktif berjalan dan menampilkan *"Upgrade KostManager (Sedang Diproses)"*.
+- **Implementasi Solusi**:
+  1. **Penyempurnaan Status Kanonikal di `MitraDashboard.tsx`**:
+     - Menetapkan daftar status tertutup/inaktif `CLOSED_KM_STATUSES = ['COMPLETED', 'ACTIVE', 'INACTIVE', 'CANCELLED', 'REJECTED', 'CLOSED', 'TERMINATED']`.
+     - Memisahkan status mitra KostManager aktif (`isKostManager`) yang hanya bernilai `true` jika properti saat ini benar-benar `is_managed: true` atau status langganan `kostmanager`.
+     - Mendeteksi `hasPendingKmRequest` dan `activeKmRequest` hanya untuk permohonan yang berstatus in-progress aktif (mengecualikan tiket inaktif, batal, ditolak, atau selesai).
+  2. **Pemulihan Banner Penawaran Otomatis KostManager di `renderKostManagerBanner()`**:
+     - **Kasus 1 (Aktif KostManager)**: Menampilkan banner hijau emerald *"KostManager Auto-Pilot Aktif"*.
+     - **Kasus 2 (Sedang Mengajukan)**: Menampilkan banner amber *"Upgrade KostManager Sedang Diproses"*.
+     - **Kasus 3 (Mitra Biasa Self-Listing)**: Menampilkan **Banner Penawaran Otomatis KostManager** berwarna oranye-amber-rose dengan copywriting resmi *"Capek Kelola Kost Sendiri? Serahkan Operasional ke KostManager!"*, 4 quick-pills keunggulan, dan tombol CTA *"Pelajari & Ajukan Sekarang"* menuju `/kostmanager`.
+  3. **Pembersihan Kartu Status Program & Layanan di `MitraProfile.tsx`**:
+     - Memperbarui `hasActiveKmRequest` dan `activeKmReq` agar hanya mendeteksi tiket yang benar-benar aktif/in-progress.
+     - Bagi mitra biasa yang tidak memiliki pengajuan aktif, kartu secara konsisten menampilkan **"Mitra Reguler"** (*"Kelola properti kost Anda secara manual"*) dengan tombol **"Upgrade ke KostManager"**.
+- **File Tersentuh**:
+  - `functions/public/pages/MitraDashboard.tsx`
+  - `functions/public/pages/MitraProfile.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi produksi `npm.cmd run build` di `functions/public` sukses 100% (2512 modul tertransformasi, `✓ built in 52.86s`, 0 error).
+  - Folder distribusi `public/` dan `dist/` terbarui secara otomatis.
+
 ### 408. Sistem Re-Aktivasi KostManager Otomatis Berbasis Data Historis KostManager (`AgentDashboard.tsx`, `adminService.ts`, Database Supabase) (September 2026)
 - **Permintaan & Masalah**:
   1. Ketika sebuah kost yang sebelumnya sudah pernah menjadi mitra KostManager lalu kembali menjadi mitra biasa (karena tidak memperpanjang langganan atau dideaktivasi oleh admin/sistem karena pelanggaran), kemudian kost tersebut ingin mengajukan diri kembali menjadi KostManager:

@@ -1349,7 +1349,12 @@ const MitraProfile: React.FC<MitraProfileProps> = ({ uid, user: initialUser, onB
 
                     {/* Membership Status Card */}
                     {(() => {
-                        const hasActiveKmRequest = kmRequests.length > 0 && kmRequests[0].status !== 'COMPLETED';
+                        const CLOSED_KM_STATUSES = ['COMPLETED', 'ACTIVE', 'INACTIVE', 'CANCELLED', 'REJECTED', 'CLOSED', 'TERMINATED'];
+                        const activeKmReq = (kmRequests || []).find((r: any) => {
+                            const s = (r.status || '').toUpperCase();
+                            return s && !CLOSED_KM_STATUSES.includes(s);
+                        }) || null;
+                        const hasActiveKmRequest = Boolean(activeKmReq);
                         return (
                             <div 
                                 onClick={() => {
@@ -1388,7 +1393,7 @@ const MitraProfile: React.FC<MitraProfileProps> = ({ uid, user: initialUser, onB
                                     </div>
                                 </div>
                             </div>
-                        ) : kmRequests.length > 0 && kmRequests[0].status !== 'COMPLETED' ? (
+                        ) : activeKmReq ? (
                             /* If they have a pending onboarding request, show the pending status preview */
                             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-5 rounded-2xl border border-orange-100 bg-orange-50/20">
                                 <div className="flex items-center gap-4">
@@ -1400,7 +1405,7 @@ const MitraProfile: React.FC<MitraProfileProps> = ({ uid, user: initialUser, onB
                                             Upgrade KostManager (Sedang Diproses)
                                         </h4>
                                         <p className="text-[10px] text-gray-500 font-bold mt-1 uppercase tracking-widest leading-relaxed">
-                                            Proses: {kmRequests[0].kost_name} • Menunggu survey lokasi
+                                            Proses: {activeKmReq.kost_name || 'Properti Anda'} • Menunggu survey lokasi
                                         </p>
                                     </div>
                                 </div>
