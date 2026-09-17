@@ -3016,33 +3016,64 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
             setAgreedToTerms(false);
         }
 
+        // Collect archived KostManager photos explicitly so they are NEVER blocked as self-listing photos!
+        const archivedKmUrlsSet = new Set<string>();
+        if (isPreviousKm && archivedKm) {
+            (Array.isArray(archivedKm.image_urls) ? archivedKm.image_urls : []).forEach((img: any) => {
+                const u = getImageUrlString(img);
+                if (u) archivedKmUrlsSet.add(u);
+            });
+            (Array.isArray(archivedKm.room_types) ? archivedKm.room_types : []).forEach((rm: any) => {
+                (Array.isArray(rm.images) ? rm.images : []).forEach((img: any) => {
+                    const u = getImageUrlString(img);
+                    if (u) archivedKmUrlsSet.add(u);
+                });
+            });
+        }
+        if (dbKmProp) {
+            (Array.isArray(dbKmProp.image_urls) ? dbKmProp.image_urls : []).forEach((img: any) => {
+                const u = getImageUrlString(img);
+                if (u) archivedKmUrlsSet.add(u);
+            });
+            (Array.isArray(dbKmProp.room_types) ? dbKmProp.room_types : []).forEach((rm: any) => {
+                (Array.isArray(rm.images) ? rm.images : []).forEach((img: any) => {
+                    const u = getImageUrlString(img);
+                    if (u) archivedKmUrlsSet.add(u);
+                });
+            });
+        }
+
         // Define sets of existing regular Mitra self-listing photos to isolate and prevent cloning into KostManager surveyor form
-        // NOTE: Only pure self-listing photos (in metadata.self_listing_images or non-kostmanager photos) are treated as self-listing.
+        // NOTE: Only pure self-listing photos (not in archivedKmUrlsSet and not containing kostmanager/) are treated as self-listing.
         const selfListingImagesSet = new Set<string>([
             ...(Array.isArray(dbPropertyRecord?.metadata?.self_listing_images) ? dbPropertyRecord.metadata.self_listing_images : []),
             ...(Array.isArray(dbPropertyRecord?.image_urls) ? dbPropertyRecord.image_urls.filter((u: any) => {
                 const s = getImageUrlString(u);
-                return s && !s.includes('kostmanager/');
+                return s && !s.includes('kostmanager/') && !archivedKmUrlsSet.has(s);
             }) : [])
-        ].map(getImageUrlString).filter(Boolean));
+        ].map(getImageUrlString).filter(Boolean).filter(u => !archivedKmUrlsSet.has(u)));
 
         const selfRoomImagesSet = new Set<string>();
         (dbPropertyRecord?.metadata?.self_listing_room_types || []).forEach((r: any) => {
             (r.images || []).forEach((img: any) => {
                 const u = getImageUrlString(img);
-                if (u && !u.includes('kostmanager/')) selfRoomImagesSet.add(u);
+                if (u && !u.includes('kostmanager/') && !archivedKmUrlsSet.has(u)) selfRoomImagesSet.add(u);
             });
         });
         (dbPropertyRecord?.room_types || []).forEach((r: any) => {
             (r.images || []).forEach((img: any) => {
                 const u = getImageUrlString(img);
-                if (u && !u.includes('kostmanager/')) selfRoomImagesSet.add(u);
+                if (u && !u.includes('kostmanager/') && !archivedKmUrlsSet.has(u)) selfRoomImagesSet.add(u);
             });
         });
 
         const isValidSurveyPhoto = (urlOrObj: any): boolean => {
             const urlStr = getImageUrlString(urlOrObj);
             if (!urlStr) return false;
+            // Any photo from previous KostManager archive is ALWAYS valid!
+            if (archivedKmUrlsSet.has(urlStr)) {
+                return true;
+            }
             // Any photo explicitly uploaded by surveyor in kostmanager survey or blob/data is ALWAYS valid
             if (urlStr.includes('kostmanager/') || urlStr.includes('survey_photos/') || urlStr.startsWith('blob:') || urlStr.startsWith('data:')) {
                 return true;
@@ -3208,6 +3239,31 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                         draftImageUrls.push({ original: urlStr, url: urlStr, label: cat });
                         draftPhotoCats.push(cat);
                     });
+                    // Fallback to archived KostManager photos if draft image_urls is empty
+                    if (draftImageUrls.length === 0 && isPreviousKm && archivedKm && Array.isArray(archivedKm.image_urls) && archivedKm.image_urls.length > 0) {
+                        archivedKm.image_urls.forEach((img: any, idx: number) => {
+                            const urlStr = getImageUrlString(img);
+                            if (!urlStr) return;
+                            let cat = (typeof img === 'object' && img.label) ? img.label : '';
+                            const caption = (typeof img === 'object' && img.caption) ? String(img.caption).toLowerCase() : '';
+                            if (cat.toLowerCase() === 'area umum' || cat.toLowerCase() === 'parkiran') cat = 'Area Parkir';
+                            if (cat.toLowerCase() === 'fasilitas bersama') {
+                                if (caption.includes('koridor') || caption.includes('tangga')) {
+                                    cat = 'Koridor';
+                                } else if (caption.includes('dapur')) {
+                                    cat = 'Dapur Bersama';
+                                } else {
+                                    cat = 'Koridor';
+                                }
+                            }
+                            if (!cat) {
+                                cat = (idx < 4 ? ['Bangunan Depan', 'Koridor', 'Area Parkir', 'Lingkungan'][idx] : `Foto Lainnya ${idx - 3}`);
+                            }
+                            draftImageUrls.push({ original: urlStr, url: urlStr, label: cat, caption: img.caption || '' });
+                            draftPhotoCats.push(cat);
+                        });
+                    }
+
                     parsed.kmListingForm.image_urls = draftImageUrls;
                     parsed.kmListingForm.photoCategories = draftPhotoCats;
 
@@ -3431,11 +3487,21 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                         const urlStr = getImageUrlString(img);
                         if (!urlStr || !isValidSurveyPhoto(urlStr)) return;
                         let label = (typeof img === 'object' && img.label) ? img.label : '';
+                        const caption = (typeof img === 'object' && img.caption) ? String(img.caption).toLowerCase() : '';
                         if (label.toLowerCase() === 'area umum' || label.toLowerCase() === 'parkiran') label = 'Area Parkir';
+                        if (label.toLowerCase() === 'fasilitas bersama') {
+                            if (caption.includes('koridor') || caption.includes('tangga')) {
+                                label = 'Koridor';
+                            } else if (caption.includes('dapur')) {
+                                label = 'Dapur Bersama';
+                            } else {
+                                label = 'Koridor';
+                            }
+                        }
                         if (!label) {
                             label = (idx < 4 ? ['Bangunan Depan', 'Koridor', 'Area Parkir', 'Lingkungan'][idx] : `Foto Lainnya ${idx - 3}`);
                         }
-                        loadedKmImageUrls.push({ original: urlStr, url: urlStr, label });
+                        loadedKmImageUrls.push({ original: urlStr, url: urlStr, label, caption: img.caption || '' });
                         loadedKmPhotoCategories.push(label);
                     });
 
@@ -3452,7 +3518,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                             pricing: rm.pricing || (rm.price ? [{ period: 'bulanan', price: rm.price }] : []),
                             price: rm.price || (Array.isArray(rm.pricing) && rm.pricing.length > 0 ? rm.pricing[0]?.price : 0) || archivedKm.price || dbPropertyRecord.price || 0,
                             size: rm.size || rm.dimensions || '3x4 m',
-                            images: validImages,
+                            images: validImages.length > 0 ? validImages : (rawImages.map(getImageUrlString).filter(Boolean)),
                             photoCategories: rm.photoCategories || [],
                             categorized_photos: rm.categorized_photos || rm.categorizedPhotos || {},
                             categorizedPhotos: rm.categorizedPhotos || rm.categorized_photos || {}
@@ -7899,10 +7965,10 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
 
                                     return (
                                         <div className="space-y-6">
-                                            <section className={`rounded-2xl p-5 flex flex-col gap-4 shadow-sm transition-all relative ${
+                                            <section className={`bg-white rounded-2xl p-5 border border-[#e0c0af] shadow-xs space-y-4 relative transition-all ${
                                                 currentEvalData.hasRevision && currentEvalData.facade
                                                     ? 'border-2 border-amber-400 ring-4 ring-amber-400/30 shadow-[0_0_25px_rgba(245,158,11,0.25)] bg-gradient-to-br from-amber-500/[0.04] via-white to-orange-500/[0.02] animate-pulse'
-                                                    : 'border border-[#e0c0af] bg-white'
+                                                    : ''
                                             }`}>
                                                 {currentEvalData.hasRevision && currentEvalData.facade && (
                                                     <div className="absolute -top-3 right-4 z-10 inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-gradient-to-r from-amber-500 to-orange-500 text-white font-black text-[10px] uppercase tracking-wider shadow-md shadow-amber-500/30 animate-bounce">
@@ -8183,11 +8249,12 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                                                     </div>
                                                 </div>
                                             )}
+                                            </section>
 
-                                            <div className={`rounded-2xl p-4 flex flex-col gap-3 relative transition-all ${
+                                            <section className={`bg-white rounded-2xl p-5 border border-[#e0c0af] shadow-xs space-y-4 relative transition-all ${
                                                 currentEvalData.hasRevision && currentEvalData.landmark
-                                                    ? 'border-2 border-amber-400 ring-4 ring-amber-400/30 shadow-[0_0_25px_rgba(245,158,11,0.25)] bg-gradient-to-br from-amber-500/[0.04] via-[#f8f9ff] to-orange-500/[0.02] animate-pulse'
-                                                    : 'border border-gray-200 bg-[#f8f9ff]'
+                                                    ? 'border-2 border-amber-400 ring-4 ring-amber-400/30 shadow-[0_0_25px_rgba(245,158,11,0.25)] bg-gradient-to-br from-amber-500/[0.04] via-white to-orange-500/[0.02] animate-pulse'
+                                                    : ''
                                             }`}>
                                                 {currentEvalData.hasRevision && currentEvalData.landmark && (
                                                     <div className="absolute -top-3 right-4 z-10 inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-gradient-to-r from-amber-500 to-orange-500 text-white font-black text-[10px] uppercase tracking-wider shadow-md shadow-amber-500/30 animate-bounce">
@@ -8589,9 +8656,9 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                                                         </div>
                                                     )}
                                                 </div>
-                                            </div>
+                                            </section>
 
-                                            <div className={`flex flex-col gap-1.5 p-3 rounded-2xl relative transition-all ${
+                                            <section className={`bg-white rounded-2xl p-5 border border-[#e0c0af] shadow-xs space-y-4 relative transition-all ${
                                                 currentEvalData.hasRevision && currentEvalData.publicFacilities
                                                     ? 'border-2 border-amber-400 ring-4 ring-amber-400/30 shadow-[0_0_25px_rgba(245,158,11,0.25)] bg-gradient-to-br from-amber-500/[0.04] via-white to-orange-500/[0.02] animate-pulse'
                                                     : ''
@@ -8988,9 +9055,9 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                                                         + Tambah
                                                     </button>
                                                 </div>
-                                            </div>
+                                            </section>
 
-                                            <div className={`flex flex-col gap-2 p-3 rounded-2xl relative transition-all ${
+                                            <section className={`bg-white rounded-2xl p-5 border border-[#e0c0af] shadow-xs space-y-4 relative transition-all ${
                                                 currentEvalData.hasRevision && (currentEvalData.facade || currentEvalData.publicFacilities)
                                                     ? 'border-2 border-amber-400 ring-4 ring-amber-400/30 shadow-[0_0_25px_rgba(245,158,11,0.25)] bg-gradient-to-br from-amber-500/[0.04] via-white to-orange-500/[0.02] animate-pulse'
                                                     : ''
@@ -9193,12 +9260,12 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                                                         + Kategori Area
                                                     </button>
                                                 </div>
-                                            </div>
+                                            </section>
 
-                                            <div className={`rounded-xl p-4 flex flex-col gap-3 relative transition-all ${
+                                            <section className={`bg-white rounded-2xl p-5 border border-[#e0c0af] shadow-xs space-y-4 relative transition-all ${
                                                 currentEvalData.hasRevision && currentEvalData.rules
-                                                    ? 'border-2 border-amber-400 ring-4 ring-amber-400/30 shadow-[0_0_25px_rgba(245,158,11,0.25)] bg-gradient-to-br from-amber-500/[0.04] via-[#f8f9ff] to-orange-500/[0.02] animate-pulse'
-                                                    : 'border border-[#e0c0af] bg-[#f8f9ff]'
+                                                    ? 'border-2 border-amber-400 ring-4 ring-amber-400/30 shadow-[0_0_25px_rgba(245,158,11,0.25)] bg-gradient-to-br from-amber-500/[0.04] via-white to-orange-500/[0.02] animate-pulse'
+                                                    : ''
                                             }`}>
                                                 {currentEvalData.hasRevision && currentEvalData.rules && (
                                                     <div className="absolute -top-3 right-4 z-10 inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-gradient-to-r from-amber-500 to-orange-500 text-white font-black text-[10px] uppercase tracking-wider shadow-md shadow-amber-500/30 animate-bounce">
@@ -9301,9 +9368,8 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                                                         </button>
                                                     </div>
                                                 </div>
-                                            </div>
-                                        </section>
-                                    </div>
+                                            </section>
+                                        </div>
                                 )})()}
 
                                 {/* STEP 2: DATA KAMAR */}
