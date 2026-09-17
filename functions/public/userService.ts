@@ -418,7 +418,7 @@ export async function getPublishedProperties(forceRefresh = false): Promise<Kost
     const { data, error } = await supabase
       .from('properties')
       .select('*')
-      .eq('status', 'published')
+      .or('status.eq.published,and(status.eq.active,is_managed.eq.true)')
       .order('updated_at', { ascending: false });
 
     if (error) throw error;
@@ -465,7 +465,7 @@ export async function getFilteredProperties(params: PropertyFilterParams = {}, f
     let query = supabase
       .from('properties')
       .select('*', { count: 'exact' })
-      .eq('status', 'published');
+      .or('status.eq.published,and(status.eq.active,is_managed.eq.true)');
 
     // 1. Multi-column Text Search (Title, Address, Area)
     if (params.searchTerm && params.searchTerm.trim() !== '') {
@@ -591,7 +591,7 @@ export async function getAvailableFilterOptions(forceRefresh = false): Promise<{
     const { data, error } = await supabase
       .from('properties')
       .select('*')
-      .eq('status', 'published');
+      .or('status.eq.published,and(status.eq.active,is_managed.eq.true)');
 
     if (error || !data) return { provinces: [], cities: [], districts: [], campuses: [], rawRelations: [] };
 
@@ -659,7 +659,7 @@ export async function getPublishedPropertyDetails(propertyId: string): Promise<K
       .from('properties')
       .select('*')
       .eq('id', propertyId)
-      .eq('status', 'published')
+      .or('status.eq.published,and(status.eq.active,is_managed.eq.true)')
       .maybeSingle();
 
     if (pubRow) {

@@ -1552,8 +1552,9 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                             {renderKostManagerBanner()}
 
                             {(() => {
-                                const publishedCount = properties.filter(p => p.status === 'published').length;
-                                const inReviewCount = properties.filter(p => p.status !== 'published' && p.status !== 'suspended').length;
+                                const isPublishedStatus = (p: any) => p.status === 'published' || (Boolean(p.isManaged) && p.status === 'active');
+                                const publishedCount = properties.filter(isPublishedStatus).length;
+                                const inReviewCount = properties.filter(p => !isPublishedStatus(p) && p.status !== 'suspended').length;
                                 const suspendedCount = properties.filter(p => p.status === 'suspended').length;
 
                                 return (
@@ -1696,7 +1697,7 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                                                 </div>
 
                                                 <div className="absolute top-4 right-4">
-                                                    {p.status === 'published' ? (
+                                                    {(p.status === 'published' || (isKm && p.status === 'active')) ? (
                                                         <span className="px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest bg-emerald-500 text-white border border-emerald-400 shadow-md flex items-center gap-1">
                                                             <CheckCircle2 size={11} /> Tayang Publik
                                                         </span>
@@ -1833,7 +1834,7 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                                                 )}
 
                                                 {/* Info Banner Khusus Properti Dalam Tahap Peninjauan / Revisi */}
-                                                {p.status !== 'published' && p.status !== 'suspended' && ((p as any).revisionNotes || (p as any).metadata?.revision_notes) ? (
+                                                {p.status !== 'published' && !(isKm && p.status === 'active') && p.status !== 'suspended' && ((p as any).revisionNotes || (p as any).metadata?.revision_notes) ? (
                                                     <div className="mt-3.5 p-3.5 bg-amber-50/90 border border-amber-300 rounded-2xl flex items-start gap-2.5 shadow-xs">
                                                         <div className="w-7 h-7 rounded-xl bg-amber-100 text-amber-600 flex items-center justify-center shrink-0 mt-0.5">
                                                             <AlertCircle size={15} />
@@ -1855,7 +1856,7 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                                                             </p>
                                                         </div>
                                                     </div>
-                                                ) : p.status !== 'published' && p.status !== 'suspended' ? (
+                                                ) : p.status !== 'published' && !(isKm && p.status === 'active') && p.status !== 'suspended' ? (
                                                     <div className="mt-3.5 p-3.5 bg-gradient-to-br from-amber-50/90 via-orange-50/40 to-amber-50/90 border border-amber-200/80 rounded-2xl flex items-start gap-2.5 shadow-xs">
                                                         <div className="w-7 h-7 rounded-xl bg-amber-100 text-amber-600 flex items-center justify-center shrink-0 mt-0.5">
                                                             <Clock size={15} className="animate-pulse" />

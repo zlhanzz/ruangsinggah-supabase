@@ -13,9 +13,15 @@ interface KostCardProps {
 const KostCard: React.FC<KostCardProps> = ({ kost, onClick, onDelete }) => {
   const [imageError, setImageError] = useState(false);
 
-  const variantCount = kost.isManaged 
+  const isManaged = Boolean(kost.isManaged || (kost as any).is_managed);
+
+  const variantCount = isManaged 
     ? (Array.from(new Set(kost.roomTypes?.map((rt: any) => rt.type?.trim() || rt.roomTypeName || 'Standard') || [])).length || 1)
     : (kost.roomTypes?.length || 1);
+
+  const vacantRoomsCount = isManaged
+    ? (kost.roomTypes?.filter((rt: any) => rt.isAvailable !== false && rt.status?.toLowerCase() !== 'terisi' && rt.status?.toLowerCase() !== 'penuh')?.length ?? 0)
+    : (kost.roomTypes?.reduce((acc: number, rt: any) => acc + (Number(rt.availableRoomCount ?? (rt.isAvailable !== false ? 1 : 0))), 0) ?? 0);
 
   // Calculate prices across all room types
   let displayPrices: number[] = [];
@@ -115,6 +121,24 @@ const KostCard: React.FC<KostCardProps> = ({ kost, onClick, onDelete }) => {
               {variantCount} TIPE
             </span>
           )}
+          {(() => {
+            if (vacantRoomsCount > 0) {
+              return (
+                <span className="bg-emerald-600 text-white px-2.5 py-1 rounded-md text-[10px] font-extrabold uppercase tracking-wider shadow-xs flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
+                  {vacantRoomsCount} Kamar Kosong
+                </span>
+              );
+            }
+            if (kost.roomTypes && kost.roomTypes.length > 0) {
+              return (
+                <span className="bg-rose-600 text-white px-2.5 py-1 rounded-md text-[10px] font-extrabold uppercase tracking-wider shadow-xs">
+                  Penuh
+                </span>
+              );
+            }
+            return null;
+          })()}
         </div>
       </div>
       

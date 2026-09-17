@@ -26,6 +26,7 @@ import {
     generateManualDriveFolder,
     triggerKostManagerAgentAssignmentEmail
 } from '../../adminService';
+import { invalidatePropertiesCache } from '../../userService';
 import { notifySurveyRevisionRequested } from '../../notificationService';
 import { 
     FolderOpen, 
@@ -646,17 +647,18 @@ const KostManagerManagement: React.FC<KostManagerManagementProps> = ({
                 })
                 .eq('id', req.id);
 
-            // 2. Update properties to active & is_managed = true & sync owner_uid
+            // 2. Update properties to published & is_managed = true & sync owner_uid
             const propId = prop?.id || req.property_id;
             if (propId) {
                 await supabase.from('properties')
                     .update({ 
-                        status: 'active',
+                        status: 'published',
                         is_managed: true,
                         owner_uid: req.user_id || prop?.owner_uid,
                         updated_at: new Date().toISOString()
                     })
                     .eq('id', propId);
+                invalidatePropertiesCache();
             }
 
             // 3. Ensure mitra subscription_status = 'kostmanager'

@@ -2,6 +2,50 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 405. Penyelarasan Alur & Siklus KostManager: Dari Pendataan Surveyor, Approval Admin, Dashboard Mitra, hingga Listing Publik & Pemasaran Kamar Kosong (`KostManagerManagement.tsx`, `userService.ts`, `MitraDashboard.tsx`, `KostCard.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna melaporkan bahwa kost pendaftar KostManager ("Kost Apalah Daya", ID `bb6b0ccc-6d9e-494a-b972-aa7dd9cbd81f`) yang sudah didata lengkap oleh agen surveyor (10 kamar: 8 terisi, 2 kosong/tersedia), sudah di-ACC oleh admin, dan sudah aktif di Portal KostManager, masih mengalami inkonsistensi status pada sistem:
+     a. Di dashboard mitra kost terkait (`/dashboard-mitra/properties`), status properti masih tertulis "SEDANG DITINJAU" (Tahap Peninjauan Admin).
+     b. Di tampilan katalog publik pencari kost (`/listings` dan halaman utama), properti kelolaan dan kamar kosong yang terdata belum muncul sama sekali.
+  2. Pengguna meminta perbaikan konkret dan holistik agar terdapat keselarasan alur dari saat pendataan, approval admin, status tayang di dashboard mitra, hingga terbitnya listing kamar kosong di katalog publik untuk dipasarkan.
+- **Akar Masalah**:
+  1. **Status Mismatch pada Handler Approval Admin (`KostManagerManagement.tsx`)**:
+     - Fungsi `handleApproveAndActivate` sebelumnya menyetel `properties.update({ status: 'active' })`.
+     - Namun, seluruh query katalog publik (`userService.ts`) memfilter secara mutlak `.eq('status', 'published')`.
+     - Akibatnya, properti yang diaktifkan oleh admin tidak pernah terambil oleh query listing publik dan tidak muncul di halaman pencarian.
+  2. **Evaluasi Status di Dashboard Mitra (`MitraDashboard.tsx`)**:
+     - Kartu properti dan badge mitra sebelumnya hanya memeriksa `p.status === 'published'`. Karena nilainya `'active'`, sistem mengklasifikasikannya ke dalam draf/in-review dan menampilkan banner *"Tahap Peninjauan Admin (Estimasi 1x24 Jam)"*.
+  3. **Ketiadaan Invalidasi Cache**:
+     - Setelah admin menekan setujui & aktifkan, cache memori/session properti (`PROPERTIES_CACHE`) belum di-invalidasi sehingga user yang sedang membuka web tetap melihat data lama.
+  4. **Pemasaran Kamar Kosong di Kartu Listing (`KostCard.tsx`)**:
+     - Kartu listing belum menampilkan informasi ketersediaan unit kamar kosong secara visual dan atraktif untuk menarik calon penyewa.
+- **Implementasi Solusi**:
+  1. **Standardisasi Status Publik pada Admin Approval (`KostManagerManagement.tsx`)**:
+     - Memperbarui `handleApproveAndActivate` agar meng-update tabel `properties` dengan `status: 'published'`.
+     - Menambahkan impor dan pemanggilan `invalidatePropertiesCache()` setelah mutasi persetujuan selesai.
+  2. **Penguatan Query Katalog Publik (`userService.ts`)**:
+     - Memperbarui `getPublishedProperties`, `getFilteredProperties`, `getAvailableFilterOptions`, dan `getPublishedPropertyDetails` dengan klausa filter tangguh `.or('status.eq.published,and(status.eq.active,is_managed.eq.true)')`.
+     - Menjamin bahwa seluruh properti aktif berstatus KostManager terjamin 100% tampil di katalog pencarian bahkan jika statusnya masih tersimpan sebagai `'active'` di database lama.
+  3. **Penyelarasan Tampilan & Banner di Dashboard Mitra (`MitraDashboard.tsx`)**:
+     - Memperbarui perhitungan tab ringkasan `publishedCount` dan `inReviewCount` agar mengkategorikan `p.status === 'published' || (p.isManaged && p.status === 'active')` sebagai properti tayang.
+     - Memperbarui kartu properti mitra agar menampilkan badge hijau *"Tayang Publik"* dengan centang SVG murni (`CheckCircle2`).
+     - Menyembunyikan banner peninjauan admin untuk properti yang sudah tayang/kelolaan aktif.
+  4. **Pemasaran Kamar Kosong dengan Badge Dinamis pada `KostCard.tsx`**:
+     - Menambahkan kalkulasi unit kamar kosong `vacantRoomsCount` (memeriksa ketersediaan unit untuk managed kost dan kuota kamar untuk non-managed).
+     - Menampilkan badge hijau elegan `X Kamar Kosong` dengan pulsating indicator atau badge `Penuh` jika seluruh kamar terisi, sehingga listing langsung aktif memasarkan kamar kosong kepada calon penyewa di `/listings` dan homepage.
+  5. **Koreksi Data Existing di Database Supabase**:
+     - Meng-update langsung properti Kost Apalah Daya (`bb6b0ccc-6d9e-494a-b972-aa7dd9cbd81f`) ke `status: 'published'`, sehingga 2 kamar kosong yang terdata (Kamar 8 Tipe Premium & Kamar 9 Tipe Standard) langsung live dan dapat disewa.
+- **File Tersentuh**:
+  - `functions/public/components/admin/KostManagerManagement.tsx`
+  - `functions/public/userService.ts`
+  - `functions/public/pages/MitraDashboard.tsx`
+  - `functions/public/components/KostCard.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi produksi `npm.cmd run build` di `functions/public` lulus 100% (2512 modul tertransformasi, `✓ built in 43.97s`, 0 error).
+  - Database Supabase terverifikasi: Properti memiliki `status: 'published'`, `is_managed: true`, dengan 2 kamar kosong tersedia.
+
 ### 404. Pemulihan Tautan Menu Navigasi 'Article' pada Kolom Perusahaan di Footer (`Footer.tsx`) (September 2026)
 - **Permintaan & Masalah**:
   1. Pengguna menanyakan mengapa menu artikel di footer menghilang pada UI/UX saat ini.
