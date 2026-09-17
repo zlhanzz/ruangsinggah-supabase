@@ -2425,9 +2425,6 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
 
             // Update state in-memory agar selalu sinkron
             setIsEditingKostManager((prev: any) => prev ? { ...prev, evaluation_summary: updatedEvalSummary } : null);
-            if (setSurveyRequests) {
-                // optional setter
-            }
         } catch (err) {
             console.warn("Silent background draft save warning:", err);
         }

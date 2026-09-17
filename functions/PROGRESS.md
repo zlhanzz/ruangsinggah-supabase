@@ -2,6 +2,30 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 411. Perbaikan Bug ReferenceError `setSurveyRequests is not defined` pada Simpan Draf KostManager (`AgentDashboard.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  1. Pada Dashboard Agen (`AgentDashboard.tsx`), saat agen menyimpan draf formulir onboarding KostManager atau menekan tombol navigasi *"Lanjut ke Step 2"*, muncul runtime error pada konsol browser:
+     ```
+     AgentDashboard.tsx:2432 Silent background draft save warning: ReferenceError: setSurveyRequests is not defined
+         at saveKostManagerDraftToDatabase (AgentDashboard.tsx:2428:13)
+         at async handleSaveDraftDirectly (AgentDashboard.tsx:2312:13)
+         at async onClick (AgentDashboard.tsx:11235:50)
+     ```
+- **Akar Masalah**:
+  1. Pada fungsi `saveKostManagerDraftToDatabase` di `AgentDashboard.tsx` baris 2428, terdapat blok kode kosong `if (setSurveyRequests) { // optional setter }`.
+  2. Variabel `setSurveyRequests` tidak pernah dideklarasikan sebagai state, variabel lokal, maupun prop komponen `AgentDashboardProps` (komponen hanya menerima `surveyRequests` dan `loadSurveyRequests`).
+  3. Mengakses identifier yang tidak dideklarasikan melempar runtime exception `ReferenceError: setSurveyRequests is not defined` yang kemudian ditangkap oleh blok `catch` dan dicetak sebagai warning pada konsol pengembang.
+- **Implementasi Solusi**:
+  1. Menghapus blok pengecekan variabel undeclared `if (setSurveyRequests) { ... }` pada `AgentDashboard.tsx`.
+  2. Memastikan pembaruan state in-memory `isEditingKostManager` berjalan bersih tanpa gangguan exception, sehingga seluruh alur penyimpanan draf ke Supabase dan localStorage berjalan mulus tanpa runtime warning.
+- **File Tersentuh**:
+  - `functions/public/pages/AgentDashboard.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi produksi `npm.cmd run build` di direktori `functions/public` lulus 100% (2512 modul tertransformasi, 0 error).
+  - Alur auto-save dan manual draft save kini berjalan senyap dan bersih tanpa exception `ReferenceError`.
+
 ### 410. Pemisahan Tegas & Normalisasi Kampus Terdekat vs Fasilitas Publik Sekitar Kost pada Detail Listing (`KostDetail.tsx`, Database Supabase, `adminService.ts`, `KostManagerPropertyFormModal.tsx`, `AgentDashboard.tsx`) (September 2026)
 - **Permintaan & Masalah**:
   1. Pada halaman detail listing kost pengguna (`KostDetail.tsx`), sistem salah dan gagal mengelompokkan antara kampus dan fasilitas publik.
