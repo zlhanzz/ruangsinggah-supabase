@@ -1160,6 +1160,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
         kmListingFormRef.current = kmListingForm;
     }, [kmListingForm]);
     const [isExistingPropertyMigration, setIsExistingPropertyMigration] = useState(false);
+    const [isPreviousKostManagerReactivation, setIsPreviousKostManagerReactivation] = useState(false);
     const [warningAccepted, setWarningAccepted] = useState(false);
     const hasAutoGeocodedRef = useRef<Record<string, boolean>>({});
 
@@ -2221,6 +2222,9 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
         setMitraProfile(null);
         setSignatureData(null);
         setAgreedToTerms(false);
+        setIsPreviousKostManagerReactivation(false);
+        setIsExistingPropertyMigration(false);
+        setWarningAccepted(false);
         setExpandedRoomIdx(null);
         setActivePhotoIdx(0);
         setKmListingForm({
@@ -2862,6 +2866,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
         setSearchParams({ status: agentTab, onboarding_id: req.id.toString() });
 
         const draftKey = `km_draft_${req.id}`;
+        setIsPreviousKostManagerReactivation(false);
         
         // 1. Fetch existing Kost Manager property & room types first to assist in sanitizing drafts and prefilling
         let kmRoomTypes: any[] = [];
@@ -2933,6 +2938,30 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
         } catch (e: any) {
             console.error("Error pre-fetching property data for cloning & draft sanitization:", e);
         }
+
+        // Check for archived KostManager data (for previous KostManager properties now reactivating)
+        const archivedKm = dbPropertyRecord?.metadata?.archived_kostmanager_data || (
+            Array.isArray(dbPropertyRecord?.metadata?.kostmanager_room_types) && dbPropertyRecord.metadata.kostmanager_room_types.length > 0
+                ? {
+                    room_types: dbPropertyRecord.metadata.kostmanager_room_types,
+                    image_urls: dbPropertyRecord.metadata.kostmanager_image_urls || [],
+                    facilities: dbPropertyRecord.metadata.kostmanager_facilities || [],
+                    rules: dbPropertyRecord.metadata.kostmanager_rules || [],
+                    description: dbPropertyRecord.metadata.kostmanager_description || '',
+                    price: dbPropertyRecord.metadata.kostmanager_price || 0,
+                    total_rooms: dbPropertyRecord.metadata.kostmanager_total_rooms || dbPropertyRecord.metadata.kostmanager_room_types.length,
+                    location: dbPropertyRecord.metadata.kostmanager_location || dbPropertyRecord.location || null,
+                    metadata: {
+                        photo_categories: dbPropertyRecord.metadata.kostmanager_photo_categories || [],
+                        categorized_photos: dbPropertyRecord.metadata.kostmanager_categorized_photos || {},
+                        photos_meta: dbPropertyRecord.metadata.kostmanager_photos_meta || {}
+                    }
+                }
+                : null
+        );
+
+        const isPreviousKm = !!(archivedKm && Array.isArray(archivedKm.room_types) && archivedKm.room_types.length > 0);
+        setIsPreviousKostManagerReactivation(isPreviousKm);
 
         // Set migration flag and always show verification warning modal on open
         if (dbPropertyRecord || dbKmProp) {
@@ -3015,7 +3044,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
             const urlStr = getImageUrlString(urlOrObj);
             if (!urlStr) return false;
             // Any photo explicitly uploaded by surveyor in kostmanager survey or blob/data is ALWAYS valid
-            if (urlStr.includes('kostmanager/') || urlStr.startsWith('blob:') || urlStr.startsWith('data:')) {
+            if (urlStr.includes('kostmanager/') || urlStr.includes('survey_photos/') || urlStr.startsWith('blob:') || urlStr.startsWith('data:')) {
                 return true;
             }
             if (selfListingImagesSet.has(urlStr) || selfRoomImagesSet.has(urlStr)) return false;
@@ -3135,9 +3164,11 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                     if (draftRoomTypes.length === 0) {
                         const sourceRooms = (Array.isArray(dbKmProp?.room_types) && dbKmProp.room_types.length > 0)
                             ? dbKmProp.room_types
-                            : ((Array.isArray(dbPropertyRecord?.room_types) && dbPropertyRecord.room_types.length > 0)
-                                ? dbPropertyRecord.room_types
-                                : (Array.isArray(dbPropertyRecord?.metadata?.self_listing_room_types) ? dbPropertyRecord.metadata.self_listing_room_types : []));
+                            : (isPreviousKm && archivedKm && Array.isArray(archivedKm.room_types) && archivedKm.room_types.length > 0)
+                                ? archivedKm.room_types
+                                : ((Array.isArray(dbPropertyRecord?.room_types) && dbPropertyRecord.room_types.length > 0)
+                                    ? dbPropertyRecord.room_types
+                                    : (Array.isArray(dbPropertyRecord?.metadata?.self_listing_room_types) ? dbPropertyRecord.metadata.self_listing_room_types : []));
                         draftRoomTypes = sourceRooms.map((rm: any) => ({
                             ...rm,
                             roomFacilities: rm.roomFacilities || rm.features || rm.room_facilities || rm.facilities || [],
@@ -3272,6 +3303,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                     setPhotoCategories(dynamicDraftCats);
                     if (dbPropertyRecord || dbKmProp) {
                         setIsExistingPropertyMigration(true);
+                        setIsPreviousKostManagerReactivation(isPreviousKm);
                         setWarningAccepted(false); // ALWAYS prompt surveyor with warning modal on open
                     }
                     console.log("Loaded sanitized onboarding draft from Cloud Database / LocalStorage on open");
@@ -3380,10 +3412,115 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                 return;
             }
 
-            // B. Fallback to `properties` table record if exists (Self-Listing Migration)
+            // B. Fallback to `properties` table record if exists
             if (dbPropertyRecord) {
                 setIsExistingPropertyMigration(true);
                 setWarningAccepted(false);
+
+                // B.1. Previous KostManager Reactivation: Restore full survey rooms and photos!
+                if (isPreviousKm && archivedKm) {
+                    setIsPreviousKostManagerReactivation(true);
+                    console.log("openKostManagerListing: restoring previous KostManager data for reactivation:", dbPropertyRecord.id);
+                    kmOriginalLocationRef.current = archivedKm.location || dbPropertyRecord.location || null;
+
+                    const rawKmImages = Array.isArray(archivedKm.image_urls) ? archivedKm.image_urls : [];
+                    const loadedKmImageUrls: any[] = [];
+                    const loadedKmPhotoCategories: string[] = [];
+
+                    rawKmImages.forEach((img: any, idx: number) => {
+                        const urlStr = getImageUrlString(img);
+                        if (!urlStr || !isValidSurveyPhoto(urlStr)) return;
+                        let label = (typeof img === 'object' && img.label) ? img.label : '';
+                        if (label.toLowerCase() === 'area umum' || label.toLowerCase() === 'parkiran') label = 'Area Parkir';
+                        if (!label) {
+                            label = (idx < 4 ? ['Bangunan Depan', 'Koridor', 'Area Parkir', 'Lingkungan'][idx] : `Foto Lainnya ${idx - 3}`);
+                        }
+                        loadedKmImageUrls.push({ original: urlStr, url: urlStr, label });
+                        loadedKmPhotoCategories.push(label);
+                    });
+
+                    const cleanKmRoomTypes = (archivedKm.room_types || []).map((rm: any, idx: number) => {
+                        const rawImages = Array.isArray(rm.images) ? rm.images : [];
+                        const validImages = rawImages.map(getImageUrlString).filter((u: any) => u && isValidSurveyPhoto(u));
+                        return {
+                            ...rm,
+                            name: rm.name || rm.type_name || `Kamar ${rm.room_number || rm.roomNumber || idx + 1}`,
+                            room_number: rm.room_number || rm.roomNumber || `${idx + 1}`,
+                            status: rm.status || 'kosong',
+                            roomFacilities: rm.roomFacilities || rm.features || rm.room_facilities || rm.facilities || [],
+                            bathroomFacilities: rm.bathroomFacilities || [],
+                            pricing: rm.pricing || (rm.price ? [{ period: 'bulanan', price: rm.price }] : []),
+                            price: rm.price || (Array.isArray(rm.pricing) && rm.pricing.length > 0 ? rm.pricing[0]?.price : 0) || archivedKm.price || dbPropertyRecord.price || 0,
+                            size: rm.size || rm.dimensions || '3x4 m',
+                            images: validImages,
+                            photoCategories: rm.photoCategories || [],
+                            categorized_photos: rm.categorized_photos || rm.categorizedPhotos || {},
+                            categorizedPhotos: rm.categorizedPhotos || rm.categorized_photos || {}
+                        };
+                    });
+
+                    const combinedKmFacs = Array.from(new Set([
+                        ...(Array.isArray(archivedKm.facilities) ? archivedKm.facilities : []),
+                        ...(Array.isArray(dbPropertyRecord.facilities) ? dbPropertyRecord.facilities : []),
+                        ...(Array.isArray(req.transaction?.metadata?.facilities) ? req.transaction.metadata.facilities : [])
+                    ]));
+
+                    const normalizedKmFacs = normalizeAndExtractPublicFacilities(
+                        combinedKmFacs.length > 0 ? combinedKmFacs : ['WiFi', 'Area Parkir', 'Dapur Bersama'],
+                        Array.from(new Set([...(archivedKm.metadata?.publicKitchenFacilities || []), ...(dbPropertyRecord.metadata?.publicKitchenFacilities || [])])),
+                        Array.from(new Set([...(archivedKm.metadata?.publicParkingFacilities || []), ...(dbPropertyRecord.metadata?.publicParkingFacilities || [])])),
+                        Array.from(new Set([...(archivedKm.metadata?.publicBathroomFacilities || []), ...(dbPropertyRecord.metadata?.publicBathroomFacilities || [])]))
+                    );
+
+                    const dynamicKmCats = computeDynamicPublicPhotoCategories(
+                        normalizedKmFacs.facilities || ['WiFi', 'Area Parkir'],
+                        loadedKmPhotoCategories.length > 0 ? loadedKmPhotoCategories : (archivedKm.metadata?.photo_categories || []),
+                        normalizedKmFacs.publicParkingFacilities || [],
+                        normalizedKmFacs.publicKitchenFacilities || [],
+                        normalizedKmFacs.publicBathroomFacilities || []
+                    );
+                    setPhotoCategories(dynamicKmCats);
+                    setShowAddLandmarkForm(false);
+                    setActiveRoomIdx(null);
+                    setTemporaryRoom(null);
+
+                    let rawPropCity = archivedKm.city || dbPropertyRecord.city || 'Makassar';
+                    let rawPropArea = archivedKm.area || dbPropertyRecord.area || '';
+                    let rawPropProvince = archivedKm.province || dbPropertyRecord.province || dbPropertyRecord.metadata?.province || detectProvinceFromAddress(dbPropertyRecord.address || req.kost_address);
+                    if (rawPropCity.toLowerCase().startsWith('kecamatan') || rawPropCity.toLowerCase().startsWith('kec.')) {
+                        if (!rawPropArea) rawPropArea = rawPropCity.replace(/^(Kecamatan|Kec\.)\s+/i, '').trim();
+                        rawPropCity = 'Makassar';
+                    }
+
+                    const totalRoomsCount = archivedKm.total_rooms || cleanKmRoomTypes.length || dbPropertyRecord.total_rooms || initialTotalRooms || 0;
+
+                    setKmListingForm({
+                        title: archivedKm.title || dbPropertyRecord.title || req.kost_name,
+                        description: archivedKm.description || dbPropertyRecord.description || '',
+                        address: archivedKm.address || dbPropertyRecord.address || req.kost_address,
+                        province: rawPropProvince,
+                        city: rawPropCity,
+                        area: rawPropArea,
+                        type: archivedKm.type || dbPropertyRecord.type || 'Campur',
+                        price: archivedKm.price || dbPropertyRecord.price || 0,
+                        totalRooms: totalRoomsCount,
+                        owner_uid: resolvedOwnerUid,
+                        roomTypes: cleanKmRoomTypes,
+                        facilities: normalizedKmFacs.facilities,
+                        location: archivedKm.location || dbPropertyRecord.location || initialCoords,
+                        rules: archivedKm.rules || dbPropertyRecord.rules || ['Tidak boleh membawa hewan peliharaan', 'Tamu dilarang menginap'],
+                        image_urls: loadedKmImageUrls,
+                        photoCategories: loadedKmPhotoCategories.length > 0 ? loadedKmPhotoCategories : dynamicKmCats,
+                        campuses: archivedKm.campuses || dbPropertyRecord.campuses || [],
+                        publicBathroomFacilities: normalizedKmFacs.publicBathroomFacilities,
+                        publicKitchenFacilities: normalizedKmFacs.publicKitchenFacilities,
+                        publicParkingFacilities: normalizedKmFacs.publicParkingFacilities
+                    });
+                    return;
+                }
+
+                // B.2. Pure Regular Mitra Self-Listing Migration: Fresh slate for photos
+                setIsPreviousKostManagerReactivation(false);
                 console.log("openKostManagerListing: fallback to loading from dbPropertyRecord (preserving original photos as self-listing only):", dbPropertyRecord.id);
                 kmOriginalLocationRef.current = dbPropertyRecord.location || null;
                 
@@ -7431,13 +7568,23 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                             {isExistingPropertyMigration && !warningAccepted && (
                                 <div className="absolute inset-0 z-50 flex items-center justify-center p-6 bg-[#f8f9ff]/95 backdrop-blur-sm rounded-3xl">
                                     <div className="bg-white w-full max-w-sm rounded-3xl p-8 shadow-2xl flex flex-col items-center gap-5 border border-orange-100">
-                                        <div className="w-16 h-16 bg-orange-50 rounded-full flex items-center justify-center">
-                                            <AlertTriangle className="w-8 h-8 text-orange-500 shrink-0" />
+                                        <div className={`w-16 h-16 ${isPreviousKostManagerReactivation ? 'bg-blue-50' : 'bg-orange-50'} rounded-full flex items-center justify-center`}>
+                                            {isPreviousKostManagerReactivation ? (
+                                                <Building2 className="w-8 h-8 text-blue-600 shrink-0" />
+                                            ) : (
+                                                <AlertTriangle className="w-8 h-8 text-orange-500 shrink-0" />
+                                            )}
                                         </div>
                                         <div className="text-center">
-                                            <h3 className="text-lg font-extrabold text-[#0b1c30] mb-2">Peninjauan Ulang Data</h3>
+                                            <h3 className="text-lg font-extrabold text-[#0b1c30] mb-2">
+                                                {isPreviousKostManagerReactivation ? 'Basis Data KostManager Dipulihkan' : 'Peninjauan Ulang Data'}
+                                            </h3>
                                             <p className="text-sm text-[#584235] leading-relaxed font-medium">
-                                                Beberapa data secara otomatis sudah terisi, lakukan peninjauan ulang untuk memastikan kesesuaian data sudah benar.
+                                                {isPreviousKostManagerReactivation ? (
+                                                    `Properti ini pernah terdaftar sebagai mitra KostManager. Seluruh basis data individual unit kamar (${kmListingForm.roomTypes?.length || 0} kamar) dan foto survei lama telah dipulihkan otomatis. Lakukan penyesuaian ulang di lapangan (verifikasi status kamar terisi/kosong, tarif sewa, atau foto baru jika ada renovasi fisik).`
+                                                ) : (
+                                                    'Beberapa data secara otomatis sudah terisi, lakukan peninjauan ulang untuk memastikan kesesuaian data sudah benar.'
+                                                )}
                                             </p>
                                         </div>
                                         <div className="flex gap-3 w-full">
@@ -7451,10 +7598,10 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                                             <button
                                                 type="button"
                                                 onClick={() => setWarningAccepted(true)}
-                                                className="flex-[2] h-12 bg-[#ff7a00] hover:bg-orange-600 text-white rounded-full font-bold text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-2 shadow-md"
+                                                className={`flex-[2] h-12 ${isPreviousKostManagerReactivation ? 'bg-blue-600 hover:bg-blue-700' : 'bg-[#ff7a00] hover:bg-orange-600'} text-white rounded-full font-bold text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-2 shadow-md`}
                                             >
-                                                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                                                Saya Mengerti
+                                                <CheckCircle2 className="w-4 h-4 text-white shrink-0" />
+                                                {isPreviousKostManagerReactivation ? 'Mulai Penyesuaian' : 'Saya Mengerti'}
                                             </button>
                                         </div>
                                     </div>
@@ -7702,6 +7849,30 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                                         </div>
                                     );
                                 })()}
+
+                                {/* Banner Pemberitahuan Pemulihan Basis Data KostManager Sebelumnya */}
+                                {isPreviousKostManagerReactivation && (
+                                    <div className="relative overflow-hidden rounded-2xl border border-blue-200 bg-gradient-to-br from-blue-500/[0.08] via-blue-50 to-indigo-500/[0.05] p-4 shadow-sm flex flex-col gap-2.5 backdrop-blur-sm animate-fadeIn">
+                                        <div className="flex items-start gap-3">
+                                            <div className="w-9 h-9 rounded-xl bg-blue-600 text-white flex items-center justify-center shadow-xs shrink-0 mt-0.5">
+                                                <Building2 size={20} />
+                                            </div>
+                                            <div className="flex flex-col gap-1">
+                                                <div className="flex items-center gap-2">
+                                                    <h4 className="font-extrabold text-xs text-blue-950 uppercase tracking-wider">
+                                                        Basis Data KostManager Sebelumnya Terpasang Otomatis
+                                                    </h4>
+                                                    <span className="px-2 py-0.5 rounded-full bg-blue-600 text-white text-[9px] font-black uppercase tracking-wider shadow-xs">
+                                                        Riwayat KostManager
+                                                    </span>
+                                                </div>
+                                                <p className="text-xs text-blue-900 leading-relaxed font-medium">
+                                                    Properti ini sebelumnya pernah aktif sebagai mitra <strong>KostManager</strong>. Seluruh basis data individual unit kamar ({kmListingForm.roomTypes?.length || 0} unit kamar) beserta foto survei properti &amp; kamar lama telah dipulihkan. Agen survei hanya perlu melakukan <strong>penyesuaian ulang di lapangan</strong> (verifikasi kamar terisi/kosong, penyesuaian tarif sewa, atau foto baru jika ada renovasi fisik).
+                                                </p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
 
                                 {/* STEP 1: PROPERTI */}
                                 {kmStep === 1 && (() => {

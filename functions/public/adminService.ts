@@ -4343,8 +4343,39 @@ export async function deactivateKostManagerAndRestoreSelfListing(propertyId: str
 
   const restoredDescription = meta.self_listing_description || prop.description || '';
 
-  // 5. Bersihkan Metadata dari Flag KostManager
+  // 5. Simpan Snapshot Arsip KostManager Lengkap untuk Re-Onboarding di Masa Depan
+  // Menyimpan seluruh unit kamar individual, foto survei, fasilitas, aturan, dan spesifikasi
+  // sehingga jika suatu saat kost diajukan kembali ke KostManager, data ini langsung terpasang kembali
+  // dan surveyor hanya perlu melakukan penyesuaian ulang di lapangan tanpa input dari nol.
+  const archivedKostManagerData = {
+    room_types: Array.isArray(prop.room_types) ? prop.room_types : [],
+    image_urls: Array.isArray(prop.image_urls) ? prop.image_urls : [],
+    facilities: Array.isArray(prop.facilities) ? prop.facilities : [],
+    rules: Array.isArray(prop.rules) ? prop.rules : [],
+    description: prop.description || '',
+    price: prop.price || 0,
+    location: prop.location || null,
+    campuses: prop.campuses || [],
+    total_rooms: prop.total_rooms || meta.totalRooms || 0,
+    metadata: {
+      totalRooms: meta.totalRooms || prop.total_rooms || 0,
+      categorized_photos: meta.categorized_photos || {},
+      photo_categories: meta.photo_categories || [],
+      photos_meta: meta.photos_meta || [],
+      publicParkingFacilities: meta.publicParkingFacilities || [],
+      publicKitchenFacilities: meta.publicKitchenFacilities || [],
+      publicBathroomFacilities: meta.publicBathroomFacilities || [],
+      addressNotes: meta.addressNotes || '',
+      signature_data: meta.signature_data || null,
+      agreed_to_terms: meta.agreed_to_terms || false,
+      surveyed_at: meta.kostmanager_survey_completed_at || meta.managed_at || new Date().toISOString()
+    },
+    archived_at: new Date().toISOString()
+  };
+
+  // 6. Bersihkan Metadata dari Flag KostManager Aktif (kembalikan ke data mandiri mitra)
   const cleanMetadata = { ...meta };
+  cleanMetadata.archived_kostmanager_data = archivedKostManagerData;
   if (meta.self_listing_categorized_photos) {
     cleanMetadata.categorized_photos = meta.self_listing_categorized_photos;
   }
@@ -4360,7 +4391,7 @@ export async function deactivateKostManagerAndRestoreSelfListing(propertyId: str
   }
   cleanMetadata.km_deactivated_at = new Date().toISOString();
 
-  // 6. Update Tabel `properties` ke Self-Listing Non-Managed
+  // 7. Update Tabel `properties` ke Self-Listing Non-Managed
   const { error: updatePropErr } = await supabase
     .from('properties')
     .update({

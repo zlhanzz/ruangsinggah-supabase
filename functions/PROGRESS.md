@@ -2,6 +2,37 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 408. Sistem Re-Aktivasi KostManager Otomatis Berbasis Data Historis KostManager (`AgentDashboard.tsx`, `adminService.ts`, Database Supabase) (September 2026)
+- **Permintaan & Masalah**:
+  1. Ketika sebuah kost yang sebelumnya sudah pernah menjadi mitra KostManager lalu kembali menjadi mitra biasa (karena tidak memperpanjang langganan atau dideaktivasi oleh admin/sistem karena pelanggaran), kemudian kost tersebut ingin mengajukan diri kembali menjadi KostManager:
+  2. Data yang sebelumnya sudah pernah ada saat masih menjadi mitra KostManager (unit-unit kamar individual, nomor kamar, status terisi/kosong, foto survei kamar, foto survei properti, tarif sewa, fasilitas publik/kamar, titik koordinat GPS) harus otomatis terpasang dan terpakai kembali.
+  3. Agen survei yang datang ke lapangan tidak perlu menginput ulang seluruh data dari nol, melainkan hanya melakukan penyesuaian ulang (verifikasi status kamar terisi/kosong, tarif sewa terkini, atau update foto bila terjadi renovasi).
+- **Implementasi Solusi**:
+  1. **Pengarsipan Otomatis Data KostManager Saat Deaktivasi (`adminService.ts`)**:
+     - Memperbarui fungsi `deactivateKostManagerAndRestoreSelfListing` untuk mengarsipkan snapshot lengkap properti KostManager ke dalam `metadata.archived_kostmanager_data` dan `metadata.kostmanager_*` (mencakup `room_types` lengkap, `image_urls` survei, `facilities`, `rules`, `description`, `price`, `total_rooms`, `location`, serta metadata survei seperti `photo_categories`, `categorized_photos`, `photos_meta`, `signature_data`).
+  2. **Pemulihan Otomatis Saat Survei Re-Aktivasi di Dashboard Agen (`AgentDashboard.tsx`)**:
+     - Menambahkan state `isPreviousKostManagerReactivation` untuk mendeteksi listing yang memiliki riwayat KostManager.
+     - Memodifikasi alur pembukaan formulir survei (`openKostManagerListing`):
+       - Memeriksa keberadaan `archived_kostmanager_data` pada rekaman properti.
+       - Jika terdeteksi, memulihkan seluruh unit kamar individual (10 unit kamar dengan nomor kamar, status terisi/kosong, fasilitas, dan foto surveinya).
+       - Memulihkan seluruh foto properti survei asli dan kategori fotonya ke dalam form.
+       - Memulihkan fasilitas publik (dapur bersama, kamar mandi luar, parkiran) dan deskripsi.
+  3. **Pemberitahuan & Modal Verifikasi Interaktif untuk Agen Survei (`AgentDashboard.tsx`)**:
+     - **Modal Peringatan**: Memperbarui modal konfirmasi awal dengan judul *"Basis Data KostManager Dipulihkan"* dan tombol aksi *"Mulai Penyesuaian"*, menjelaskan bahwa data 10 unit kamar dan foto survei telah dipulihkan.
+     - **Banner Informasi Form**: Menambahkan banner biru elegan bernuansa modern (`Building2` SVG) di bagian atas formulir survei yang menegaskan:
+       *"Basis Data KostManager Sebelumnya Terpasang Otomatis: Properti ini sebelumnya pernah aktif sebagai mitra KostManager. Seluruh basis data individual unit kamar (10 unit kamar) beserta foto survei properti & kamar lama telah dipulihkan. Agen survei hanya perlu melakukan penyesuaian ulang di lapangan (verifikasi kamar terisi/kosong, penyesuaian tarif sewa, atau foto baru jika ada renovasi fisik)."*
+  4. **Sinkronisasi Data Kost Apalah Daya (`bb6b0ccc-6d9e-494a-b972-aa7dd9cbd81f`)**:
+     - Mensinkronisasikan 10 unit kamar hasil survei resmi (8 Terisi, 2 Kosong) beserta foto kamar 8 (7 foto) dan kamar 9 (8 foto) ke `metadata.archived_kostmanager_data` pada database properti Supabase.
+- **File Tersentuh**:
+  - `functions/public/pages/AgentDashboard.tsx`
+  - `functions/public/adminService.ts`
+  - Database Supabase (tabel `properties`)
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi produksi `npm.cmd run build` di `functions/public` sukses 100% (2512 modul tertransformasi, `✓ built in 33.36s`, 0 error).
+  - Skrip pengujian Node.js memverifikasi bahwa Kost Apalah Daya memiliki `archived_kostmanager_data: true`, `10 unit kamar` (Lengkap nomor 1-10 beserta status dan fotonya), dan `7 foto properti`.
+
 ### 407. Perbaikan Tuntas Campur Aduk Foto & Data (Deduplikasi 45 Foto Menjadi Terkurasi Bersih 11 Foto) pada Listing Bekas KostManager yang Kembali ke Mitra Biasa (`adminService.ts`, `KostDetail.tsx`, Database Supabase) (September 2026)
 - **Permintaan & Masalah**:
   1. Pengguna melaporkan bahwa ketika sebuah listing kost yang sebelumnya berstatus KostManager dikembalikan menjadi mitra biasa (self-listing), seluruh data seharusnya kembali seperti saat masih menjadi mitra biasa.
