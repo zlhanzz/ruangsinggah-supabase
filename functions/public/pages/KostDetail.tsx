@@ -872,16 +872,30 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
       return propertyPhotos.length > 0 ? propertyPhotos : [{ url: 'https://ruangsinggah.id/logo.png', label: '', isRoom: false }];
     }
 
+    // Helper normalisasi URL kanonikal untuk deduplikasi akurat
+    const canonicalPhotoUrl = (raw: any): string => {
+      if (!raw) return '';
+      const str = typeof raw === 'string' ? raw : (raw.url || raw.original || raw.thumbnail || '');
+      if (!str) return '';
+      try {
+        const parsed = new URL(str);
+        return (parsed.origin + parsed.pathname).toLowerCase().trim();
+      } catch {
+        return str.split('?')[0].toLowerCase().trim();
+      }
+    };
+
     // Default 'all': Property photos + all empty rooms photos combined
     const allVacantPhotos = emptyRooms.flatMap(r => r.photoItems || []);
     const combined = [...propertyPhotos, ...allVacantPhotos];
 
-    // De-duplicate by URL
+    // De-duplicate ketat berbasis canonical URL agar tidak melipatgandakan foto
     const seen = new Set<string>();
     const unique: PhotoItem[] = [];
     combined.forEach(p => {
-      if (p.url && !seen.has(p.url)) {
-        seen.add(p.url);
+      const canon = canonicalPhotoUrl(p?.url);
+      if (canon && !seen.has(canon)) {
+        seen.add(canon);
         unique.push(p);
       }
     });

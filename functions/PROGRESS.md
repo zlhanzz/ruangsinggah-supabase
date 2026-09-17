@@ -2,6 +2,41 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 407. Perbaikan Tuntas Campur Aduk Foto & Data (Deduplikasi 45 Foto Menjadi Terkurasi Bersih 11 Foto) pada Listing Bekas KostManager yang Kembali ke Mitra Biasa (`adminService.ts`, `KostDetail.tsx`, Database Supabase) (September 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna melaporkan bahwa ketika sebuah listing kost yang sebelumnya berstatus KostManager dikembalikan menjadi mitra biasa (self-listing), seluruh data seharusnya kembali seperti saat masih menjadi mitra biasa.
+  2. Namun yang terjadi pada tampilan user, data menjadi bercampur aduk secara masif hingga jumlah foto di galeri membengkak menjadi **45 foto** (`1 / 45 FOTO • FOTO PROPERTI`).
+  3. Campur aduk foto tersebut mencakup penumpukan seluruh berkas storage hasil re-upload, foto kloset, wastafel, dan screenshot bersama dengan foto unit kamar.
+- **Akar Masalah**:
+  1. **Penumpukan Massal File Storage Drafts**:
+     - Fungsi `deactivateKostManagerAndRestoreSelfListing` sebelumnya membaca seluruh file di folder storage `drafts/${owner_uid}` (33 berkas) dan memasukkan semuanya tanpa kurasi ke dalam `image_urls` dan `metadata.categorized_photos`.
+  2. **Double Counting & Inkompatibilitas Bentuk Objek pada `KostDetail.tsx`**:
+     - Komponen `KostDetail.tsx` menggabungkan `propertyPhotos` (33 foto) dengan `allVacantPhotos` dari tipe kamar (12 foto: 5 Standard + 7 Premium) via `combined = [...propertyPhotos, ...allVacantPhotos]`.
+     - Karena URL foto kamar dan objek foto properti memiliki struktur yang berbeda atau belum dinormalisasi secara kanonikal, deduplikasi URL gagal mendeteksi kesamaan URL sehingga menghasilkan angka tepat `33 + 12 = 45 foto`.
+  3. **Data Standar Mitra Biasa**:
+     - Seluruh listing mitra biasa lainnya di database (Kost Azzahra, Kost Madani BTP, Kost TN, Kost Belfachr) hanya memiliki rata-rata 5 sampai 11 foto terkurasi (terbagi tegas antara fasad, area parkir, fasilitas bersama, dan unit kamar).
+- **Implementasi Solusi**:
+  1. **Kurasi & Partisi Data Mandiri Mitra pada Properti "Kost Apalah Daya" (`bb6b0ccc-6d9e-494a-b972-aa7dd9cbd81f`)**:
+     - Mengurasi `image_urls` menjadi tepat **7 foto properti umum**: 3 Tampak Depan / Fasad, 2 Area Parkir, 2 Fasilitas Bersama.
+     - Mengurasi `room_types` menjadi foto kamar terisolasi: **2 foto untuk Tipe Standard** (Interior 3x3 & Kamar Mandi) dan **2 foto untuk Tipe Premium** (Interior 3x4 Luas & Kasur Queen/AC).
+     - Menyelaraskan `metadata.categorized_photos`, `metadata.photo_categories`, dan `metadata.self_listing_*` sehingga total foto listing turun secara drastis dan elegan dari 45 foto menjadi **11 foto terkurasi berkualitas tinggi**.
+  2. **Penyempurnaan Fungsi `deactivateKostManagerAndRestoreSelfListing` (`adminService.ts`)**:
+     - Memperketat deduplikasi URL pada pemulihan `self_listing_images`.
+     - Pada fallback pencarian storage drafts, sistem membatasi maksimal 7 foto properti non-duplikat berformat gambar valid dan mengisolasi foto kamar ke `room_types` (maksimal 2-3 foto per tipe), mencegah penumpukan file sembarangan.
+  3. **Normalisasi Kanonikal URL & Deduplikasi Ketat di `KostDetail.tsx`**:
+     - Menambahkan fungsi helper `canonicalPhotoUrl` yang membersihkan query parameter dan normalisasi string URL.
+     - Menerapkan deduplikasi ketat berbasis URL kanonikal pada penggabungan `combined = [...propertyPhotos, ...allVacantPhotos]` sehingga tidak ada lagi foto yang terhitung ganda.
+- **File Tersentuh**:
+  - `functions/public/pages/KostDetail.tsx`
+  - `functions/public/adminService.ts`
+  - Database Supabase (tabel `properties`)
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi produksi `npm.cmd run build` di `functions/public` sukses 100% (2512 modul tertransformasi, `✓ built in 28.84s`, 0 error).
+  - Sinkronisasi build folder `./public` ke `./dist` berhasil.
+  - Simulasi perhitungan foto di `KostDetail` untuk Kost Apalah Daya menghasilkan `propertyPhotos: 7`, `allVacantPhotos: 4`, `Total Displayed Images: 11`, Badge Foto: `1 / 11 FOTO` (bebas dari campur aduk 45 foto).
+
 ### 406. Fitur De-aktivasi Properti KostManager & Pemulihan Bersih ke Mitra Biasa (Self-Listing) dengan Restorasi Foto & Data Mandiri Asli Mitra (`adminService.ts`, `KostManagerPortal.tsx`, `KostManagerManagement.tsx`) (September 2026)
 - **Permintaan & Masalah**:
   1. Pengguna meminta agar properti terkelola KostManager yang sebelumnya berasal dari listing kost biasa (self-listing), jika dinonaktifkan dari portofolio kelolaan KostManager, dapat kembali menjadi mitra biasa atau self-listing.

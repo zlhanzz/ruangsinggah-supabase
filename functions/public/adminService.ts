@@ -4240,10 +4240,17 @@ export async function deactivateKostManagerAndRestoreSelfListing(propertyId: str
 
   const meta = prop.metadata || {};
 
-  // 2. Pulihkan Foto Mandiri Mitra
+  // 2. Pulihkan Foto Mandiri Mitra (Terpartisi & Terkurasi, hindari penumpukan file duplikat)
   let restoredImages: any[] = [];
   if (Array.isArray(meta.self_listing_images) && meta.self_listing_images.length > 0) {
-    restoredImages = meta.self_listing_images;
+    const seen = new Set<string>();
+    restoredImages = meta.self_listing_images.filter((img: any) => {
+      const url = typeof img === 'string' ? img : (img?.url || img?.original || '');
+      const canon = url.split('?')[0].toLowerCase().trim();
+      if (!canon || seen.has(canon)) return false;
+      seen.add(canon);
+      return true;
+    });
   } else {
     // Fallback cerdas: cari foto mandiri di bucket storage drafts milik owner_uid
     if (prop.owner_uid) {
@@ -4255,8 +4262,11 @@ export async function deactivateKostManagerAndRestoreSelfListing(propertyId: str
           const { data: { publicUrl } } = supabase.storage
             .from('properties')
             .getPublicUrl(`drafts/${prop.owner_uid}`);
-          restoredImages = draftFiles
-            .filter(f => f.name.match(/\.(webp|jpg|jpeg|png)$/i))
+          
+          // Kurasi foto: ambil maksimal 7 foto properti berformat gambar valid
+          const validFiles = draftFiles.filter(f => f.name.match(/\.(webp|jpg|jpeg|png)$/i));
+          restoredImages = validFiles
+            .slice(0, 7)
             .map(f => ({
               url: `${publicUrl}/${f.name}`,
               original: `${publicUrl}/${f.name}`,
@@ -4289,6 +4299,8 @@ export async function deactivateKostManagerAndRestoreSelfListing(propertyId: str
       restoredRoomTypes = distinctTypes.map((tName: any) => {
         const matchingRooms = (prop.room_types || []).filter((r: any) => (r.type?.trim() || r.roomTypeName?.trim() || r.name?.trim()) === tName);
         const sampleRoom = matchingRooms[0] || {};
+        // Batasi foto kamar maksimal 2-3 foto per tipe agar tidak berlebihan
+        const sampleImages = Array.isArray(sampleRoom.images) ? sampleRoom.images.slice(0, 3) : [];
         return {
           name: tName,
           type: tName,
@@ -4300,7 +4312,7 @@ export async function deactivateKostManagerAndRestoreSelfListing(propertyId: str
           features: sampleRoom.features || ['Kamar Mandi Dalam', 'Kasur', 'Lemari'],
           roomFacilities: sampleRoom.roomFacilities || ['Kasur', 'Lemari'],
           bathroomFacilities: sampleRoom.bathroomFacilities || ['Kloset Duduk', 'Shower'],
-          images: sampleRoom.images || []
+          images: sampleImages
         };
       });
     } else {
@@ -4315,7 +4327,7 @@ export async function deactivateKostManagerAndRestoreSelfListing(propertyId: str
         features: ['Kamar Mandi Dalam', 'Kasur', 'Lemari'],
         roomFacilities: ['Kasur', 'Lemari'],
         bathroomFacilities: ['Kloset Duduk', 'Shower'],
-        images: restoredImages.slice(0, 5)
+        images: []
       }];
     }
   }
