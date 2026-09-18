@@ -1304,7 +1304,7 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                                             </div>
                                             <p className="text-amber-900/70 text-xs font-medium mt-0.5 leading-snug">
                                                 {user?.verification_status === 'pending'
-                                                    ? 'Data verifikasi KTP Anda sedang divalidasi oleh tim admin. Estimasi maksimal 1x24 jam.'
+                                                    ? 'Data verifikasi KTP Anda sedang diproses. Anda dapat meninjau dan menyelesaikan verifikasi kilat otomatis.'
                                                     : 'Verifikasi KTP Anda sekarang untuk mulai mempublikasikan iklan kost.'}
                                             </p>
                                         </div>
@@ -1312,15 +1312,17 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                                     {user?.verification_status !== 'pending' ? (
                                         <button
                                             onClick={() => handleMenuChange('profile')}
-                                            className="bg-orange-500 hover:bg-orange-600 text-white px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-md shadow-orange-500/20 shrink-0 w-full md:w-auto text-center"
+                                            className="bg-orange-500 hover:bg-orange-600 text-white px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-md shadow-orange-500/20 shrink-0 w-full md:w-auto text-center cursor-pointer"
                                         >
                                             Verifikasi Sekarang
                                         </button>
                                     ) : (
-                                        <div className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/90 border border-amber-200/90 text-amber-800 text-[10px] font-black uppercase tracking-wider shadow-2xs">
-                                            <Lock size={12} className="text-amber-600" />
-                                            Data Terkunci
-                                        </div>
+                                        <button
+                                            onClick={() => handleMenuChange('profile')}
+                                            className="bg-amber-600 hover:bg-amber-700 text-white px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-md shadow-amber-200 shrink-0 w-full md:w-auto text-center cursor-pointer"
+                                        >
+                                            Periksa / Verifikasi Instan
+                                        </button>
                                     )}
                                 </div>
                             )}

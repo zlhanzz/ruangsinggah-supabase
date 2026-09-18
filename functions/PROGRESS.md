@@ -2,6 +2,38 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 432. Implementasi Verifikasi Identitas Kilat & Otomatis (Instant Auto-ACC) Berbasis AI KTP & WhatsApp OTP (`MitraProfile.tsx` & `MitraDashboard.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna mempertanyakan dan meminta penerapan alur verifikasi identitas kilat dan otomatis (*Instant Auto-ACC*), sehingga calon pemilik kost tidak perlu menunggu lama (1x24 jam) untuk persetujuan manual admin sebelum dapat mengunggah dan mempublikasikan listing kamar kost mereka.
+  2. Calon mitra yang harus menunggu lama berisiko membatalkan niat (*drop-off*) untuk mempublikasikan kost karena proses onboarding yang dirasa rumit dan lambat.
+- **Akar Masalah**:
+  1. Alur sebelumnya selalu menetapkan status `verification_status = 'pending'` ketika mitra mengunggah KTP dan nomor WhatsApp, lalu mengunci seluruh formulir profil sehingga mitra tidak dapat melakukan apa pun sampai admin menyetujui secara manual di admin panel.
+  2. Status `pending` juga memblokir tombol tambah/publikasi kost di `MitraDashboard.tsx` (`if (!isVerified)`), sehingga listing kost tidak dapat diterbitkan seketika.
+- **Implementasi Solusi**:
+  1. **Logika Validasi Kilat & Otomatis (Instant Auto-ACC)**:
+     - Pada `handleSave` di `MitraProfile.tsx`, sistem mengevaluasi kriteria kelengkapan data primer:
+       - `isWaVerified`: Nomor WhatsApp wajib telah terverifikasi via OTP 6-digit (`waOtpVerified` atau `whatsapp_verified`).
+       - `isNikValid`: Nomor NIK KTP wajib valid tepat 16 digit numerik (`/^\d{16}$/`).
+       - `isNameValid`: Nama lengkap sesuai KTP minimal 3 karakter.
+       - `isKtpPhotoReady`: Foto KTP fisik sudah terunggah dan terkurasi.
+     - Jika seluruh kriteria terpenuhi, sistem **seketika memberikan status `verified`** (`updates.verification_status = 'verified'` dan `verification_notes = 'Terverifikasi Otomatis (Validasi AI KTP & WhatsApp OTP)'`).
+     - Status `verified` langsung di-upsert ke tabel `user_verifications` dan tabel `users`, lalu memicu event global `RS_USER_UPDATED` sehingga state aplikasi dan dashboard langsung berubah menjadi terverifikasi penuh tanpa reload.
+  2. **Notifikasi Audit Background untuk Admin**:
+     - Sistem tetap mengirimkan notifikasi audit ke admin (`notifyAdminIdentityVerification`) agar tim admin dapat melakukan audit dan pengawasan dokumen di latar belakang tanpa menghambat langkah onboarding mitra.
+  3. **Pelepasan Lockout pada Status Pending**:
+     - Membuka pembatasan penguncian formulir pada `MitraProfile.tsx` agar akun berstatus `pending` dapat membuka formulir identitas, meninjau kelengkapan berkas, dan menekan tombol *SIMPAN & VERIFIKASI INSTAN* untuk langsung beralih ke status `verified`.
+     - Memperbarui kartu status verifikasi di `MitraProfile.tsx` dan overview banner di `MitraDashboard.tsx` dengan tombol aktif "Periksa / Verifikasi Instan".
+  4. **Pembaruan Label Tombol Aksi**:
+     - Mengubah tombol formulir Langkah 2 KTP menjadi **"SIMPAN & VERIFIKASI INSTAN"** dengan modal ucapan selamat yang menegaskan bahwa akun telah aktif penuh dan dapat langsung mempublikasikan kost.
+- **File Tersentuh**:
+  - `functions/public/pages/MitraProfile.tsx`
+  - `functions/public/pages/MitraDashboard.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi build frontend Vite (`cmd.exe /c npm run build`) sukses 100% (`✓ built in 33.41s`, 0 error).
+  - Alur verifikasi instan berhasil terintegrasi mulus dengan validasi WhatsApp OTP dan OCR KTP, memungkinkan penerbitan listing seketika.
+
 ### 431. Redesain Banner Promosi KostManager Menjadi Rasio 16:9 yang Ramping & Hemat Ruang (`MitraDashboard.tsx`) (September 2026)
 - **Permintaan & Masalah**:
   1. Pengguna meminta agar banner promosi KostManager di halaman ringkasan (*overview*) dashboard mitra dibuat lebih kecil dan mengadopsi rasio lanskap 16:9 agar tidak terlalu memakan ruang vertikal layar (*screen-hogging*), khususnya pada perangkat mobile.

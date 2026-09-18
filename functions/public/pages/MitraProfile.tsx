@@ -281,14 +281,6 @@ const MitraProfile: React.FC<MitraProfileProps> = ({
 
     // Sync local state when URL params change (e.g. after background re-render)
     useEffect(() => {
-        if (formData.verification_status === 'pending') {
-            setIsEditing(false);
-            if (isEditingFromUrl) {
-                setSearchParams(new URLSearchParams());
-            }
-            return;
-        }
-
         setIsEditing(isEditingFromUrl);
         if (formData.verification_status === 'verified' && stepFromUrl === 2) {
             setCurrentStep(1);
@@ -299,15 +291,11 @@ const MitraProfile: React.FC<MitraProfileProps> = ({
     }, [isEditingFromUrl, stepFromUrl, formData.verification_status]);
 
     useEffect(() => {
-        if (formData.verification_status === 'pending' && isEditing) {
-            setIsEditing(false);
-            setSearchParams(new URLSearchParams());
-        }
         if (formData.verification_status === 'verified' && currentStep === 2) {
             setCurrentStep(1);
             setSearchParams({ edit: 'true', step: '1' });
         }
-    }, [formData.verification_status, currentStep, isEditing]);
+    }, [formData.verification_status, currentStep]);
 
     useEffect(() => {
         loadProfile();
@@ -831,8 +819,22 @@ const MitraProfile: React.FC<MitraProfileProps> = ({
         }
         if (!waOtpVerified && !initialUser?.whatsapp_verified) {
             alert('Nomor WhatsApp wajib diverifikasi dengan kode OTP sebelum menyimpan dan mengajukan verifikasi identitas.');
-            return;
+            return; 
         }
+
+        // Jika mengisi formulir data identitas KTP (Step 2), validasi kelengkapan
+        if (currentStep === 2 || (formData.ktp_photo_url && formData.verification_status !== 'verified')) {
+            if (!formData.ktp_photo_url) {
+                alert('Silakan unggah foto KTP asli Anda terlebih dahulu.');
+                return;
+            }
+            const cleanNik = (formData.ktp_number || '').trim();
+            if (!/^\d{16}$/.test(cleanNik)) {
+                alert('Nomor NIK KTP harus terdiri dari tepat 16 digit angka.');
+                return;
+            }
+        }
+
         setIsSubmitting(true);
         try {
             const updates: any = {
@@ -843,7 +845,7 @@ const MitraProfile: React.FC<MitraProfileProps> = ({
                 photo_url: formData.photo_url,
                 birth_place: formData.birth_place,
                 birth_date: formData.birth_date || null,
-                whatsapp_verified: waOtpVerified,
+                whatsapp_verified: Boolean(waOtpVerified || initialUser?.whatsapp_verified),
                 gender: formData.gender,
                 religion: formData.religion,
                 occupation: formData.occupation,
@@ -851,21 +853,43 @@ const MitraProfile: React.FC<MitraProfileProps> = ({
                 updated_at: new Date().toISOString()
             };
 
-            // Process Verification if fields are provided
+            // Evaluasi Verifikasi Identitas Kilat & Otomatis (Instant Auto-ACC)
             let isNewVerificationSubmission = false;
+            let isInstantVerified = false;
+
             if (formData.ktp_photo_url && formData.ktp_number && formData.verification_status !== 'verified') {
                 isNewVerificationSubmission = true;
-                updates.verification_status = 'pending';
+
+                const isWaVerified = Boolean(waOtpVerified || initialUser?.whatsapp_verified);
+                const isNikValid = /^\d{16}$/.test((formData.ktp_number || '').trim());
+                const isNameValid = (formData.display_name || '').trim().length >= 3;
+                const isKtpPhotoReady = Boolean(formData.ktp_photo_url);
+
+                if (isWaVerified && isNikValid && isNameValid && isKtpPhotoReady) {
+                    isInstantVerified = true;
+                    updates.verification_status = 'verified';
+                    updates.verification_notes = 'Terverifikasi Otomatis (Validasi AI KTP & WhatsApp OTP)';
+                } else {
+                    updates.verification_status = 'pending';
+                    updates.verification_notes = 'Menunggu verifikasi admin';
+                }
+
                 const { error: verifErr } = await supabase.from('user_verifications').upsert({
                     user_id: uid,
-                    ktp_number: formData.ktp_number,
+                    ktp_number: formData.ktp_number.trim(),
                     ktp_address: formData.ktp_address,
                     ktp_photo_url: formData.ktp_photo_url,
-                    verification_status: 'pending',
+                    verification_status: updates.verification_status,
+                    verification_notes: updates.verification_notes,
                     updated_at: new Date().toISOString()
                 }, { onConflict: 'user_id' });
                 if (verifErr) throw verifErr;
-                setFormData(prev => ({ ...prev, verification_status: 'pending' }));
+
+                setFormData(prev => ({ 
+                    ...prev, 
+                    verification_status: updates.verification_status,
+                    verification_notes: updates.verification_notes 
+                }));
             }
 
             const { error: userErr } = await supabase.from('users').update(updates).eq('id', uid);
@@ -900,7 +924,14 @@ const MitraProfile: React.FC<MitraProfileProps> = ({
             setIsEditing(false);
             setCurrentStep(1);
             setSearchParams(new URLSearchParams());
-            alert('Profil dan data verifikasi berhasil disimpan!');
+
+            if (isInstantVerified) {
+                alert('🎉 Selamat! Identitas Anda berhasil diverifikasi secara instan oleh sistem. Akun mitra Anda kini aktif penuh dan dapat langsung menambah serta mempublikasikan unit kost!');
+            } else if (isNewVerificationSubmission) {
+                alert('Data profil dan dokumen verifikasi berhasil disimpan dan sedang ditinjau.');
+            } else {
+                alert('Profil dan data berhasil diperbarui!');
+            }
         } catch (error: any) { 
             console.error('Error saving profile:', error);
             alert('Gagal menyimpan profil: ' + (error.message || error));
@@ -1425,7 +1456,7 @@ const MitraProfile: React.FC<MitraProfileProps> = ({
                                             disabled={isSubmitting || (!waOtpVerified && !initialUser?.whatsapp_verified)} 
                                             className="w-full sm:w-auto px-10 py-4 bg-orange-500 text-white rounded-xl text-xs font-black uppercase tracking-widest hover:bg-orange-600 active:scale-95 disabled:opacity-50 disabled:active:scale-100 transition-all shadow-lg shadow-orange-500/20 text-center"
                                         >
-                                            {isSubmitting ? 'MEMPROSES...' : 'SIMPAN & AJUKAN VERIFIKASI'}
+                                            {isSubmitting ? 'MEMPROSES...' : 'SIMPAN & VERIFIKASI INSTAN'}
                                         </button>
                                     </>
                                 )}
@@ -1486,13 +1517,7 @@ const MitraProfile: React.FC<MitraProfileProps> = ({
                         {/* Banner Action: Data Kontak Pribadi */}
                         <button
                             type="button"
-                            onClick={() => {
-                                if (formData.verification_status === 'pending') {
-                                    alert('Data profil Anda sedang dalam proses peninjauan verifikasi admin sehingga terkunci sementara.');
-                                    return;
-                                }
-                                setSearchParams({ edit: 'true', step: '1' });
-                            }}
+                            onClick={() => setSearchParams({ edit: 'true', step: '1' })}
                             className="w-full mt-5 bg-orange-500/5 hover:bg-orange-500/10 border border-orange-200 rounded-2xl p-3 sm:p-3.5 flex items-center justify-between transition-all group active:scale-[0.99] cursor-pointer"
                         >
                             <div className="flex items-center gap-2.5 text-xs font-bold text-gray-800">
@@ -1502,7 +1527,7 @@ const MitraProfile: React.FC<MitraProfileProps> = ({
                                 <span className="truncate">Data Kontak Pribadi</span>
                             </div>
                             <div className="flex items-center gap-1 text-[11px] font-extrabold text-orange-600 shrink-0 ml-2">
-                                <span>{formData.verification_status === 'pending' ? 'Terkunci (Sedang Ditinjau)' : 'Lihat / Ubah'}</span>
+                                <span>Lihat / Ubah</span>
                                 <ChevronRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
                             </div>
                         </button>
@@ -1539,14 +1564,17 @@ const MitraProfile: React.FC<MitraProfileProps> = ({
                                         </span>
                                     </div>
                                     <p className="text-xs font-medium text-amber-900/70 mt-1 leading-relaxed">
-                                        Data identitas KTP Anda sedang divalidasi oleh tim admin. Estimasi waktu peninjauan maksimal 1x24 jam.
+                                        Data identitas KTP Anda sedang ditinjau. Anda dapat membuka data dan melakukan verifikasi kilat otomatis jika dokumen sudah lengkap.
                                     </p>
                                 </div>
                             </div>
-                            <div className="shrink-0 self-end sm:self-center flex items-center gap-2 px-3.5 py-2 rounded-xl bg-white/90 border border-amber-200/90 text-amber-800 shadow-2xs">
-                                <Lock size={13} className="text-amber-600" />
-                                <span className="text-[10px] font-black uppercase tracking-wider">Data Terkunci</span>
-                            </div>
+                            <button
+                                type="button"
+                                onClick={() => setSearchParams({ edit: 'true', step: '2' })}
+                                className="shrink-0 self-end sm:self-center px-4 py-2.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-[10px] font-black uppercase tracking-wider transition-all shadow-md shadow-amber-200 cursor-pointer"
+                            >
+                                Periksa / Verifikasi Instan
+                            </button>
                         </div>
                     ) : formData.verification_status === 'banned' ? (
                         <div className="bg-red-50 border border-red-200 rounded-3xl p-5 sm:p-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-xs">
@@ -1629,11 +1657,7 @@ const MitraProfile: React.FC<MitraProfileProps> = ({
                             <button
                                 type="button"
                                 onClick={() => {
-                                    if (formData.verification_status === 'pending') {
-                                        alert('Data profil dan verifikasi identitas Anda sedang dalam proses peninjauan oleh admin (maks 1x24 jam).');
-                                        return;
-                                    }
-                                    if (formData.verification_status === 'rejected') {
+                                    if (formData.verification_status === 'rejected' || formData.verification_status === 'pending') {
                                         setSearchParams({ edit: 'true', step: '2' });
                                     } else {
                                         setSearchParams({ edit: 'true', step: '1' });
