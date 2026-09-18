@@ -1547,340 +1547,263 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
             });
         };
 
-        // 3. Scan Kampus Fallback: HANYA JIKA TIDAK ADA SAMA SEKALI KAMPUS DI MASTER DATASET
-        const scanCampusesFallback = curatedCampuses.length > 0 
-            ? Promise.resolve([]) 
-            : performSearch({
-                location: centerLatLng,
-                radius: 7000,
-                type: 'university'
-            }).then(results => {
-                const validKeywords = ['universitas', 'institut', 'politeknik', 'stie', 'stikes', 'uin', 'iain', 'stmik', 'sekolah tinggi', 'akademi'];
-                return results
+        const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
+
+        (async () => {
+            try {
+                // Staggered sequential requests to prevent Google Places API quota / rate-limit overload
+                if (landmarkScanAbortRef.current !== scanId) return;
+
+                // A. Scan Minimarket (Prioritaskan ritel utama Indomaret & Alfamart dengan jeda waktu)
+                const rMini1 = await performSearch({
+                    location: centerLatLng,
+                    rankBy: google.maps.places.RankBy.DISTANCE,
+                    keyword: 'indomaret'
+                });
+                await sleep(250);
+                if (landmarkScanAbortRef.current !== scanId) return;
+
+                const rMini2 = await performSearch({
+                    location: centerLatLng,
+                    rankBy: google.maps.places.RankBy.DISTANCE,
+                    keyword: 'alfamart'
+                });
+                await sleep(250);
+                if (landmarkScanAbortRef.current !== scanId) return;
+
+                const combinedMini = [...rMini1, ...rMini2];
+                const seenMini = new Set<string>();
+                const mappedMini = combinedMini
                     .filter(p => {
                         if (!p.name || !p.geometry?.location) return false;
-                        const lower = p.name.toLowerCase();
-                        const hasValidKeyword = validKeywords.some(k => lower.includes(k));
-                        return hasValidKeyword && !isInvalidCampus(p.name);
+                        if (!isValidMicroFacility('minimarket', p)) return false;
+                        if (isGarbageFacility(p.name)) return false;
+                        const key = p.place_id || `${p.name}_${p.geometry.location.lat().toFixed(4)}_${p.geometry.location.lng().toFixed(4)}`;
+                        if (seenMini.has(key)) return false;
+                        seenMini.add(key);
+                        return true;
                     })
                     .map(p => {
                         const pLat = p.geometry.location.lat();
                         const pLng = p.geometry.location.lng();
                         const km = getKm(pLat, pLng);
-                        const ratingsCount = p.user_ratings_total || 0;
-                        const rating = p.rating || 0;
-                        const popularityScore = Math.log10(ratingsCount + 1) * 35 + (rating * 3) - ((km / 7) * 8);
+                        const lowerName = p.name.toLowerCase();
+                        const isTier1 = ['indomaret', 'alfamart', 'alfamidi', 'super indo'].some(brand => lowerName.includes(brand));
                         return {
                             name: p.name,
                             lat: pLat,
                             lng: pLng,
                             distance: `± ${km} KM`,
                             kmVal: km,
-                            popularityScore,
-                            category: 'campus',
+                            category: 'minimarket',
+                            isTier1,
                             transportMode: km <= 1.0 ? 'walk' : 'motorcycle',
                             isLiveGoogleApi: true
                         };
                     })
-                    .sort((a, b) => b.popularityScore - a.popularityScore)
-                    .slice(0, 3);
-            });
+                    .filter(p => p.kmVal <= 3.5);
 
-        // 4. Scan Fasilitas Harian Mikro: Minimarket Terdekat (Prioritas Ritel Nasional Terverifikasi)
-        const searchMini1 = performSearch({
-            location: centerLatLng,
-            rankBy: google.maps.places.RankBy.DISTANCE,
-            keyword: 'indomaret'
-        });
-        const searchMini2 = performSearch({
-            location: centerLatLng,
-            rankBy: google.maps.places.RankBy.DISTANCE,
-            keyword: 'alfamart'
-        });
-        const searchMini3 = performSearch({
-            location: centerLatLng,
-            rankBy: google.maps.places.RankBy.DISTANCE,
-            keyword: 'alfamidi'
-        });
-        const searchMini4 = performSearch({
-            location: centerLatLng,
-            rankBy: google.maps.places.RankBy.DISTANCE,
-            keyword: 'minimarket'
-        });
+                const tier1Mini = mappedMini.filter(p => p.isTier1).sort((a, b) => a.kmVal - b.kmVal);
+                const minimarketList = (tier1Mini.length > 0 ? tier1Mini : mappedMini.sort((a, b) => a.kmVal - b.kmVal)).slice(0, 1);
 
-        const scanMinimarket = Promise.all([searchMini1, searchMini2, searchMini3, searchMini4]).then(([r1, r2, r3, r4]) => {
-            const combined = [...r1, ...r2, ...r3, ...r4];
-            const seen = new Set<string>();
-            const mapped = combined
-                .filter(p => {
-                    if (!p.name || !p.geometry?.location) return false;
-                    if (!isValidMicroFacility('minimarket', p)) return false;
-                    if (isGarbageFacility(p.name)) return false;
-                    const key = p.place_id || `${p.name}_${p.geometry.location.lat().toFixed(4)}_${p.geometry.location.lng().toFixed(4)}`;
-                    if (seen.has(key)) return false;
-                    seen.add(key);
-                    return true;
-                })
-                .map(p => {
-                    const pLat = p.geometry.location.lat();
-                    const pLng = p.geometry.location.lng();
-                    const km = getKm(pLat, pLng);
-                    const lowerName = p.name.toLowerCase();
-                    // Tier 1: Ritel nasional terverifikasi
-                    const isTier1 = ['indomaret', 'alfamart', 'alfamidi', 'circle k', 'familymart', 'family mart', 'lawson', 'super indo', 'superindo'].some(brand => lowerName.includes(brand));
-                    return {
-                        name: p.name,
-                        lat: pLat,
-                        lng: pLng,
-                        distance: `± ${km} KM`,
-                        kmVal: km,
-                        category: 'minimarket',
-                        isTier1,
-                        transportMode: km <= 1.0 ? 'walk' : 'motorcycle',
-                        isLiveGoogleApi: true
-                    };
-                })
-                .filter(p => p.kmVal <= 3.5);
+                // B. Scan Laundry Kiloan Terdekat
+                const rLaundry = await performSearch({
+                    location: centerLatLng,
+                    rankBy: google.maps.places.RankBy.DISTANCE,
+                    keyword: 'laundry'
+                });
+                await sleep(250);
+                if (landmarkScanAbortRef.current !== scanId) return;
 
-            // Jika ada minimarket ritel Tier 1 (Indomaret/Alfamart/Alfamidi), prioritaskan yang paling dekat
-            const tier1Items = mapped.filter(p => p.isTier1).sort((a, b) => a.kmVal - b.kmVal);
-            if (tier1Items.length > 0) {
-                return tier1Items.slice(0, 1);
-            }
+                const laundryList = rLaundry
+                    .filter(p => p.name && p.geometry?.location && isValidMicroFacility('laundry', p) && !isGarbageFacility(p.name))
+                    .map(p => {
+                        const pLat = p.geometry.location.lat();
+                        const pLng = p.geometry.location.lng();
+                        const km = getKm(pLat, pLng);
+                        return {
+                            name: p.name,
+                            lat: pLat,
+                            lng: pLng,
+                            distance: `± ${km} KM`,
+                            kmVal: km,
+                            category: 'laundry',
+                            transportMode: km <= 1.0 ? 'walk' : 'motorcycle',
+                            isLiveGoogleApi: true
+                        };
+                    })
+                    .filter(p => p.kmVal <= 3.0)
+                    .sort((a, b) => a.kmVal - b.kmVal)
+                    .slice(0, 1);
 
-            return mapped.sort((a, b) => a.kmVal - b.kmVal).slice(0, 1);
-        });
+                // C. Scan Tempat Ibadah: Masjid / Musholla Terdekat
+                const rMosque = await performSearch({
+                    location: centerLatLng,
+                    rankBy: google.maps.places.RankBy.DISTANCE,
+                    type: 'mosque'
+                });
+                await sleep(250);
+                if (landmarkScanAbortRef.current !== scanId) return;
 
-        // 5. Scan Fasilitas Harian Mikro: Laundry Kiloan Terdekat
-        const scanLaundry = performSearch({
-            location: centerLatLng,
-            rankBy: google.maps.places.RankBy.DISTANCE,
-            keyword: 'laundry'
-        }).then(results => {
-            return results
-                .filter(p => p.name && p.geometry?.location && isValidMicroFacility('laundry', p) && !isGarbageFacility(p.name))
-                .map(p => {
-                    const pLat = p.geometry.location.lat();
-                    const pLng = p.geometry.location.lng();
-                    const km = getKm(pLat, pLng);
-                    return {
-                        name: p.name,
-                        lat: pLat,
-                        lng: pLng,
-                        distance: `± ${km} KM`,
-                        kmVal: km,
-                        category: 'laundry',
-                        transportMode: km <= 1.0 ? 'walk' : 'motorcycle',
-                        isLiveGoogleApi: true
-                    };
-                })
-                .filter(p => p.kmVal <= 3.0)
-                .sort((a, b) => a.kmVal - b.kmVal)
-                .slice(0, 1);
-        });
+                const mosqueList = rMosque
+                    .filter(p => p.name && p.geometry?.location && isValidMicroFacility('mosque', p) && !isGarbageFacility(p.name))
+                    .map(p => {
+                        const pLat = p.geometry.location.lat();
+                        const pLng = p.geometry.location.lng();
+                        const km = getKm(pLat, pLng);
+                        return {
+                            name: p.name,
+                            lat: pLat,
+                            lng: pLng,
+                            distance: `± ${km} KM`,
+                            kmVal: km,
+                            category: 'mosque',
+                            transportMode: km <= 1.0 ? 'walk' : 'motorcycle',
+                            isLiveGoogleApi: true
+                        };
+                    })
+                    .filter(p => p.kmVal <= 2.5)
+                    .sort((a, b) => a.kmVal - b.kmVal)
+                    .slice(0, 1);
 
-        // 6. Scan Fasilitas Harian Mikro: Masjid / Musholla Terdekat
-        const searchMosque1 = performSearch({
-            location: centerLatLng,
-            rankBy: google.maps.places.RankBy.DISTANCE,
-            keyword: 'masjid'
-        });
-        const searchMosque2 = performSearch({
-            location: centerLatLng,
-            rankBy: google.maps.places.RankBy.DISTANCE,
-            type: 'mosque'
-        });
+                // D. Scan Tempat Ibadah: Gereja Terdekat
+                const rChurch = await performSearch({
+                    location: centerLatLng,
+                    rankBy: google.maps.places.RankBy.DISTANCE,
+                    type: 'church'
+                });
+                await sleep(250);
+                if (landmarkScanAbortRef.current !== scanId) return;
 
-        const scanMosque = Promise.all([searchMosque1, searchMosque2]).then(([r1, r2]) => {
-            const combined = [...r1, ...r2];
-            const seen = new Set<string>();
-            return combined
-                .filter(p => {
-                    if (!p.name || !p.geometry?.location) return false;
-                    if (!isValidMicroFacility('mosque', p)) return false;
-                    if (isGarbageFacility(p.name)) return false;
-                    const key = p.place_id || `${p.name}_${p.geometry.location.lat().toFixed(4)}_${p.geometry.location.lng().toFixed(4)}`;
-                    if (seen.has(key)) return false;
-                    seen.add(key);
-                    return true;
-                })
-                .map(p => {
-                    const pLat = p.geometry.location.lat();
-                    const pLng = p.geometry.location.lng();
-                    const km = getKm(pLat, pLng);
-                    return {
-                        name: p.name,
-                        lat: pLat,
-                        lng: pLng,
-                        distance: `± ${km} KM`,
-                        kmVal: km,
-                        category: 'mosque',
-                        transportMode: km <= 1.0 ? 'walk' : 'motorcycle',
-                        isLiveGoogleApi: true
-                    };
-                })
-                .filter(p => p.kmVal <= 2.5)
-                .sort((a, b) => a.kmVal - b.kmVal)
-                .slice(0, 1);
-        });
+                const churchList = rChurch
+                    .filter(p => p.name && p.geometry?.location && isValidMicroFacility('church', p) && !isGarbageFacility(p.name))
+                    .map(p => {
+                        const pLat = p.geometry.location.lat();
+                        const pLng = p.geometry.location.lng();
+                        const km = getKm(pLat, pLng);
+                        return {
+                            name: p.name,
+                            lat: pLat,
+                            lng: pLng,
+                            distance: `± ${km} KM`,
+                            kmVal: km,
+                            category: 'church',
+                            transportMode: km <= 1.0 ? 'walk' : 'motorcycle',
+                            isLiveGoogleApi: true
+                        };
+                    })
+                    .filter(p => p.kmVal <= 3.5)
+                    .sort((a, b) => a.kmVal - b.kmVal)
+                    .slice(0, 1);
 
-        // 7. Scan Fasilitas Harian Mikro: Gereja Terdekat
-        const searchChurch1 = performSearch({
-            location: centerLatLng,
-            rankBy: google.maps.places.RankBy.DISTANCE,
-            keyword: 'gereja'
-        });
-        const searchChurch2 = performSearch({
-            location: centerLatLng,
-            rankBy: google.maps.places.RankBy.DISTANCE,
-            type: 'church'
-        });
+                // E. Scan SPBU / Pom Bensin Terdekat
+                const rSpbu = await performSearch({
+                    location: centerLatLng,
+                    rankBy: google.maps.places.RankBy.DISTANCE,
+                    type: 'gas_station'
+                });
+                await sleep(250);
+                if (landmarkScanAbortRef.current !== scanId) return;
 
-        const scanChurch = Promise.all([searchChurch1, searchChurch2]).then(([r1, r2]) => {
-            const combined = [...r1, ...r2];
-            const seen = new Set<string>();
-            return combined
-                .filter(p => {
-                    if (!p.name || !p.geometry?.location) return false;
-                    if (!isValidMicroFacility('church', p)) return false;
-                    if (isGarbageFacility(p.name)) return false;
-                    const key = p.place_id || `${p.name}_${p.geometry.location.lat().toFixed(4)}_${p.geometry.location.lng().toFixed(4)}`;
-                    if (seen.has(key)) return false;
-                    seen.add(key);
-                    return true;
-                })
-                .map(p => {
-                    const pLat = p.geometry.location.lat();
-                    const pLng = p.geometry.location.lng();
-                    const km = getKm(pLat, pLng);
-                    return {
-                        name: p.name,
-                        lat: pLat,
-                        lng: pLng,
-                        distance: `± ${km} KM`,
-                        kmVal: km,
-                        category: 'church',
-                        transportMode: km <= 1.0 ? 'walk' : 'motorcycle',
-                        isLiveGoogleApi: true
-                    };
-                })
-                .filter(p => p.kmVal <= 3.5)
-                .sort((a, b) => a.kmVal - b.kmVal)
-                .slice(0, 1);
-        });
+                const mappedSpbu = rSpbu
+                    .filter(p => p.name && p.geometry?.location && isValidMicroFacility('gas_station', p) && !isGarbageFacility(p.name))
+                    .map(p => {
+                        const pLat = p.geometry.location.lat();
+                        const pLng = p.geometry.location.lng();
+                        const km = getKm(pLat, pLng);
+                        const lowerName = p.name.toLowerCase();
+                        const isTier1 = ['pertamina', 'shell', 'bp ', 'bp-', 'vivo'].some(brand => lowerName.includes(brand)) || lowerName.startsWith('spbu');
+                        return {
+                            name: p.name,
+                            lat: pLat,
+                            lng: pLng,
+                            distance: `± ${km} KM`,
+                            kmVal: km,
+                            category: 'gas_station',
+                            isTier1,
+                            transportMode: 'motorcycle',
+                            isLiveGoogleApi: true
+                        };
+                    })
+                    .filter(p => p.kmVal <= 5.0);
 
-        // 8. Scan Fasilitas Vital: SPBU / Pom Bensin Terdekat (Prioritas SPBU Resmi Pertamina/Shell/BP)
-        const searchSpbu1 = performSearch({
-            location: centerLatLng,
-            rankBy: google.maps.places.RankBy.DISTANCE,
-            keyword: 'spbu'
-        });
-        const searchSpbu2 = performSearch({
-            location: centerLatLng,
-            rankBy: google.maps.places.RankBy.DISTANCE,
-            keyword: 'pertamina'
-        });
-        const searchSpbu3 = performSearch({
-            location: centerLatLng,
-            rankBy: google.maps.places.RankBy.DISTANCE,
-            type: 'gas_station'
-        });
+                const tier1Spbu = mappedSpbu.filter(p => p.isTier1).sort((a, b) => a.kmVal - b.kmVal);
+                const gasStationList = (tier1Spbu.length > 0 ? tier1Spbu : mappedSpbu.sort((a, b) => a.kmVal - b.kmVal)).slice(0, 1);
 
-        const scanGasStation = Promise.all([searchSpbu1, searchSpbu2, searchSpbu3]).then(([r1, r2, r3]) => {
-            const combined = [...r1, ...r2, ...r3];
-            const seen = new Set<string>();
-            const mapped = combined
-                .filter(p => {
-                    if (!p.name || !p.geometry?.location) return false;
-                    if (!isValidMicroFacility('gas_station', p)) return false;
-                    if (isGarbageFacility(p.name)) return false;
-                    const key = p.place_id || `${p.name}_${p.geometry.location.lat().toFixed(4)}_${p.geometry.location.lng().toFixed(4)}`;
-                    if (seen.has(key)) return false;
-                    seen.add(key);
-                    return true;
-                })
-                .map(p => {
-                    const pLat = p.geometry.location.lat();
-                    const pLng = p.geometry.location.lng();
-                    const km = getKm(pLat, pLng);
-                    const lowerName = p.name.toLowerCase();
-                    // Tier 1: SPBU resmi utama (Pertamina, Shell, BP, Vivo atau diawali 'SPBU')
-                    const isTier1 = ['pertamina', 'shell', 'bp ', 'bp-', 'vivo'].some(brand => lowerName.includes(brand)) || lowerName.startsWith('spbu');
-                    return {
-                        name: p.name,
-                        lat: pLat,
-                        lng: pLng,
-                        distance: `± ${km} KM`,
-                        kmVal: km,
-                        category: 'gas_station',
-                        isTier1,
-                        transportMode: 'motorcycle',
-                        isLiveGoogleApi: true
-                    };
-                })
-                .filter(p => p.kmVal <= 5.0);
-
-            // Jika ada SPBU resmi Tier 1 (Pertamina/Shell/BP), utamakan yang terdekat
-            const tier1Items = mapped.filter(p => p.isTier1).sort((a, b) => a.kmVal - b.kmVal);
-            if (tier1Items.length > 0) {
-                return tier1Items.slice(0, 1);
-            }
-
-            return mapped.sort((a, b) => a.kmVal - b.kmVal).slice(0, 1);
-        });
-
-        Promise.all([
-            scanCampusesFallback,
-            scanMinimarket,
-            scanLaundry,
-            scanMosque,
-            scanChurch,
-            scanGasStation
-        ]).then(([fallbackCampuses, minimarketList, laundryList, mosqueList, churchList, gasStationList]) => {
-            if (landmarkScanAbortRef.current !== scanId) return;
-            setIsScanningLandmarks(false);
-
-            const finalCampuses = curatedCampuses.length > 0 
-                ? [...curatedCampuses] 
-                : [...fallbackCampuses];
-
-            const finalFacilities = [
-                ...curatedOthers,
-                ...minimarketList,
-                ...laundryList,
-                ...gasStationList,
-                ...mosqueList,
-                ...churchList
-            ];
-
-            const cleanFinalFacilities = finalFacilities.filter(fac => !isGarbageFacility(fac.name));
-            const combinedLandmarks = [...finalCampuses.filter(c => !isGarbageFacility(c.name))];
-            cleanFinalFacilities.forEach(fac => {
-                const exists = combinedLandmarks.some((c: any) => 
-                    c.name.toLowerCase() === fac.name.toLowerCase() ||
-                    (c.lat === fac.lat && c.lng === fac.lng)
-                );
-                if (!exists) {
-                    combinedLandmarks.push(fac);
+                // F. Fallback Kampus: HANYA JIKA TIDAK ADA SAMA SEKALI KAMPUS DI MASTER DATASET KURASI
+                let fallbackCampuses: any[] = [];
+                if (curatedCampuses.length === 0) {
+                    const rCamp = await performSearch({
+                        location: centerLatLng,
+                        radius: 7000,
+                        type: 'university'
+                    });
+                    const validKeywords = ['universitas', 'institut', 'politeknik', 'stie', 'stikes', 'uin', 'iain', 'stmik', 'sekolah tinggi', 'akademi'];
+                    fallbackCampuses = rCamp
+                        .filter((p: any) => {
+                            if (!p.name || !p.geometry?.location) return false;
+                            const lower = p.name.toLowerCase();
+                            return validKeywords.some(k => lower.includes(k)) && !isInvalidCampus(p.name);
+                        })
+                        .map((p: any) => {
+                            const pLat = p.geometry.location.lat();
+                            const pLng = p.geometry.location.lng();
+                            const km = getKm(pLat, pLng);
+                            return {
+                                name: p.name,
+                                lat: pLat,
+                                lng: pLng,
+                                distance: `± ${km} KM`,
+                                kmVal: km,
+                                category: 'campus',
+                                transportMode: km <= 1.0 ? 'walk' : 'motorcycle',
+                                isLiveGoogleApi: true
+                            };
+                        })
+                        .slice(0, 3);
                 }
-            });
 
-            const cleanCombinedLandmarks = combinedLandmarks.filter((c: any) => !isGarbageFacility(c.name));
-
-            if (cleanCombinedLandmarks.length > 0) {
-                setKmListingForm((prev: any) => ({
-                    ...prev,
-                    campuses: cleanCombinedLandmarks.map(({ kmVal, ...item }: any) => item)
-                }));
-
-                // Langsung hitung rute nyata Google Maps via DistanceMatrixService
-                enrichLandmarksWithGoogleDistanceMatrix(centerLat, centerLng, cleanCombinedLandmarks);
-            }
-        }).catch(() => {
-            if (landmarkScanAbortRef.current === scanId) {
+                if (landmarkScanAbortRef.current !== scanId) return;
                 setIsScanningLandmarks(false);
+
+                const finalCampuses = curatedCampuses.length > 0 ? [...curatedCampuses] : [...fallbackCampuses];
+                const finalFacilities = [
+                    ...curatedOthers,
+                    ...minimarketList,
+                    ...laundryList,
+                    ...gasStationList,
+                    ...mosqueList,
+                    ...churchList
+                ];
+
+                const cleanFinalFacilities = finalFacilities.filter(fac => !isGarbageFacility(fac.name));
+                const combinedLandmarks = [...finalCampuses.filter(c => !isGarbageFacility(c.name))];
+                cleanFinalFacilities.forEach(fac => {
+                    const exists = combinedLandmarks.some((c: any) => 
+                        c.name.toLowerCase() === fac.name.toLowerCase() ||
+                        (c.lat === fac.lat && c.lng === fac.lng)
+                    );
+                    if (!exists) {
+                        combinedLandmarks.push(fac);
+                    }
+                });
+
+                const cleanCombinedLandmarks = combinedLandmarks.filter((c: any) => !isGarbageFacility(c.name));
+                if (cleanCombinedLandmarks.length > 0) {
+                    setKmListingForm((prev: any) => ({
+                        ...prev,
+                        campuses: cleanCombinedLandmarks.map(({ kmVal, ...item }: any) => item)
+                    }));
+                    // Langsung perbarui rute Google Maps via DistanceMatrixService dalam 1 batch
+                    enrichLandmarksWithGoogleDistanceMatrix(centerLat, centerLng, cleanCombinedLandmarks);
+                }
+            } catch (err) {
+                console.warn('[detectNearbyLandmarks] Staggered scan warning:', err);
+                if (landmarkScanAbortRef.current === scanId) {
+                    setIsScanningLandmarks(false);
+                }
             }
-        });
+        })();
     };
 
     const searchFacilityCoordinates = (index: number, name: string) => {
@@ -1966,8 +1889,16 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                     campuses: (prev.campuses || []).filter((c: any) => !isGarbageFacility(c.name) && !isInvalidCampus(c.name))
                 }));
             }
+            // CATATAN: JANGAN memanggil detectNearbyLandmarks (Google Places API) secara otomatis di sini!
+            // Cukup gunakan master data terkurasi lokal (offline, 0ms, 0 kuota API) jika form benar-benar belum memiliki landmark sama sekali.
             if (currentCampuses.length === 0) {
-                detectNearbyLandmarks(kmListingForm.location.lat, kmListingForm.location.lng);
+                const curatedAnchors = findNearbyCuratedLandmarks(kmListingForm.location.lat, kmListingForm.location.lng, 7.0);
+                if (curatedAnchors.length > 0) {
+                    setKmListingForm((prev: any) => ({
+                        ...prev,
+                        campuses: curatedAnchors.map(({ kmVal, ...item }: any) => item)
+                    }));
+                }
             }
         }
     }, [kmStep, isEditingKostManager, kmListingForm.location?.lat, kmListingForm.location?.lng]);
@@ -3288,13 +3219,37 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
 
                     parsed.kmListingForm.roomTypes = draftRoomTypes;
 
-                    // Fallback campuses to database if draft has none (helps heal corrupted drafts or empty states)
-                    let draftCampuses = parsed.kmListingForm.campuses || [];
+                    // Merge landmarks (campuses & public facilities) from draft or database
+                    let draftCampuses = Array.isArray(parsed.kmListingForm.campuses) ? parsed.kmListingForm.campuses : [];
+                    const dbAllLandmarks = [
+                        ...(Array.isArray(dbKmProp?.campuses) ? dbKmProp.campuses : []),
+                        ...(Array.isArray(dbKmProp?.public_facilities) ? dbKmProp.public_facilities : []),
+                        ...(Array.isArray(dbPropertyRecord?.campuses) ? dbPropertyRecord.campuses : []),
+                        ...(Array.isArray(dbPropertyRecord?.public_facilities) ? dbPropertyRecord.public_facilities : []),
+                        ...(Array.isArray(archivedKm?.campuses) ? archivedKm.campuses : []),
+                        ...(Array.isArray(archivedKm?.public_facilities) ? archivedKm.public_facilities : [])
+                    ].filter((item: any) => item && typeof item === 'object' && item.name);
+
                     if (draftCampuses.length === 0) {
-                        const dbCampuses = dbKmProp?.campuses || dbPropertyRecord?.campuses || [];
-                        if (dbCampuses.length > 0) {
-                            draftCampuses = dbCampuses;
+                        if (dbAllLandmarks.length > 0) {
+                            const seen = new Set();
+                            draftCampuses = dbAllLandmarks.filter(item => {
+                                const k = (item.name || '').toLowerCase().trim();
+                                if (!k || seen.has(k)) return false;
+                                seen.add(k);
+                                return true;
+                            });
                         }
+                    } else if (dbAllLandmarks.length > 0) {
+                        // Pastikan fasilitas publik dari database disertakan ke draftCampuses jika belum ada
+                        const seen = new Set(draftCampuses.map((c: any) => (c.name || '').toLowerCase().trim()));
+                        dbAllLandmarks.forEach((item: any) => {
+                            const k = (item.name || '').toLowerCase().trim();
+                            if (k && !seen.has(k)) {
+                                seen.add(k);
+                                draftCampuses.push(item);
+                            }
+                        });
                     }
 
                     // Sanitize draft public area images
@@ -3557,7 +3512,19 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                     rules: dbKmProp.rules || ['Tidak boleh membawa hewan peliharaan', 'Tamu dilarang menginap'],
                     image_urls: loadedKmImageUrls,
                     photoCategories: loadedKmPhotoCategories,
-                    campuses: dbKmProp.campuses || [],
+                    campuses: (() => {
+                        const raw = [
+                            ...(Array.isArray(dbKmProp.campuses) ? dbKmProp.campuses : []),
+                            ...(Array.isArray(dbKmProp.public_facilities) ? dbKmProp.public_facilities : [])
+                        ].filter((item: any) => item && typeof item === 'object' && item.name);
+                        const seen = new Set();
+                        return raw.filter(item => {
+                            const k = (item.name || '').toLowerCase().trim();
+                            if (!k || seen.has(k)) return false;
+                            seen.add(k);
+                            return true;
+                        });
+                    })(),
                     publicBathroomFacilities: normalizedKmFacs.publicBathroomFacilities,
                     publicKitchenFacilities: normalizedKmFacs.publicKitchenFacilities,
                     publicParkingFacilities: normalizedKmFacs.publicParkingFacilities
@@ -3706,7 +3673,19 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                         rules: archivedKm.rules || dbPropertyRecord.rules || ['Tidak boleh membawa hewan peliharaan', 'Tamu dilarang menginap'],
                         image_urls: loadedKmImageUrls,
                         photoCategories: loadedKmPhotoCategories.length > 0 ? loadedKmPhotoCategories : dynamicKmCats,
-                        campuses: archivedKm.campuses || dbPropertyRecord.campuses || [],
+                        campuses: (() => {
+                            const raw = [
+                                ...(Array.isArray(archivedKm?.campuses) ? archivedKm.campuses : (Array.isArray(dbPropertyRecord?.campuses) ? dbPropertyRecord.campuses : [])),
+                                ...(Array.isArray(archivedKm?.public_facilities) ? archivedKm.public_facilities : (Array.isArray(dbPropertyRecord?.public_facilities) ? dbPropertyRecord.public_facilities : []))
+                            ].filter((item: any) => item && typeof item === 'object' && item.name);
+                            const seen = new Set();
+                            return raw.filter(item => {
+                                const k = (item.name || '').toLowerCase().trim();
+                                if (!k || seen.has(k)) return false;
+                                seen.add(k);
+                                return true;
+                            });
+                        })(),
                         publicBathroomFacilities: normalizedKmFacs.publicBathroomFacilities,
                         publicKitchenFacilities: normalizedKmFacs.publicKitchenFacilities,
                         publicParkingFacilities: normalizedKmFacs.publicParkingFacilities
@@ -3789,7 +3768,19 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                     rules: dbPropertyRecord.rules || ['Tidak boleh membawa hewan peliharaan', 'Tamu dilarang menginap'],
                     image_urls: [], // FRESH SLATE: Surveyor will take new survey photos (0 Foto)
                     photoCategories: freshDynamicCats,
-                    campuses: dbPropertyRecord.campuses || [],
+                    campuses: (() => {
+                        const raw = [
+                            ...(Array.isArray(dbPropertyRecord?.campuses) ? dbPropertyRecord.campuses : []),
+                            ...(Array.isArray(dbPropertyRecord?.public_facilities) ? dbPropertyRecord.public_facilities : [])
+                        ].filter((item: any) => item && typeof item === 'object' && item.name);
+                        const seen = new Set();
+                        return raw.filter(item => {
+                            const k = (item.name || '').toLowerCase().trim();
+                            if (!k || seen.has(k)) return false;
+                            seen.add(k);
+                            return true;
+                        });
+                    })(),
                     publicBathroomFacilities: normalizedPropFacs.publicBathroomFacilities,
                     publicKitchenFacilities: normalizedPropFacs.publicKitchenFacilities,
                     publicParkingFacilities: normalizedPropFacs.publicParkingFacilities
