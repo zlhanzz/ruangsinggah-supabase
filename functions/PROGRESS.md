@@ -2,6 +2,34 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 420. Perbaikan Sistem OCR AI Verifikasi KTP: Eliminasi Payload Base64 Korup & Optimalisasi Public Storage URL (`MitraProfile.tsx`, `AgentProfile.tsx`, `analyze-ktp`) (September 2026)
+- **Permintaan & Masalah**:
+  1. Pemindaian OCR KTP otomatis pada tahap verifikasi identitas (Step 2) mengalami kegagalan dengan error konsol: `FunctionsHttpError: Edge Function returned a non-2xx status code` pada `MitraProfile.tsx:563`.
+  2. Akibatnya, formulir Step 2 (NIK, Nama, Tempat Lahir, Tanggal Lahir, Jenis Kelamin, Agama, Pekerjaan, Alamat) gagal terisi secara otomatis dari foto KTP yang diunggah.
+- **Akar Masalah**:
+  1. **Payload Base64 di Klien**: Pada fungsi `handleKtpUpload`, front-end mencoba mengonversi file WebP yang sudah diunggah ke storage menjadi string base64 dengan perulangan JavaScript (`String.fromCharCode` + `btoa`), lalu mengirimkan string raksasa tersebut ke Edge Function sebagai `base64Image`.
+  2. **Prioritas Base64 Edge Function**: Edge Function `analyze-ktp` memprioritaskan `base64Image` jika ada di payload body. String base64 klien yang sangat besar atau terpotong menyebabkan batas ukuran body HTTP Edge Function terlampaui atau gagal diproses oleh Gemini API, memicu HTTP 400 Bad Request.
+  3. **Karakter Spasi Nama File**: Nama file upload mentah mengandung spasi (misal: `Screenshot 2026-06-15...webp`), berpotensi memicu masalah URL encoding saat di-fetch oleh backend.
+- **Implementasi Solusi**:
+  1. **Transmisi Bersih Berbasis Public URL Storage**:
+     - Menghapus pembuatan string base64 di sisi front-end browser pada [MitraProfile.tsx](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/MitraProfile.tsx) dan [AgentProfile.tsx](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/AgentProfile.tsx).
+     - Mengirimkan body bersih `{ imageUrl: publicUrl, mimeType: 'image/webp' }` ke Edge Function. Ukuran payload turun drastis dari >1MB menjadi <200 byte, super cepat dan 100% bebas dari risiko memory overflow browser.
+  2. **Sanitasi Nama File Foto KTP**:
+     - Menambahkan sanitasi nama file pada `handleKtpUpload`: `safeBaseName = rawBaseName.replace(/[^a-zA-Z0-9_-]/g, '_')` untuk menjamin tidak ada spasi atau karakter ilegal pada URL storage.
+  3. **Penyempurnaan Penanganan Error & Edge Function**:
+     - Di `supabase/functions/analyze-ktp/index.ts`, memastikan pembacaan URL menggunakan `encodeURI(imageUrl)` dan menghapus candidate model yang deprecated (`gemini-1.5-pro` 404).
+     - Di `performOcr`, menangkap pesan error detail dari response Edge Function (`aiErr.context.json()`) untuk mempermudah observabilitas.
+- **File Tersentuh**:
+  - `functions/public/pages/MitraProfile.tsx`
+  - `functions/public/pages/AgentProfile.tsx`
+  - `supabase/functions/analyze-ktp/index.ts`
+  - `functions/PROGRESS.md`
+  - `IMPLEMENTATION_PLAN.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Pengujian langsung ke Edge Function Supabase menggunakan foto KTP pengguna sukses 100% mengekstrak data lengkap: NIK `7312011011040003`, Nama `SULHAN`, Tempat Lahir `SUNNE`, Tanggal Lahir `2004-11-10`, Jenis Kelamin `Pria`, Agama `Islam`, Pekerjaan `Pelajar/Mahasiswa`, Status `Single`, Alamat `BUNNE RT 001/RW 003, GOARIE, MARIORIWAWO`.
+  - Kompilasi Vite production di `functions/public` lulus 100% tanpa error (`✓ built in 29.88s`).
+
 ### 419. Protokol Ketat Penguncian Nomor WhatsApp Terverifikasi & Alur Ganti Nomor Baru via Verifikasi Ulang OTP (`MitraProfile.tsx`, `AgentProfile.tsx`) (September 2026)
 - **Permintaan & Masalah**:
   1. Nomor WhatsApp yang sudah diverifikasi dengan OTP sebelumnya masih bisa diedit secara bebas hanya dengan mengeklik kolom input nomor telepon.

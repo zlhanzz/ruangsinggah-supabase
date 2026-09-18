@@ -524,7 +524,7 @@ const MitraProfile: React.FC<MitraProfileProps> = ({ uid, user: initialUser, onB
         securityOtpRefs.current[focusIndex]?.focus();
     };
 
-    const performOcr = async (imageUrl: string, base64Image?: string) => {
+    const performOcr = async (imageUrl: string) => {
         setIsScanning(true);
         try {
             // Timeout guard 25 detik agar tetap fleksibel untuk jaringan seluler
@@ -535,7 +535,6 @@ const MitraProfile: React.FC<MitraProfileProps> = ({ uid, user: initialUser, onB
             const invokePromise = supabase.functions.invoke('analyze-ktp', {
                 body: { 
                     imageUrl: imageUrl,
-                    base64Image: base64Image,
                     mimeType: 'image/webp'
                 }
             });
@@ -560,8 +559,15 @@ const MitraProfile: React.FC<MitraProfileProps> = ({ uid, user: initialUser, onB
                 }));
                 alert('Data KTP berhasil dipindai otomatis. Mohon periksa kembali kecocokan data Anda sebelum melanjutkan.');
             } else {
-                console.warn('AI Extraction response:', aiErr || aiRes);
-                alert('Pemindaian otomatis belum optimal. Silakan periksa dan lengkapi data profil Anda secara manual.');
+                let detailMsg = aiErr?.message || '';
+                if (aiErr?.context) {
+                    try {
+                        const errJson = await aiErr.context.json();
+                        if (errJson?.error) detailMsg = errJson.error;
+                    } catch (_) {}
+                }
+                console.warn('AI Extraction response:', aiErr || aiRes, detailMsg);
+                alert(`Pemindaian otomatis belum optimal${detailMsg ? ` (${detailMsg})` : ''}. Silakan periksa dan lengkapi data profil Anda secara manual.`);
             }
         } catch (error: any) {
             console.error('OCR Error:', error);
@@ -591,23 +597,10 @@ const MitraProfile: React.FC<MitraProfileProps> = ({ uid, user: initialUser, onB
         try {
             const { convertToWebP } = await import('../adminService');
             const processedFile = await convertToWebP(file);
-            const baseName = processedFile.name.substring(0, processedFile.name.lastIndexOf('.')) || processedFile.name;
-            const fileName = `${uid}-${Math.random()}_${baseName}.webp`;
+            const rawBaseName = processedFile.name.substring(0, processedFile.name.lastIndexOf('.')) || processedFile.name;
+            const safeBaseName = rawBaseName.replace(/[^a-zA-Z0-9_-]/g, '_');
+            const fileName = `${uid}-${Date.now()}_${safeBaseName}.webp`;
             const filePath = `ktp/${fileName}`;
-
-            // Baca base64 dari processedFile secara lokal untuk transfer instan
-            let base64String = '';
-            try {
-                const arrayBuffer = await processedFile.arrayBuffer();
-                const bytes = new Uint8Array(arrayBuffer);
-                let binary = '';
-                for (let i = 0; i < bytes.byteLength; i++) {
-                    binary += String.fromCharCode(bytes[i]);
-                }
-                base64String = btoa(binary);
-            } catch (b64Err) {
-                console.warn('Gagal membaca base64 lokal:', b64Err);
-            }
 
             const { error: uploadError } = await supabase.storage
                 .from('survey-photos')
@@ -622,7 +615,7 @@ const MitraProfile: React.FC<MitraProfileProps> = ({ uid, user: initialUser, onB
                 .getPublicUrl(filePath);
 
             setFormData(prev => ({ ...prev, ktp_photo_url: publicUrl }));
-            performOcr(publicUrl, base64String);
+            performOcr(publicUrl);
         } catch (error) {
             console.error('Error uploading KTP:', error);
         } finally {

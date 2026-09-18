@@ -10,8 +10,7 @@ const corsHeaders = {
 const CANDIDATE_MODELS = [
   "gemini-2.5-flash",
   "gemini-2.0-flash",
-  "gemini-1.5-flash",
-  "gemini-1.5-pro"
+  "gemini-1.5-flash"
 ];
 
 serve(async (req) => {
@@ -76,7 +75,7 @@ FORMAT OUTPUT (JSON SAJA, TANPA DEKORASI BACKTICKS / MURNI JSON):
       });
     } else if (imageUrl) {
       console.log(`Fetching image from URL: ${imageUrl}`);
-      const imageRes = await fetch(imageUrl);
+      const imageRes = await fetch(encodeURI(imageUrl));
       if (!imageRes.ok) {
         throw new Error(`Failed to fetch KTP image from storage: ${imageRes.statusText}`);
       }
