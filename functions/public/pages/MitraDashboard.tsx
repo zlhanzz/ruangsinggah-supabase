@@ -221,14 +221,14 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
     }, [kmRequests, CLOSED_KM_STATUSES]);
 
     const handleMenuChange = (menu: MenuKey) => {
-        if (!loading && !isKostManager && (menu === 'overview' || menu === 'properties')) {
-            setShowPromoPopup(true);
-        }
         navigate(`${Page.DASHBOARD_MITRA}/${menu}`);
     };
 
     const handleClosePromoPopup = useCallback(() => {
         setShowPromoPopup(false);
+        try {
+            sessionStorage.setItem('km_promo_popup_closed_session', 'true');
+        } catch { }
     }, []);
 
     const handleLogoutWithCleanup = useCallback(() => {
@@ -238,9 +238,9 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
         onLogout?.();
     }, [onLogout]);
 
-    // Load promo popup setting on mount
+    // Load promo popup setting on mount (hanya jika identitas terverifikasi dan bukan KostManager)
     useEffect(() => {
-        if (isKostManager) {
+        if (isKostManager || !isVerified) {
             setShowPromoPopup(false);
             return;
         }
@@ -252,16 +252,31 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
         getKostManagerFeeSettings().then(feeSet => {
             setKmFeeSettings(feeSet);
         }).catch(err => console.warn('Could not load KM fee setting:', err));
-    }, [isKostManager]);
+    }, [isKostManager, isVerified]);
 
-    // Selalu munculkan pop-up iklan promosi KostManager HANYA jika data sudah selesai dimuat dan mitra BUKAN KostManager / tidak sedang mengajukan
+    // Pop-up iklan promosi KostManager HANYA boleh muncul jika:
+    // 1. Identitas mitra SUDAH terverifikasi resmi (isVerified)
+    // 2. Mitra BUKAN KostManager aktif (isKostManager === false)
+    // 3. Data sudah selesai dimuat (!loading)
+    // 4. Berada pada tab yang relevan (overview / properties)
+    // 5. Pengguna BELUM pernah menutup pop-up pada sesi penjelajahan ini (anti-spam sessionStorage)
     useEffect(() => {
-        if (!loading && !isKostManager && (activeMenu === 'overview' || activeMenu === 'properties')) {
+        if (!isVerified || isKostManager) {
+            setShowPromoPopup(false);
+            return;
+        }
+
+        let isDismissed = false;
+        try {
+            isDismissed = sessionStorage.getItem('km_promo_popup_closed_session') === 'true';
+        } catch { }
+
+        if (!loading && !isDismissed && (activeMenu === 'overview' || activeMenu === 'properties')) {
             setShowPromoPopup(true);
-        } else if (isKostManager) {
+        } else {
             setShowPromoPopup(false);
         }
-    }, [activeMenu, isKostManager, loading]);
+    }, [activeMenu, isKostManager, isVerified, loading]);
 
     // Handle Escape key for popup
     useEffect(() => {
@@ -3873,7 +3888,7 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
             })()}
 
             {/* ── POP-UP IKLAN GRAFIS PROMO MITRA (KOSTMANAGER) ── */}
-            {showPromoPopup && !loading && !isKostManager && (
+            {showPromoPopup && !loading && !isKostManager && isVerified && (
                 <div 
                     onClick={(e) => {
                         if (e.target === e.currentTarget) {

@@ -2,6 +2,29 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 430. Validasi Status Verifikasi Identitas & Kontrol Sesi Pop-Up Promosi KostManager (`MitraDashboard.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna menegaskan kembali bahwa pop-up promosi KostManager ("Capek Kelola Kost Sendiri? Serahkan Operasional ke KostManager!") hanya boleh muncul apabila identitas pemilik kost telah terverifikasi resmi (`isVerified === true`).
+  2. Ditemukan bug di mana akun baru yang baru masuk dashboard dan belum diverifikasi identitasnya langsung disajikan pop-up promosi secara terus-menerus (*spamming*) setiap kali berpindah tab/menu.
+- **Akar Masalah**:
+  1. Pemicu otomatis di `useEffect` (baris 259) dan handler menu `handleMenuChange` (baris 224) di `MitraDashboard.tsx` sebelumnya tidak memeriksa status `isVerified`, melainkan hanya `!loading && !isKostManager`.
+  2. Penutupan pop-up di `handleClosePromoPopup` tidak menyimpan status dismiss di `sessionStorage`, sementara `handleMenuChange` secara manual memaksa `setShowPromoPopup(true)` setiap kali tab `overview` atau `properties` diklik, menyebabkan pop-up muncul berulang-ulang tanpa henti.
+- **Implementasi Solusi**:
+  1. **Proteksi Wajib Identitas Terverifikasi (`isVerified`)**:
+     - Memperbarui `useEffect` pemicu pop-up dan `useEffect` pemuat setting iklan agar langsung keluar (`setShowPromoPopup(false); return;`) jika `!isVerified || isKostManager`.
+     - Menambahkan proteksi ganda pada kondisi render JSX: `{showPromoPopup && !loading && !isKostManager && isVerified && (...) }` sehingga mustahil pop-up dirender untuk akun belum terverifikasi (`unverified`, `pending`, `rejected`, atau `banned`).
+  2. **Kontrol Sesi Anti-Spam (`sessionStorage`)**:
+     - Pada fungsi `handleClosePromoPopup`, sistem mencatat `sessionStorage.setItem('km_promo_popup_closed_session', 'true')` saat pengguna menutup via tombol "X", "Nanti Saja", backdrop klik, atau tombol Escape.
+     - `useEffect` memeriksa apakah pop-up sudah pernah ditutup di sesi penjelajahan ini (`sessionStorage.getItem('km_promo_popup_closed_session') === 'true'`). Jika sudah ditutup, pop-up tidak akan muncul kembali saat berpindah-pindah tab.
+     - Menghapus pemanggilan manual `setShowPromoPopup(true)` di dalam `handleMenuChange` agar penayangan sepenuhnya tertib dikendalikan oleh sesi.
+- **File Tersentuh**:
+  - `functions/public/pages/MitraDashboard.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi build frontend Vite (`cmd.exe /c npm run build`) sukses 100% (`✓ built in 34.13s`, 0 error).
+  - Pop-up promosi KostManager dipastikan 100% tidak akan pernah muncul bagi akun belum terverifikasi, dan tidak lagi muncul berulang kali setelah ditutup pada akun terverifikasi.
+
 ### 429. Restrukturisasi 4 Kategori Menu Profil Mitra & Penambahan Modal Preferensi Notifikasi (`MitraProfile.tsx`) (September 2026)
 - **Permintaan & Masalah**:
   1. Pengguna meminta agar tombol "Pengaturan" di profil mitra tidak langsung memunculkan formulir ubah kata sandi, melainkan dijadikan sebuah kategori pengaturan akun yang komprehensif sebagaimana profil pencari kost (`Profile.tsx`), yang memuat manajemen *Keamanan & Kata Sandi* dan *Preferensi Notifikasi*.

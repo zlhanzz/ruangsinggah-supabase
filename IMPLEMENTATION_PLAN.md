@@ -1,101 +1,102 @@
-# Rencana Implementasi: Penataan Struktur Menu Profil Mitra & Pemisahan Kategori Program dan Pusat Bantuan (`MitraProfile.tsx`)
+# Rencana Implementasi: Validasi Status Verifikasi Identitas & Kontrol Frekuensi Pop-Up Promosi KostManager (`MitraDashboard.tsx`)
 
-Dokumen ini merinci penyesuaian arsitektur menu profil mitra (`MitraProfile.tsx`) sesuai arahan terbaru:
-1. Menjadikan **PENGATURAN AKUN & KEAMANAN** sebagai kategori terpisah (memuat *Keamanan & Kata Sandi* ber-OTP dan *Preferensi Notifikasi*), serasi dengan tampilan profil pencari kost (`Profile.tsx`).
-2. Menata kategori pertama **KEUANGAN & DATA DIRI** memuat *Penarikan Saldo* dan *Informasi Pribadi*.
-3. Memisahkan **PROGRAM & SOLUSI KOST** (*Program KostManager Auto-Pilot*) dengan **PUSAT BANTUAN & INFORMASI LEGAL** (*Pusat Bantuan 24/7* & *Ketentuan Layanan Kemitraan*) menjadi dua grup kategori independen.
+Dokumen ini merinci analisis dan rencana perbaikan atas keluhan pengguna terkait kemunculan pop-up promosi KostManager:
+1. **Syarat Wajib Terverifikasi (`isVerified`)**: Pop-up promosi KostManager **HANYA** boleh tampil jika mitra pemilik kost telah menyelesaikan dan lolos verifikasi identitas resmi (`user?.verification_status === 'verified'`). Akun baru yang belum terverifikasi (`unverified`, `pending`, `rejected`, atau `banned`) **DILARANG KERAS** menampilkan pop-up ini.
+2. **Pencegahan Muncul Berulang-ulang (*Anti-Spam / Session Control*)**: Pop-up tidak boleh muncul terus-menerus setiap kali pengguna berpindah tab/menu atau me-refresh halaman. Setelah ditutup (tombol "X", "Nanti Saja", backdrop, atau tombol Esc), status dismiss disimpan di `sessionStorage` untuk sesi penjelajahan tersebut.
 
 ---
 
-## 1. Analisis Kebutuhan & Desain Hierarki 4 Kategori Menu
+## 1. Analisis Masalah & Akar Penyebab
 
-Hierarki menu profil mitra yang akan diimplementasikan:
+### Masalah:
+- Akun mitra baru yang baru masuk dashboard dan belum diverifikasi identitasnya langsung disajikan pop-up promosi KostManager.
+- Pop-up muncul secara terus-menerus (*annoying/spamming*) setiap kali mitra berpindah menu tab atau membuka dashboard.
+
+### Akar Penyebab:
+1. **Ketiadaan Pengecekan `isVerified` pada Pemicu Pop-Up**:
+   - Di baris 224: `handleMenuChange` langsung memanggil `setShowPromoPopup(true)` tanpa memeriksa apakah akun sudah terverifikasi (`isVerified`).
+   - Di baris 259: `useEffect` penayangan otomatis hanya memeriksa `!loading && !isKostManager && (activeMenu === 'overview' || activeMenu === 'properties')`, tanpa menyertakan `isVerified`.
+   - Di baris 3876: Kondisi render JSX `{showPromoPopup && !loading && !isKostManager && (` juga tidak memiliki pengaman `isVerified`.
+2. **Belum Terhubungnya Session Storage saat Pop-up Ditutup**:
+   - Di baris 230: `handleClosePromoPopup` hanya memanggil `setShowPromoPopup(false)` tanpa mencatat flag penutupan di `sessionStorage`.
+   - Akibatnya, setiap kali `activeMenu` berganti ke `overview` atau `properties`, `useEffect` dan `handleMenuChange` langsung memaksa `setShowPromoPopup(true)` kembali.
+
+---
+
+## 2. Solusi Teknis & Rencana Perubahan
 
 ```mermaid
 graph TD
-    subgraph Grup_1 [1. KEUANGAN & DATA DIRI]
-        A1["Penarikan Saldo<br/>(Badge Saldo Aktif Rp X)"]
-        A2["Informasi Pribadi<br/>(Badge Status Verifikasi KTP)"]
-    end
+    A["Mitra Masuk Dashboard / Berpindah Menu"] --> B{"Data Selesai Dimuat? (!loading)"}
+    B -- Tidak --> Z["Jangan Tampilkan Pop-Up"]
+    B -- Ya --> C{"Apakah Identitas Terverifikasi?<br/>(isVerified === true)"}
+    C -- Tidak (Akun Baru / Pending / Belum KTP) --> Z
+    C -- Ya (Verified) --> D{"Sudah Menjadi KostManager Aktif?<br/>(isKostManager === true)"}
+    D -- Ya --> Z
+    D -- Tidak --> E{"Sudah Pernah Ditutup pada Sesi Ini?<br/>(sessionStorage km_promo_popup_closed_session)"}
+    E -- Ya (Sudah Di-dismiss) --> Z
+    E -- Tidak --> F{"Berada di Tab Overview / Properties?"}
+    F -- Ya --> G["TAMPILKAN POP-UP PROMOSI KOSTMANAGER"]
+    F -- Tidak --> Z
 
-    subgraph Grup_2 [2. PENGATURAN AKUN & KEAMANAN]
-        B1["Keamanan & Kata Sandi<br/>(Modal Ganti Password Ber-OTP Email)"]
-        B2["Preferensi Notifikasi<br/>(Modal Pengaturan Notifikasi WA/Email/Promo)"]
-    end
-
-    subgraph Grup_3 [3. PROGRAM & SOLUSI KOST]
-        C1["Program KostManager Auto-Pilot<br/>(Badge Status Autopilot / Diproses / Detail)"]
-    end
-
-    subgraph Grup_4 [4. PUSAT BANTUAN & INFORMASI LEGAL]
-        D1["Pusat Bantuan 24/7<br/>(Badge CS Online & Link WA)"]
-        D2["Ketentuan Layanan Kemitraan<br/>(Halaman S&K Pemilik Kost)"]
-        D3["Keluar dari Akun Mitra<br/>(Tombol Logout Berbahaya/Aman)"]
-    end
+    G --> H["User Klik 'X' / 'Nanti Saja' / Backdrop / Esc"]
+    H --> I["Set sessionStorage('km_promo_popup_closed_session', 'true')<br/>& Tutup Pop-Up"]
 ```
 
-### Rincian Pembagian Kategori:
-1. **Grup 1: KEUANGAN & DATA DIRI**
-   - **`Penarikan Saldo`**: Akses dompet penghasilan sewa, saldo aktif (`availableBalance`), dan rekening bank penarikan.
-   - **`Informasi Pribadi`**: Kontak profil, nomor WA terverifikasi, alamat domisili, dan dokumen KTP resmi.
+### Langkah Perubahan Spesifik pada `MitraDashboard.tsx`:
+1. **Proteksi di `useEffect` (Baris 258–264)**:
+   - Tambahkan pengecekan:
+     ```tsx
+     useEffect(() => {
+         if (!isVerified || isKostManager) {
+             setShowPromoPopup(false);
+             return;
+         }
 
-2. **Grup 2: PENGATURAN AKUN & KEAMANAN** *(Sesuai Standar Profil User)*
-   - **`Keamanan & Kata Sandi`**: Ikon `<Lock />` biru $\rightarrow$ membuka modal ganti kata sandi berproteksi verifikasi Email OTP 6-digit (keamanan tinggi).
-   - **`Preferensi Notifikasi`**: Ikon `<Bell />` amber $\rightarrow$ membuka modal toggle preferensi notifikasi WhatsApp, Email Laporan, & Promo/Fitur Baru.
-
-3. **Grup 3: PROGRAM & SOLUSI KOST** *(Kategori Mandiri)*
-   - **`Program KostManager Auto-Pilot`**: Layanan manajemen properti otomatis bagi pemilik kost tanpa repot, dengan badge status (`Autopilot 👑`, `Diproses`, atau navigasi ke detail program).
-
-4. **Grup 4: PUSAT BANTUAN & INFORMASI LEGAL** *(Kategori Mandiri)*
-   - **`Pusat Bantuan 24/7`**: Menghubungkan ke layanan CS WhatsApp & tim operasional RuangSinggah.
-   - **`Ketentuan Layanan Kemitraan`**: Syarat, ketentuan & panduan hukum pemilik kost (`/terms`).
-   - **`Keluar dari Akun Mitra`**: Tombol logout akun mitra.
-
----
-
-## 2. Fitur Baru: Modal Preferensi Notifikasi Mitra
-
-Mengadopsi pola modal dari `Profile.tsx` yang sudah stabil:
-- **State Pengaturan**:
-  ```tsx
-  const [isNotifModalOpen, setIsNotifModalOpen] = useState(false);
-  const [notifSettings, setNotifSettings] = useState({
-      waNotif: true,
-      emailNotif: true,
-      promoNotif: false,
-  });
-  ```
-- **Opsi Toggle**:
-  1. **Notifikasi WhatsApp**: Notifikasi pembayaran sewa masuk, verifikasi penyewa, dan pesan darurat.
-  2. **Notifikasi Email**: Rekap bulanan pendapatan sewa, faktur transaksi, dan notifikasi keamanan akun.
-  3. **Info Program & Promo**: Rekomendasi pengelolaan hunian dan penawaran fitur KostManager.
-
----
-
-## 3. Pencegahan FOUT & Standar Kualitas
-
-- Seluruh ikon menggunakan SVG murni yang diimpor dari **`lucide-react`**:
-  - `<Wallet />`, `<UserCheck />`, `<Lock />`, `<Bell />`, `<Sparkles />`, `<HelpCircle />`, `<FileText />`, `<LogOut />`, `<ChevronRight />`, `<Check />`, `<X />`, dll.
-- 0 Google font ligatures, 0ms FOUT delay.
-- Desain konsisten dengan border halus (`border-gray-100 divide-y divide-gray-50`), rounded cards (`rounded-3xl`), dan tracking label uppercase (`text-[11px] font-black uppercase text-gray-400 tracking-wider mb-2.5 px-1`).
+         const isDismissed = sessionStorage.getItem('km_promo_popup_closed_session') === 'true';
+         if (!loading && !isDismissed && (activeMenu === 'overview' || activeMenu === 'properties')) {
+             setShowPromoPopup(true);
+         } else {
+             setShowPromoPopup(false);
+         }
+     }, [activeMenu, isKostManager, isVerified, loading]);
+     ```
+2. **Pembersihan di `handleMenuChange` (Baris 223–228)**:
+   - Hapus pemanggilan manual `setShowPromoPopup(true)` yang memicu pop-up berulang kali saat berpindah tab. Biarkan `useEffect` yang memiliki kendali session storage yang mengaturnya secara tertib.
+3. **Pencatatan Dismiss di `handleClosePromoPopup` (Baris 230–232)**:
+   - Simpan status di session storage agar tidak muncul lagi di sesi aktif:
+     ```tsx
+     const handleClosePromoPopup = useCallback(() => {
+         setShowPromoPopup(false);
+         try {
+             sessionStorage.setItem('km_promo_popup_closed_session', 'true');
+         } catch { }
+     }, []);
+     ```
+4. **Proteksi Ganda pada Kondisi Render JSX (Baris 3876)**:
+   - Perbarui kondisi render JSX:
+     ```tsx
+     {showPromoPopup && !loading && !isKostManager && isVerified && (
+     ```
 
 ---
 
-## 4. Dampak File yang Akan Dimodifikasi
+## 3. Dampak File yang Dimodifikasi
 
-1. **`functions/public/pages/MitraProfile.tsx`**:
-   - Menambahkan state `isNotifModalOpen` & `notifSettings`.
-   - Mengelompokkan tampilan menu menjadi 4 kategori terpisah sesuai desain.
-   - Menambahkan Modal Preferensi Notifikasi di dalam modal container.
+1. **`functions/public/pages/MitraDashboard.tsx`**:
+   - Menambahkan pengaman `isVerified` dan `sessionStorage` pada alur kemunculan pop-up promosi KostManager.
 2. **`functions/PROGRESS.md`**:
-   - Mencatat histori penyelesaian progres #429.
+   - Mencatat progres fitur penyelesaian perbaikan nomor #430.
 3. **`WALKTHROUGH.md`**:
-   - Dokumentasi hasil verifikasi kompilasi dan panduan pengujian visual.
+   - Melampirkan dokumentasi pengujian dan verifikasi logika.
 
 ---
 
-## 5. Rencana Verifikasi
+## 4. Rencana Verifikasi
 
-- [ ] **Kompilasi Frontend**: Menjalankan `cmd.exe /c npm run build` di direktori `functions/public` (wajib 0 error, exit code 0).
-- [ ] **Struktur 4 Kategori**: Memastikan layout menu terbagi jelas menjadi 4 bagian independen dengan header masing-masing.
-- [ ] **Modal Keamanan & Notifikasi**: Memastikan modal ganti kata sandi ber-OTP dan modal preferensi notifikasi dapat dibuka, ditutup, dan berfungsi sempurna.
+- [ ] **Kompilasi Frontend**: Menjalankan `cmd.exe /c npm run build` di direktori `functions/public` untuk memastikan 0 error.
+- [ ] **Simulasi Akun Belum Verifikasi**:
+  - Akun baru atau yang statusnya belum `verified` masuk ke dashboard mitra $\rightarrow$ Pop-up promosi KostManager dipastikan **100% TIDAK MUNCUL**.
+- [ ] **Simulasi Akun Terverifikasi**:
+  - Akun yang sudah `verified` masuk ke overview $\rightarrow$ Pop-up promosi muncul sekali.
+  - Saat ditutup (klik "X" atau "Nanti Saja"), berpindah-pindah tab tidak akan memunculkan pop-up lagi pada sesi tersebut.
