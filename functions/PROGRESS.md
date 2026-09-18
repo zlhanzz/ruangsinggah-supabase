@@ -2,6 +2,30 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 433. Pembersihan Diksi Internal ("Instan") & Standarisasi Hasil Evaluasi Protokol AI Verifikasi Mitra (`MitraProfile.tsx` & `MitraDashboard.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna menegaskan bahwa tidak boleh ada istilah teknis atau logika dapur seperti "instan", "kilat", "auto-acc", dsb. yang tampil di antarmuka sistem (tombol pengajuan, alert dialog, kartu status, atau banner).
+  2. Mitra tidak perlu mengetahui cara kerja verifikasi di belakang layar; mitra cukup mengetahui apakah verifikasi berhasil atau masih ada data yang perlu dievaluasi dan diperbaiki berdasarkan protokol AI & keamanan yang tertanam di sistem.
+- **Akar Masalah**:
+  1. Tombol Step 2 sebelumnya menggunakan label `"SIMPAN & VERIFIKASI INSTAN"`, alert sukses menggunakan kata "terverifikasi secara instan oleh sistem", status notes mencatat `'Terverifikasi Otomatis (Validasi AI KTP & WhatsApp OTP)'`, dan banner menampilkan tombol "Periksa / Verifikasi Instan", yang secara vulgar memperlihatkan mekanisme internal dapur sistem.
+- **Implementasi Solusi**:
+  1. **Pembersihan Seluruh Diksi "Instan" & "Kilat"**:
+     - Mengubah label tombol formulir KTP (Langkah 2) menjadi **"SIMPAN & AJUKAN VERIFIKASI"**.
+     - Mengubah label tombol pada banner peninjauan (*pending*) di profil dan overview dashboard menjadi **"Periksa Kelengkapan Data"**.
+     - Memperbarui deskripsi banner peninjauan menjadi: *"Data identitas KTP Anda sedang dalam proses peninjauan sistem. Silakan periksa kembali kelengkapan dokumen apabila ada data yang perlu disesuaikan."*
+  2. **Standarisasi Respon Protokol AI & Keamanan**:
+     - Ketika seluruh protokol terpenuhi (WhatsApp OTP, NIK 16 digit, nama lengkap KTP, foto KTP asli), sistem mencatat status notes bersih: `'Identitas Terverifikasi'` dan menyajikan alert konfirmasi resmi:
+       > *"🎉 Verifikasi Identitas Berhasil! Dokumen dan nomor kontak Anda telah sesuai dengan protokol verifikasi RuangSinggah. Akun mitra Anda kini aktif dan siap untuk mempublikasikan unit kost."*
+     - Jika ada protokol yang belum terpenuhi, sistem menampilkan pesan evaluasi spesifik agar mitra tahu bagian mana yang harus diperbaiki.
+- **File Tersentuh**:
+  - `functions/public/pages/MitraProfile.tsx`
+  - `functions/public/pages/MitraDashboard.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi build frontend Vite (`cmd.exe /c npm run build`) sukses 100% (`✓ built in 29.15s`, 0 error).
+  - Pemeriksaan `grep_search` mengonfirmasi 0 penggunaan kata "instan" atau "kilat" pada seluruh alur verifikasi mitra.
+
 ### 432. Implementasi Verifikasi Identitas Kilat & Otomatis (Instant Auto-ACC) Berbasis AI KTP & WhatsApp OTP (`MitraProfile.tsx` & `MitraDashboard.tsx`) (September 2026)
 - **Permintaan & Masalah**:
   1. Pengguna mempertanyakan dan meminta penerapan alur verifikasi identitas kilat dan otomatis (*Instant Auto-ACC*), sehingga calon pemilik kost tidak perlu menunggu lama (1x24 jam) untuk persetujuan manual admin sebelum dapat mengunggah dan mempublikasikan listing kamar kost mereka.

@@ -853,9 +853,9 @@ const MitraProfile: React.FC<MitraProfileProps> = ({
                 updated_at: new Date().toISOString()
             };
 
-            // Evaluasi Verifikasi Identitas Kilat & Otomatis (Instant Auto-ACC)
+            // Evaluasi Kesesuaian Protokol Verifikasi AI & Keamanan
             let isNewVerificationSubmission = false;
-            let isInstantVerified = false;
+            let isProtocolPassed = false;
 
             if (formData.ktp_photo_url && formData.ktp_number && formData.verification_status !== 'verified') {
                 isNewVerificationSubmission = true;
@@ -866,12 +866,12 @@ const MitraProfile: React.FC<MitraProfileProps> = ({
                 const isKtpPhotoReady = Boolean(formData.ktp_photo_url);
 
                 if (isWaVerified && isNikValid && isNameValid && isKtpPhotoReady) {
-                    isInstantVerified = true;
+                    isProtocolPassed = true;
                     updates.verification_status = 'verified';
-                    updates.verification_notes = 'Terverifikasi Otomatis (Validasi AI KTP & WhatsApp OTP)';
+                    updates.verification_notes = 'Identitas Terverifikasi';
                 } else {
                     updates.verification_status = 'pending';
-                    updates.verification_notes = 'Menunggu verifikasi admin';
+                    updates.verification_notes = 'Menunggu kelengkapan verifikasi admin';
                 }
 
                 const { error: verifErr } = await supabase.from('user_verifications').upsert({
@@ -925,8 +925,8 @@ const MitraProfile: React.FC<MitraProfileProps> = ({
             setCurrentStep(1);
             setSearchParams(new URLSearchParams());
 
-            if (isInstantVerified) {
-                alert('🎉 Selamat! Identitas Anda berhasil diverifikasi secara instan oleh sistem. Akun mitra Anda kini aktif penuh dan dapat langsung menambah serta mempublikasikan unit kost!');
+            if (isProtocolPassed) {
+                alert('🎉 Verifikasi Identitas Berhasil! Dokumen dan nomor kontak Anda telah sesuai dengan protokol verifikasi RuangSinggah. Akun mitra Anda kini aktif dan siap untuk mempublikasikan unit kost.');
             } else if (isNewVerificationSubmission) {
                 alert('Data profil dan dokumen verifikasi berhasil disimpan dan sedang ditinjau.');
             } else {
@@ -1456,7 +1456,7 @@ const MitraProfile: React.FC<MitraProfileProps> = ({
                                             disabled={isSubmitting || (!waOtpVerified && !initialUser?.whatsapp_verified)} 
                                             className="w-full sm:w-auto px-10 py-4 bg-orange-500 text-white rounded-xl text-xs font-black uppercase tracking-widest hover:bg-orange-600 active:scale-95 disabled:opacity-50 disabled:active:scale-100 transition-all shadow-lg shadow-orange-500/20 text-center"
                                         >
-                                            {isSubmitting ? 'MEMPROSES...' : 'SIMPAN & VERIFIKASI INSTAN'}
+                                            {isSubmitting ? 'MEMPROSES...' : 'SIMPAN & AJUKAN VERIFIKASI'}
                                         </button>
                                     </>
                                 )}
@@ -1564,7 +1564,7 @@ const MitraProfile: React.FC<MitraProfileProps> = ({
                                         </span>
                                     </div>
                                     <p className="text-xs font-medium text-amber-900/70 mt-1 leading-relaxed">
-                                        Data identitas KTP Anda sedang ditinjau. Anda dapat membuka data dan melakukan verifikasi kilat otomatis jika dokumen sudah lengkap.
+                                        Data identitas KTP Anda sedang dalam proses peninjauan sistem. Silakan periksa kembali kelengkapan dokumen apabila ada data yang perlu disesuaikan.
                                     </p>
                                 </div>
                             </div>
@@ -1573,7 +1573,7 @@ const MitraProfile: React.FC<MitraProfileProps> = ({
                                 onClick={() => setSearchParams({ edit: 'true', step: '2' })}
                                 className="shrink-0 self-end sm:self-center px-4 py-2.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-[10px] font-black uppercase tracking-wider transition-all shadow-md shadow-amber-200 cursor-pointer"
                             >
-                                Periksa / Verifikasi Instan
+                                Periksa Kelengkapan Data
                             </button>
                         </div>
                     ) : formData.verification_status === 'banned' ? (

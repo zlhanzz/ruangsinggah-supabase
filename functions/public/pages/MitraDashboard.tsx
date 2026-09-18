@@ -1304,7 +1304,7 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                                             </div>
                                             <p className="text-amber-900/70 text-xs font-medium mt-0.5 leading-snug">
                                                 {user?.verification_status === 'pending'
-                                                    ? 'Data verifikasi KTP Anda sedang diproses. Anda dapat meninjau dan menyelesaikan verifikasi kilat otomatis.'
+                                                    ? 'Data verifikasi identitas Anda sedang diproses oleh sistem. Silakan periksa kembali kelengkapan dokumen apabila ada data yang perlu disesuaikan.'
                                                     : 'Verifikasi KTP Anda sekarang untuk mulai mempublikasikan iklan kost.'}
                                             </p>
                                         </div>
@@ -1321,7 +1321,7 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                                             onClick={() => handleMenuChange('profile')}
                                             className="bg-amber-600 hover:bg-amber-700 text-white px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-md shadow-amber-200 shrink-0 w-full md:w-auto text-center cursor-pointer"
                                         >
-                                            Periksa / Verifikasi Instan
+                                            Periksa Kelengkapan Data
                                         </button>
                                     )}
                                 </div>

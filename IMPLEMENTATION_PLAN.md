@@ -1,81 +1,62 @@
-# Rencana Implementasi: Verifikasi Identitas Kilat & Otomatis (Instant Auto-ACC) Berbasis AI & WhatsApp OTP (`MitraProfile.tsx`)
+# Implementation Plan: Pembersihan Diksi Internal ("Instan") & Standarisasi Hasil Evaluasi Protokol AI Verifikasi Mitra
 
-Dokumen ini merinci rencana implementasi proses verifikasi identitas instan bagi calon pemilik kost (mitra) untuk mengeliminasi hambatan (*friction*) dan waktu tunggu 1x24 jam saat pertama kali mendaftar:
-1. **Verifikasi Kilat (Instant Auto-ACC)**: Calon mitra yang mengunggah foto KTP asli, memiliki NIK 16 digit valid, dan telah memverifikasi nomor WhatsApp via OTP 6-digit akan **LANGSUNG mendapatkan status `verified` seketika (0 detik waktu tunggu)**.
-2. **Langsung Siap Upload Listing**: Status `verified` langsung membuka semua hak akses di dashboard mitra, termasuk menambah kamar, mengatur tarif sewa, dan mempublikasikan listing tanpa tertunda.
-3. **Audit Pasif di Balik Layar (*Post-Audit Control*)**: Sistem tetap mencatat seluruh berkas di tabel `user_verifications` dan mengirimkan notifikasi audit ke admin. Admin memiliki wewenang mencabut (*revoke/ban*) jika di kemudian hari ditemukan kecurangan.
+Dokumen rencana kerja ini disusun berdasarkan arahan pengguna untuk menata ulang tata bahasa (*copywriting*) dan alur interaksi verifikasi mitra. Konsep "instan" adalah logika dapur/sistem latar belakang internal dan tidak boleh ditampilkan kepada mitra. Mitra hanya perlu mengetahui status kepatuhan dokumen: **apakah verifikasi berhasil** atau **masih ada bagian yang perlu dievaluasi dan diperbaiki** berdasarkan protokol AI & keamanan yang tertanam dalam sistem.
 
 ---
 
-## 1. Analisis Masalah & Alur Saat Ini
+## 1. Analisis Masalah & Kebutuhan
 
-### Hambatan Saat Ini:
-- Di `MitraProfile.tsx` (baris 858), saat mitra menekan "Simpan & Ajukan Verifikasi", kode secara kaku menetapkan status:
-  ```tsx
-  updates.verification_status = 'pending';
-  ```
-- Di `MitraDashboard.tsx`, fungsi `checkVerification()` memblokir akses tambah kost jika `!isVerified`.
-- Calon mitra yang sedang sangat bersemangat mempublikasikan kost terpaksa berhenti dan menunggu manual review admin hingga 24 jam. Ini menyebabkan *drop-off* calon mitra yang berharga.
-
-### Alur Baru yang Diinginkan (Opsi 1):
-
-```mermaid
-graph TD
-    A["Mitra Unggah KTP & Verifikasi WA"] --> B["AI OCR Membaca Data KTP & Memvalidasi Format"]
-    B --> C{"Cek Kelayakan Otomatis:<br/>1. Foto KTP Terunggah?<br/>2. NIK Tepat 16 Digit Angka?<br/>3. WhatsApp Terverifikasi OTP?<br/>4. Nama Lengkap Valid?"}
-    C -- Ya (Memenuhi Syarat) --> D["AUTO-ACC INSTAN!<br/>verification_status = 'verified'<br/>Catatan: 'Terverifikasi Otomatis (AI & WA OTP)'"]
-    D --> E["Notifikasi Admin di Balik Layar (Post-Audit)"]
-    D --> F["Mitra LANGSUNG Bisa Upload & Publikasi Kost Seketika!"]
-    C -- Belum Lengkap / Kurang --> G["Tampilkan Petunjuk Perbaikan Data /<br/>Fallback Review Admin jika diperlukan"]
-```
+1. **Pembersihan Diksi "Dapur" Internal**:
+   - Penggunaan kata seperti *"Instan"*, *"Verifikasi Instan"*, *"Kilat"*, dan *"Auto-ACC"* pada tombol, alert, kartu banner, serta status catatan membuat sistem tampak mengekspos mekanisme internal.
+   - Mitra pemilik kost membutuhkan pengalaman pengguna (*user experience*) yang profesional, tenang, dan berstandar industri: tombol aksi formal, konfirmasi yang jelas, dan penjelasan apakah data mereka telah memenuhi protokol verifikasi.
+2. **Standarisasi Protokol Evaluasi Berbasis AI**:
+   - Sistem telah memiliki integrasi validasi AI KTP (OCR via edge function `analyze-ktp`) dan validasi nomor WhatsApp OTP 6-digit.
+   - Evaluasi kelayakan harus menyajikan respon yang tegas dan edukatif:
+     - **Jika Berhasil Lolos Protokol**: Tampilkan konfirmasi keberhasilan resmi bahwa identitas telah terverifikasi dan akun mitra aktif penuh untuk mulai mempublikasikan kost.
+     - **Jika Perlu Evaluasi / Perbaikan**: Tampilkan pesan panduan spesifik mengenai poin mana yang belum memenuhi standar (misal: foto KTP buram/tidak terbaca, NIK belum tepat 16 digit, nama lengkap belum sesuai KTP, atau WhatsApp belum diverifikasi OTP).
 
 ---
 
-## 2. Kriteria Validasi Otomatis (Instant Approval Guard)
+## 2. Dampak Perubahan
 
-Sistem akan mengevaluasi kondisi berikut saat tombol submit ditekan:
-1. **Nomor WhatsApp Terverifikasi**: `waOtpVerified === true` atau `initialUser?.whatsapp_verified === true`. (Menjamin pemilik adalah orang riil dengan nomor telepon aktif yang bisa dihubungi).
-2. **Format NIK Valid 16 Digit**: `/^\d{16}$/.test(formData.ktp_number.trim())`. (Mencegah input asal-asalan seperti "123" atau teks sembarangan).
-3. **Foto KTP Resmi Terunggah**: `Boolean(formData.ktp_photo_url)`.
-4. **Nama Lengkap Sesuai**: `formData.display_name.trim().length >= 3`.
-
-**Hasil Evaluasi**:
-- Jika ke-4 kriteria di atas terpenuhi $\rightarrow$ `verification_status` langsung ditetapkan menjadi **`'verified'`** (bukan `'pending'`).
-- `verification_notes` dicatat sebagai: `Terverifikasi Otomatis oleh Sistem (Validasi Dokumen KTP & WhatsApp OTP)`.
-- Data tersimpan serentak di tabel `users` dan `user_verifications` Supabase.
-- Tampilan profil mitra langsung menampilkan lencana hijau: **`Akun Mitra Terverifikasi ✓`**.
-- Modal / Alert selamat muncul: *"Selamat! Identitas Anda berhasil diverifikasi secara instan. Anda sekarang dapat langsung menambah dan mempublikasikan properti kost!"*
+File yang akan disentuh pada tahap eksekusi:
+- [MitraProfile.tsx](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/MitraProfile.tsx):
+  - Mengganti teks tombol Langkah 2 dari `"SIMPAN & VERIFIKASI INSTAN"` menjadi `"SIMPAN & AJUKAN VERIFIKASI"`.
+  - Mengubah alert keberhasilan dari bahasa "terverifikasi secara instan oleh sistem" menjadi pernyataan resmi: `"🎉 Verifikasi Identitas Berhasil! Dokumen identitas dan kontak Anda telah memenuhi protokol verifikasi RuangSinggah. Akun mitra Anda kini aktif penuh dan dapat langsung mempublikasikan unit kost."`
+  - Menyempurnakan catatan status di database (`verification_notes`) dari `'Terverifikasi Otomatis (Validasi AI KTP & WhatsApp OTP)'` menjadi `'Identitas Terverifikasi'`.
+  - Mengganti tombol banner pending dari `"Periksa / Verifikasi Instan"` menjadi `"Periksa Kelengkapan Data"`.
+  - Memperbaiki copywriting banner peninjauan agar informatif dan bebas dari istilah "kilat/instan".
+- [MitraDashboard.tsx](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/MitraDashboard.tsx):
+  - Mengganti tombol banner verifikasi overview dari `"Periksa / Verifikasi Instan"` menjadi `"Periksa Kelengkapan Data"`.
+  - Mengubah deskripsi banner overview dari *"menyelesaikan verifikasi kilat otomatis"* menjadi *"Data verifikasi identitas Anda sedang diproses. Anda dapat memeriksa kembali kelengkapan dokumen apabila ada data yang perlu diperbarui."*
 
 ---
 
-## 3. Dampak File yang Dimodifikasi
+## 3. Langkah-Langkah Eksekusi
 
-1. **`functions/public/pages/MitraProfile.tsx`**:
-   - Memperbarui fungsi `handleSave` untuk mengevaluasi kriteria instan dan memberikan status `verified` seketika.
-   - Menyesuaikan pesan status dan feedback agar mitra tahu bahwa akun mereka langsung aktif tanpa menunggu.
-2. **`functions/PROGRESS.md`**:
-   - Mencatat progres fitur nomor #432.
-3. **`WALKTHROUGH.md`**:
-   - Dokumentasi hasil verifikasi dan panduan uji coba.
+### Langkah 1: Pembersihan Copywriting di `MitraProfile.tsx`
+1. Ubah tombol submit formulir identitas (Langkah 2) menjadi `"SIMPAN & AJUKAN VERIFIKASI"`.
+2. Ubah pesan dialog / alert saat protokol verifikasi terpenuhi:
+   - Bahasa lugas, ramah, dan profesional yang mengonfirmasi bahwa data berhasil lolos verifikasi dan akun langsung aktif.
+3. Ubah catatan status verifikasi di Supabase menjadi `'Identitas Terverifikasi'` (tanpa embel-embel teknis internal).
+4. Ubah tombol pada banner status peninjauan (pending) menjadi `"Periksa Kelengkapan Data"`.
+5. Perhalus pesan panduan evaluasi jika ada input yang tidak memenuhi protokol (misal: foto KTP buram, NIK tidak pas 16 digit, OTP belum dimasukkan).
 
----
+### Langkah 2: Penyelarasan Copywriting di `MitraDashboard.tsx`
+1. Perbarui banner status verifikasi di halaman overview dashboard mitra:
+   - Ganti label tombol menjadi `"Periksa Kelengkapan Data"`.
+   - Perbarui subteks keterangan agar bersih dari kata "kilat" atau "instan".
 
-## 4. Langkah-Langkah Eksekusi (Fase 2)
-
-1. Memodifikasi logika penentuan status verifikasi di `handleSave` pada `MitraProfile.tsx`:
-   - Menambahkan pengecekan kriteria validasi instan (`isEligibleForInstantApproval`).
-   - Menyetel status menjadi `verified` jika lolos uji kelayakan.
-2. Menyesuaikan banner notifikasi status di UI profil mitra agar mencerminkan aktivasi instan.
-3. Menjalankan kompilasi build frontend `cmd.exe /c npm run build`.
-4. Mencatat histori progres di `functions/PROGRESS.md` dan memperbarui `WALKTHROUGH.md`.
-5. Melakukan commit dan push ke branch `bukan-productions`.
+### Langkah 3: Pengujian Kompilasi & Bebas Regresi
+1. Jalankan pengujian build Vite via shell (`cmd.exe /c npm run build`).
+2. Pastikan 0 lint error dan seluruh alur transisi status berjalan mulus.
 
 ---
 
-## 5. Rencana Verifikasi
+## 4. Rencana Verifikasi
 
-- [ ] **Kompilasi Frontend**: `cmd.exe /c npm run build` lulus tanpa error.
-- [ ] **Uji Coba Pengajuan KTP**:
-  - Mitra mengunggah foto KTP, melengkapi NIK 16 digit, dan memverifikasi nomor WhatsApp via OTP.
-  - Klik tombol simpan $\rightarrow$ status langsung menjadi **`Terverifikasi ✓`** dalam hitungan detik.
-  - Navigasi ke menu "Kelola Kost" $\rightarrow$ Tombol "Tambah Kost" langsung dapat dibuka tanpa terblokir oleh `checkVerification()`.
+1. **Uji Kompilasi**: Memastikan proses `npm run build` sukses 100% tanpa kompilasi error.
+2. **Pemeriksaan Teks (Grep Search)**: Melakukan scan pada seluruh file frontend untuk memastikan tidak ada lagi kata "instan" atau "kilat" pada alur verifikasi identitas mitra.
+3. **Uji Fungsionalitas Alur**:
+   - Memastikan tombol "SIMPAN & AJUKAN VERIFIKASI" tetap mengevaluasi protokol AI dan WhatsApp OTP secara andal di belakang layar.
+   - Memastikan akun yang memenuhi syarat langsung aktif (`verified`) dan dapat mengunggah kost, sementara yang belum memenuhi syarat mendapatkan panduan perbaikan yang jelas.
