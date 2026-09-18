@@ -1,79 +1,83 @@
-# Laporan Perubahan: Penyelarasan Alur Verifikasi Email & Eliminasi Anomali Pesan Login (Walkthrough)
+# Laporan Penyelesaian (Walkthrough): Konfigurasi Nomor WhatsApp Operasional Resmi RuangSinggah.id (+62 878-8784-5584) & Penyelarasan Template OTP
 
-Dokumen ini merangkum seluruh perubahan kode yang telah diimplementasikan untuk mengembalikan antarmuka verifikasi email ke standar produksi `ruangsinggah.id` yang stabil, mengeliminasi anomali banner ganda pada halaman login, dan memastikan alur autentikasi pemilik kost berjalan mulus.
-
----
-
-## 1. Daftar Perubahan (Detailed Changes)
-
-### A. Restorasi Antarmuka "Verifikasi Email Terkirim" ([Login.tsx](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/Login.tsx))
-- Mengembalikan layar setelah submit pendaftaran (`verificationSent`) menjadi kartu putih rounded dengan badge icon envelope hijau (`<Mail className="w-10 h-10 text-green-600" />`) sesuai dengan tampilan standar di production `https://ruangsinggah.id/login`.
-- Menyediakan tombol pintas `<Edit3 className="w-3 h-3" /> Salah email? Ubah disini` yang mengembalikan pengguna ke formulir jika terjadi salah ketik email.
-- Menyediakan hitung mundur otomatis dan tombol *"Belum terima email? Kirim Ulang"*.
-- Menyediakan tombol besar *"Kembali ke Login"*.
-- Menghapus seluruh form input 6-digit kode OTP beserta state terkait (`emailOtpCode`, `emailOtpInput`, `handleVerifyEmailOtp`, `handleResendEmailOtp`) sehingga alur kembali bersih dan tidak membingungkan calon mitra.
-
-### B. Eliminasi Anomali Banner Pesan Ganda (Merah & Hijau Bersamaan) ([Login.tsx](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/Login.tsx))
-- **Pemeriksaan Error Hash Terlebih Dahulu**: Di `useEffect`, URL hash (`window.location.hash`) kini diperiksa lebih awal. Jika Supabase Auth mengirimkan error seperti `#error=server_error` atau `error_code=otp_expired`, sistem langsung menampilkan pesan kesalahan yang akurat dan membersihkan `successMsg` (mencegah pesan hijau muncul secara keliru saat ada error).
-- **Mutual Exclusion State**: Setiap kali `setErrorMsg` dipanggil, `successMsg` otomatis dikosongkan (`setSuccessMsg('')`). Di awal fungsi `handleLogin`, `setSuccessMsg('')` juga selalu dipanggil untuk mencegah pesan hijau tertinggal.
-- **Guard di Level JSX**: Tampilan banner hijau dibungkus dengan kondisi `!errorMsg && successMsg`, menjamin 100% secara fisik di antarmuka pengguna bahwa kedua banner tidak akan pernah bisa muncul bersamaan.
-
-### C. Penyelarasan Template Email Brevo ([functions/src/index.ts](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/src/index.ts))
-- Merapikan template email pendaftaran akun pada Cloud Function agar berfokus pada tombol aksi utama **"KONFIRMASI AKUN SEKARANG"** tanpa blok kode OTP angka.
-- Menghapus variabel yang tidak terpakai sehingga lulus kompilasi TypeScript dengan 0 peringatan/error.
+Dokumen ini memuat ringkasan menyeluruh mengenai pekerjaan pengalihan nomor WhatsApp Business Cloud API dari akun Sandbox/Uji Coba ke nomor WhatsApp operasional resmi RuangSinggah.id, serta penyelarasan format komponen tombol template OTP.
 
 ---
 
-## 2. Hasil Pengujian & Kompilasi
+## 1. Ringkasan Perubahan
 
-### A. Kompilasi TypeScript Backend Cloud Functions (`functions/`)
-```bash
-> functions@ build
-> tsc
-# Exit Code: 0 (Sukses 100% tanpa error)
-```
+### A. Konfigurasi Nomor WhatsApp Operasional Resmi
+- **Nama Akun WhatsApp**: **Ruang Singgah Id** (Dimiliki oleh *Ruang Singgah Nusantara*)
+- **WABA ID Resmi**: `3179718795693124`
+- **Nomor Telepon Operasional**: `+62 878-8784-5584`
+- **Phone Number ID**: `1377156352140430` (Status: `VERIFIED`, `Terhubung`)
+- **Webhook Terhubung**: `https://sgcmnsnokrztocnhxnqm.supabase.co/functions/v1/wa-webhook`
+- File [functions/public/.env.local](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/.env.local) telah diperbarui dengan:
+  ```env
+  VITE_WHATSAPP_PHONE_ID=1377156352140430
+  VITE_WHATSAPP_WABA_ID=3179718795693124
+  ```
 
-### B. Kompilasi Front-End Vite (`functions/public/`)
-```bash
-> ruangsinggah.id@0.0.0 build
-> vite build && node -e "..."
-
-✓ 2512 modules transformed.
-rendering chunks...
-computing gzip size...
-../../public/index.html                                  7.92 kB
-../../public/assets/Login-BXwwwrT1.js                   30.28 kB
-✓ built in 26.01s (Exit Code: 0)
-```
-Seluruh aset produksi berhasil dibangun dan disinkronkan ke folder `public/dist`.
-
----
-
-## 3. Panduan Pengujian bagi Pengguna (User Testing Guide)
-
-1. **Buka Halaman Pendaftaran Pemilik Kost**:
-   - Buka `/login?role=owner&mode=register` di browser.
-   - Isi formulir pendaftaran: Nama Lengkap, Nomor WhatsApp, Email baru, dan Kata Sandi.
-   - Klik tombol **"Daftar & Verifikasi"**.
-2. **Periksa Layar Konfirmasi Email**:
-   - Layar akan menampilkan kartu *"Verifikasi Email Terkirim"* dengan ikon amplop hijau, info email yang dituju, link *"Salah email? Ubah disini"*, dan tombol *"Kembali ke Login"*.
-   - Tidak ada lagi input kotak 6-digit kode OTP.
-3. **Konfirmasi via Email**:
-   - Buka email masuk dari Brevo (subjek: *🛡️ Konfirmasi Akun RuangSinggah.id*).
-   - Klik tombol **"KONFIRMASI AKUN SEKARANG"**.
-   - Browser akan membuka link verifikasi Supabase dan langsung mengarahkan pemilik kost ke **Dashboard Mitra** (`/dashboard-mitra`).
-   - Tidak ada lagi benturan banner merah dan hijau secara bersamaan di halaman login.
+### B. Default Fallback & Penyelarasan Payload di `whatsappService.ts`
+- Menambahkan fallback permanen:
+  ```typescript
+  export const DEFAULT_OPERATIONAL_PHONE_ID = '1377156352140430'; // +62 878-8784-5584 (Ruang Singgah Id)
+  export const DEFAULT_OPERATIONAL_WABA_ID = '3179718795693124';
+  ```
+  sehingga bila env tidak tersedia (misal di production bundle static), sistem otomatis menggunakan nomor operasional resmi RuangSinggah.id.
+- Menjadikan komponen tombol **URL** (`sub_type: 'url'`) sebagai opsi prioritas utama pengiriman template `otp_verification` untuk mencocokkan skema template `APPROVED` di Meta WABA `3179718795693124`.
+- Menjaga opsi fallback sekunder ke `copy_code` dan `body-only`.
 
 ---
 
-## 4. Petunjuk Deploy bagi Pengguna
+## 2. Hasil Pengujian & Verifikasi
 
-Sesuai aturan kerja workspace, deploy dilakukan secara manual oleh pengguna:
+### A. Uji Live Kirim OTP via Meta Cloud API
+- Pengujian langsung pengiriman template `otp_verification` dari Phone ID `1377156352140430` (`+62 878-8784-5584`) ke nomor WhatsApp penerima:
+  ```json
+  {
+    "messaging_product": "whatsapp",
+    "contacts": [
+      {
+        "input": "6281527080656",
+        "wa_id": "6281527080656"
+      }
+    ],
+    "messages": [
+      {
+        "id": "wamid.HBgNNjI4MTUyNzA4MDY1NhUCABEYEkU1ODczMEQ4RjA3OEYwNjhDQQA=",
+        "message_status": "accepted"
+      }
+    ]
+  }
+  ```
+- **Hasil**: **Sukses 100%** (Status: `accepted`, nomor pengirim: `+62 878-8784-5584` / *Ruang Singgah Id*).
 
-1. **Deploy Front-End (Cloudflare Pages / Hosting)**:
-   - Karena repository ini terhubung dengan Cloudflare Pages melalui GitHub, perubahan di branch akan otomatis atau dapat di-merge ke branch yang terhubung untuk publish ke production.
-2. **Deploy Cloud Functions (Jika ingin memperbarui fungsi email backend)**:
-   ```bash
-   cd functions
-   firebase deploy --only functions:handleCustomAuthEmail
-   ```
+### B. Uji Kompilasi Front-End Vite
+- Perintah: `npm.cmd run build` di direktori `functions/public`
+- Hasil:
+  ```bash
+  vite v6.4.1 building for production...
+  transforming...
+  ✓ 2512 modules transformed.
+  ✓ built in 26.88s
+  Exit code: 0 (No compile errors)
+  ```
+
+---
+
+## 3. Panduan Pengujian bagi Pengguna di UI
+
+1. Buka antarmuka aplikasi lokal atau deploy (misal di `localhost:5173`).
+2. Masuk ke halaman **Profil Mitra** $\rightarrow$ **Verifikasi Identitas**.
+3. Pada kartu **Verifikasi Nomor WhatsApp**, klik tombol **"Kirim Kode Verifikasi"**.
+4. Periksa aplikasi WhatsApp pada ponsel Anda:
+   - Pengirim adalah **"Ruang Singgah Id"** (`+62 878-8784-5584`).
+   - Terdapat teks kode verifikasi beserta tombol **"Salin Kode"**.
+5. Masukkan 6 digit kode OTP ke input formulir di website.
+6. Nomor WhatsApp Anda akan langsung terverifikasi dengan tanda centang hijau (`whatsapp_verified: true`).
+
+---
+
+## 4. Keamanan & Deploy
+- Sesuai protokol workspace: perubahan tidak di-deploy ke production secara otomatis. Pengguna dapat melakukan sinkronisasi/deploy secara mandiri saat diinginkan.

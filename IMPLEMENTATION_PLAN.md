@@ -1,92 +1,97 @@
-# Rencana Implementasi: Perbaikan Tuntas Alur Verifikasi Email & Eliminasi Anomali Pesan Login
+# Rencana Implementasi: Konfigurasi Nomor WhatsApp Operasional Resmi RuangSinggah.id (+62 878-8784-5584) & Penyelarasan Template OTP
 
-Dokumen ini memuat analisis akar masalah, strategi perbaikan komprehensif, file yang terdampak, serta langkah eksekusi bertahap untuk memastikan sistem verifikasi pendaftaran pemilik kost berjalan lancar menggunakan tautan verifikasi akses (*action link button*), bebas dari anomali banner ganda, dan otomatis mengarahkan mitra ke Dashboard Mitra.
+Dokumen ini memuat analisis dan rencana eksekusi untuk mengganti nomor WhatsApp Sandbox/Uji Coba dengan nomor operasional resmi RuangSinggah.id (`+62 878-8784-5584`) beserta akun bisnis WABA utamanya, serta menyelaraskan payload template `otp_verification` agar pengiriman OTP dan pesan operasional berjalan lancar 100%.
 
 ---
 
-## 1. Analisis Masalah & Kebutuhan
+## 1. Analisis Masalah & Temuan Investigasi
 
-Berdasarkan pengujian terbaru dan bukti tangkapan layar dari pengguna:
-1. **Anomali Banner Pesan Ganda (Merah & Hijau Bersamaan)**:
-   - Pada halaman `Masuk Pemilik Kost`, muncul dua kotak pesan secara bersamaan:
-     - 🔴 **Merah**: *"Email Anda belum diverifikasi. Silakan cek inbox/spam email Anda."*
-     - 🟢 **Hijau**: *"Email berhasil diverifikasi! Silakan masuk dengan email dan kata sandi Anda."*
-   - **Akar Masalah**:
-     - Di `Login.tsx`, ketika pengguna dialihkan kembali dari tautan email dengan parameter `?verified=true`, sistem menyetel `successMsg`.
-     - Namun, URL kembalian dari Supabase pada saat yang sama memuat error di hash `#error=server_error&error_code=unexpected_failure&error_description=Error+confirming+user` yang tidak di-filter sebelum membaca `verified=true`.
-     - Ketika pengguna memasukkan email & password lalu klik *"Masuk Sekarang"*, fungsi `handleLogin` mendeteksi bahwa `email_confirmed_at` masih kosong, sehingga memicu `setErrorMsg(...)`.
-     - Karena `handleLogin` tidak mereset `successMsg` (tidak memanggil `setSuccessMsg('')`), kedua pesan tersebut tampil bersamaan dan saling bertolak belakang.
+1. **Kondisi Sebelumnya (Sandbox/Test)**:
+   - Konfigurasi aplikasi di `.env.local` sebelumnya mengarah ke akun uji coba Meta:
+     - `VITE_WHATSAPP_PHONE_ID=1132009059986709` (Test Number Meta `+1 555-635-3168`)
+     - `VITE_WHATSAPP_WABA_ID=1253101886503653` (Test WABA)
+   - Akibatnya, pengiriman pesan operasional dari sistem masih menggunakan nomor uji coba dan template yang dibuat di WABA utama tidak terbaca oleh phone ID tersebut (memunculkan error `#132001`).
 
-2. **Penyebab Utama Gagalnya Verifikasi Akun di Supabase (`500 unexpected_failure`)**:
-   - Supabase Auth menjalankan trigger database `public.handle_new_user()` setiap kali `email_confirmed_at` diperbarui.
-   - Pada trigger `public.handle_new_user()`, terdapat query `INSERT INTO public.users (...) VALUES (...) ON CONFLICT (id) DO UPDATE ...`.
-   - Di database `public.users`, email `kaossekai@gmail.com` sebelumnya sudah tercatat (warisan migrasi data lama) dengan ID user yang berbeda (`9cd3d9c8-...`).
-   - Akibatnya, saat akun Supabase Auth baru (`c0fd4105-...`) mencoba diverifikasi, Postgres menolak dengan error `23505 duplicate key value violates unique constraint "users_email_key"`.
-   - Error database ini menyebabkan Supabase Auth membatalkan transaksi verifikasi dan me-redirect browser dengan status error.
+2. **Identifikasi Akun WhatsApp Operasional Resmi**:
+   - Berdasarkan tangkapan layar pengguna dan hasil verifikasi langsung via Meta Graph API:
+     - **Nama WABA**: *Ruang Singgah Id* (Dimiliki oleh *Ruang Singgah Nusantara*)
+     - **WABA ID**: `3179718795693124`
+     - **Nomor Telepon Operasional**: `+62 878-8784-5584`
+     - **Phone Number ID**: `1377156352140430`
+     - **Status Nomor**: `VERIFIED` & `Terhubung` (Quality: `UNKNOWN`, Throughput: `STANDARD`)
+     - **Webhook Aplikasi**: Telah terhubung ke `https://sgcmnsnokrztocnhxnqm.supabase.co/functions/v1/wa-webhook`
+     - **Access Token**: Token yang aktif di `.env.local` telah diverifikasi memiliki akses penuh (*Full Access*) ke WABA dan Phone ID operasional ini.
 
-3. **Pilihan Alur Pengguna (Verifikasi Tombol Akses Email)**:
-   - Sesuai arahan pengguna: *"kalau memang auth supabase tidak bisa diverifikasi dengan menggunakan kode email, okelah kita pakai tombol akses verif aja, tapi pastikan bekerja dengan baik, tidak anomali seperti sekarang"*.
-   - Kita akan mengembalikan alur pendaftaran ke sistem tautan tombol verifikasi email (**"KONFIRMASI AKUN SEKARANG"**) yang stabil, intuitif, dan tidak membingungkan pengguna dengan meminta 6-digit kode yang tidak ada di email.
-
-4. **Otomatisasi Masuk ke Dashboard Mitra**:
-   - Setelah tombol email diklik, sesi Supabase langsung terurai (`#access_token`), sistem menyetel role ke `owner`, dan langsung mengarahkan pengguna ke `/dashboard-mitra` secara otomatis tanpa memaksa login ulang manual.
+3. **Struktur Template `otp_verification` yang Disetujui di WABA Operasional**:
+   - Meta Graph API mengonfirmasi bahwa template `otp_verification` pada WABA `3179718795693124` berstatus **`APPROVED`**:
+     - Kategori: `AUTHENTICATION`, Bahasa: `id`
+     - Body: `*{{1}}* adalah kode verifikasi Anda. Demi keamanan, jangan bagikan kode ini.`
+     - Button: Tipe **`URL`** (`Salin Kode` dengan tautan dinamis `https://www.whatsapp.com/otp/code/?otp_type=COPY_CODE&code=otp{{1}}`).
+   - Pada `whatsappService.ts`, payload pengiriman saat ini masih mengutamakan `sub_type: 'copy_code'`, sehingga Meta menolak dengan error `#132018 (Button at index 0 must be of type Url)`.
+   - Oleh karena itu, kita perlu menjadikan `sub_type: 'url'` sebagai payload prioritas utama saat memanggil `sendWaOtpVerification`.
 
 ---
 
 ## 2. Dampak Perubahan File
 
-Perubahan difokuskan secara presisi pada file-file berikut tanpa merombak logika yang sudah stabil:
-
-1. [Login.tsx](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/Login.tsx):
-   - **Eliminasi Anomali Banner**: Pastikan `errorMsg` dan `successMsg` bersifat *mutually exclusive* (memanggil salah satu otomatis mengosongkan yang lain).
-   - **Filter Hash Error**: Tangani `#error=...` dan `#error_code=...` di URL hash terlebih dahulu sebelum memproses status sukses verifikasi.
-   - **Tampilan Tunggu Konfirmasi Email yang Bersih**: Ganti tampilan input OTP 6-digit dengan layar status konfirmasi email yang profesional (menampilkan ilustrasi email, tombol "Buka Gmail", hitung mundur kirim ulang, dan tombol kembali ke login).
-   - **Penanganan Auto-Redirect Mitra**: Setelah verifikasi tautan sukses, tampilkan loader transisi *"Memverifikasi dan mengalihkan ke Dashboard Mitra..."* lalu redirect langsung ke `/dashboard-mitra`.
-
-2. [functions/src/index.ts](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/src/index.ts):
-   - Memastikan endpoint `handleCustomAuthEmail` memprioritaskan desain tombol aksi verifikasi email yang responsif dan elegan via Brevo tanpa ketergantungan wajib pada kode angka 6-digit.
+1. [functions/public/.env.local](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/.env.local):
+   - Mengubah `VITE_WHATSAPP_PHONE_ID` menjadi `1377156352140430`.
+   - Mengubah `VITE_WHATSAPP_WABA_ID` menjadi `3179718795693124`.
+2. [functions/public/whatsappService.ts](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/whatsappService.ts):
+   - Menambahkan default fallback ID operasional:
+     ```typescript
+     const DEFAULT_OPERATIONAL_PHONE_ID = '1377156352140430'; // +62 878-8784-5584
+     const DEFAULT_OPERATIONAL_WABA_ID = '3179718795693124';
+     ```
+     sehingga jika variabel env belum termuat atau di lingkungan produksi, sistem secara otomatis tetap menggunakan nomor resmi RuangSinggah.id.
+   - Menyelaraskan fungsi `sendWaOtpVerification` agar mengirim komponen tombol bertipe URL (`sub_type: 'url'`) sebagai opsi utama, persis sesuai spesifikasi template `otp_verification` yang disetujui di Meta.
+   - Mempertahankan fallback ke `body-only` dan `copy_code` sebagai pengaman sekunder.
 
 ---
 
 ## 3. Langkah-Langkah Eksekusi (Fase 2 Setelah ACC)
 
-### Langkah 1: Resolusi Konflik Database (Database Level)
-- Memastikan tidak ada duplikasi data `email` pada tabel `public.users` antara ID user lama dengan ID Supabase Auth aktif.
-- Menjaga integritas data pengguna dan memastikan `email_confirmed_at` di Supabase Auth dapat diperbarui tanpa terhalang `users_email_key`.
+### Langkah 1: Pembaruan Konfigurasi `.env.local`
+- Set `VITE_WHATSAPP_PHONE_ID=1377156352140430`.
+- Set `VITE_WHATSAPP_WABA_ID=3179718795693124`.
 
-### Langkah 2: Pembaruan Logika Deteksi Verifikasi & Eliminasi Anomali di `Login.tsx`
-- Menambahkan pengecekan awal pada hash URL (`window.location.hash`):
-  - Jika terdapat `error=` atau `error_code=otp_expired` atau `error_code=unexpected_failure`, tampilkan pesan kesalahan yang jelas dan bersihkan `successMsg`.
-- Mengatur `handleLogin`:
-  - Reset `setSuccessMsg('')` setiap kali form disubmit atau terjadi kegagalan validasi.
-  - Reset `setErrorMsg('')` setiap kali ada pesan sukses baru.
-- Pada cabang `verified === 'true'` atau deteksi `#access_token`:
-  - Jika sesi Supabase aktif dan metadata / target role adalah `owner`:
-    - Simpan `localStorage.setItem('portal_view', 'owner')`.
-    - Tampilkan status transisi loading verifikasi sukses.
-    - Arahkan langsung ke `Page.DASHBOARD_MITRA` (`/dashboard-mitra`).
+### Langkah 2: Pembaruan `whatsappService.ts`
+- Tambahkan konstanta default operasional (`DEFAULT_OPERATIONAL_PHONE_ID` dan `DEFAULT_OPERATIONAL_WABA_ID`).
+- Ubah prioritas `sendWaOtpVerification`:
+  ```typescript
+  // Prioritas Utama: Format URL Button resmi sesuai template approved di WABA Ruang Singgah Id
+  const urlComponents = [
+    {
+      type: 'body',
+      parameters: [{ type: 'text', text: otpCode }]
+    },
+    {
+      type: 'button',
+      sub_type: 'url',
+      index: '0',
+      parameters: [{ type: 'text', text: otpCode }]
+    }
+  ];
+  ```
 
-### Langkah 3: Perbaikan Tampilan Tunggu Email Pasca Registrasi
-- Ubah layar `verificationSent` pada pendaftaran:
-  - Tampilkan instruksi jelas: *"Tautan verifikasi telah dikirim ke email [email]. Silakan klik tombol 'Konfirmasi Akun Sekarang' di email Anda untuk langsung mengaktifkan akun."*
-  - Sediakan tombol pintas *"Buka Gmail"* (`https://mail.google.com`) untuk memudahkan calon mitra.
-  - Sediakan tombol *"Kirim Ulang Email"* dengan timer hitung mundur 60 detik.
-  - Hapus input kotak 6-digit OTP dari layar pendaftaran agar calon mitra tidak bingung mencari kode angka.
+### Langkah 3: Uji Kirim Pesan & Kompilasi Frontend
+- Jalankan simulasi kirim OTP dari nomor resmi `+62 878-8784-5584` ke nomor WhatsApp pengujian menggunakan Phone ID `1377156352140430`.
+- Jalankan build `npm.cmd run build` di folder `functions/public` untuk memastikan kompilasi 100% lulus 0 error.
+
+### Langkah 4: Dokumentasi Progres & Walkthrough
+- Catat riwayat pekerjaan di `functions/PROGRESS.md` (#417).
+- Terbitkan panduan hasil di `WALKTHROUGH.md`.
+- Lakukan commit dan git push ke branch `bukan-productions`.
 
 ---
 
-## 4. Rencana Verifikasi & Pengujian
+## 4. Rencana Verifikasi
 
-1. **Uji Kompilasi Front-End**:
-   - Menjalankan `npm.cmd run build` di direktori `functions/public` untuk memastikan **0 error** TypeScript / JSX.
-2. **Uji Kompilasi Cloud Functions**:
-   - Menjalankan `npm.cmd run build` di direktori `functions` untuk memastikan integritas kode backend.
-3. **Simulasi Pengujian Alur Pendaftaran**:
-   - Calon mitra mendaftar di `/login?role=owner`.
-   - Muncul layar instruksi konfirmasi email yang bersih.
-   - Mengklik tombol **"KONFIRMASI AKUN SEKARANG"** di email.
-   - Sistem memvalidasi token dan langsung mengarahkan pengguna ke **Dashboard Mitra** (`/dashboard-mitra`) tanpa anomali pesan merah & hijau bertabrakan.
-4. **Pencatatan Progres**:
-   - Mencatat seluruh riwayat di `functions/PROGRESS.md`.
-   - Menerbitkan `WALKTHROUGH.md`.
-   - Melakukan commit dan push ke branch `bukan-productions`.
+1. **Uji Meta Cloud API**:
+   - Panggilan API pengiriman pesan dengan Phone ID `1377156352140430` diterima oleh Meta dengan status HTTP 200 / `messages[0].id` (`wamid...`).
+2. **Penerimaan Pesan di WhatsApp Pengguna**:
+   - Pengguna menerima pesan WhatsApp resmi dengan pengirim terverifikasi **"Ruang Singgah Id"** (`+62 878-8784-5584`), berisi teks kode verifikasi dan tombol "Salin Kode".
+3. **Uji Kompilasi Front-End**:
+   - `npm.cmd run build` di direktori `functions/public` sukses tanpa error TypeScript ataupun Vite bundler.
+4. **Verifikasi UI Profil Mitra**:
+   - Menu Verifikasi Identitas di `MitraProfile.tsx` dapat mengirimkan OTP WhatsApp, menerima input kode 6 digit, dan sukses memvalidasi nomor menjadi terverifikasi (`whatsapp_verified: true`).

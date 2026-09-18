@@ -1,10 +1,13 @@
 import { supabase } from './supabase';
 
+export const DEFAULT_OPERATIONAL_PHONE_ID = '1377156352140430'; // +62 878-8784-5584 (Ruang Singgah Id)
+export const DEFAULT_OPERATIONAL_WABA_ID = '3179718795693124';
+
 const getWhatsAppAccessToken = () => 
   (typeof import.meta !== 'undefined' && import.meta.env && (import.meta.env as any).VITE_WHATSAPP_ACCESS_TOKEN) || '';
 
 const getPhoneNumberId = () => 
-  (typeof import.meta !== 'undefined' && import.meta.env && (import.meta.env as any).VITE_WHATSAPP_PHONE_ID) || '';
+  (typeof import.meta !== 'undefined' && import.meta.env && (import.meta.env as any).VITE_WHATSAPP_PHONE_ID) || DEFAULT_OPERATIONAL_PHONE_ID;
 
 const API_VERSION = 'v21.0';
 
@@ -137,7 +140,38 @@ export async function sendWhatsAppTemplate({
  * Mendukung template dengan tombol URL/Copy Code, serta auto-retry dengan body-only jika tombol tidak cocok.
  */
 export async function sendWaOtpVerification(phone: string, otpCode: string, languageCode = 'id') {
-  // ── Opsi 1: Standar Resmi Meta Template Autentikasi (Body + Tombol Salin Kode / Copy Code) ──
+  // ── Opsi 1: Standar Template Approved di WABA Ruang Singgah Id (Body + Tombol URL Salin Kode) ──
+  const urlComponents = [
+    {
+      type: 'body',
+      parameters: [
+        { type: 'text', text: otpCode }
+      ]
+    },
+    {
+      type: 'button',
+      sub_type: 'url',
+      index: '0',
+      parameters: [
+        { type: 'text', text: otpCode }
+      ]
+    }
+  ];
+
+  const primaryRes = await sendWhatsAppTemplate({
+    to: phone,
+    templateName: 'otp_verification',
+    languageCode: languageCode,
+    components: urlComponents
+  });
+
+  if (primaryRes.success) {
+    return primaryRes;
+  }
+
+  console.warn('[WHATSAPP_API] Opsi URL Button mengembalikan error:', primaryRes.error, 'Mencoba fallback Copy-Code...');
+
+  // ── Opsi 2: Fallback Tombol Copy Code (Jika menggunakan tipe copy_code) ──
   const copyCodeComponents = [
     {
       type: 'body',
@@ -155,20 +189,18 @@ export async function sendWaOtpVerification(phone: string, otpCode: string, lang
     }
   ];
 
-  const primaryRes = await sendWhatsAppTemplate({
+  const copyCodeRes = await sendWhatsAppTemplate({
     to: phone,
     templateName: 'otp_verification',
     languageCode: languageCode,
     components: copyCodeComponents
   });
 
-  if (primaryRes.success) {
-    return primaryRes;
+  if (copyCodeRes.success) {
+    return copyCodeRes;
   }
 
-  console.warn('[WHATSAPP_API] Opsi Copy Code mengembalikan error:', primaryRes.error, 'Mencoba fallback Body-Only...');
-
-  // ── Opsi 2: Fallback Parameter Body Saja (Jika template tidak memiliki tombol di Meta) ──
+  // ── Opsi 3: Fallback Parameter Body Saja (Jika template tanpa tombol) ──
   const bodyOnlyComponents = [
     {
       type: 'body',
@@ -187,35 +219,6 @@ export async function sendWaOtpVerification(phone: string, otpCode: string, lang
 
   if (bodyOnlyRes.success) {
     return bodyOnlyRes;
-  }
-
-  // ── Opsi 3: Fallback Tombol URL (Jika template lama menggunakan tombol URL dinamis) ──
-  const urlComponents = [
-    {
-      type: 'body',
-      parameters: [
-        { type: 'text', text: otpCode }
-      ]
-    },
-    {
-      type: 'button',
-      sub_type: 'url',
-      index: '0',
-      parameters: [
-        { type: 'text', text: otpCode }
-      ]
-    }
-  ];
-
-  const urlRes = await sendWhatsAppTemplate({
-    to: phone,
-    templateName: 'otp_verification',
-    languageCode: languageCode,
-    components: urlComponents
-  });
-
-  if (urlRes.success) {
-    return urlRes;
   }
 
   return primaryRes;

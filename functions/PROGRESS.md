@@ -2,6 +2,36 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 417. Konfigurasi Nomor WhatsApp Operasional Resmi RuangSinggah.id (+62 878-8784-5584), Pembaruan WABA ID & Penyelarasan Template URL Button OTP (`whatsappService.ts`, `.env.local`) (September 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna meminta agar sistem WhatsApp di `ruangsinggah.id` secara resmi beralih dari nomor uji coba/sandbox ke nomor WhatsApp operasional sistem yang sesungguhnya.
+  2. Akun WhatsApp Business resmi yang terdaftar dan terverifikasi di Meta:
+     - Nama Akun: **Ruang Singgah Id** (Dimiliki oleh *Ruang Singgah Nusantara*)
+     - WABA ID: **`3179718795693124`**
+     - Nomor Telepon: **`+62 878-8784-5584`**
+     - Phone Number ID: **`1377156352140430`** (Status: `VERIFIED`, `Terhubung`)
+  3. Mengatasi kegagalan pengiriman OTP verifikasi WhatsApp (`#132001 Template name does not exist` atau `#132018 Button at index 0 must be of type Url`) yang timbul karena perbedaan WABA dan format komponen tombol antara Meta dengan kode sebelumnya.
+- **Akar Masalah**:
+  1. **Konfigurasi Sandbox**: File `.env.local` sebelumnya mengarah ke nomor uji coba Meta (`1132009059986709`) dan Test WABA (`1253101886503653`), sehingga template yang dibuat di akun bisnis operasional utama tidak dapat diakses.
+  2. **Ketidaksesuaian Tipe Tombol Template**: Template `otp_verification` (Bahasa: `id`, Kategori: `AUTHENTICATION`) yang disetujui di WABA resmi menggunakan tombol bertipe `URL` (`Salin Kode` dengan parameter kode dinamis `{{1}}`). Sedangkan kode di `whatsappService.ts` mencoba komponen `copy_code` terlebih dahulu, memicu penolakan validasi dari Meta.
+- **Implementasi Solusi**:
+  1. **Pembaruan Variabel Environment & Default Fallback**:
+     - Memperbarui [functions/public/.env.local](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/.env.local) dengan `VITE_WHATSAPP_PHONE_ID=1377156352140430` dan `VITE_WHATSAPP_WABA_ID=3179718795693124`.
+     - Menambahkan konstanta fallback resmi pada [whatsappService.ts](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/whatsappService.ts):
+       `DEFAULT_OPERATIONAL_PHONE_ID = '1377156352140430'` dan `DEFAULT_OPERATIONAL_WABA_ID = '3179718795693124'` sebagai jaminan agar sistem tidak pernah keliru kembali ke nomor sandbox sekalipun di bundle produksi.
+  2. **Penyelarasan Komponen Tombol OTP WhatsApp**:
+     - Menata ulang fungsi `sendWaOtpVerification` pada `whatsappService.ts` agar menggunakan struktur `urlComponents` (`sub_type: 'url'`) sebagai opsi prioritas utama (Opsi 1), mencocokkan skema template `otp_verification` Meta yang berstatus APPROVED.
+     - Menyediakan fallback cadangan ke `copy_code` dan `body-only` untuk ketahanan sistem maksimal.
+- **File Tersentuh**:
+  - `functions/public/.env.local`
+  - `functions/public/whatsappService.ts`
+  - `functions/PROGRESS.md`
+  - `IMPLEMENTATION_PLAN.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Uji kirim live OTP via Meta Cloud API langsung dari Phone ID `1377156352140430` (`+62 878-8784-5584`) ke nomor WhatsApp berhasil 100% dengan status `accepted` (`wamid.HBgNNjI4MTUyNzA4MDY1NhUCABEYEkU1ODczMEQ4RjA3OEYwNjhDQQA=`).
+  - Uji kompilasi frontend Vite di `functions/public` sukses 100% tanpa kesalahan (2512 modul tertransformasi, `✓ built in 26.88s`, 0 error).
+
 ### 416. Penyelarasan Alur Verifikasi Email Berbasis Tautan (Action Link), Restorasi UI Kartu Email Production & Eliminasi Anomali Banner Pesan Ganda (`Login.tsx`, `index.ts`) (September 2026)
 - **Permintaan & Masalah**:
   1. Pengguna meminta pengembalian antarmuka verifikasi email pada pendaftaran akun agar persis seperti versi production yang stabil di `ruangsinggah.id` (menggunakan kartu "Verifikasi Email Terkirim" dengan icon envelope hijau, opsi "Salah email? Ubah disini", timer kirim ulang, dan tombol "Kembali ke Login"), menghapus penginputan kode 6-digit OTP yang membingungkan pengguna.
