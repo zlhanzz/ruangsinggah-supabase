@@ -2,6 +2,33 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 429. Restrukturisasi 4 Kategori Menu Profil Mitra & Penambahan Modal Preferensi Notifikasi (`MitraProfile.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna meminta agar tombol "Pengaturan" di profil mitra tidak langsung memunculkan formulir ubah kata sandi, melainkan dijadikan sebuah kategori pengaturan akun yang komprehensif sebagaimana profil pencari kost (`Profile.tsx`), yang memuat manajemen *Keamanan & Kata Sandi* dan *Preferensi Notifikasi*.
+  2. Pengguna juga meminta agar *Program Layanan (KostManager)* dipisahkan secara tegas dari *Pusat Bantuan & Ketentuan Kemitraan*, menjadi dua grup kategori independen yang rapi dan terstruktur.
+- **Akar Masalah**:
+  1. Menu pengaturan sebelumnya berada dalam satu kartu dengan menu keuangan dan profil, dan langsung memicu modal ubah password saat diklik.
+  2. Menu Program KostManager sebelumnya digabung bersama Pusat Bantuan dan Ketentuan Kemitraan di dalam satu grup "Program & Bantuan Kemitraan", sehingga batas fungsi layanan operasional kost dan bantuan pengguna menjadi rancu.
+- **Implementasi Solusi**:
+  1. **Restrukturisasi 4 Grup Kategori Menu Mandiri**:
+     - **Grup 1: KEUANGAN & DATA DIRI**: Memuat `Penarikan Saldo` (dengan badge saldo aktif `availableBalance`) dan `Informasi Pribadi` (dengan badge status dokumen KTP).
+     - **Grup 2: PENGATURAN AKUN & KEAMANAN**: Mengikuti standar `Profile.tsx`, memuat `Keamanan & Kata Sandi` (ikon `<Lock />`, membuka modal ubah password ber-OTP email 6-digit) dan `Preferensi Notifikasi` (ikon `<Bell />`).
+     - **Grup 3: PROGRAM & SOLUSI KOST**: Kategori mandiri memuat `Program KostManager Auto-Pilot` (ikon `<Sparkles />`, badge status `Autopilot 👑` / `Diproses`).
+     - **Grup 4: PUSAT BANTUAN & INFORMASI LEGAL**: Kategori mandiri memuat `Pusat Bantuan 24/7` (ikon `<HelpCircle />`, link CS WhatsApp) dan `Ketentuan Layanan Kemitraan` (ikon `<FileText />`, `/terms`), diikuti tombol `Keluar dari Akun Mitra`.
+  2. **Penyematan Modal Preferensi Notifikasi Mitra**:
+     - Modal dialog modern dengan toggle interaktif: *Notifikasi WhatsApp* (pesan & sewa masuk), *Notifikasi Email* (rekap saldo bulanan), dan *Promo & Fitur Baru* (penawaran operasional kost).
+  3. **Penyempurnaan Modal Keamanan & Kata Sandi**:
+     - Header modal diperbarui menjadi "Keamanan & Kata Sandi" dengan subteks verifikasi OTP yang presisi.
+  4. **Pencegahan FOUT (100% Lucide React)**:
+     - Mengimpor `<Bell />` dan seluruh ikon sebagai SVG murni dari `lucide-react` tanpa Google font ligature.
+- **File Tersentuh**:
+  - `functions/public/pages/MitraProfile.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi build frontend Vite (`cmd.exe /c npm run build`) sukses 100% (`✓ built in 32.91s`, 0 error).
+  - Tampilan menu profil mitra terbagi menjadi 4 kategori estetik, modal preferensi notifikasi dan keamanan berfungsi responsif.
+
 ### 428. Penguatan Keamanan Ganti Kata Sandi Berbasis Verifikasi Email OTP (`emailService.ts`, `MitraProfile.tsx`, & `Profile.tsx`) (September 2026)
 - **Permintaan & Masalah**:
   1. Pengguna mengevaluasi bahwa alur ganti kata sandi di tampilan user dan mitra sangat lemah secara keamanan (*security anomaly*), karena hanya disuruh memasukkan kata sandi baru tanpa adanya verifikasi email pemilik akun.

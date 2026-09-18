@@ -5,7 +5,7 @@ import {
     User, ShieldCheck, MapPin, Phone, ChevronRight, LogOut, Upload, BadgeCheck, 
     AlertCircle, Clock, Search, X, Mail, Calendar, Gift, Lock, Wallet, Landmark, 
     Sparkles, HelpCircle, FileText, CheckCircle2, Edit3, ArrowLeft, Settings,
-    UserCheck, Eye, EyeOff, RefreshCw, Check
+    UserCheck, Eye, EyeOff, RefreshCw, Check, Bell
 } from 'lucide-react';
 import { sendWhatsAppTemplate, sendWaOtpVerification } from '../whatsappService';
 import { notifyAdminIdentityVerification, sendPasswordChangeOtp } from '../emailService';
@@ -106,6 +106,14 @@ const MitraProfile: React.FC<MitraProfileProps> = ({
     const [otpCooldown, setOtpCooldown] = useState(0);
     const [isSendingOtp, setIsSendingOtp] = useState(false);
     const [isOtpSent, setIsOtpSent] = useState(false);
+
+    // Notification preferences modal states
+    const [isNotifModalOpen, setIsNotifModalOpen] = useState(false);
+    const [notifSettings, setNotifSettings] = useState({
+        emailNotif: true,
+        waNotif: true,
+        promoNotif: false,
+    });
 
     // Cooldown interval timer for OTP resend
     useEffect(() => {
@@ -1584,8 +1592,11 @@ const MitraProfile: React.FC<MitraProfileProps> = ({
                         </div>
                     )}
 
-                    {/* ── MENU UTAMA: PENARIKAN SALDO, INFORMASI PRIBADI & PENGATURAN ── */}
-                    <div className="mb-2">
+                    {/* ── GROUP 1: KEUANGAN & DATA DIRI ── */}
+                    <div className="mb-6">
+                        <h3 className="text-[11px] font-black uppercase text-gray-400 tracking-wider mb-2.5 px-1">
+                            KEUANGAN & DATA DIRI
+                        </h3>
                         <div className="bg-white rounded-3xl border border-gray-100 shadow-xs divide-y divide-gray-50 overflow-hidden">
                             {/* 1. Penarikan Saldo */}
                             <button
@@ -1664,8 +1675,16 @@ const MitraProfile: React.FC<MitraProfileProps> = ({
                                     <ChevronRight className="w-4 h-4 text-gray-400 group-hover:text-orange-500 group-hover:translate-x-0.5 transition-all" />
                                 </div>
                             </button>
+                        </div>
+                    </div>
 
-                            {/* 3. Pengaturan */}
+                    {/* ── GROUP 2: PENGATURAN AKUN & KEAMANAN ── */}
+                    <div className="mb-6">
+                        <h3 className="text-[11px] font-black uppercase text-gray-400 tracking-wider mb-2.5 px-1">
+                            PENGATURAN AKUN & KEAMANAN
+                        </h3>
+                        <div className="bg-white rounded-3xl border border-gray-100 shadow-xs divide-y divide-gray-50 overflow-hidden">
+                            {/* Keamanan & Kata Sandi */}
                             <button
                                 type="button"
                                 onClick={() => {
@@ -1673,19 +1692,46 @@ const MitraProfile: React.FC<MitraProfileProps> = ({
                                     setPasswordMessage(null);
                                     setNewPassword('');
                                     setConfirmPassword('');
+                                    setPasswordOtpInput('');
+                                    setGeneratedPasswordOtp('');
+                                    setIsOtpSent(false);
                                 }}
                                 className="w-full p-4 flex items-center justify-between text-left hover:bg-orange-50/40 transition-colors group cursor-pointer"
                             >
                                 <div className="flex items-center gap-3.5 min-w-0">
                                     <div className="w-10 h-10 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
-                                        <Settings className="w-5 h-5" />
+                                        <Lock className="w-5 h-5" />
                                     </div>
                                     <div className="min-w-0">
                                         <h4 className="text-sm font-black text-gray-900 group-hover:text-orange-600 transition-colors">
-                                            Pengaturan
+                                            Keamanan & Kata Sandi
                                         </h4>
                                         <p className="text-xs text-gray-400 font-medium truncate mt-0.5">
-                                            Keamanan akun, ganti kata sandi & pengaturan login
+                                            Ganti password berproteksi OTP & keamanan login
+                                        </p>
+                                    </div>
+                                </div>
+                                <div className="flex items-center gap-2 shrink-0 ml-2">
+                                    <ChevronRight className="w-4 h-4 text-gray-400 group-hover:text-orange-500 group-hover:translate-x-0.5 transition-all" />
+                                </div>
+                            </button>
+
+                            {/* Preferensi Notifikasi */}
+                            <button
+                                type="button"
+                                onClick={() => setIsNotifModalOpen(true)}
+                                className="w-full p-4 flex items-center justify-between text-left hover:bg-orange-50/40 transition-colors group cursor-pointer"
+                            >
+                                <div className="flex items-center gap-3.5 min-w-0">
+                                    <div className="w-10 h-10 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center shrink-0">
+                                        <Bell className="w-5 h-5" />
+                                    </div>
+                                    <div className="min-w-0">
+                                        <h4 className="text-sm font-black text-gray-900 group-hover:text-orange-600 transition-colors">
+                                            Preferensi Notifikasi
+                                        </h4>
+                                        <p className="text-xs text-gray-400 font-medium truncate mt-0.5">
+                                            WhatsApp sewa, email laporan & info promo
                                         </p>
                                     </div>
                                 </div>
@@ -1696,10 +1742,10 @@ const MitraProfile: React.FC<MitraProfileProps> = ({
                         </div>
                     </div>
 
-                    {/* ── GROUP 3: PROGRAM & BANTUAN KEMITRAAN ── */}
-                    <div className="mb-2">
+                    {/* ── GROUP 3: PROGRAM & SOLUSI KOST ── */}
+                    <div className="mb-6">
                         <h3 className="text-[11px] font-black uppercase text-gray-400 tracking-wider mb-2.5 px-1">
-                            PROGRAM & BANTUAN KEMITRAAN
+                            PROGRAM & SOLUSI KOST
                         </h3>
                         <div className="bg-white rounded-3xl border border-gray-100 shadow-xs divide-y divide-gray-50 overflow-hidden">
                             {/* Solusi KostManager Auto-Pilot */}
@@ -1744,7 +1790,15 @@ const MitraProfile: React.FC<MitraProfileProps> = ({
                                     <ChevronRight className="w-4 h-4 text-gray-400 group-hover:text-orange-500 group-hover:translate-x-0.5 transition-all" />
                                 </div>
                             </button>
+                        </div>
+                    </div>
 
+                    {/* ── GROUP 4: PUSAT BANTUAN & INFORMASI LEGAL ── */}
+                    <div className="mb-6">
+                        <h3 className="text-[11px] font-black uppercase text-gray-400 tracking-wider mb-2.5 px-1">
+                            PUSAT BANTUAN & INFORMASI LEGAL
+                        </h3>
+                        <div className="bg-white rounded-3xl border border-gray-100 shadow-xs divide-y divide-gray-50 overflow-hidden">
                             {/* Pusat Bantuan 24/7 */}
                             <button
                                 type="button"
@@ -1967,8 +2021,8 @@ const MitraProfile: React.FC<MitraProfileProps> = ({
                                     <Lock className="w-5 h-5" />
                                 </div>
                                 <div>
-                                    <h3 className="text-base font-black text-gray-900 tracking-tight">Pengaturan Akun</h3>
-                                    <p className="text-xs text-gray-400 font-medium mt-0.5">Keamanan kata sandi & akses login</p>
+                                    <h3 className="text-base font-black text-gray-900 tracking-tight">Keamanan & Kata Sandi</h3>
+                                    <p className="text-xs text-gray-400 font-medium mt-0.5">Perbarui kata sandi dengan verifikasi OTP</p>
                                 </div>
                             </div>
                             <button
@@ -2134,6 +2188,78 @@ const MitraProfile: React.FC<MitraProfileProps> = ({
                                 </button>
                             </div>
                         </form>
+                    </div>
+                </div>
+            )}
+
+            {/* Modal Preferensi Notifikasi */}
+            {isNotifModalOpen && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs animate-in fade-in duration-200">
+                    <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-sm w-full shadow-2xl border border-gray-100 relative">
+                        <button 
+                            type="button"
+                            onClick={() => setIsNotifModalOpen(false)}
+                            className="absolute right-5 top-5 p-1.5 rounded-full hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors cursor-pointer"
+                        >
+                            <X className="w-5 h-5" />
+                        </button>
+                        <div className="flex items-center gap-3 mb-5">
+                            <div className="w-10 h-10 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center">
+                                <Bell className="w-5 h-5" />
+                            </div>
+                            <div>
+                                <h3 className="text-base font-black text-gray-900">Preferensi Notifikasi</h3>
+                                <p className="text-xs text-gray-400">Atur kanal notifikasi kemitraan Anda</p>
+                            </div>
+                        </div>
+                        <div className="space-y-3.5">
+                            <div className="flex items-center justify-between p-3.5 bg-gray-50 rounded-2xl">
+                                <div>
+                                    <p className="text-xs font-bold text-gray-800">Notifikasi WhatsApp</p>
+                                    <p className="text-[10px] text-gray-500">Pemberitahuan sewa & pembayaran</p>
+                                </div>
+                                <input 
+                                    type="checkbox" 
+                                    checked={notifSettings.waNotif} 
+                                    onChange={(e) => setNotifSettings(prev => ({ ...prev, waNotif: e.target.checked }))}
+                                    className="w-5 h-5 accent-orange-500 rounded cursor-pointer" 
+                                />
+                            </div>
+                            <div className="flex items-center justify-between p-3.5 bg-gray-50 rounded-2xl">
+                                <div>
+                                    <p className="text-xs font-bold text-gray-800">Notifikasi Email</p>
+                                    <p className="text-[10px] text-gray-500">Rekap saldo & laporan kemitraan</p>
+                                </div>
+                                <input 
+                                    type="checkbox" 
+                                    checked={notifSettings.emailNotif} 
+                                    onChange={(e) => setNotifSettings(prev => ({ ...prev, emailNotif: e.target.checked }))}
+                                    className="w-5 h-5 accent-orange-500 rounded cursor-pointer" 
+                                />
+                            </div>
+                            <div className="flex items-center justify-between p-3.5 bg-gray-50 rounded-2xl">
+                                <div>
+                                    <p className="text-xs font-bold text-gray-800">Promo & Fitur Baru</p>
+                                    <p className="text-[10px] text-gray-500">Info program operasional & promo</p>
+                                </div>
+                                <input 
+                                    type="checkbox" 
+                                    checked={notifSettings.promoNotif} 
+                                    onChange={(e) => setNotifSettings(prev => ({ ...prev, promoNotif: e.target.checked }))}
+                                    className="w-5 h-5 accent-orange-500 rounded cursor-pointer" 
+                                />
+                            </div>
+                        </div>
+                        <button 
+                            type="button"
+                            onClick={() => {
+                                setIsNotifModalOpen(false);
+                                alert('Preferensi notifikasi kemitraan berhasil disimpan.');
+                            }}
+                            className="w-full mt-6 py-3.5 bg-[#ff7a00] hover:bg-orange-600 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-orange-500/20 active:scale-95 cursor-pointer"
+                        >
+                            Simpan Preferensi
+                        </button>
                     </div>
                 </div>
             )}

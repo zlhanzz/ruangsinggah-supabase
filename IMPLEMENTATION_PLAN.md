@@ -1,102 +1,101 @@
-# Rencana Implementasi: Peningkatan Keamanan Ganti Kata Sandi Berbasis Verifikasi Email OTP (`Profile.tsx` & `MitraProfile.tsx`)
+# Rencana Implementasi: Penataan Struktur Menu Profil Mitra & Pemisahan Kategori Program dan Pusat Bantuan (`MitraProfile.tsx`)
 
-Dokumen ini merinci rencana penanganan celah keamanan (*security anomaly*) pada fitur perubahan kata sandi di RuangSinggah.
-
----
-
-## 1. Analisis Masalah Keamanan
-
-### Celah Keamanan Saat Ini
-Saat ini, baik pada antarmuka **Profil Pengguna (`Profile.tsx`)** maupun **Profil Mitra (`MitraProfile.tsx`)**:
-- Pengguna yang sedang login dapat langsung mengganti kata sandi hanya dengan mengetikkan *Kata Sandi Baru* dan *Konfirmasi Kata Sandi Baru*, lalu menekan tombol simpan (`supabase.auth.updateUser({ password: newPassword })`).
-- **Risiko Fatal (*Account Takeover*)**:
-  Jika perangkat pengguna tertinggal dalam keadaan login (misal di warnet, laptop bersama, atau ponsel pinjaman), pihak yang tidak berwenang dapat langsung mengubah kata sandi akun tanpa memerlukan izin atau verifikasi apa pun ke pemilik akun yang sah. Akibatnya, pemilik asli terkunci dari akunnya sendiri.
-
-### Solusi Standar Keamanan
-Untuk memastikan integritas dan keamanan akun, setiap perubahan kata sandi wajib melewati **Verifikasi Kepemilikan Email (Two-Step Email OTP Verification)**:
-1. Sistem mengirimkan **Kode OTP 6-Digit** khusus ke alamat email terdaftar pengguna.
-2. Form perubahan kata sandi **hanya akan memproses kata sandi baru jika kode OTP yang dimasukkan dari email terbukti valid dan belum kedaluwarsa**.
-3. Sistem memberikan notifikasi peringatan jika ada upaya perubahan kata sandi yang tidak dikenali.
+Dokumen ini merinci penyesuaian arsitektur menu profil mitra (`MitraProfile.tsx`) sesuai arahan terbaru:
+1. Menjadikan **PENGATURAN AKUN & KEAMANAN** sebagai kategori terpisah (memuat *Keamanan & Kata Sandi* ber-OTP dan *Preferensi Notifikasi*), serasi dengan tampilan profil pencari kost (`Profile.tsx`).
+2. Menata kategori pertama **KEUANGAN & DATA DIRI** memuat *Penarikan Saldo* dan *Informasi Pribadi*.
+3. Memisahkan **PROGRAM & SOLUSI KOST** (*Program KostManager Auto-Pilot*) dengan **PUSAT BANTUAN & INFORMASI LEGAL** (*Pusat Bantuan 24/7* & *Ketentuan Layanan Kemitraan*) menjadi dua grup kategori independen.
 
 ---
 
-## 2. Alur Pengalaman Pengguna (Security Flow)
+## 1. Analisis Kebutuhan & Desain Hierarki 4 Kategori Menu
 
-### Rincian Alur:
-1. Pengguna membuka modal Keamanan & Ganti Sandi.
-2. Modal menampilkan email terdaftar pengguna yang aktif.
-3. Pengguna menekan tombol **"Kirim Kode Verifikasi ke Email"**.
-4. Sistem men-generate kode OTP 6-digit dan mengirimkannya ke email resmi pengguna.
-5. Timer hitung mundur (*cooldown* 60 detik) aktif untuk mencegah spam.
-6. Pengguna memasukkan:
-   - **Kode OTP 6-Digit**
-   - **Kata Sandi Baru** (minimal 6 karakter)
-   - **Konfirmasi Kata Sandi Baru**
-7. Sistem memvalidasi kesesuaian OTP:
-   - Jika OTP salah atau kedaluwarsa (> 10 menit): Ditolak dengan pesan kesalahan yang jelas.
-   - Jika OTP valid: Kata sandi diperbarui via `supabase.auth.updateUser({ password })`.
+Hierarki menu profil mitra yang akan diimplementasikan:
 
----
+```mermaid
+graph TD
+    subgraph Grup_1 [1. KEUANGAN & DATA DIRI]
+        A1["Penarikan Saldo<br/>(Badge Saldo Aktif Rp X)"]
+        A2["Informasi Pribadi<br/>(Badge Status Verifikasi KTP)"]
+    end
 
-## 3. Rincian Fitur yang Akan Diterapkan
+    subgraph Grup_2 [2. PENGATURAN AKUN & KEAMANAN]
+        B1["Keamanan & Kata Sandi<br/>(Modal Ganti Password Ber-OTP Email)"]
+        B2["Preferensi Notifikasi<br/>(Modal Pengaturan Notifikasi WA/Email/Promo)"]
+    end
 
-### A. Penambahan Fungsi Pengiriman Email OTP di `emailService.ts`
-- Membuat fungsi `sendPasswordChangeOtp(email: string, otp: string, name?: string)`:
-  - Mengirim email dengan template keamanan resmi RuangSinggah.
-  - Subjek: `[RuangSinggah.id] Kode Keamanan Verifikasi Ganti Kata Sandi`.
-  - Berisi kode OTP 6-digit, masa berlaku (10 menit), dan peringatan keamanan bahwa jika bukan pemilik akun yang meminta, pemilik dapat segera mengabaikan pesan tersebut.
+    subgraph Grup_3 [3. PROGRAM & SOLUSI KOST]
+        C1["Program KostManager Auto-Pilot<br/>(Badge Status Autopilot / Diproses / Detail)"]
+    end
 
-### B. Pembaruan Modal Ganti Kata Sandi pada `MitraProfile.tsx` (Profil Mitra)
-1. **Langkah 1 (Verifikasi Email)**:
-   - Menampilkan email terdaftar secara jelas.
-   - Tombol *"Kirim Kode OTP"* dengan countdown cooldown timer (60 detik) untuk mencegah spam pengiriman.
-2. **Langkah 2 (Input Data)**:
-   - Field input **Kode OTP Email (6 digit)** dengan validasi angka.
-   - Field input **Kata Sandi Baru** & **Konfirmasi Kata Sandi** (toggle intip sandi).
-3. **Langkah 3 (Validasi & Eksekusi)**:
-   - Verifikasi kecocokan OTP dan masa aktif (maks 10 menit).
-   - Eksekusi `supabase.auth.updateUser({ password: newPassword })` hanya setelah OTP lolos validasi.
-   - Tetap menyediakan opsi bantuan *"Kirim Link Reset via Email"* sebagai metode alternatif.
+    subgraph Grup_4 [4. PUSAT BANTUAN & INFORMASI LEGAL]
+        D1["Pusat Bantuan 24/7<br/>(Badge CS Online & Link WA)"]
+        D2["Ketentuan Layanan Kemitraan<br/>(Halaman S&K Pemilik Kost)"]
+        D3["Keluar dari Akun Mitra<br/>(Tombol Logout Berbahaya/Aman)"]
+    end
+```
 
-### C. Pembaruan Modal Ganti Kata Sandi pada `Profile.tsx` (Profil User Biasa)
-- Menggantikan modal ganti kata sandi lama di `Profile.tsx` dengan alur verifikasi email OTP yang sama persis dan konsisten dengan `MitraProfile.tsx`.
+### Rincian Pembagian Kategori:
+1. **Grup 1: KEUANGAN & DATA DIRI**
+   - **`Penarikan Saldo`**: Akses dompet penghasilan sewa, saldo aktif (`availableBalance`), dan rekening bank penarikan.
+   - **`Informasi Pribadi`**: Kontak profil, nomor WA terverifikasi, alamat domisili, dan dokumen KTP resmi.
 
----
+2. **Grup 2: PENGATURAN AKUN & KEAMANAN** *(Sesuai Standar Profil User)*
+   - **`Keamanan & Kata Sandi`**: Ikon `<Lock />` biru $\rightarrow$ membuka modal ganti kata sandi berproteksi verifikasi Email OTP 6-digit (keamanan tinggi).
+   - **`Preferensi Notifikasi`**: Ikon `<Bell />` amber $\rightarrow$ membuka modal toggle preferensi notifikasi WhatsApp, Email Laporan, & Promo/Fitur Baru.
 
-## 4. Dampak File yang Tersentuh
+3. **Grup 3: PROGRAM & SOLUSI KOST** *(Kategori Mandiri)*
+   - **`Program KostManager Auto-Pilot`**: Layanan manajemen properti otomatis bagi pemilik kost tanpa repot, dengan badge status (`Autopilot 👑`, `Diproses`, atau navigasi ke detail program).
 
-1. **`functions/public/emailService.ts`**:
-   - Menambahkan fungsi helper `sendPasswordChangeOtp`.
-2. **`functions/public/pages/MitraProfile.tsx`**:
-   - Menambahkan state OTP (`emailOtp`, `inputOtp`, `isOtpSent`, `otpTimer`, `otpExpiresAt`).
-   - Memperbarui modal pengaturan ganti kata sandi dengan verifikasi OTP.
-3. **`functions/public/pages/Profile.tsx`**:
-   - Menambahkan state OTP dan memperbarui modal ganti sandi user dengan verifikasi OTP.
-4. **`functions/PROGRESS.md`**:
-   - Pencatatan progres perbaikan celah keamanan nomor #428.
-5. **`WALKTHROUGH.md`**:
-   - Dokumentasi hasil pengujian keamanan.
+4. **Grup 4: PUSAT BANTUAN & INFORMASI LEGAL** *(Kategori Mandiri)*
+   - **`Pusat Bantuan 24/7`**: Menghubungkan ke layanan CS WhatsApp & tim operasional RuangSinggah.
+   - **`Ketentuan Layanan Kemitraan`**: Syarat, ketentuan & panduan hukum pemilik kost (`/terms`).
+   - **`Keluar dari Akun Mitra`**: Tombol logout akun mitra.
 
 ---
 
-## 5. Langkah-Langkah Eksekusi (Fase 2)
+## 2. Fitur Baru: Modal Preferensi Notifikasi Mitra
 
-1. Menambahkan fungsi `sendPasswordChangeOtp` di `emailService.ts`.
-2. Mengintegrasikan logika OTP dan pembaruan antarmuka modal pada `MitraProfile.tsx`.
-3. Mengintegrasikan logika OTP dan pembaruan antarmuka modal pada `Profile.tsx`.
-4. Menjalankan kompilasi `npm run build` di `functions/public` untuk memastikan 0 error tipe TypeScript.
-5. Mencatat riwayat di `functions/PROGRESS.md` dan memperbarui `WALKTHROUGH.md`.
-6. Melakukan git commit dan push ke branch `bukan-productions`.
+Mengadopsi pola modal dari `Profile.tsx` yang sudah stabil:
+- **State Pengaturan**:
+  ```tsx
+  const [isNotifModalOpen, setIsNotifModalOpen] = useState(false);
+  const [notifSettings, setNotifSettings] = useState({
+      waNotif: true,
+      emailNotif: true,
+      promoNotif: false,
+  });
+  ```
+- **Opsi Toggle**:
+  1. **Notifikasi WhatsApp**: Notifikasi pembayaran sewa masuk, verifikasi penyewa, dan pesan darurat.
+  2. **Notifikasi Email**: Rekap bulanan pendapatan sewa, faktur transaksi, dan notifikasi keamanan akun.
+  3. **Info Program & Promo**: Rekomendasi pengelolaan hunian dan penawaran fitur KostManager.
 
 ---
 
-## 6. Rencana Verifikasi
+## 3. Pencegahan FOUT & Standar Kualitas
 
-- [ ] **Kompilasi Sukses**: `npm run build` selesai tanpa error.
-- [ ] **Uji Coba Profil Mitra**:
-  - Modal ganti kata sandi meminta pengiriman OTP ke email terlebih dahulu.
-  - Tombol simpan terkunci/memvalidasi jika OTP belum diisi atau salah.
-  - Jika OTP benar, kata sandi berhasil diperbarui.
-- [ ] **Uji Coba Profil User**:
-  - Alur verifikasi OTP email berjalan mulus dan protektif seperti pada profil mitra.
-- [ ] **Rate Limiting & Cooldown**: Timer hitung mundur 60 detik mencegah pengiriman berulang tak terkontrol.
+- Seluruh ikon menggunakan SVG murni yang diimpor dari **`lucide-react`**:
+  - `<Wallet />`, `<UserCheck />`, `<Lock />`, `<Bell />`, `<Sparkles />`, `<HelpCircle />`, `<FileText />`, `<LogOut />`, `<ChevronRight />`, `<Check />`, `<X />`, dll.
+- 0 Google font ligatures, 0ms FOUT delay.
+- Desain konsisten dengan border halus (`border-gray-100 divide-y divide-gray-50`), rounded cards (`rounded-3xl`), dan tracking label uppercase (`text-[11px] font-black uppercase text-gray-400 tracking-wider mb-2.5 px-1`).
+
+---
+
+## 4. Dampak File yang Akan Dimodifikasi
+
+1. **`functions/public/pages/MitraProfile.tsx`**:
+   - Menambahkan state `isNotifModalOpen` & `notifSettings`.
+   - Mengelompokkan tampilan menu menjadi 4 kategori terpisah sesuai desain.
+   - Menambahkan Modal Preferensi Notifikasi di dalam modal container.
+2. **`functions/PROGRESS.md`**:
+   - Mencatat histori penyelesaian progres #429.
+3. **`WALKTHROUGH.md`**:
+   - Dokumentasi hasil verifikasi kompilasi dan panduan pengujian visual.
+
+---
+
+## 5. Rencana Verifikasi
+
+- [ ] **Kompilasi Frontend**: Menjalankan `cmd.exe /c npm run build` di direktori `functions/public` (wajib 0 error, exit code 0).
+- [ ] **Struktur 4 Kategori**: Memastikan layout menu terbagi jelas menjadi 4 bagian independen dengan header masing-masing.
+- [ ] **Modal Keamanan & Notifikasi**: Memastikan modal ganti kata sandi ber-OTP dan modal preferensi notifikasi dapat dibuka, ditutup, dan berfungsi sempurna.

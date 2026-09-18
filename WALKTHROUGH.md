@@ -1,75 +1,79 @@
-# WALKTHROUGH - RuangSinggah Development
+# Walkthrough: Restrukturisasi 4 Kategori Menu Profil Mitra & Penambahan Modal Preferensi Notifikasi (`MitraProfile.tsx`)
 
-## Ringkasan Progres Terbaru
-
-### Progres #428: Penguatan Keamanan Ganti Kata Sandi Berbasis Verifikasi Email OTP (`emailService.ts`, `MitraProfile.tsx`, & `Profile.tsx`)
+Dokumen ini mendokumentasikan implementasi penataan ulang menu profil pemilik kost (mitra), pemisahan program layanan dengan pusat bantuan, serta penambahan modal preferensi notifikasi sesuai arahan desain terbaru.
 
 ---
 
-## 1. Daftar Perubahan yang Dilakukan
+## 1. Ringkasan Perubahan
 
-1. **Pembuatan Helper Service Pengiriman OTP Email (`emailService.ts`)**:
-   - Menambahkan fungsi `sendPasswordChangeOtp(email: string, otp: string, name?: string)`.
-   - Mengirimkan email verifikasi resmi dengan subjek `[RuangSinggah.id] Kode Keamanan Verifikasi Ganti Kata Sandi`.
-   - Memuat 6 digit kode OTP, masa berlaku 10 menit, dan catatan peringatan keamanan akun.
+### A. Restrukturisasi 4 Grup Kategori Menu Independen
+Sebelumnya, menu profil mitra memiliki struktur yang padat di mana pengaturan langsung membuka formulir ubah kata sandi, dan program KostManager bercampur dengan pusat bantuan. Sekarang tampilan disusun menjadi 4 bagian yang teratur dan serasi dengan profil user (`Profile.tsx`):
 
-2. **Peningkatan Keamanan pada Modal Pengaturan Mitra (`MitraProfile.tsx`)**:
-   - Menambahkan card verifikasi email pemilik di dalam modal Pengaturan Akun:
-     - Tombol **"Kirim Kode Verifikasi ke Email"** dengan state loading dan cooldown countdown 60 detik (*rate limiting*).
-     - Menampilkan indikator status *Terkirim* ketika kode OTP telah berhasil dikirim.
-     - Input khusus **KODE VERIFIKASI EMAIL (6 DIGIT)** di posisi tengah dengan format monospace tebal.
-   - Mengunci eksekusi tombol **"Verifikasi & Simpan Kata Sandi"** hingga 6 digit kode OTP dimasukkan.
-   - Validasi ketat di sisi logika:
-     - Jika OTP salah: memunculkan pesan peringatan bahwa kode tidak cocok.
-     - Jika OTP kedaluwarsa (> 10 menit): memunculkan peringatan kedaluwarsa.
-     - Hanya jika OTP valid barulah `supabase.auth.updateUser` dipanggil.
+1. **Grup 1: KEUANGAN & DATA DIRI**
+   - **`Penarikan Saldo`**: Menampilkan badge saldo aktif (`Rp X`), ikon `<Wallet />`, dan navigasi langsung ke tab dompet untuk pencairan sewa dan rekening bank.
+   - **`Informasi Pribadi`**: Menampilkan badge verifikasi KTP (`Terverifikasi ✓`, `Sedang Ditinjau`, `Perlu Revisi`), ikon `<UserCheck />`, dan navigasi ke formulir data diri.
 
-3. **Penyelarasan Keamanan pada Modal Profil User (`Profile.tsx`)**:
-   - Menggantikan form ganti kata sandi lama di modal user agar menggunakan alur Two-Factor Email OTP yang sama persis.
-   - Melindungi akun pencari kost dari celah pengambilalihan akun (*account takeover*).
+2. **Grup 2: PENGATURAN AKUN & KEAMANAN** *(Standar Seragam dengan User)*
+   - **`Keamanan & Kata Sandi`**: Ikon `<Lock />` biru $\rightarrow$ membuka modal ganti kata sandi berproteksi verifikasi Email OTP 6-digit.
+   - **`Preferensi Notifikasi`**: Ikon `<Bell />` kuning $\rightarrow$ membuka modal preferensi notifikasi kanal WhatsApp, Email, & Promo.
 
-4. **Kepatuhan UI/UX & Standar Bebas FOUT**:
-   - 100% menggunakan pure bundled vector SVG dari `lucide-react` (`ShieldCheck`, `Lock`, `Mail`, `RefreshCw`, `Clock`, `Check`, `CheckCircle2`, `AlertCircle`, `Eye`, `EyeOff`, `X`).
+3. **Grup 3: PROGRAM & SOLUSI KOST** *(Kategori Mandiri)*
+   - **`Program KostManager Auto-Pilot`**: Ikon `<Sparkles />` ungu $\rightarrow$ solusi pengelolaan hunian terima beres dengan badge status (`Autopilot 👑` / `Diproses`).
+
+4. **Grup 4: PUSAT BANTUAN & INFORMASI LEGAL** *(Kategori Mandiri)*
+   - **`Pusat Bantuan 24/7`**: Ikon `<HelpCircle />` toska $\rightarrow$ menghubungkan langsung ke WhatsApp CS resmi.
+   - **`Ketentuan Layanan Kemitraan`**: Ikon `<FileText />` $\rightarrow$ membuka syarat, ketentuan, dan panduan hukum pemilik kost (`/terms`).
+   - **`Keluar dari Akun Mitra`**: Tombol logout akun mitra.
+
+### B. Komponen Modal Preferensi Notifikasi
+- Menyediakan 3 toggle interaktif:
+  - **Notifikasi WhatsApp**: Pemberitahuan penyewaan dan pembayaran sewa masuk.
+  - **Notifikasi Email**: Rekap saldo bulanan dan laporan akun kemitraan.
+  - **Promo & Fitur Baru**: Informasi program operasional dan promo KostManager.
+- Menggunakan state reaktif `notifSettings` dan tombol *Simpan Preferensi* dengan feedback visual langsung.
+
+### C. Bebas FOUT (100% Lucide React SVG)
+- Seluruh icon dimuat melalui vector SVG murni dari package `lucide-react` tanpa menggunakan font CDN ligature, menjamin performa cepat tanpa kedipan teks mentah.
 
 ---
 
-## 2. Hasil Pengujian & Kompilasi
+## 2. Hasil Verifikasi Kompilasi (Build Test)
 
-Perintah build frontend Vite dijalankan pada direktori `functions/public`:
+Perintah kompilasi frontend Vite dijalankan dan berhasil 100% tanpa error:
 ```bash
 cmd.exe /c npm run build
 ```
 
-**Hasil Terminal**:
-```text
-> ruangsinggah.id@0.0.0 build
-> vite build && node -e "const fs=require('fs'); if (fs.existsSync('./dist')) fs.rmSync('./dist', {recursive: true, force: true}); fs.cpSync('../../public', './dist', {recursive: true, force: true});"
-
+**Output Log**:
+```
 vite v6.4.1 building for production...
 transforming...
 ✓ 2512 modules transformed.
 rendering chunks...
 computing gzip size...
-✓ built in 34.95s
+../../public/index.html                                  7.92 kB │ gzip:   2.29 kB
+../../public/assets/index-B5qcSKpE.css                 299.39 kB │ gzip:  35.93 kB
+../../public/assets/MitraDashboard-Bd_Qbzih.js         427.40 kB │ gzip:  93.13 kB
+✓ built in 32.91s
 ```
-- **Exit Code**: `0` (Sukses tanpa error TypeScript maupun JSX bundling).
 
 ---
 
-## 3. Panduan Pengujian bagi Pengguna
+## 3. Panduan Pengujian bagi Pengguna (User Testing)
 
-### A. Pengujian pada Profil Mitra:
-1. Buka dashboard mitra $\rightarrow$ pilih menu/tab **Profil**.
-2. Klik menu **Pengaturan** (ikon settings biru).
-3. Di dalam modal dialog:
-   - Perhatikan kotak peringatan verifikasi email pemilik.
-   - Klik tombol **Kirim Kode Verifikasi ke Email**.
-   - Cek kotak masuk email Anda untuk melihat 6 digit kode OTP.
-   - Masukkan 6 digit kode OTP, Kata Sandi Baru, dan Konfirmasi Kata Sandi Baru.
-   - Klik **Verifikasi & Simpan Kata Sandi**.
-   - Sistem akan memvalidasi OTP dan memperbarui kata sandi secara aman.
-
-### B. Pengujian pada Profil User (Pencari Kost):
-1. Buka menu **Profil** user biasa.
-2. Di bagian Pengaturan Akun & Keamanan, klik **Keamanan & Kata Sandi**.
-3. Lakukan langkah yang sama: minta kode OTP email, masukkan OTP, dan perbarui kata sandi dengan aman.
+1. Buka dashboard mitra dan masuk ke menu **Profil** (`/dashboard-mitra/profile`).
+2. Periksa struktur menu yang tampil di layar:
+   - Pastikan terdapat 4 judul kategori dengan huruf kapital dan warna abu-abu elegan:
+     - `KEUANGAN & DATA DIRI`
+     - `PENGATURAN AKUN & KEAMANAN`
+     - `PROGRAM & SOLUSI KOST`
+     - `PUSAT BANTUAN & INFORMASI LEGAL`
+3. Klik menu **`Preferensi Notifikasi`**:
+   - Modal preferensi notifikasi akan muncul dengan 3 toggle (WhatsApp, Email, Promo & Fitur Baru).
+   - Coba ubah toggle dan klik tombol *Simpan Preferensi*.
+4. Klik menu **`Keamanan & Kata Sandi`**:
+   - Modal keamanan akan terbuka dengan header "Keamanan & Kata Sandi" serta formulir verifikasi Email OTP 6-digit.
+5. Periksa kategori **`PROGRAM & SOLUSI KOST`**:
+   - Menampilkan satu menu fokus `Program KostManager Auto-Pilot` secara terpisah dari pusat bantuan.
+6. Periksa kategori **`PUSAT BANTUAN & INFORMASI LEGAL`**:
+   - Berisi `Pusat Bantuan 24/7`, `Ketentuan Layanan Kemitraan`, dan tombol `Keluar dari Akun Mitra`.
