@@ -1271,25 +1271,46 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
 
                             {/* Verification Banner — Imitated from Agent Dashboard */}
                             {!isVerified && (
-                                <div className="bg-orange-50 border border-orange-200 rounded-3xl p-5 flex flex-col md:flex-row items-center justify-between gap-4 shadow-sm animate-pulse">
-                                    <div className="flex items-center gap-4">
-                                        <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center text-xl shadow-sm">⚠️</div>
-                                        <div className="text-left">
-                                            <h4 className="text-orange-900 font-black uppercase text-[10px] tracking-widest mb-1">Identitas Belum Lengkap</h4>
-                                            <p className="text-gray-600 text-[11px] font-medium leading-tight">
+                                <div className="bg-gradient-to-r from-amber-500/[0.08] via-orange-500/[0.04] to-amber-500/[0.02] border border-amber-200/90 rounded-3xl p-5 flex flex-col md:flex-row items-center justify-between gap-4 shadow-xs">
+                                    <div className="flex items-center gap-4 text-left w-full md:w-auto">
+                                        <div className="w-11 h-11 rounded-2xl bg-amber-500/10 border border-amber-300/50 text-amber-600 flex items-center justify-center shrink-0 shadow-xs">
+                                            {user?.verification_status === 'pending' ? (
+                                                <Clock size={22} className="text-amber-600" />
+                                            ) : (
+                                                <AlertCircle size={22} className="text-orange-600" />
+                                            )}
+                                        </div>
+                                        <div>
+                                            <div className="flex items-center gap-2">
+                                                <h4 className="text-amber-950 font-black uppercase text-[11px] tracking-widest">
+                                                    {user?.verification_status === 'pending' ? 'Verifikasi Sedang Ditinjau' : 'Identitas Belum Lengkap'}
+                                                </h4>
+                                                {user?.verification_status === 'pending' && (
+                                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 text-[9px] font-black uppercase tracking-wider">
+                                                        <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>
+                                                        Reviewing
+                                                    </span>
+                                                )}
+                                            </div>
+                                            <p className="text-amber-900/70 text-xs font-medium mt-0.5 leading-snug">
                                                 {user?.verification_status === 'pending'
-                                                    ? 'Data verifikasi Anda sedang dalam peninjauan admin. Mohon tunggu.'
+                                                    ? 'Data verifikasi KTP Anda sedang divalidasi oleh tim admin. Estimasi maksimal 1x24 jam.'
                                                     : 'Verifikasi KTP Anda sekarang untuk mulai mempublikasikan iklan kost.'}
                                             </p>
                                         </div>
                                     </div>
-                                    {user?.verification_status !== 'pending' && (
+                                    {user?.verification_status !== 'pending' ? (
                                         <button
                                             onClick={() => handleMenuChange('profile')}
-                                            className="bg-orange-500 hover:bg-orange-600 text-white px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-lg shadow-orange-100 shrink-0"
+                                            className="bg-orange-500 hover:bg-orange-600 text-white px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-md shadow-orange-500/20 shrink-0 w-full md:w-auto text-center"
                                         >
                                             Verifikasi Sekarang
                                         </button>
+                                    ) : (
+                                        <div className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/90 border border-amber-200/90 text-amber-800 text-[10px] font-black uppercase tracking-wider shadow-2xs">
+                                            <Lock size={12} className="text-amber-600" />
+                                            Data Terkunci
+                                        </div>
                                     )}
                                 </div>
                             )}

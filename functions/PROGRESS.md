@@ -2,6 +2,38 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 421. Redesain Ramping & Elegan Kartu Status Verifikasi Sedang Ditinjau serta Penguncian Ketat Mode Edit Saat Pending (`MitraProfile.tsx`, `AgentProfile.tsx`, `MitraDashboard.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna mengeluhkan kartu status *"Verifikasi Sedang Ditinjau"* yang berlatar oranye solid pekat raksasa (`bg-orange-500 rounded-[2.5rem] p-8 md:p-10`) karena terlalu bongsor, tidak estetik, serta boros ruang UI/UX pada layar desktop dan mobile.
+  2. Kartu tersebut memiliki aksi klik yang langsung membuka mode edit/pengubahan data, padahal berkas identitas sedang dalam tahap peninjauan oleh admin. Seharusnya saat sudah diajukan, data terkunci rapat dan tidak bisa diubah kecuali jika telah ditolak atau diberikan catatan revisi oleh admin.
+- **Akar Masalah**:
+  1. **Tampilan Bongsor & Agresif**: Kartu status verifikasi peninjauan menggunakan ukuran vertikal sangat besar (>250px), ikon jam raksasa (`w-20 h-20`), dan warna oranye pekat yang menyilaukan mata dan tidak proporsional dengan kartu dashboard lainnya.
+  2. **Event Klik Tanpa Proteksi**: Kartu status peninjauan di `MitraProfile.tsx` memiliki `onClick={() => setSearchParams({ edit: 'true', step: '1' })}` dan `cursor-pointer hover:scale-[1.01]`, yang membuat pengguna dapat masuk ke formulir edit kapan saja.
+  3. **Ketiadaan Guard State**: Tombol "Edit Profil" pada kartu profil akun tetap aktif dan query parameter `?edit=true` di URL tetap mengeksekusi mode edit meskipun status akun adalah `pending`.
+- **Implementasi Solusi**:
+  1. **Redesain Kartu Menjadi Ramping, Estetik, & Efisien**:
+     - Mengubah container kartu menjadi profil modern beraksen lembut (`bg-gradient-to-r from-amber-500/[0.08] via-orange-500/[0.04] to-amber-500/[0.02] border border-amber-200/90 rounded-3xl p-5 sm:p-6 shadow-xs`).
+     - Menata layout horizontal proporsional: ikon jam `<Clock size={24} />` dengan background soft amber box (`w-12 h-12 rounded-2xl bg-amber-500/10 border border-amber-300/50`), judul ringkas berstatus badge ("Reviewing"), deskripsi estimasi 1x24 jam, serta badge status informasi "Data Terkunci".
+     - Menghapus efek `cursor-pointer` dan hover scale sehingga kartu murni bersifat informatif.
+  2. **Penguncian Ketat Hak Akses Mode Edit saat `pending`**:
+     - Menghapus event `onClick` pada kartu review di `MitraProfile.tsx` dan `AgentProfile.tsx`.
+     - Mengubah tombol "Edit Profil" pada kartu informasi akun menjadi indikator data terkunci (`<Lock size={12} /> Data Terkunci (Sedang Ditinjau)`) selama status verifikasi masih `pending`.
+     - Menambahkan guard proteksi di hook `useEffect`: jika `formData.verification_status === 'pending'`, mode edit otomatis dipaksa nonaktif (`setIsEditing(false)`) dan query param `edit` dibersihkan dari URL.
+     - Mode edit hanya dapat dibuka kembali jika status berubah menjadi `rejected` (melalui tombol *"Perbaiki Data"*) atau akun masih `unverified`.
+  3. **Penyelarasan Banner Dashboard (`MitraDashboard.tsx`)**:
+     - Mengganti emoji non-standar `⚠️` dengan 100% pure bundled vector SVG (`<Clock />` saat pending dan `<AlertCircle />` saat unverified).
+     - Menyelaraskan teks judul banner menjadi "Verifikasi Sedang Ditinjau" saat status pending dengan badge "Data Terkunci".
+- **File Tersentuh**:
+  - `functions/public/pages/MitraProfile.tsx`
+  - `functions/public/pages/AgentProfile.tsx`
+  - `functions/public/pages/MitraDashboard.tsx`
+  - `functions/PROGRESS.md`
+  - `IMPLEMENTATION_PLAN.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi Vite production di `functions/public` sukses 100% tanpa error (`✓ built in 28.34s`).
+  - Kartu tampil proporsional, hemat ruang vertikal, dan hak akses edit terkunci secara menyeluruh saat status pending.
+
 ### 420. Perbaikan Sistem OCR AI Verifikasi KTP: Eliminasi Payload Base64 Korup & Optimalisasi Public Storage URL (`MitraProfile.tsx`, `AgentProfile.tsx`, `analyze-ktp`) (September 2026)
 - **Permintaan & Masalah**:
   1. Pemindaian OCR KTP otomatis pada tahap verifikasi identitas (Step 2) mengalami kegagalan dengan error konsol: `FunctionsHttpError: Edge Function returned a non-2xx status code` pada `MitraProfile.tsx:563`.

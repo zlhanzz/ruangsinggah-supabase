@@ -1,111 +1,90 @@
-# Rencana Implementasi (Implementation Plan): Perbaikan Sistem OCR AI Verifikasi KTP (`analyze-ktp`)
+# Rencana Implementasi (Implementation Plan): Perbaikan UI/UX Kartu Review Verifikasi & Penguncian Hak Akses Edit
 
-Dokumen ini memuat analisis akar masalah dan rencana perbaikan atas kendala kegagalan pemindaian OCR KTP (`FunctionsHttpError: Edge Function returned a non-2xx status code` pada baris 563 `MitraProfile.tsx`).
-
----
-
-## 1. Analisis Masalah & Akar Masalah
-
-### A. Gejala yang Ditemukan
-Saat pengguna mengunggah foto KTP pada halaman verifikasi identitas (Step 2), sistem memunculkan peringatan *"Pemindaian otomatis belum optimal. Silakan periksa dan lengkapi data profil Anda secara manual"* dan di konsol browser tercatat error:
-```text
-MitraProfile.tsx:563 AI Extraction response: FunctionsHttpError: Edge Function returned a non-2xx status code
-```
-
-### B. Hasil Investigasi Empiris & Akar Masalah
-Setelah dilakukan simulasi pengujian langsung ke Edge Function Supabase `analyze-ktp` menggunakan file KTP asli yang diunggah pengguna:
-1. **Pengujian dengan `imageUrl` murni dari Supabase Storage**:
-   - **Hasil**: **SUKSES 100%** (Status: 200 OK, waktu pemrosesan < 3 detik).
-   - **Data yang Berhasil Diekstrak Secara Presisi**:
-     - NIK: `7312011011040003`
-     - Nama: `SULHAN`
-     - Tempat Lahir: `SUNNE`
-     - Tanggal Lahir: `2004-11-10`
-     - Jenis Kelamin: `Pria`
-     - Agama: `Islam`
-     - Pekerjaan: `Pelajar/Mahasiswa`
-     - Status Perkawinan: `Single`
-     - Alamat: `BUNNE RT 001/RW 003, GOARIE, MARIORIWAWO`
-2. **Akar Masalah di Sisi Front-End (`MitraProfile.tsx` & `AgentProfile.tsx`)**:
-   - Pada fungsi `handleKtpUpload`, front-end mencoba mengonversi file WebP lokal menjadi string base64 dengan perulangan karakter JavaScript (`for (...) binary += String.fromCharCode(bytes[i]); base64String = btoa(binary);`).
-   - Kode kemudian memanggil `performOcr(publicUrl, base64String)` dan mengirimkan `{ imageUrl, base64Image, mimeType }` ke Edge Function.
-   - Di dalam Edge Function `analyze-ktp`:
-     ```typescript
-     if (base64Image) {
-         // Menggunakan base64Image
-     } else if (imageUrl) {
-         // Menggunakan imageUrl
-     }
-     ```
-   - Karena `base64Image` terisi, Edge Function memprioritaskan base64 tersebut dan mengabaikan `imageUrl`.
-   - String base64 yang dihasilkan di sisi klien browser berukuran besar (>130 KB - beberapa MB), rawan terpotong/korup di memori browser atau menyebabkan ukuran payload HTTP body melampaui batas yang diterima Deno/Edge Function, sehingga Edge Function melempar error status 400.
-3. **Karakter Spasi pada Nama File**:
-   - Nama file upload menyertakan nama file mentah tanpa sanitasi (misal: `Screenshot 2026-06-15 143554.webp`). Karakter spasi mentah pada URL dapat memicu masalah decoding pada beberapa HTTP client.
+Dokumen perencanaan ini disusun untuk menanggapi kebutuhan perbaikan tampilan kartu status verifikasi identitas *"Verifikasi Sedang Ditinjau"* yang saat ini terlalu bongsor, tidak estetik, dan boros ruang UI/UX, serta celah di mana pengguna masih dapat masuk ke mode edit/formulir pengajuan saat data identitasnya sedang dalam tahap peninjauan (*pending*).
 
 ---
 
-## 2. Dampak Perubahan
+## 1. Analisis Masalah & Kebutuhan
 
-Perubahan akan difokuskan pada pengoptimalan pemanggilan OCR di sisi front-end:
-1. `functions/public/pages/MitraProfile.tsx`
-2. `functions/public/pages/AgentProfile.tsx`
+### A. Masalah Tampilan Kartu (UI/UX)
+- **Kondisi Saat Ini**:
+  - Kartu status verifikasi peninjauan (*pending*) di [MitraProfile.tsx](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/MitraProfile.tsx) dan [AgentProfile.tsx](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/AgentProfile.tsx) menggunakan latar oranye solid pekat raksasa (`bg-orange-500 rounded-[2.5rem] p-8 md:p-10`), ikon jam yang sangat besar (`w-20 h-20`), dan teks berukuran besar.
+  - Kartu ini memakan hampir separuh viewport layar (*bongsor*), terasa agresif/berlebihan, dan tidak proporsional dengan kartu-kartu dashboard lainnya yang bersih dan modern.
+- **Kebutuhan**:
+  - Mendesain ulang kartu menjadi kartu status yang **ringkas, estetik, elegan, dan efisien ruang**.
+  - Menggunakan palet modern bernuansa *soft warm amber / slate* yang profesional (`bg-gradient-to-r from-amber-50/90 to-orange-50/50 border border-amber-200/80`).
+  - Menggunakan layout horizontal proporsional: ikon `<Clock />` SVG dari `lucide-react` berukuran pas (`w-11 h-11`), tipografi rapi, dan indikator status *badge* minimalis (*"Sedang Ditinjau - Estimasi Maks 1x24 Jam"*).
+  - Menghapus efek kursor klik pointer dan hover zoom yang memberikan ilusi seolah kartu tersebut adalah tombol aksi.
 
-*Catatan: Edge Function `analyze-ktp` di Supabase backend sudah terbukti berfungsi sempurna ketika menerima `imageUrl`.*
+### B. Masalah Logika & Hak Akses Pengeditan (*Security & Business Flow*)
+- **Kondisi Saat Ini**:
+  - Kartu status *pending* memiliki event `onClick={() => setSearchParams({ edit: 'true', step: '1' })}` dengan `cursor-pointer hover:scale-[1.01]`.
+  - Mengklik kartu tersebut langsung membuka kembali formulir edit identitas dan data KTP, padahal berkas sedang dalam proses validasi oleh admin.
+  - Tombol *"Edit Profil"* di kartu informasi akun masih aktif dan dapat diklik.
+  - Parameter URL `?edit=true` masih diproses tanpa memeriksa apakah akun berstatus `pending`.
+- **Kebutuhan**:
+  - **Kunci Akses Penuh saat `pending`**: Saat status verifikasi adalah `pending` (Sedang Ditinjau), pengguna **TIDAK BOLEH** dapat masuk ke mode edit profil/identitas. Data terkinci rapat (*read-only*) demi menjaga integritas data yang sedang diperiksa oleh tim admin.
+  - Kartu status murni bersifat informatif tanpa event klik/navigasi.
+  - Tombol *"Edit Profil"* di kartu profil akun diganti dengan indikator status terkunci (*"Data Terkunci (Sedang Ditinjau)"*).
+  - Guard di sisi *router / URL state*: Jika ada akses langsung ke `?edit=true` saat status `pending`, sistem otomatis membatalkan/mereset `isEditing` ke `false` dan membersihkan URL query param.
+  - **Pengecualian Pembukaan Edit**: Mode edit identitas HANYA dapat dibuka kembali jika:
+    1. Status verifikasi adalah `rejected` (ditolak oleh admin, pengguna wajib memperbaiki berkas yang bermasalah melalui tombol *"Perbaiki Data"*).
+    2. Status verifikasi adalah `unverified` (belum pernah mengajukan verifikasi).
+    *(Untuk status `verified`, profil utama sudah valid; nomor WA & KTP tetap terkunci oleh protokol keamanan).*
 
 ---
 
-## 3. Langkah-Langkah Eksekusi (Setelah Approval)
+## 2. Dampak Perubahan (Files Affected)
 
-### Langkah 1: Sanitasi Nama File Upload KTP
-Pada `handleKtpUpload` di `MitraProfile.tsx` dan `AgentProfile.tsx`:
-- Membersihkan `baseName` dari spasi dan karakter non-alphanumeric:
-  ```typescript
-  const safeBaseName = baseName.replace(/[^a-zA-Z0-9_-]/g, '_');
-  const fileName = `${uid}-${Date.now()}_${safeBaseName}.webp`;
-  ```
+Perubahan akan difokuskan pada:
+1. [functions/public/pages/MitraProfile.tsx](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/MitraProfile.tsx):
+   - Redesain komponen kartu status verifikasi `pending` menjadi ringkas, estetik, dan proporsional.
+   - Menghapus `onClick` dan `cursor-pointer` pada kartu review.
+   - Memperbarui tombol *"Edit Profil"* pada kartu *"Profil Anda"* agar terkunci saat `verification_status === 'pending'`.
+   - Menambahkan guard proteksi pada `useEffect` URL query params (`edit=true`) agar otomatis menolak masuk mode edit jika status `pending`.
+2. [functions/public/pages/AgentProfile.tsx](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/AgentProfile.tsx):
+   - Menerapkan desain kartu status `pending` yang sama ringkas dan estetisnya.
+   - Menerapkan guard proteksi edit profil saat status `pending`.
+3. [functions/public/pages/MitraDashboard.tsx](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/MitraDashboard.tsx) (Penyelarasan):
+   - Memastikan banner peringatan identitas di beranda dashboard menampilkan ikon Lucide vector SVG dan teks status yang selaras.
 
-### Langkah 2: Eliminasi Generasi Base64 Klien & Gunakan `imageUrl` Bersih
-- Menghapus perulangan berat `String.fromCharCode` dan pembuatan `base64String` dari `handleKtpUpload`.
-- Memanggil `performOcr(publicUrl)` secara langsung.
-- Pada `performOcr`:
-  ```typescript
-  const invokePromise = supabase.functions.invoke('analyze-ktp', {
-      body: { 
-          imageUrl: imageUrl,
-          mimeType: 'image/webp'
-      }
-  });
-  ```
-- Keuntungan:
-  - Payload request ke Edge Function menjadi sangat kecil (< 200 bytes), cepat, dan stabil.
-  - 0% risiko memory overflow atau string encoding korup di browser pengguna.
-  - Pemrosesan gambar di Edge Function mengambil file WebP langsung dari storage Supabase berkecepatan tinggi.
+---
 
-### Langkah 3: Ekstraksi Pesan Error Detail pada `aiErr`
-Memperbarui penanganan error pada `performOcr`:
-```typescript
-if (aiErr) {
-    let detailMsg = aiErr.message;
-    if (aiErr.context) {
-        try {
-            const errBody = await aiErr.context.json();
-            if (errBody?.error) detailMsg = errBody.error;
-        } catch (_) {}
-    }
-    console.warn('AI Extraction error detail:', detailMsg);
-}
-```
+## 3. Langkah-Langkah Eksekusi (Fase 2)
 
-### Langkah 4: Kompilasi & Verifikasi Build
-- Menjalankan `npm.cmd run build` di direktori `functions/public` untuk memastikan 0 error kompilasi.
+1. **Redesain Kartu Review Verifikasi (`verification_status === 'pending'`)**:
+   - Mengganti blok kartu oranye solid raksasa dengan container modern berprofil ramping (`rounded-2xl sm:rounded-3xl p-5 sm:p-6 bg-gradient-to-r from-amber-50/90 to-orange-50/50 border border-amber-200/80 shadow-sm`).
+   - Menyusun layout horizontal yang bersih:
+     - Ikon status: Kotak lembut `w-11 h-11 rounded-2xl bg-amber-500/10 border border-amber-200/60 flex items-center justify-center text-amber-600 shrink-0` dengan `<Clock size={22} />`.
+     - Teks: Judul ringkas bertaraf h4 (`text-sm font-black text-amber-950 uppercase tracking-wide`) dengan deskripsi padat (`text-xs text-amber-800/80 font-medium mt-0.5`).
+     - Badge status: Pill modern di sisi kanan (`px-3 py-1.5 rounded-full bg-white/80 border border-amber-200 text-amber-700 text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5 shadow-xs`).
+   - Meniadakan seluruh event klik dan pointer cursor.
+
+2. **Penerapan Guard Penguncian Mode Edit**:
+   - Di [MitraProfile.tsx](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/MitraProfile.tsx) dan [AgentProfile.tsx](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/AgentProfile.tsx):
+     - Guard: Jika status verifikasi adalah `pending` dan `isEditing` bernilai true, paksa reset ke `false` dan bersihkan query URL.
+     - Pada kartu *"Profil Anda"*, jika `formData.verification_status === 'pending'`, tampilkan badge terkunci dengan ikon `<Lock size={12} />`: *"Data Terkunci (Sedang Ditinjau)"*.
+     - Tombol *"Perbaiki Data"* hanya muncul saat status `rejected`.
+
+3. **Verifikasi & Kompilasi**:
+   - Menjalankan `npm run build` di direktori `functions/public` untuk memastikan 0 error kompilasi.
+   - Menguji tampilan UI responsif (mobile & desktop).
+
+4. **Pencatatan Progres & Walkthrough**:
+   - Mendokumentasikan perubahan di `functions/PROGRESS.md` dan `WALKTHROUGH.md`.
+   - Melakukan commit dan push ke remote GitHub branch `bukan-productions`.
 
 ---
 
 ## 4. Rencana Verifikasi
-1. **Uji Simulasi Pemanggilan**:
-   - Memastikan request body hanya berisi `imageUrl`.
-   - Menjalankan pemindaian otomatis pada foto KTP yang diunggah pengguna.
-2. **Uji Pengisian Formulir Otomatis**:
-   - NIK, Nama Lengkap, Tempat Lahir, Tanggal Lahir, Jenis Kelamin, Agama, Pekerjaan, dan Alamat terisi otomatis di form Step 2 tanpa memunculkan error.
-3. **Uji Kompilasi Front-End**:
-   - Memastikan `npm run build` sukses 100%.
+
+- **Verifikasi UI/UX**:
+  - Memastikan kartu review tidak lagi memakan banyak ruang, memiliki tinggi yang proporsional, teks yang tajam, dan kontras warna yang nyaman dilihat.
+  - Memastikan tidak ada glitch font / FOUT (menggunakan 100% vector SVG dari `lucide-react`).
+- **Verifikasi Penguncian Akses**:
+  - Mengklik kartu review: Memastikan kartu tidak dapat diklik dan tidak merespon hover/scale.
+  - Mengakses halaman dengan status `pending`: Memastikan tombol *"Edit Profil"* menampilkan status terkunci dan tidak dapat diklik.
+  - Simulasi URL `?edit=true` saat status `pending`: Memastikan sistem otomatis menolak dan membersihkan query parameter kembali ke mode tampilan baca (*read-only*).
+  - Saat status `rejected`: Memastikan tombol perbaikan data dapat diakses untuk mengirimkan revisi data yang diminta admin.
+- **Verifikasi Build**:
+  - Menjalankan perintah `npm.cmd run build` dan memastikan proses build Vite berhasil dengan 0 error.

@@ -1,69 +1,50 @@
-# Laporan Penyelesaian (Walkthrough): Perbaikan Sistem OCR AI Verifikasi KTP (`analyze-ktp`)
+# Laporan Penyelesaian (Walkthrough): Redesain Kartu Status Verifikasi & Penguncian Mode Edit saat Pending
 
-Dokumen ini memuat ringkasan menyeluruh mengenai diagnosis, perbaikan, dan pengujian empiris sistem OCR AI KTP pada alur verifikasi identitas (Step 2) di `MitraProfile.tsx` dan `AgentProfile.tsx`.
+Dokumen ini memuat ringkasan menyeluruh mengenai perbaikan tampilan antarmuka (UI/UX) kartu status verifikasi *"Verifikasi Sedang Ditinjau"* serta penguncian ketat mode edit profil/identitas ketika akun sedang dalam tahap peninjauan oleh admin.
 
 ---
 
-## 1. Ringkasan Perbaikan
+## 1. Ringkasan Perubahan
 
-### A. Eliminasi Base64 Klien & Transmisi Bersih Berbasis Public URL Storage
+### A. Redesain Kartu Status Verifikasi Peninjauan (UI/UX)
 - **Sebelumnya**:
-  - Pada saat pengguna mengunggah foto KTP, browser melakukan konversi WebP lalu mencoba mengonversi file biner tersebut menjadi base64 string raksasa menggunakan perulangan JavaScript (`String.fromCharCode` + `btoa`).
-  - Browser mengirimkan body `{ imageUrl, base64Image, mimeType }`.
-  - Edge Function memprioritaskan `base64Image` dan mengabaikan `imageUrl`.
-  - Base64 string dari browser berukuran besar (>130 KB - beberapa MB), rawan terpotong/korup di memori JavaScript browser atau melampaui batas payload body Edge Function, sehingga memicu `FunctionsHttpError: Edge Function returned a non-2xx status code` (400 Bad Request).
+  - Menggunakan container oranye solid pekat (`bg-orange-500 rounded-[2.5rem] p-8 md:p-10`), ikon jam raksasa (`w-20 h-20`), dan teks berukuran besar.
+  - Sangat memakan ruang vertikal (*bongsor*), terasa agresif dan kurang selaras dengan desain modern komponen dashboard lainnya.
+  - Memiliki efek klik (`onClick`), cursor pointer, dan hover zoom yang membingungkan karena mengindikasikan kartu adalah tombol aksi.
 - **Sesudah**:
-  - Pembuatan string base64 manual di sisi browser dihapus sepenuhnya.
-  - Front-end kini langsung mengirimkan payload sangat ringan dan bersih:
-    ```typescript
-    const invokePromise = supabase.functions.invoke('analyze-ktp', {
-        body: { 
-            imageUrl: publicUrl,
-            mimeType: 'image/webp'
-        }
-    });
+  - Container dirancang **ringkas, elegan, dan proporsional** (`bg-gradient-to-r from-amber-500/[0.08] via-orange-500/[0.04] to-amber-500/[0.02] border border-amber-200/90 rounded-3xl p-5 sm:p-6 shadow-xs`).
+  - Layout horizontal proporsional:
+    - Ikon jam `<Clock size={24} />` dari `lucide-react` dengan kotak beraksen amber lembut (`w-12 h-12 rounded-2xl bg-amber-500/10 border border-amber-300/50`).
+    - Judul yang tajam dan rapi dengan badge pill *"Reviewing"*.
+    - Deskripsi estimasi peninjauan maksimal 1x24 jam yang informatif.
+    - Indikator status di sisi kanan: badge *"Data Terkunci"* dengan ikon `<Lock size={13} />`.
+  - Seluruh efek pointer dan aksi klik dihapus sehingga kartu murni berstatus informatif.
+
+### B. Penguncian Hak Akses Mode Edit saat Status `pending`
+- **Sebelumnya**:
+  - Mengklik kartu peninjauan langsung memicu navigasi ke formulir edit Step 1 (`edit: 'true', step: '1'`).
+  - Tombol *"Edit Profil"* di kartu profil akun tetap aktif.
+  - Memasukkan URL `?edit=true` tetap membuka form pengeditan meskipun status masih `pending`.
+- **Sesudah**:
+  - Event `onClick` pada kartu review dihapus sepenuhnya.
+  - Pada kartu *"Profil Anda"*, tombol *"Edit Profil"* digantikan dengan badge terkunci:
+    ```tsx
+    <span className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-[10px] font-black uppercase tracking-wider rounded-xl bg-amber-50 text-amber-700 border border-amber-200/90 shadow-2xs cursor-not-allowed">
+        <Lock size={12} className="text-amber-600" /> Data Terkunci (Sedang Ditinjau)
+    </span>
     ```
-  - Ukuran payload request turun dari >1 MB menjadi **< 200 byte**. Sangat cepat, stabil, dan bebas dari risiko kehabisan memori di browser pengguna.
+  - Guard state pada `useEffect` URL query params: Jika `formData.verification_status === 'pending'` dan `isEditing` bernilai true (misalnya dipicu dari URL `?edit=true`), sistem otomatis membatalkan edit mode (`setIsEditing(false)`) dan membersihkan query param URL.
+  - Mode edit **hanya** dapat dibuka kembali apabila admin menolak pengajuan / meminta revisi berkas (`status: rejected`) melalui tombol *"Perbaiki Data"*, atau jika akun memang belum pernah mengajukan verifikasi (`unverified`).
 
-### B. Sanitasi Nama File Foto KTP
-- Nama file yang diunggah kini disanitasi secara ketat dari karakter spasi mentah dan karakter ilegal:
-  ```typescript
-  const rawBaseName = processedFile.name.substring(0, processedFile.name.lastIndexOf('.')) || processedFile.name;
-  const safeBaseName = rawBaseName.replace(/[^a-zA-Z0-9_-]/g, '_');
-  const fileName = `${uid}-${Date.now()}_${safeBaseName}.webp`;
-  ```
-  Hal ini menjamin URL storage selalu valid tanpa risiko gagal parsing URL di backend.
-
-### C. Penyelarasan Backend Edge Function & Error Context Detail
-- Pada `supabase/functions/analyze-ktp/index.ts`, penarikan gambar kini menggunakan `fetch(encodeURI(imageUrl))`.
-- Menghapus model yang deprecated (`gemini-1.5-pro` 404) dari daftar candidate models.
-- Menambahkan penangkapan detail error JSON pada hook error front-end (`aiErr.context.json()`).
+### C. Penyelarasan Banner Beranda Dashboard (`MitraDashboard.tsx`)
+- Mengganti emoji mentah `⚠️` dengan vector SVG murni dari `lucide-react` (`<Clock />` untuk status pending dan `<AlertCircle />` untuk status unverified) guna mencegah ketidakseragaman rendering platform dan FOUT.
+- Menyelaraskan teks judul banner menjadi *"Verifikasi Sedang Ditinjau"* dengan badge status *"Data Terkunci"* ketika berkas sedang dalam peninjauan.
 
 ---
 
-## 2. Hasil Pengujian Empiris & Verifikasi
+## 2. Hasil Pengujian & Kompilasi
 
-### A. Uji Coba Langsung ke Edge Function dengan File KTP Asli Pengguna
-Pengujian pemanggilan Edge Function `analyze-ktp` menggunakan file KTP asli yang diunggah pengguna:
-- **File Uji**: `84d0913c-5bc0-4ca1-a4a8-7c3e94b27b79-0.9931891700776246_Screenshot 2026-06-15 143554.webp`
-- **Hasil**: **SUKSES 100% (Status: 200 OK)**
-- **Data Hasil Ekstraksi AI**:
-  ```json
-  {
-    "nik": "7312011011040003",
-    "name": "SULHAN",
-    "birth_place": "SUNNE",
-    "birth_date": "2004-11-10",
-    "gender": "Pria",
-    "religion": "Islam",
-    "occupation": "Pelajar/Mahasiswa",
-    "relationship_status": "Single",
-    "address": "BUNNE RT 001/RW 003, GOARIE, MARIORIWAWO"
-  }
-  ```
-Semua bidang terbaca dan terkonversi dengan sangat presisi (termasuk konversi format tanggal lahir menjadi standar ISO HTML date `2004-11-10`).
-
-### B. Uji Kompilasi Front-End Vite
+### A. Uji Kompilasi Front-End Vite
 - **Perintah**: `npm.cmd run build` di direktori `functions/public`
 - **Hasil**:
   ```text
@@ -72,8 +53,7 @@ Semua bidang terbaca dan terkonversi dengan sangat presisi (termasuk konversi fo
   ✓ 2512 modules transformed.
   rendering chunks...
   computing gzip size...
-  ...
-  ✓ built in 29.88s
+  ✓ built in 28.34s
   The command exited with code 0.
   ```
 - **Status**: **100% LULUS (0 Error)**.
@@ -81,9 +61,10 @@ Semua bidang terbaca dan terkonversi dengan sangat presisi (termasuk konversi fo
 ---
 
 ## 3. File yang Dimodifikasi
+
 1. [functions/public/pages/MitraProfile.tsx](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/MitraProfile.tsx)
 2. [functions/public/pages/AgentProfile.tsx](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/AgentProfile.tsx)
-3. [supabase/functions/analyze-ktp/index.ts](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/supabase/functions/analyze-ktp/index.ts)
+3. [functions/public/pages/MitraDashboard.tsx](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/MitraDashboard.tsx)
 4. [functions/PROGRESS.md](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/PROGRESS.md)
 5. [IMPLEMENTATION_PLAN.md](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/IMPLEMENTATION_PLAN.md)
 6. [WALKTHROUGH.md](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/WALKTHROUGH.md)
@@ -91,17 +72,13 @@ Semua bidang terbaca dan terkonversi dengan sangat presisi (termasuk konversi fo
 ---
 
 ## 4. Panduan Verifikasi Pengguna
-1. Buka kembali halaman profil dan lanjutkan ke **Step 2 (Verifikasi KTP)**.
-2. Klik **"Ganti Foto KTP"** atau unggah foto KTP Anda.
-3. Perhatikan proses:
-   - File WebP terunggah cepat ke storage Supabase.
-   - Status pemindaian muncul: *"Membaca Data KTP..."*.
-   - Muncul alert notifikasi sukses: *"Data KTP berhasil dipindai otomatis. Mohon periksa kembali kecocokan data Anda sebelum melanjutkan."*
-4. Periksa seluruh kolom input:
-   - **NIK (16 Digit)** terisi otomatis (`7312011011040003`).
-   - **Nama Lengkap** terisi otomatis (`SULHAN`).
-   - **Tempat Lahir** terisi otomatis (`SUNNE`).
-   - **Tanggal Lahir** terisi otomatis (`10/11/2004`).
-   - **Jenis Kelamin** terisi otomatis (`Pria`).
-   - **Agama** terisi otomatis (`Islam`).
-   - Serta pekerjaan dan alamat domisili terisi secara akurat.
+
+1. Masuk ke halaman **Profil Mitra** (`/dashboard-mitra/profile`).
+2. Perhatikan kartu status verifikasi:
+   - Tampilan tidak lagi berlatar oranye solid raksasa, melainkan kartu ramping dengan border aksen amber yang estetik dan efisien ruang.
+   - Kartu tidak dapat diklik (`cursor-default`), tidak memiliki efek hover scale, dan memiliki badge "Data Terkunci".
+3. Periksa kartu **"Profil Anda"**:
+   - Tombol "Edit Profil" berubah menjadi badge bertuliskan **"🔒 DATA TERKUNCI (SEDANG DITINJAU)"** dan tidak dapat diklik.
+4. Uji manipulasi URL:
+   - Tambahkan `?edit=true` di akhir URL browser dan tekan Enter.
+   - Sistem akan otomatis menghapus parameter tersebut dan tetap mempertahankan tampilan *read-only*.

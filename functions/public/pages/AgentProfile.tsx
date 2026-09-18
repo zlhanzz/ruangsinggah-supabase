@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { supabase } from '../supabase';
-import { User, ShieldCheck, MapPin, Phone, ChevronRight, LogOut, Upload, BadgeCheck, AlertCircle, Clock, X, Mail, Calendar, Gift } from 'lucide-react';
+import { User, ShieldCheck, MapPin, Phone, ChevronRight, LogOut, Upload, BadgeCheck, AlertCircle, Clock, X, Mail, Calendar, Gift, Lock } from 'lucide-react';
 import { sendWhatsAppTemplate, sendWaOtpVerification } from '../whatsappService';
 import { notifyAdminIdentityVerification } from '../emailService';
 
@@ -64,6 +64,14 @@ const AgentProfile: React.FC<AgentProfileProps> = ({ uid, onEditModeChange }) =>
 
     // Sync local state when URL params change
     useEffect(() => {
+        if (formData.verification_status === 'pending') {
+            setIsEditing(false);
+            if (isEditingFromUrl) {
+                setSearchParams(new URLSearchParams());
+            }
+            return;
+        }
+
         setIsEditing(isEditingFromUrl);
         if (formData.verification_status === 'verified' && stepFromUrl === 2) {
             setCurrentStep(1);
@@ -74,11 +82,15 @@ const AgentProfile: React.FC<AgentProfileProps> = ({ uid, onEditModeChange }) =>
     }, [isEditingFromUrl, stepFromUrl, formData.verification_status]);
 
     useEffect(() => {
+        if (formData.verification_status === 'pending' && isEditing) {
+            setIsEditing(false);
+            setSearchParams(new URLSearchParams());
+        }
         if (formData.verification_status === 'verified' && currentStep === 2) {
             setCurrentStep(1);
             setSearchParams({ edit: 'true', step: '1' });
         }
-    }, [formData.verification_status, currentStep]);
+    }, [formData.verification_status, currentStep, isEditing]);
 
     useEffect(() => {
         onEditModeChange?.(isEditing);
@@ -1217,21 +1229,27 @@ const AgentProfile: React.FC<AgentProfileProps> = ({ uid, onEditModeChange }) =>
                 <div className="space-y-6">
                     {/* Status Alert Cards */}
                     {formData.verification_status === 'pending' ? (
-                        <div className="bg-orange-500 rounded-[2.5rem] p-8 md:p-12 text-white shadow-xl relative overflow-hidden text-center md:text-left">
-                            <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full blur-3xl -mr-32 -mt-32"></div>
-                            <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-8">
-                                <div className="flex items-center gap-6">
-                                    <div className="w-20 h-20 rounded-[2rem] bg-white/20 flex items-center justify-center border border-white/30 animate-pulse">
-                                        <Clock size={40} />
-                                    </div>
-                                    <div>
-                                        <h3 className="text-2xl font-black uppercase tracking-tight mb-2">Verifikasi Sedang Ditinjau</h3>
-                                        <p className="text-sm font-bold opacity-80 uppercase tracking-widest leading-relaxed">Tim kami sedang memvalidasi berkas KTP Anda. Proses ini memerlukan waktu maksimal 1x24 jam.</p>
-                                    </div>
+                        <div className="bg-gradient-to-r from-amber-500/[0.08] via-orange-500/[0.04] to-amber-500/[0.02] border border-amber-200/90 rounded-3xl p-5 sm:p-6 shadow-xs relative overflow-hidden flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                            <div className="flex items-center gap-4 text-left">
+                                <div className="w-12 h-12 rounded-2xl bg-amber-500/10 border border-amber-300/50 text-amber-600 flex items-center justify-center shrink-0 shadow-xs">
+                                    <Clock size={24} className="text-amber-600" />
                                 </div>
-                                <div className="bg-white/10 px-6 py-3 rounded-2xl border border-white/20 backdrop-blur-md">
-                                    <span className="text-[10px] font-black uppercase tracking-[0.2em] animate-pulse">Status: Reviewing</span>
+                                <div>
+                                    <div className="flex flex-wrap items-center gap-2">
+                                        <h3 className="text-sm sm:text-base font-black text-amber-950 uppercase tracking-tight">Verifikasi Sedang Ditinjau</h3>
+                                        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-amber-100/90 text-amber-800 border border-amber-200 text-[10px] font-black uppercase tracking-widest">
+                                            <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>
+                                            Reviewing
+                                        </span>
+                                    </div>
+                                    <p className="text-xs font-medium text-amber-900/70 mt-1 leading-relaxed">
+                                        Berkas KTP dan data identitas Anda sedang divalidasi oleh tim admin. Estimasi waktu peninjauan maksimal 1x24 jam.
+                                    </p>
                                 </div>
+                            </div>
+                            <div className="shrink-0 self-end sm:self-center flex items-center gap-2 px-3.5 py-2 rounded-xl bg-white/90 border border-amber-200/90 text-amber-800 shadow-2xs">
+                                <Lock size={13} className="text-amber-600" />
+                                <span className="text-[10px] font-black uppercase tracking-wider">Data Terkunci</span>
                             </div>
                         </div>
                     ) : formData.verification_status === 'banned' ? (
@@ -1292,9 +1310,15 @@ const AgentProfile: React.FC<AgentProfileProps> = ({ uid, onEditModeChange }) =>
                         <div className="absolute top-0 right-0 w-32 h-32 bg-orange-50 rounded-full blur-3xl opacity-50 -translate-y-1/2 translate-x-1/2 pointer-events-none"></div>
                         <div className="flex items-center justify-between mb-8 relative z-10">
                             <h3 className="text-sm font-black uppercase text-gray-900 tracking-widest">Profil Anda</h3>
-                            <button onClick={() => setSearchParams({ edit: 'true', step: '1' })} className="px-5 py-2 text-[10px] font-black uppercase rounded-xl transition-all shadow-sm bg-gray-50 text-gray-600 border border-gray-200 hover:bg-gray-100">
-                                Edit Profil
-                            </button>
+                            {formData.verification_status === 'pending' ? (
+                                <span className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-[10px] font-black uppercase tracking-wider rounded-xl bg-amber-50 text-amber-700 border border-amber-200/90 shadow-2xs cursor-not-allowed">
+                                    <Lock size={12} className="text-amber-600" /> Data Terkunci (Sedang Ditinjau)
+                                </span>
+                            ) : formData.verification_status === 'banned' ? null : (
+                                <button onClick={() => setSearchParams({ edit: 'true', step: '1' })} className="px-5 py-2 text-[10px] font-black uppercase rounded-xl transition-all shadow-sm bg-gray-50 text-gray-600 border border-gray-200 hover:bg-gray-100">
+                                    Edit Profil
+                                </button>
+                            )}
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 relative z-10">
                             <ProfileItemRead icon={<User size={18} />} label="Nama Lengkap" value={formData.display_name} name="display_name" onChange={handleInputChange} />
