@@ -137,8 +137,60 @@ export async function sendWhatsAppTemplate({
  * Mendukung template dengan tombol URL/Copy Code, serta auto-retry dengan body-only jika tombol tidak cocok.
  */
 export async function sendWaOtpVerification(phone: string, otpCode: string, languageCode = 'id') {
-  // Opsi A: Template standar dengan Parameter Body & Tombol URL / Copy Code
-  const primaryComponents = [
+  // ── Opsi 1: Standar Resmi Meta Template Autentikasi (Body + Tombol Salin Kode / Copy Code) ──
+  const copyCodeComponents = [
+    {
+      type: 'body',
+      parameters: [
+        { type: 'text', text: otpCode }
+      ]
+    },
+    {
+      type: 'button',
+      sub_type: 'copy_code',
+      index: '0',
+      parameters: [
+        { type: 'text', text: otpCode }
+      ]
+    }
+  ];
+
+  const primaryRes = await sendWhatsAppTemplate({
+    to: phone,
+    templateName: 'otp_verification',
+    languageCode: languageCode,
+    components: copyCodeComponents
+  });
+
+  if (primaryRes.success) {
+    return primaryRes;
+  }
+
+  console.warn('[WHATSAPP_API] Opsi Copy Code mengembalikan error:', primaryRes.error, 'Mencoba fallback Body-Only...');
+
+  // ── Opsi 2: Fallback Parameter Body Saja (Jika template tidak memiliki tombol di Meta) ──
+  const bodyOnlyComponents = [
+    {
+      type: 'body',
+      parameters: [
+        { type: 'text', text: otpCode }
+      ]
+    }
+  ];
+
+  const bodyOnlyRes = await sendWhatsAppTemplate({
+    to: phone,
+    templateName: 'otp_verification',
+    languageCode: languageCode,
+    components: bodyOnlyComponents
+  });
+
+  if (bodyOnlyRes.success) {
+    return bodyOnlyRes;
+  }
+
+  // ── Opsi 3: Fallback Tombol URL (Jika template lama menggunakan tombol URL dinamis) ──
+  const urlComponents = [
     {
       type: 'body',
       parameters: [
@@ -155,46 +207,15 @@ export async function sendWaOtpVerification(phone: string, otpCode: string, lang
     }
   ];
 
-  const primaryRes = await sendWhatsAppTemplate({
+  const urlRes = await sendWhatsAppTemplate({
     to: phone,
     templateName: 'otp_verification',
     languageCode: languageCode,
-    components: primaryComponents
+    components: urlComponents
   });
 
-  if (primaryRes.success) {
-    return primaryRes;
-  }
-
-  // Jika gagal karena struktur komponen tombol tidak sesuai dengan konfigurasi template di Meta Business Manager,
-  // lakukan fallback ke Opsi B (Hanya parameter body)
-  const isComponentMismatch = 
-    primaryRes.error?.toLowerCase().includes('component') ||
-    primaryRes.error?.toLowerCase().includes('parameter') ||
-    primaryRes.error?.toLowerCase().includes('button') ||
-    primaryRes.error?.toLowerCase().includes('does not exist');
-
-  if (isComponentMismatch) {
-    console.log('[WHATSAPP_API] Mencoba ulang kirim OTP dengan parameter body murni tanpa tombol...');
-    const bodyOnlyComponents = [
-      {
-        type: 'body',
-        parameters: [
-          { type: 'text', text: otpCode }
-        ]
-      }
-    ];
-
-    const retryRes = await sendWhatsAppTemplate({
-      to: phone,
-      templateName: 'otp_verification',
-      languageCode: languageCode,
-      components: bodyOnlyComponents
-    });
-
-    if (retryRes.success) {
-      return retryRes;
-    }
+  if (urlRes.success) {
+    return urlRes;
   }
 
   return primaryRes;
