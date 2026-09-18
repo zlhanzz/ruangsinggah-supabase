@@ -1,52 +1,79 @@
-# Walkthrough: Perbaikan Redirect Dinamis (Localhost vs Produksi) & Auto-Routing ke Dashboard Mitra setelah Verifikasi
+# Laporan Perubahan: Penyelarasan Alur Verifikasi Email & Eliminasi Anomali Pesan Login (Walkthrough)
 
-Dokumen ini mendokumentasikan penyelesaian kendala redirection email dan navigasi otomatis ke Dashboard Mitra setelah pendaftaran akun pemilik kost.
-
----
-
-## 1. Daftar Perubahan yang Dilakukan
-
-### A. Tautan Verifikasi Dinamis (Localhost vs Domain Asli) ([`functions/public/pages/Login.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/Login.tsx))
-- Pada fungsi `handleRegister` dan `handleResendEmailOtp`, parameter `redirectTo` kini dikirimkan secara dinamis:
-  ```typescript
-  redirectTo: `${window.location.origin}${Page.LOGIN}?verified=true&role=${activeRole}`
-  ```
-- **Hasil**:
-  - Saat Anda mendaftar di **`http://localhost:5173`**, tautan di email akan mengarahkan kembali ke **`http://localhost:5173/login?verified=true&role=owner`** (tidak lagi terlempar ke domain asli).
-  - Saat pengguna mendaftar di **`https://ruangsinggah.id`**, tautan otomatis mengarahkan ke **`https://ruangsinggah.id/login?verified=true&role=owner`**.
-
-### B. Auto-Routing ke Dashboard Mitra setelah Verifikasi Pemilik Kost
-- Pada `Login.tsx`:
-  - Ketika parameter `verified=true&role=owner` diterima dari tautan email:
-    1. Sistem menyetel `localStorage.setItem('portal_view', 'owner')` dan `setActiveRole('owner')`.
-    2. Sistem mengecek sesi Supabase aktif yang otomatis dihasilkan dari token konfirmasi email.
-    3. Begitu sesi aktif terdeteksi, sistem **langsung mengarahkan pemilik kost ke Dashboard Mitra (`/dashboard-mitra`)** secara otomatis, tanpa terlempar ke tampilan pencari kost!
-  - Pada fungsi `handleVerifyEmailOtp` (saat 6 digit kode OTP dimasukkan di layar), sistem juga memastikan `localStorage.setItem('portal_view', 'owner')` dan langsung beralih ke Dashboard Mitra.
+Dokumen ini merangkum seluruh perubahan kode yang telah diimplementasikan untuk mengembalikan antarmuka verifikasi email ke standar produksi `ruangsinggah.id` yang stabil, mengeliminasi anomali banner ganda pada halaman login, dan memastikan alur autentikasi pemilik kost berjalan mulus.
 
 ---
 
-## 2. Hasil Kompilasi & Verifikasi
+## 1. Daftar Perubahan (Detailed Changes)
 
-1. **Kompilasi Front-End Vite (`functions/public`)**:
-   ```
-   vite v6.4.1 building for production...
-   ✓ 2512 modules transformed.
-   rendering chunks...
-   ✓ built in 24.14s
-   Exit code: 0 (Sukses 100%)
-   ```
-2. **Sinkronisasi Aset**: Seluruh build terbaru telah tersinkronisasi ke folder `public/dist`.
+### A. Restorasi Antarmuka "Verifikasi Email Terkirim" ([Login.tsx](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/Login.tsx))
+- Mengembalikan layar setelah submit pendaftaran (`verificationSent`) menjadi kartu putih rounded dengan badge icon envelope hijau (`<Mail className="w-10 h-10 text-green-600" />`) sesuai dengan tampilan standar di production `https://ruangsinggah.id/login`.
+- Menyediakan tombol pintas `<Edit3 className="w-3 h-3" /> Salah email? Ubah disini` yang mengembalikan pengguna ke formulir jika terjadi salah ketik email.
+- Menyediakan hitung mundur otomatis dan tombol *"Belum terima email? Kirim Ulang"*.
+- Menyediakan tombol besar *"Kembali ke Login"*.
+- Menghapus seluruh form input 6-digit kode OTP beserta state terkait (`emailOtpCode`, `emailOtpInput`, `handleVerifyEmailOtp`, `handleResendEmailOtp`) sehingga alur kembali bersih dan tidak membingungkan calon mitra.
+
+### B. Eliminasi Anomali Banner Pesan Ganda (Merah & Hijau Bersamaan) ([Login.tsx](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/Login.tsx))
+- **Pemeriksaan Error Hash Terlebih Dahulu**: Di `useEffect`, URL hash (`window.location.hash`) kini diperiksa lebih awal. Jika Supabase Auth mengirimkan error seperti `#error=server_error` atau `error_code=otp_expired`, sistem langsung menampilkan pesan kesalahan yang akurat dan membersihkan `successMsg` (mencegah pesan hijau muncul secara keliru saat ada error).
+- **Mutual Exclusion State**: Setiap kali `setErrorMsg` dipanggil, `successMsg` otomatis dikosongkan (`setSuccessMsg('')`). Di awal fungsi `handleLogin`, `setSuccessMsg('')` juga selalu dipanggil untuk mencegah pesan hijau tertinggal.
+- **Guard di Level JSX**: Tampilan banner hijau dibungkus dengan kondisi `!errorMsg && successMsg`, menjamin 100% secara fisik di antarmuka pengguna bahwa kedua banner tidak akan pernah bisa muncul bersamaan.
+
+### C. Penyelarasan Template Email Brevo ([functions/src/index.ts](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/src/index.ts))
+- Merapikan template email pendaftaran akun pada Cloud Function agar berfokus pada tombol aksi utama **"KONFIRMASI AKUN SEKARANG"** tanpa blok kode OTP angka.
+- Menghapus variabel yang tidak terpakai sehingga lulus kompilasi TypeScript dengan 0 peringatan/error.
 
 ---
 
-## 3. Catatan Penting Mengenai Tampilan Email (Kode 6-Digit OTP Brevo)
+## 2. Hasil Pengujian & Kompilasi
 
-Kode template email Brevo yang menampilkan **Kotak Kode 6-Digit OTP** sudah selesai kita buat di [`functions/src/index.ts`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/src/index.ts). 
-
-Karena kode tersebut berjalan sebagai Cloud Function Google (`handleCustomAuthEmail`), untuk memperbarui template email live yang dikirimkan oleh Brevo, Anda dapat menjalankan perintah deploy berikut di terminal kapan saja:
+### A. Kompilasi TypeScript Backend Cloud Functions (`functions/`)
 ```bash
-firebase deploy --only functions:handleCustomAuthEmail
+> functions@ build
+> tsc
+# Exit Code: 0 (Sukses 100% tanpa error)
 ```
 
-> 💡 **Tips Pengujian Tanpa Harus Deploy Sekarang**:
-> Saat mendaftar akun di browser, sistem sudah menampilkan **Mode Pengujian Cepat** di modal pendaftaran yang memuat 6 digit kode OTP secara instan di layar. Anda bisa langsung mengetikkan kode tersebut ke 6 kotak OTP di website untuk langsung masuk ke Dashboard Mitra!
+### B. Kompilasi Front-End Vite (`functions/public/`)
+```bash
+> ruangsinggah.id@0.0.0 build
+> vite build && node -e "..."
+
+✓ 2512 modules transformed.
+rendering chunks...
+computing gzip size...
+../../public/index.html                                  7.92 kB
+../../public/assets/Login-BXwwwrT1.js                   30.28 kB
+✓ built in 26.01s (Exit Code: 0)
+```
+Seluruh aset produksi berhasil dibangun dan disinkronkan ke folder `public/dist`.
+
+---
+
+## 3. Panduan Pengujian bagi Pengguna (User Testing Guide)
+
+1. **Buka Halaman Pendaftaran Pemilik Kost**:
+   - Buka `/login?role=owner&mode=register` di browser.
+   - Isi formulir pendaftaran: Nama Lengkap, Nomor WhatsApp, Email baru, dan Kata Sandi.
+   - Klik tombol **"Daftar & Verifikasi"**.
+2. **Periksa Layar Konfirmasi Email**:
+   - Layar akan menampilkan kartu *"Verifikasi Email Terkirim"* dengan ikon amplop hijau, info email yang dituju, link *"Salah email? Ubah disini"*, dan tombol *"Kembali ke Login"*.
+   - Tidak ada lagi input kotak 6-digit kode OTP.
+3. **Konfirmasi via Email**:
+   - Buka email masuk dari Brevo (subjek: *🛡️ Konfirmasi Akun RuangSinggah.id*).
+   - Klik tombol **"KONFIRMASI AKUN SEKARANG"**.
+   - Browser akan membuka link verifikasi Supabase dan langsung mengarahkan pemilik kost ke **Dashboard Mitra** (`/dashboard-mitra`).
+   - Tidak ada lagi benturan banner merah dan hijau secara bersamaan di halaman login.
+
+---
+
+## 4. Petunjuk Deploy bagi Pengguna
+
+Sesuai aturan kerja workspace, deploy dilakukan secara manual oleh pengguna:
+
+1. **Deploy Front-End (Cloudflare Pages / Hosting)**:
+   - Karena repository ini terhubung dengan Cloudflare Pages melalui GitHub, perubahan di branch akan otomatis atau dapat di-merge ke branch yang terhubung untuk publish ke production.
+2. **Deploy Cloud Functions (Jika ingin memperbarui fungsi email backend)**:
+   ```bash
+   cd functions
+   firebase deploy --only functions:handleCustomAuthEmail
+   ```

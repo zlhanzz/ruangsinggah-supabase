@@ -16,7 +16,8 @@ import {
   Eye,
   EyeOff,
   AlertCircle,
-  Mail
+  Mail,
+  Edit3
 } from 'lucide-react';
 import { supabase } from '../supabase';
 import { Page } from '../types';
@@ -100,11 +101,6 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
     localStorage.setItem('portal_view', activeRole);
   }, [activeRole]);
 
-  // Email OTP states (6-Digit)
-  const [emailOtpCode, setEmailOtpCode] = useState('');
-  const [emailOtpInput, setEmailOtpInput] = useState('');
-  const [emailResendTimer, setEmailResendTimer] = useState(0);
-
   // WhatsApp OTP states
   const [waOtpCode, setWaOtpCode] = useState('');
   const [waOtpInput, setWaOtpInput] = useState('');
@@ -146,9 +142,6 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
     setShowConfirmPassword(false);
     setResendTimer(0);
     setReferralCode('');
-    setEmailOtpCode('');
-    setEmailOtpInput('');
-    setEmailResendTimer(0);
     setWaOtpCode('');
     setWaOtpInput('');
     setIsVerifyingWaOtp(false);
@@ -168,9 +161,29 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
     const upgradeToOwner = searchParams.get('upgrade_to_owner');
     const upgradeSuccess = searchParams.get('upgrade_success');
 
+    // ── 0. Cek hash URL untuk error Supabase Auth terlebih dahulu ─────────────
+    const hash = window.location.hash || '';
+    const hasHashError = hash.includes('error=') || hash.includes('error_code=') || error === 'access_denied';
+
+    if (hasHashError) {
+      setSuccessMsg('');
+      setIsRoleSelected(true);
+      if (hash.includes('otp_expired') || searchParams.get('error_code') === 'otp_expired') {
+        setErrorMsg('Tautan verifikasi email Anda telah kedaluwarsa atau sudah pernah digunakan. Silakan minta tautan baru.');
+      } else {
+        setErrorMsg('Terjadi kendala saat memverifikasi tautan email. Silakan coba masuk atau kirim ulang tautan verifikasi.');
+      }
+      setSearchParams({}, { replace: true });
+      if (window.location.hash) {
+        window.history.replaceState({}, document.title, window.location.pathname + window.location.search);
+      }
+      return;
+    }
+
     if (mode === 'recovery') {
       setMode('PASSWORD_UPDATE');
       setIsRoleSelected(true);
+      setErrorMsg('');
       setSuccessMsg('Silakan masukkan kata sandi baru Anda.');
 
       const checkSession = async () => {
@@ -185,6 +198,7 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
       localStorage.setItem('portal_view', targetRole);
       setActiveRole(targetRole === 'user' ? 'user' : 'owner');
       setIsRoleSelected(true);
+      setErrorMsg('');
 
       const checkConfirmedSession = async () => {
         // Berikan waktu sejenak agar Supabase Client selesai memproses token dari URL hash/search
@@ -218,6 +232,7 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
 
         setTimeout(() => {
           subscription.unsubscribe();
+          setErrorMsg('');
           setSuccessMsg('Email berhasil diverifikasi! Silakan masuk dengan email dan kata sandi Anda.');
           setSearchParams({}, { replace: true });
         }, 3000);
@@ -241,19 +256,6 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
       setIsRoleSelected(true);
       setSuccessMsg('');
       setSearchParams({}, { replace: true });
-    } else if (
-      error === 'access_denied' ||
-      window.location.hash.includes('error_code=otp_expired') ||
-      window.location.search.includes('error_code=otp_expired')
-    ) {
-      setErrorMsg('Tautan verifikasi email Anda telah kedaluwarsa atau sudah pernah digunakan. Silakan ajukan upgrade kembali.');
-      setSuccessMsg('');
-      setIsRoleSelected(true);
-      setSearchParams({}, { replace: true });
-      // Bersihkan hash juga agar tidak terdeteksi terus
-      if (window.location.hash) {
-        window.history.replaceState({}, document.title, window.location.pathname + window.location.search);
-      }
     } else if (upgradeToOwner === 'true') {
       setMode('LOGIN');
       setActiveRole('owner');
@@ -283,21 +285,21 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
 
   useEffect(() => {
     let interval: any;
-    if (resendTimer > 0 || emailResendTimer > 0 || waResendTimer > 0 || upgradeResendTimer > 0) {
+    if (resendTimer > 0 || waResendTimer > 0 || upgradeResendTimer > 0) {
       interval = setInterval(() => {
         if (resendTimer > 0) setResendTimer((prev) => prev - 1);
-        if (emailResendTimer > 0) setEmailResendTimer((prev) => prev - 1);
         if (waResendTimer > 0) setWaResendTimer((prev) => prev - 1);
         if (upgradeResendTimer > 0) setUpgradeResendTimer((prev) => prev - 1);
       }, 1000);
     }
     return () => clearInterval(interval);
-  }, [resendTimer, emailResendTimer, waResendTimer, upgradeResendTimer]);
+  }, [resendTimer, waResendTimer, upgradeResendTimer]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setErrorMsg('');
+    setSuccessMsg('');
     localStorage.setItem('portal_view', activeRole);
 
     try {
@@ -393,13 +395,7 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
         return;
       }
 
-      const resData = await response.json().catch(() => ({}));
-      if (resData?.emailOtp) {
-        setEmailOtpCode(resData.emailOtp);
-      }
-      setEmailOtpInput('');
       setVerificationSent(true);
-      setEmailResendTimer(60);
       setResendTimer(120);
     } catch (error: any) {
       setErrorMsg(getErrorMessage(error.message || 'unknown'));
@@ -488,108 +484,6 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
     }
   };
   // ──────────────────────────────────────────────────────────────────────────
-
-  const handleVerifyEmailOtp = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setErrorMsg('');
-    setSuccessMsg('');
-    setLoading(true);
-
-    if (emailOtpInput.trim().length !== 6) {
-      setErrorMsg('Masukkan 6-digit kode verifikasi email.');
-      setLoading(false);
-      return;
-    }
-
-    try {
-      const { data, error } = await supabase.auth.verifyOtp({
-        email: formData.email.trim(),
-        token: emailOtpInput.trim(),
-        type: 'signup'
-      });
-
-      if (error) {
-        // Fallback dengan type 'email' jika token tersimpan sebagai email verification
-        const fallback = await supabase.auth.verifyOtp({
-          email: formData.email.trim(),
-          token: emailOtpInput.trim(),
-          type: 'email'
-        });
-        if (fallback.error) {
-          throw error;
-        }
-      }
-
-      setSuccessMsg('Email berhasil diverifikasi! Mengalihkan ke dashboard...');
-      localStorage.setItem('portal_view', activeRole);
-      setTimeout(() => {
-        if (activeRole === 'owner') {
-          window.location.href = Page.DASHBOARD_MITRA;
-        } else {
-          window.location.href = Page.HOME;
-        }
-      }, 800);
-    } catch (err: any) {
-      console.error('[EMAIL-OTP] Gagal verifikasi:', err);
-      setErrorMsg(err.message || 'Kode verifikasi email salah atau sudah kedaluwarsa.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleResendEmailOtp = async () => {
-    if (emailResendTimer > 0) return;
-    setErrorMsg('');
-    setSuccessMsg('');
-    setLoading(true);
-
-    try {
-      const trimmedReferral = referralCode.trim().toUpperCase();
-      const normalizePhone = (p: string) => {
-        if (!p) return '';
-        let clean = p.replace(/\D/g, '');
-        if (clean.startsWith('0')) clean = clean.substring(1);
-        if (clean.startsWith('62')) clean = clean.substring(2);
-        return `+62${clean}`;
-      };
-      const finalPhone = normalizePhone(formData.phone);
-
-      const response = await fetch('https://handlecustomauthemail-hzxlewhsuq-uc.a.run.app', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          type: 'signup',
-          email: formData.email.trim(),
-          password: formData.password,
-          redirectTo: `${window.location.origin}${Page.LOGIN}?verified=true&role=${activeRole}`,
-          metadata: {
-            full_name: formData.name,
-            name: formData.name,
-            phone: finalPhone,
-            whatsapp_verified: false,
-            role: activeRole,
-            referred_by: activeRole === 'owner' && trimmedReferral ? trimmedReferral : undefined
-          }
-        })
-      });
-
-      if (!response.ok) {
-        const errData = await response.json().catch(() => ({}));
-        setErrorMsg(errData.message || 'Gagal mengirim ulang kode verifikasi.');
-      } else {
-        const resData = await response.json().catch(() => ({}));
-        if (resData?.emailOtp) {
-          setEmailOtpCode(resData.emailOtp);
-        }
-        setSuccessMsg('Kode verifikasi baru telah dikirimkan ke email Anda.');
-        setEmailResendTimer(60);
-      }
-    } catch (err: any) {
-      setErrorMsg(`Gagal mengirim ulang: ${err.message}`);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const handleForgotPassword = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
@@ -697,97 +591,47 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8 animate-in fade-in duration-300">
         <div className="max-w-md w-full bg-white rounded-[2.5rem] shadow-xl border border-gray-100 overflow-hidden p-8 text-center animate-in zoom-in-95">
-          <div className="w-20 h-20 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-6">
-            <Mail className="w-10 h-10 text-orange-600" />
+          <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6">
+            <Mail className="w-10 h-10 text-green-600" />
           </div>
-
-          <h2 className="text-2xl font-black text-gray-900 mb-2 leading-tight">Verifikasi Email Anda</h2>
-          <p className="text-gray-500 mb-6 leading-relaxed text-sm">
-            Kami telah mengirimkan 6-digit kode verifikasi ke email:<br />
-            <strong className="text-gray-800">{formData.email}</strong>
+          <h2 className="text-2xl font-black text-gray-900 mb-2 leading-tight">Verifikasi Email Terkirim</h2>
+          <p className="text-gray-500 mb-2 leading-relaxed text-sm">
+            Link verifikasi telah dikirim ke <strong>{formData.email}</strong>.<br />
+            Silakan cek kotak masuk atau folder spam Anda.
           </p>
 
-          {errorMsg && (
-            <div className="mb-6 p-4 bg-red-50 border border-red-100 rounded-xl flex items-center gap-3 animate-in fade-in slide-in-from-top-2">
-              <AlertCircle className="w-5 h-5 text-red-500 shrink-0" />
-              <p className="text-xs font-bold text-red-500 text-left">{errorMsg}</p>
-            </div>
-          )}
+          <button
+            type="button"
+            onClick={() => setVerificationSent(false)}
+            className="text-[10px] uppercase tracking-widest font-bold text-orange-500 hover:text-orange-600 mb-6 flex items-center gap-1 mx-auto transition-colors"
+          >
+            <Edit3 className="w-3 h-3" />
+            Salah email? Ubah disini
+          </button>
 
-          {successMsg && (
-            <div className="mb-6 p-4 bg-green-50 border border-green-100 rounded-xl flex items-center gap-3 animate-in fade-in slide-in-from-top-2">
-              <CheckCircle2 className="w-5 h-5 text-green-500 shrink-0" />
-              <p className="text-xs font-bold text-green-500 text-left">{successMsg}</p>
-            </div>
-          )}
-
-          {/* Developer Sandbox Testing Helper */}
-          {emailOtpCode && (
-            <div className="mb-6 p-4 bg-orange-50 border border-orange-100 rounded-xl text-left animate-in fade-in slide-in-from-top-2">
-              <div className="flex items-center gap-2 mb-1">
-                <span className="w-2 h-2 rounded-full bg-orange-500 animate-pulse"></span>
-                <span className="text-[10px] font-black text-orange-600 uppercase tracking-wider">Mode Pengujian Cepat</span>
-              </div>
-              <p className="text-xs text-gray-600 leading-relaxed">
-                Kode OTP verifikasi email Anda: <strong className="text-orange-600 font-mono text-sm">{emailOtpCode}</strong>
-              </p>
-            </div>
-          )}
-
-          <form onSubmit={handleVerifyEmailOtp} className="space-y-6">
-            <div>
-              <input
-                type="text"
-                required
-                maxLength={6}
-                placeholder="000000"
-                className="w-full text-center tracking-[1em] font-mono text-3xl bg-gray-50 border border-gray-100 rounded-2xl py-4 focus:outline-none focus:ring-2 focus:ring-orange-500/10 focus:border-orange-500 transition-all font-bold"
-                value={emailOtpInput}
-                onChange={(e) => setEmailOtpInput(e.target.value.replace(/\D/g, ''))}
-              />
-            </div>
-
-            <div className="flex gap-4">
-              <button
-                type="button"
-                onClick={() => { setVerificationSent(false); resetForm(); }}
-                className="flex-1 bg-gray-100 text-gray-700 font-bold py-4 rounded-xl hover:bg-gray-200 transition-all active:scale-95"
-              >
-                Batal
-              </button>
-              <button
-                type="submit"
-                disabled={loading || emailOtpInput.length !== 6}
-                className={`flex-1 bg-orange-500 text-white font-bold py-4 rounded-xl shadow-lg transition-all active:scale-95 flex items-center justify-center gap-2 ${(loading || emailOtpInput.length !== 6) ? 'opacity-70 cursor-not-allowed' : 'hover:bg-orange-600'}`}
-              >
-                {loading && (
-                  <svg className="animate-spin h-5 w-5 text-white" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                  </svg>
-                )}
-                Verifikasi & Masuk
-              </button>
-            </div>
-          </form>
-
-          <div className="mt-8 text-center space-y-3">
-            {emailResendTimer > 0 ? (
+          <div className="space-y-3 mb-8">
+            {resendTimer > 0 ? (
               <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">
-                Kirim ulang kode dalam {emailResendTimer} detik
+                Kirim ulang tersedia dalam {resendTimer} detik
               </p>
             ) : (
               <button
                 type="button"
-                onClick={handleResendEmailOtp}
-                className="text-orange-500 font-bold text-sm hover:underline"
+                onClick={() => handleRegister()}
+                disabled={loading}
+                className="text-orange-500 font-bold text-sm hover:underline flex items-center justify-center gap-2 mx-auto"
               >
-                Kirim Ulang Kode Verifikasi
+                Belum terima email? Kirim Ulang
               </button>
             )}
-            <p className="text-[11px] text-gray-400">
-              Atau Anda juga dapat mengklik tombol konfirmasi di dalam pesan email yang Anda terima.
-            </p>
+
+            <button
+              type="button"
+              onClick={() => { setVerificationSent(false); setMode('LOGIN'); resetForm(); }}
+              className="w-full bg-orange-500 text-white font-bold py-3 rounded-xl shadow-lg hover:bg-orange-600 transition-all active:scale-95"
+            >
+              Kembali ke Login
+            </button>
           </div>
         </div>
       </div>
@@ -1066,7 +910,7 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
           )}
 
 
-          {successMsg && (
+          {!errorMsg && successMsg && (
             <div className="mb-6 p-4 bg-green-50 border border-green-100 rounded-xl flex flex-col gap-2 animate-in fade-in slide-in-from-top-2">
               <div className="flex items-center gap-3">
                 <svg className="w-5 h-5 text-green-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>

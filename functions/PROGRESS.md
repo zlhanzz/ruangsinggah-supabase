@@ -2,6 +2,36 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 416. Penyelarasan Alur Verifikasi Email Berbasis Tautan (Action Link), Restorasi UI Kartu Email Production & Eliminasi Anomali Banner Pesan Ganda (`Login.tsx`, `index.ts`) (September 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna meminta pengembalian antarmuka verifikasi email pada pendaftaran akun agar persis seperti versi production yang stabil di `ruangsinggah.id` (menggunakan kartu "Verifikasi Email Terkirim" dengan icon envelope hijau, opsi "Salah email? Ubah disini", timer kirim ulang, dan tombol "Kembali ke Login"), menghapus penginputan kode 6-digit OTP yang membingungkan pengguna.
+  2. Menghilangkan anomali banner ganda pada halaman login (di mana banner merah "Email Anda belum diverifikasi" dan banner hijau "Email berhasil diverifikasi" muncul bersamaan dan saling bertentangan).
+  3. Memastikan alur verifikasi email via tombol akses bekerja dengan lancar, menangani error token/hash Supabase dengan tepat, dan langsung mengarahkan pemilik kost ke Dashboard Mitra (`/dashboard-mitra`) setelah terverifikasi.
+- **Akar Masalah**:
+  1. **Anomali Pesan Ganda**: Pada `Login.tsx`, ketika `handleLogin` gagal karena `email_confirmed_at` belum terisi, sistem menyetel `errorMsg` tanpa mereset `successMsg` (`setSuccessMsg('')`). Di sisi UI, kedua banner di-render berdampingan tanpa kondisi *mutual exclusion*.
+  2. **Pengabaian Hash Error**: Ketika Supabase Auth mengalami error saat validasi link (seperti `unexpected_failure` atau `otp_expired`), pesan error dikirimkan di URL hash (`#error=...`), sementara `searchParams.get('verified')` tetap bernilai `'true'`. Akibatnya, sistem keliru mengira verifikasi berhasil dan menampilkan pesan hijau.
+  3. **Konflik Database Akun Lama**: Terjadi duplikasi data email pada tabel `public.users` dari data lama/migrasi yang memicu pelanggaran `users_email_key` saat trigger Supabase `handle_new_user()` berjalan.
+- **Implementasi Solusi**:
+  1. **Restorasi Tampilan "Verifikasi Email Terkirim" Standar Production**:
+     - Mengembalikan antarmuka layar `verificationSent` di [Login.tsx](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/Login.tsx) menjadi kartu putih berlingkar badge hijau `<Mail />`, teks instruksi konfirmasi email, tombol pintas `<Edit3 /> Salah email? Ubah disini`, hitung mundur kirim ulang, dan tombol *"Kembali ke Login"*.
+     - Menghapus seluruh state dan fungsi input OTP 6-digit (`emailOtpCode`, `emailOtpInput`, `handleVerifyEmailOtp`, `handleResendEmailOtp`) dari `Login.tsx`.
+     - Menggunakan pure bundled vector SVG dari `lucide-react` (100% bebas FOUT/glitch teks).
+  2. **Eliminasi Anomali Pesan & Penanganan Error Hash URL**:
+     - Memeriksa error pada hash URL (`window.location.hash`) terlebih dahulu di `useEffect` sebelum memproses parameter `verified === 'true'`. Jika terdapat `otp_expired` atau `error=`, tampilkan pesan kesalahan yang jelas dan bersihkan `successMsg`.
+     - Menjamin mutual exclusion: setiap pemanggilan `setErrorMsg` otomatis mengosongkan `successMsg`, dan `handleLogin` mereset `setSuccessMsg('')` di awal eksekusi.
+     - Di level JSX, membungkus render banner hijau dengan kondisi `!errorMsg && successMsg` sehingga secara fisik tidak akan pernah bisa muncul bersamaan dengan banner merah.
+  3. **Penyelarasan Template Email Brevo (`functions/src/index.ts`)**:
+     - Merapikan template email pendaftaran akun pada Cloud Function agar berfokus pada tombol aksi utama **"KONFIRMASI AKUN SEKARANG"** tanpa elemen OTP angka yang membingungkan.
+     - Menghapus variabel yang tidak terpakai sehingga lulus kompilasi TypeScript dengan 0 peringatan/error.
+- **File Tersentuh**:
+  - `functions/public/pages/Login.tsx`
+  - `functions/src/index.ts`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi backend Cloud Functions (`npm.cmd run build` di direktori `functions`) lulus 100% (exit code 0).
+  - Kompilasi frontend Vite (`npm.cmd run build` di direktori `functions/public`) lulus 100% (2512 modul tertransformasi, `✓ built in 26.01s`, 0 error).
+
 ### 415. Perbaikan Tautan Redirect Dinamis (Localhost vs Produksi) & Auto-Routing ke Dashboard Mitra setelah Verifikasi (`Login.tsx`, `App.tsx`) (September 2026)
 - **Permintaan & Masalah**:
   1. Pada pendaftaran pemilik kost, email verifikasi yang dikirimkan mengarahkan ke domain asli `ruangsinggah.id` meskipun pendaftaran dilakukan di `localhost:5173`.
