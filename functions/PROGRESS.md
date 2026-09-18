@@ -2,6 +2,31 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 423. Penguncian Floating Mobile Header Anti-Scroll (`position: fixed`) dan Desain Ikon Pesan Messenger Pop-Art Eksklusif (`MitraDashboard.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna meminta agar header mobile dibuat benar-benar mengambang (*floating*) dan tidak ikut tergulung (scrolled away) saat konten halaman di-scroll ke bawah.
+  2. Pengguna meminta agar ikon pesan di header atas diganti menjadi mirip **Messenger** agar lebih menonjol, menarik perhatian (*catchy*), dan mudah dikenali (*easy to notice*).
+- **Akar Masalah**:
+  1. Penggunaan `sticky top-0` sebelumnya pada header mobile terbatalkan oleh properti `overflow-x-hidden` milik elemen pembungkus utama (`<div className="flex-1 ... overflow-x-hidden">`), karena spesifikasi CSS browser modern memperlakukan kontainer ancestor ber-overflow sebagai viewport batas sticky, sehingga header ikut terseret saat scroll dokumen berlangsung.
+  2. Ikon sebelumnya (`<MessageSquare />`) berupa kotak garis tipis oranye yang menyerupai ikon dokumen/komentar biasa, kurang mencolok sebagai tombol chat instan.
+- **Implementasi Solusi**:
+  1. **Floating Mobile Header Anti-Scroll Berbasis `position: fixed` (`MitraDashboard.tsx`)**:
+     - Mengubah header mobile menjadi `fixed top-0 inset-x-0 h-16 z-40 lg:hidden bg-white/90 backdrop-blur-md border-b border-gray-100/80 shadow-xs`.
+     - Karena terikat langsung pada viewport browser (`position: fixed`), header 100% kebal terhadap scroll halaman dan tidak terpengaruh oleh struktur overflow kontainer induk.
+     - Menyesuaikan kontainer konten utama (`<main className="flex-1 p-4 pt-20 lg:p-8 ...">`) dengan padding atas `pt-20` (80px) pada mobile sehingga konten paling atas memiliki margin 16px di bawah header mengambang dan tidak tertimpa.
+  2. **Ikon Pesan Gaya Messenger Eksklusif (`MessengerIcon`)**:
+     - Membangun komponen vector SVG murni (`MessengerIcon`) yang mengadopsi siluet gelembung pesan khas Messenger dengan petir zig-zag diagonal di tengahnya (`d="M14 2C7.1 2 1.5 7.1 1.5 13.5c0 3.7 1.8 6.9 4.6 9V26l3.4-1.9c1.4.4 2.9.6 4.5.6 6.9 0 12.5-5.1 12.5-11.5S20.9 2 14 2zm1.4 15.5l-3.6-3.8-7 3.8 7.7-8.2 3.7 3.8 6.9-3.8-7.7 8.2z"`).
+     - Menggunakan gradasi warna Messenger yang khas (`#0084FF` $\rightarrow$ `#A824FF` $\rightarrow$ `#FF5A5F`) sehingga langsung memikat perhatian pengguna saat membuka aplikasi.
+     - Ditempatkan di dalam tombol lingkaran modern (*circular button* `w-10 h-10 rounded-full bg-gray-100/90 hover:bg-gray-200/80`) dengan feedback active ring dan badge counter merah beranimasi pulse.
+- **File Tersentuh**:
+  - `functions/public/pages/MitraDashboard.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi build frontend Vite (`cmd.exe /c npm run build`) sukses 100% (`✓ built in 32.13s`, 0 error).
+  - Header mobile melayang kokoh di puncak layar saat digulir, dan ikon Messenger tampil tajam serta instan dikenali.
+
+
 ### 422. Pemindahan Menu Pesan/Chat ke Floating Header Mobile, Menu Kelola Kost ke Bottom Navigation, dan Transformasi Profil Mitra Menjadi Grouped Profile Hub Terintegrasi Tarik Saldo (`MitraDashboard.tsx`, `MitraProfile.tsx`) (September 2026)
 - **Permintaan & Masalah**:
   1. Pada tampilan mobile, menu Chat / Pesan Masuk yang sebelumnya berada di bottom navigation bar diminta untuk dipindahkan ke Header atas, dan Header mobile dibuat mengambang (*floating* sticky dengan efek glassmorphism/backdrop-blur).

@@ -139,7 +139,26 @@ const BottomNavItem: React.FC<{ active: boolean; icon: React.ReactNode; label: s
     </button>
 );
 
-
+// ── Vector SVG Messenger Icon ────────────────────────────────────────────────
+const MessengerIcon: React.FC<{ className?: string }> = ({ className = "w-6 h-6" }) => (
+    <svg viewBox="0 0 28 28" className={className} fill="none" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+            <linearGradient id="msgGradMitra" x1="0%" y1="100%" x2="100%" y2="0%">
+                <stop offset="0%" stopColor="#0084FF" />
+                <stop offset="50%" stopColor="#A824FF" />
+                <stop offset="100%" stopColor="#FF5A5F" />
+            </linearGradient>
+        </defs>
+        <path
+            d="M14 2C7.1 2 1.5 7.1 1.5 13.5c0 3.7 1.8 6.9 4.6 9V26l3.4-1.9c1.4.4 2.9.6 4.5.6 6.9 0 12.5-5.1 12.5-11.5S20.9 2 14 2z"
+            fill="url(#msgGradMitra)"
+        />
+        <path
+            d="M15.4 17.5l-3.6-3.8-7 3.8 7.7-8.2 3.7 3.8 6.9-3.8-7.7 8.2z"
+            fill="#ffffff"
+        />
+    </svg>
+);
 
 // ── Main Component ────────────────────────────────────────────────────────────
 const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange, onLogout }) => {
@@ -1233,8 +1252,8 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
 
             <div className="flex-1 lg:ml-64 xl:ml-72 flex flex-col min-h-screen overflow-x-hidden">
 
-                {/* Mobile Top Header Bar with Hamburger Menu & Floating Chat Button */}
-                <header className="lg:hidden h-16 bg-white/85 backdrop-blur-md border-b border-gray-100/80 flex items-center justify-between px-4 sticky top-0 z-40 shadow-xs transition-all">
+                {/* Mobile Top Header Bar with Hamburger Menu & Floating Messenger Chat Button */}
+                <header className="lg:hidden fixed top-0 inset-x-0 h-16 bg-white/90 backdrop-blur-md border-b border-gray-100/80 flex items-center justify-between px-4 z-40 shadow-xs transition-all">
                     <button
                         onClick={() => setMobileSidebarOpen(true)}
                         className="p-2 rounded-xl hover:bg-gray-100/80 text-gray-600 focus:outline-none active:scale-95 transition-all cursor-pointer"
@@ -1250,17 +1269,17 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                     </div>
                     <button
                         onClick={() => handleMenuChange('chat')}
-                        className={`w-10 h-10 rounded-xl flex items-center justify-center relative transition-all active:scale-95 cursor-pointer ${
+                        className={`w-10 h-10 rounded-full flex items-center justify-center relative transition-all active:scale-95 cursor-pointer shadow-xs ${
                             activeMenu === 'chat'
-                                ? 'bg-orange-500 text-white shadow-md shadow-orange-500/20'
-                                : 'bg-orange-50 text-orange-600 hover:bg-orange-100 border border-orange-100'
+                                ? 'bg-blue-50 ring-2 ring-blue-500/40 shadow-blue-500/10'
+                                : 'bg-gray-100/90 hover:bg-gray-200/80'
                         }`}
                         title="Pesan Masuk"
                         aria-label="Pesan Masuk"
                     >
-                        <MessageSquare size={19} />
+                        <MessengerIcon className="w-6 h-6" />
                         {chatUnreadCount > 0 && (
-                            <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 bg-red-500 text-white text-[9px] font-black rounded-full flex items-center justify-center border-2 border-white shadow-xs animate-pulse">
+                            <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 bg-rose-500 text-white text-[9px] font-black rounded-full flex items-center justify-center border-2 border-white shadow-xs animate-pulse">
                                 {chatUnreadCount > 9 ? '9+' : chatUnreadCount}
                             </span>
                         )}
@@ -1268,7 +1287,7 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                 </header>
 
                 {/* ── PAGE CONTENT ─────────────────────────────────────────── */}
-                <main className="flex-1 p-4 lg:p-8 pb-28 lg:pb-8 overflow-y-auto overflow-x-hidden">
+                <main className="flex-1 p-4 pt-20 lg:p-8 pb-28 lg:pb-8 overflow-y-auto overflow-x-hidden">
 
 
                     {/* BERANDA */}
