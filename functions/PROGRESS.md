@@ -2,7 +2,31 @@
 
 ## Fitur Selesai (Completed Features)
 
-### 414. Penerapan Arsitektur Opsi B: Pendaftaran Email OTP 6-Digit Tanpa Hambatan & Pemindahan Verifikasi WhatsApp ke Menu Verifikasi Identitas (KYC) Mitra (`Login.tsx`, `functions/src/index.ts`, `MitraProfile.tsx`) (September 2026)
+### 415. Perbaikan Tautan Redirect Dinamis (Localhost vs Produksi) & Auto-Routing ke Dashboard Mitra setelah Verifikasi (`Login.tsx`, `App.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  1. Pada pendaftaran pemilik kost, email verifikasi yang dikirimkan mengarahkan ke domain asli `ruangsinggah.id` meskipun pendaftaran dilakukan di `localhost:5173`.
+  2. Setelah verifikasi email berhasil, pemilik kost diarahkan ke tampilan pencari kost biasa (`portal_view: 'user'`), bukan langsung ke Dashboard Mitra (`Page.DASHBOARD_MITRA`).
+- **Akar Masalah**:
+  1. Pada `Login.tsx`, panggilan `fetch` ke endpoint cloud `handleCustomAuthEmail` belum menyertakan properti `redirectTo` di body JSON sehingga backend menggunakan fallback URL statis `https://ruangsinggah.id/login`.
+  2. Saat tautan email dikonfirmasi, browser membuka URL tanpa menyetel `localStorage.setItem('portal_view', 'owner')`, sehingga `App.tsx` menganggap pengguna sedang berada di gerbang pencari kost dan mengarahkan ke `Page.HOME`.
+- **Implementasi Solusi**:
+  1. **Dynamic `redirectTo` URL**:
+     - Menambahkan `redirectTo: `${window.location.origin}${Page.LOGIN}?verified=true&role=${activeRole}`` pada `handleRegister` dan `handleResendEmailOtp` di `Login.tsx`.
+     - Saat pendaftaran di `localhost`, link email otomatis mengarah ke `http://localhost:5173/login?verified=true&role=owner`.
+     - Saat di produksi, link email otomatis mengarah ke `https://ruangsinggah.id/login?verified=true&role=owner`.
+  2. **Auto-Routing ke Dashboard Mitra setelah Verifikasi**:
+     - Pada blok `verified === 'true'` di `Login.tsx`, sistem menyetel `localStorage.setItem('portal_view', targetRole)` dan `setActiveRole('owner')`.
+     - Menambahkan verifikasi sesi aktif dari Supabase (`supabase.auth.getSession()` dan listener `onAuthStateChange`). Begitu sesi terkonfirmasi, sistem langsung mengarahkan pemilik kost ke `Page.DASHBOARD_MITRA` secara instan.
+     - Pada `handleVerifyEmailOtp`, sistem juga menyetel `portal_view: 'owner'` sebelum mengalihkan ke Dashboard Mitra.
+- **File Tersentuh**:
+  - `functions/public/pages/Login.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi produksi front-end Vite di `functions/public` sukses 100% (2512 modul tertransformasi, `✓ built in 24.14s`, 0 error).
+  - Seluruh aset tersinkronisasi ke `public/dist`.
+
+
 - **Permintaan & Masalah**:
   1. Pengguna menganalisis alur pendaftaran: sistem autentikasi RuangSinggah berakar pada Email & Password. Pemaksaan verifikasi OTP WhatsApp pada form registrasi awal menimbulkan *double friction* (calon mitra harus verifikasi OTP WhatsApp terlebih dahulu, namun setelahnya Supabase Auth tetap menuntut konfirmasi email), yang membingungkan calon mitra dan menurunkan tingkat konversi pendaftaran.
   2. Pengguna menyepakati penerapan arsitektur **Opsi B**:

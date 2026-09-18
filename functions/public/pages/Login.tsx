@@ -181,9 +181,49 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
       };
       checkSession();
     } else if (verified === 'true') {
-      setSuccessMsg('Email berhasil diverifikasi! Silakan login dengan email dan kata sandi Anda.');
+      const targetRole = searchParams.get('role') || 'owner';
+      localStorage.setItem('portal_view', targetRole);
+      setActiveRole(targetRole === 'user' ? 'user' : 'owner');
       setIsRoleSelected(true);
-      setSearchParams({}, { replace: true });
+
+      const checkConfirmedSession = async () => {
+        // Berikan waktu sejenak agar Supabase Client selesai memproses token dari URL hash/search
+        await new Promise((r) => setTimeout(r, 500));
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.user) {
+          const userRole = session.user.user_metadata?.role || targetRole;
+          localStorage.setItem('portal_view', userRole);
+          if (userRole === 'owner' || userRole === 'mitra') {
+            window.location.href = Page.DASHBOARD_MITRA;
+            return;
+          } else {
+            window.location.href = Page.HOME;
+            return;
+          }
+        }
+
+        // Jika sesi belum terurai, pasang listener sesaat
+        const { data: { subscription } } = supabase.auth.onAuthStateChange((event, newSession) => {
+          if (event === 'SIGNED_IN' && newSession?.user) {
+            subscription.unsubscribe();
+            const userRole = newSession.user.user_metadata?.role || targetRole;
+            localStorage.setItem('portal_view', userRole);
+            if (userRole === 'owner' || userRole === 'mitra') {
+              window.location.href = Page.DASHBOARD_MITRA;
+            } else {
+              window.location.href = Page.HOME;
+            }
+          }
+        });
+
+        setTimeout(() => {
+          subscription.unsubscribe();
+          setSuccessMsg('Email berhasil diverifikasi! Silakan masuk dengan email dan kata sandi Anda.');
+          setSearchParams({}, { replace: true });
+        }, 3000);
+      };
+
+      checkConfirmedSession();
     } else if (error === 'blocked') {
       setErrorMsg('Akun Anda telah ditangguhkan. Silakan hubungi admin untuk informasi lebih lanjut.');
       setSuccessMsg('');
@@ -326,6 +366,7 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
           type: 'signup',
           email: formData.email.trim(),
           password: formData.password,
+          redirectTo: `${window.location.origin}${Page.LOGIN}?verified=true&role=${activeRole}`,
           metadata: {
             full_name: formData.name,
             name: formData.name,
@@ -480,6 +521,7 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
       }
 
       setSuccessMsg('Email berhasil diverifikasi! Mengalihkan ke dashboard...');
+      localStorage.setItem('portal_view', activeRole);
       setTimeout(() => {
         if (activeRole === 'owner') {
           window.location.href = Page.DASHBOARD_MITRA;
@@ -519,6 +561,7 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
           type: 'signup',
           email: formData.email.trim(),
           password: formData.password,
+          redirectTo: `${window.location.origin}${Page.LOGIN}?verified=true&role=${activeRole}`,
           metadata: {
             full_name: formData.name,
             name: formData.name,
