@@ -1,26 +1,24 @@
-# Laporan Penyelesaian (Walkthrough): Elevasi Adaptif dan Penyesuaian Z-Index Floating Chat FAB di Atas Navbar
+# Laporan Penyelesaian (Walkthrough): Penyelarasan Z-Index Pop-Up Promosi KostManager Menjadi z-[100]
 
-Dokumen ini memuat ringkasan penyelesaian perbaikan posisi ketinggian vertikal dan z-index tombol melayang (*Floating Action Button / FAB*) Chat di sudut kanan bawah antarmuka mobile agar melayang utuh dan bebas di atas Bottom Navigation Bar.
+Dokumen ini memuat ringkasan penyelesaian perbaikan urutan lapisan z-index pada Pop-Up Iklan Promosi KostManager (`showPromoPopup`) agar memayungi seluruh elemen layar mobile (termasuk tombol melayang Chat dan Bottom Navigation Bar), sehingga seluruh elemen di balik modal ter-blur dan meredup sempurna.
 
 ---
 
 ## 1. Ringkasan Perubahan
 
-### A. Evaluasi & Perbaikan Ketinggian Vertikal (`MitraDashboard.tsx`)
+### A. Penyelarasan Lapisan Z-Index Modal Promosi (`MitraDashboard.tsx`)
 - **Sebelumnya**:
-  - Tombol FAB Chat menggunakan class `bottom-24` (96px).
-  - Bottom Navigation Bar mobile memiliki total tinggi antara 95px hingga 130px (karena memuat safe area padding `pb-safe`, ikon, dan teks label), sehingga bagian bawah tombol melayang bertabrakan langsung dengan navbar.
+  - Modal overlay iklan promosi KostManager menggunakan class `z-50`.
+  - Tombol melayang (FAB) Chat menggunakan class `z-[60]` (agar berada di atas navbar `z-50`).
+  - Akibatnya, tombol Chat muncul menembus lapisan backdrop modal promosi dan tampak mengambang di atas iklan bukannya berada di belakang.
 - **Sesudah**:
-  - Elevasi tombol dinaikkan menjadi **`bottom-[calc(6.75rem+env(safe-area-inset-bottom,0px))] sm:bottom-32`**.
-  - Nilai `6.75rem` (108px) ditambah fungsi `env(safe-area-inset-bottom, 0px)` menjamin tombol melayang dengan jarak aman 14–20px tepat di atas garis border atas navbar di seluruh model perangkat (iOS, Android gesture bar, dsb.).
-
-### B. Koreksi Z-Index Stacking Context (`MitraDashboard.tsx`)
-- **Sebelumnya**:
-  - Tombol FAB memiliki class `z-40`, sedangkan Bottom Navigation Bar memiliki `z-50`.
-  - Hal ini menyebabkan lapisan navbar dirender di atas tombol FAB, sehingga separuh tombol chat tertutup oleh navbar.
-- **Sesudah**:
-  - Z-index tombol FAB dinaikkan menjadi **`z-[60]`** (lebih tinggi daripada `z-50` milik navbar).
-  - Tombol FAB dipastikan selalu berada di lapisan terdepan antarmuka mobile.
+  - Class pembungkus modal pop-up iklan promosi diubah menjadi:
+    ```tsx
+    className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/75 backdrop-blur-md animate-in fade-in duration-200"
+    ```
+  - Dengan lapisan **`z-[100]`**, modal promosi KostManager kini selaras dengan standar modal lainnya di `MitraDashboard.tsx` (seperti Modal Edit Rekening Bank `z-[100]` dan Modal Laporan Keuangan `z-[100]`).
+  - Ketika modal promosi muncul, backdrop hitam transparan dengan efek `backdrop-blur-md` menyelimuti seluruh layar, menempatkan tombol Chat (`z-[60]`) dan navbar (`z-50`) di belakang secara meredup dan ter-blur halus.
+  - Ketika modal ditutup, tombol Chat kembali tajam dan melayang bebas di atas navbar.
 
 ---
 
@@ -35,7 +33,7 @@ Dokumen ini memuat ringkasan penyelesaian perbaikan posisi ketinggian vertikal d
   ✓ 2512 modules transformed.
   rendering chunks...
   computing gzip size...
-  ✓ built in 45.15s
+  ✓ built in 41.60s
   The command exited with code 0.
   ```
 - **Status**: **100% LULUS (0 Error, Exit Code 0)**.
@@ -46,9 +44,10 @@ Dokumen ini memuat ringkasan penyelesaian perbaikan posisi ketinggian vertikal d
 
 1. **Buka Tampilan Mobile**:
    - Buka `/mitra` pada browser smartphone atau emulator layar mobile.
-2. **Periksa Sudut Kanan Bawah**:
-   - Perhatikan tombol melayang (FAB) Chat oranye kini berada **sepenuhnya di atas** Bottom Navigation Bar.
-   - Seluruh lingkaran tombol, ikon `<MessageSquare />`, efek bayangan (*shadow glow*), dan badge notifikasi tampil 100% utuh tanpa terpotong atau tertutup sedikit pun oleh navbar.
-3. **Uji Klik & Respon**:
-   - Klik tombol FAB: menu pesan masuk terbuka secara instan.
-   - Klik tab menu pada navbar di bawahnya: seluruh tab navbar (Beranda, Kelola Kost, Pesanan, Penghuni Aktif, Profil) tetap dapat diklik dengan leluasa.
+2. **Amati saat Pop-Up Iklan Promosi KostManager Muncul**:
+   - Perhatikan bahwa backdrop gelap dengan efek `backdrop-blur-md` kini menyelimuti seluruh layar.
+   - Tombol melayang (FAB) Chat oranye kini **berada di belakang** lapisan overlay modal dan ter-blur bersama navbar dan konten halaman.
+   - Kartu promosi KostManager dan tombol close silang `X` berada di lapisan paling depan tanpa gangguan elemen lain.
+3. **Tutup Pop-Up Promosi**:
+   - Klik tombol silang `X` atau klik tombol *"NANTI SAJA"*.
+   - Pop-up tertutup, dan tombol FAB Chat kembali tampil tajam dan melayang di sudut kanan bawah.

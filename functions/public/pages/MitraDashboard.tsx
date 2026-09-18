@@ -3880,7 +3880,7 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                             handleClosePromoPopup();
                         }
                     }}
-                    className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-md animate-in fade-in duration-200"
+                    className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/75 backdrop-blur-md animate-in fade-in duration-200"
                 >
                     <div className="relative w-full max-w-lg mx-auto animate-in zoom-in-95 duration-200">
                         {/* Tombol Close Melayang di Sudut Kanan Atas */}

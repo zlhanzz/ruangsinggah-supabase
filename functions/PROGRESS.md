@@ -2,6 +2,27 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 426. Penyelarasan Z-Index Pop-Up Promosi KostManager Menjadi z-[100] Agar Memayungi Seluruh Lapisan Layar Mobile (`MitraDashboard.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna menemukan anomali visual saat pop-up promosi KostManager muncul di layar mobile: tombol melayang (FAB) Chat tampil menembus di atas modal iklan promosi dan tidak ikut ter-blur/meredup bersama navbar dan konten latar belakang.
+- **Akar Masalah**:
+  1. Kontainer overlay pop-up iklan promosi KostManager (`showPromoPopup`) sebelumnya menggunakan `z-50`.
+  2. Karena tombol FAB Chat menggunakan `z-[60]` (agar melayang di atas navbar `z-50`), tombol Chat berada di lapisan yang lebih tinggi daripada modal promosi `z-50`, sehingga tombol Chat tidak terpayungi oleh backdrop overlay hitam transparan (`bg-black/75 backdrop-blur-md`).
+- **Implementasi Solusi**:
+  1. **Peningkatan Z-Index Modal ke Standar `z-[100]`**:
+     - Mengubah class pembungkus modal `showPromoPopup` menjadi `fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/75 backdrop-blur-md animate-in fade-in duration-200`.
+     - Lapisan `z-[100]` kini memayungi seluruh antarmuka (termasuk FAB Chat `z-[60]` dan Bottom Navigation Bar `z-50`).
+     - Saat pop-up promosi muncul, tombol Chat dan navbar berada di belakang latar belakang modal secara proporsional, ter-blur halus dan meredup serasi.
+     - Saat pop-up ditutup, tombol FAB Chat kembali tajam dan melayang di atas navbar.
+- **File Tersentuh**:
+  - `functions/public/pages/MitraDashboard.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi build frontend Vite (`cmd.exe /c npm run build`) sukses 100% (`✓ built in 41.60s`, 0 error).
+  - Modal promosi KostManager tampil di lapisan terdepan (`z-[100]`), tombol Chat dan navbar ter-blur sempurna di balik backdrop overlay.
+
+
 ### 425. Elevasi Adaptif dan Penyesuaian Z-Index Floating Chat FAB di Atas Bottom Navigation Bar (`MitraDashboard.tsx`) (September 2026)
 - **Permintaan & Masalah**:
   1. Pengguna melaporkan bahwa tombol melayang (FAB) Chat di sudut kanan bawah terpotong dan tertutup separuh bagian bawahnya oleh Bottom Navigation Bar.
