@@ -861,7 +861,7 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
 
     const NAV_ITEMS: { key: MenuKey; icon: React.ReactNode; label: string; badge?: number }[] = [
         { key: 'overview', icon: <Zap size={20} />, label: 'Beranda' },
-        { key: 'properties', icon: <Home size={20} />, label: 'Kost Saya' },
+        { key: 'properties', icon: <Home size={20} />, label: 'Kelola Kost' },
         { key: 'bookings', icon: <ClipboardList size={20} />, label: 'Pesanan', badge: pendingCount },
         { key: 'tenants', icon: <Users size={20} />, label: 'Penghuni Aktif', badge: stats.activeTenants },
         { key: 'chat', icon: <MessageSquare size={20} />, label: 'Pesan', badge: chatUnreadCount },
@@ -1233,11 +1233,12 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
 
             <div className="flex-1 lg:ml-64 xl:ml-72 flex flex-col min-h-screen overflow-x-hidden">
 
-                {/* Mobile Top Header Bar with Hamburger Menu */}
-                <header className="lg:hidden h-16 bg-white border-b border-gray-100 flex items-center justify-between px-4 sticky top-0 z-40">
+                {/* Mobile Top Header Bar with Hamburger Menu & Floating Chat Button */}
+                <header className="lg:hidden h-16 bg-white/85 backdrop-blur-md border-b border-gray-100/80 flex items-center justify-between px-4 sticky top-0 z-40 shadow-xs transition-all">
                     <button
                         onClick={() => setMobileSidebarOpen(true)}
-                        className="p-2 rounded-xl hover:bg-gray-50 text-gray-600 focus:outline-none"
+                        className="p-2 rounded-xl hover:bg-gray-100/80 text-gray-600 focus:outline-none active:scale-95 transition-all cursor-pointer"
+                        aria-label="Buka Menu Sidebar"
                     >
                         <Menu size={22} />
                     </button>
@@ -1247,9 +1248,23 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                         </span>
                         <span className="text-[8px] font-black text-orange-500 uppercase tracking-widest mt-0.5">Mitra Dashboard</span>
                     </div>
-                    <div className="w-10 h-10 flex items-center justify-center">
-                        {/* Empty space for alignment */}
-                    </div>
+                    <button
+                        onClick={() => handleMenuChange('chat')}
+                        className={`w-10 h-10 rounded-xl flex items-center justify-center relative transition-all active:scale-95 cursor-pointer ${
+                            activeMenu === 'chat'
+                                ? 'bg-orange-500 text-white shadow-md shadow-orange-500/20'
+                                : 'bg-orange-50 text-orange-600 hover:bg-orange-100 border border-orange-100'
+                        }`}
+                        title="Pesan Masuk"
+                        aria-label="Pesan Masuk"
+                    >
+                        <MessageSquare size={19} />
+                        {chatUnreadCount > 0 && (
+                            <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 bg-red-500 text-white text-[9px] font-black rounded-full flex items-center justify-center border-2 border-white shadow-xs animate-pulse">
+                                {chatUnreadCount > 9 ? '9+' : chatUnreadCount}
+                            </span>
+                        )}
+                    </button>
                 </header>
 
                 {/* ── PAGE CONTENT ─────────────────────────────────────────── */}
@@ -1536,34 +1551,6 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                                     </div>
                                 );
                             })()}
-
-                            {/* ── MOBILE QUICK MENU (PINTAS MENU) ─────────────────── */}
-                            <div className="lg:hidden grid grid-cols-2 gap-4">
-                                <button
-                                    onClick={() => handleMenuChange('properties')}
-                                    className="bg-white border-2 border-orange-100 rounded-3xl p-5 flex flex-col items-center text-center gap-3 active:scale-95 transition-all shadow-sm group hover:border-orange-500"
-                                >
-                                    <div className="w-14 h-14 bg-orange-50 rounded-2xl flex items-center justify-center text-orange-500 group-hover:bg-orange-500 group-hover:text-white transition-colors shadow-sm">
-                                        <Home size={28} />
-                                    </div>
-                                    <div>
-                                        <p className="text-xs font-black text-gray-900 uppercase tracking-tight">Kelola Kost</p>
-                                        <p className="text-[10px] font-bold text-gray-400 uppercase mt-0.5">Atur Iklan</p>
-                                    </div>
-                                </button>
-                                <button
-                                    onClick={() => handleMenuChange('wallet')}
-                                    className="bg-white border-2 border-blue-100 rounded-3xl p-5 flex flex-col items-center text-center gap-3 active:scale-95 transition-all shadow-sm group hover:border-blue-500"
-                                >
-                                    <div className="w-14 h-14 bg-blue-50 rounded-2xl flex items-center justify-center text-blue-500 group-hover:bg-blue-500 group-hover:text-white transition-colors shadow-sm">
-                                        <Wallet size={28} />
-                                    </div>
-                                    <div>
-                                        <p className="text-xs font-black text-gray-900 uppercase tracking-tight">Cek Dompet</p>
-                                        <p className="text-[10px] font-bold text-gray-400 uppercase mt-0.5">Tarik Dana</p>
-                                    </div>
-                                </button>
-                            </div>
 
 
                             {/* Stat Cards — 2 col on mobile, 3 col on desktop */}
@@ -2661,6 +2648,12 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                                 onBack={() => handleMenuChange('overview')}
                                 onLogout={() => onPageChange?.(Page.HOME)}
                                 autoOpenKmProgress={tab === 'profile/km-progress'}
+                                onNavigateMenu={handleMenuChange}
+                                availableBalance={stats.availableBalance}
+                                onEditBank={() => {
+                                    setEditForm({ ...withdrawalAccount });
+                                    setIsEditingBank(true);
+                                }}
                             />
                         </div>
                     )}
@@ -2668,7 +2661,7 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
 
                 {/* ── MOBILE BOTTOM NAV ────────────────────────────────────── */}
                 <nav className="lg:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-100 z-50 flex items-center px-3 pt-2 pb-safe shadow-[0_-10px_40px_rgba(0,0,0,0.08)]">
-                    {NAV_ITEMS.filter(item => ['overview', 'bookings', 'tenants', 'chat', 'profile'].includes(item.key)).map(item => (
+                    {NAV_ITEMS.filter(item => ['overview', 'bookings', 'tenants', 'properties', 'profile'].includes(item.key)).map(item => (
                         <BottomNavItem
                             key={item.key}
                             active={activeMenu === item.key}

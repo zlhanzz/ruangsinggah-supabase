@@ -2,6 +2,56 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 422. Pemindahan Menu Pesan/Chat ke Floating Header Mobile, Menu Kelola Kost ke Bottom Navigation, dan Transformasi Profil Mitra Menjadi Grouped Profile Hub Terintegrasi Tarik Saldo (`MitraDashboard.tsx`, `MitraProfile.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  1. Pada tampilan mobile, menu Chat / Pesan Masuk yang sebelumnya berada di bottom navigation bar diminta untuk dipindahkan ke Header atas, dan Header mobile dibuat mengambang (*floating* sticky dengan efek glassmorphism/backdrop-blur).
+  2. Posisi Chat sebelumnya di bottom navigation bar mobile digantikan oleh menu **"Kelola Kost"** (sebelumnya ada di kartu jalan pintas Beranda).
+  3. Menu jalan pintas 2-kolom ("Kelola Kost" dan "Cek Dompet") di halaman Beranda mobile dibersihkan agar tidak redundan dan layout lebih lapang.
+  4. Fitur **"Cek Dompet" (Tarik Saldo)** dipindahkan ke dalam halaman Profil Mitra.
+  5. Halaman Profil Mitra ditransformasikan menjadi arsitektur menu berkelompok yang modern, estetik, dan terorganisir mirip dengan tampilan Profile Hub role User (berdasarkan referensi foto profil user yang dilampirkan).
+- **Akar Masalah**:
+  1. Header mobile sebelumnya masih menggunakan posisi statis biasa tanpa tombol aksi cepat untuk Chat.
+  2. Bottom navigation bar mobile menempatkan Chat di slot tengah-kanan, sedangkan menu operasional paling penting bagi pemilik kost (Kelola Kost) tersembunyi di dalam kartu pintas halaman Beranda.
+  3. Kartu pintas di Beranda menduplikasi fungsi navigasi dan menghabiskan ruang vertikal pada layar HP.
+  4. Halaman Profil Mitra sebelumnya langsung menampilkan formulir data tanpa menu hub berkelompok (Keuangan/Saldo, Informasi Pribadi, Bantuan & Layanan).
+- **Implementasi Solusi**:
+  1. **Floating Glassmorphic Mobile Header (`MitraDashboard.tsx`)**:
+     - Mengubah header mobile menjadi floating sticky (`sticky top-0 z-40 bg-white/85 backdrop-blur-md border-b border-gray-100/80 shadow-xs`).
+     - Menambahkan tombol Chat/Pesan Masuk di sisi kanan header dengan ikon `<MessageSquare size={20} />` dan badge counter pesan belum dibaca yang dinamis.
+     - Tombol Chat memicu navigasi langsung ke menu `chat` (`handleMenuChange('chat')`).
+  2. **Penyelarasan Bottom Navigation Bar Mobile (`MitraDashboard.tsx`)**:
+     - Mengganti item `chat` pada array `mobileNavItems` menjadi `properties` dengan label **"Kelola Kost"** dan ikon `<Building2 size={20} strokeWidth={2.2} />`.
+     - Susunan 5 tab utama mobile kini: **Beranda**, **Pesanan**, **Penghuni Aktif**, **Kelola Kost**, dan **Profil**.
+  3. **Pembersihan Kartu Jalan Pintas di Beranda Mobile (`MitraDashboard.tsx`)**:
+     - Menghapus blok grid 2-kolom (*"Kelola Kost"* dan *"Cek Dompet"*) dari tampilan mobile Beranda, menyederhanakan antarmuka dan memberikan ruang lebih lapang untuk metrik statistik dan daftar transaksi terkini.
+  4. **Integrasi Data Saldo Dompet ke Profil Mitra (`MitraDashboard.tsx` & `MitraProfile.tsx`)**:
+     - Mengirimkan props `onNavigateMenu={handleMenuChange}`, `availableBalance={stats.availableBalance}`, dan `onEditBank` dari `MitraDashboard` ke komponen `MitraProfile`.
+  5. **Transformasi Grouped Profile Hub Menyerupai Referensi User (`MitraProfile.tsx`)**:
+     - **Profile Header Card**: Menampilkan avatar foto/inisial, nama lengkap, email/telepon terverifikasi, pill badge peran ("Pemilik Kost (Mitra)"), serta kartu cepat *Data Kontak Pribadi* dengan chevron aksi.
+     - **Compact Verification Card**: Mempertahankan kartu verifikasi identitas ramping dan terkunci rapat saat berstatus review.
+     - **Grup 1: KEUANGAN & SALDO KOST**:
+       - *Tarik Saldo Kost (Cek Dompet)*: Menampilkan nominal saldo tersedia riil dalam badge hijau (`FORMAT_CURRENCY(availableBalance)`) dan langsung bernavigasi ke tab dompet dashboard saat diklik.
+       - *Rekening Penarikan*: Membuka modal/pengaturan rekening bank mitra.
+     - **Grup 2: INFORMASI PRIBADI & DOKUMEN**:
+       - *Data Profil & Domisili*: Membuka formulir pengeditan data kontak & domisili lengkap dengan tombol navigasi kembali (*Back button*) ke Menu Hub.
+       - *Verifikasi Identitas (KTP)*: Akses verifikasi identitas terpadu.
+     - **Grup 3: PROGRAM & BANTUAN KEMITRAAN**:
+       - *KostManager Auto-Pilot*: Membuka landing page program KostManager dengan badge status aktif/promo.
+       - *Pusat Bantuan 24/7*: Menghubungkan ke layanan CS RuangSinggah via WhatsApp.
+       - *Ketentuan Layanan Kemitraan*: Membuka halaman syarat & ketentuan kemitraan.
+     - **Tombol Keluar Akun**: Tombol logout dengan konfirmasi aman di bagian bawah.
+  6. **100% Pure Bundled Vector SVG (`lucide-react`)**:
+     - Menggunakan ikon vector SVG murni (`Wallet`, `CreditCard`, `UserCheck`, `ShieldCheck`, `HelpCircle`, `FileText`, `Sparkles`, `LogOut`, dll.) menjamin 0 FOUT dan tampilan premium instan.
+- **File Tersentuh**:
+  - `functions/public/pages/MitraDashboard.tsx`
+  - `functions/public/pages/MitraProfile.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi build frontend Vite (`cmd.exe /c npm run build`) sukses 100% (`✓ built in 26.48s`, 0 error).
+  - Tampilan mobile header floating sticky, navigasi bottom bar beralih ke Kelola Kost, dan menu Profil Mitra tersaji dalam format Grouped Hub terpadu.
+
+
 ### 421. Redesain Ramping & Elegan Kartu Status Verifikasi Sedang Ditinjau serta Penguncian Ketat Mode Edit Saat Pending (`MitraProfile.tsx`, `AgentProfile.tsx`, `MitraDashboard.tsx`) (September 2026)
 - **Permintaan & Masalah**:
   1. Pengguna mengeluhkan kartu status *"Verifikasi Sedang Ditinjau"* yang berlatar oranye solid pekat raksasa (`bg-orange-500 rounded-[2.5rem] p-8 md:p-10`) karena terlalu bongsor, tidak estetik, serta boros ruang UI/UX pada layar desktop dan mobile.

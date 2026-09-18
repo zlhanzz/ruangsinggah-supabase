@@ -1,9 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../supabase';
-import { User, ShieldCheck, MapPin, Phone, ChevronRight, LogOut, Upload, BadgeCheck, AlertCircle, Clock, Search, X, Mail, Calendar, Gift, Lock } from 'lucide-react';
+import { 
+    User, ShieldCheck, MapPin, Phone, ChevronRight, LogOut, Upload, BadgeCheck, 
+    AlertCircle, Clock, Search, X, Mail, Calendar, Gift, Lock, Wallet, Landmark, 
+    Sparkles, HelpCircle, FileText, CheckCircle2, Edit3, ArrowLeft 
+} from 'lucide-react';
 import { sendWhatsAppTemplate, sendWaOtpVerification } from '../whatsappService';
 import { notifyAdminIdentityVerification } from '../emailService';
+import { FORMAT_CURRENCY } from '../constants';
 
 interface MitraProfileProps {
     uid: string;
@@ -11,9 +16,21 @@ interface MitraProfileProps {
     onBack?: () => void;
     onLogout?: () => void;
     autoOpenKmProgress?: boolean;
+    onNavigateMenu?: (menuKey: string) => void;
+    availableBalance?: number;
+    onEditBank?: () => void;
 }
 
-const MitraProfile: React.FC<MitraProfileProps> = ({ uid, user: initialUser, onBack, onLogout, autoOpenKmProgress }) => {
+const MitraProfile: React.FC<MitraProfileProps> = ({ 
+    uid, 
+    user: initialUser, 
+    onBack, 
+    onLogout, 
+    autoOpenKmProgress,
+    onNavigateMenu,
+    availableBalance,
+    onEditBank
+}) => {
     const navigate = useNavigate();
     const [searchParams, setSearchParams] = useSearchParams();
     const isEditingFromUrl = searchParams.get('edit') === 'true';
@@ -747,52 +764,31 @@ const MitraProfile: React.FC<MitraProfileProps> = ({ uid, user: initialUser, onB
         }
         finally { setIsSubmitting(false); }
     };
+    const CLOSED_KM_STATUSES = ['COMPLETED', 'ACTIVE', 'INACTIVE', 'CANCELLED', 'REJECTED', 'CLOSED', 'TERMINATED'];
+    const activeKmReq = (kmRequests || []).find((r: any) => {
+        const s = (r.status || '').toUpperCase();
+        return s && !CLOSED_KM_STATUSES.includes(s);
+    }) || null;
+    const hasActiveKmRequest = Boolean(activeKmReq);
+
     if (loading && !initialUser) return <div className="p-20 text-center">Loading...</div>;
 
     return (
         <div className="animate-in fade-in slide-in-from-right-4 duration-500 pb-20 space-y-6 text-left">
-            {/* Profile Hero / Header */}
-            {!isEditing && (
-                <div className="bg-white rounded-[2.5rem] p-8 border border-gray-100 shadow-sm relative overflow-hidden flex flex-col md:flex-row gap-8 items-center md:items-start text-center md:text-left">
-                    <div className="relative group">
-                        <div className="w-32 h-32 bg-orange-50 rounded-[2.5rem] flex items-center justify-center text-4xl border-4 border-white shadow-xl shadow-orange-100/20 shrink-0 overflow-hidden relative">
-                            {formData.photo_url ? (
-                                <img src={formData.photo_url} className="w-full h-full object-cover" alt="Profile" />
-                            ) : (
-                                <span className="text-orange-200 font-black">{formData.display_name?.charAt(0).toUpperCase() || 'M'}</span>
-                            )}
-                            {isUploadingPhoto && (
-                                <div className="absolute inset-0 bg-orange-600/40 backdrop-blur-sm flex items-center justify-center">
-                                    <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                                </div>
-                            )}
-                        </div>
-                    </div>
-                    <div className="flex-grow">
-                        <div className="flex items-center gap-3 mb-2 justify-center md:justify-start">
-                            <h2 className="text-2xl font-black text-gray-900 uppercase tracking-tight">
-                                {formData.display_name || 'Pemilik Kost'}
-                            </h2>
-                            {formData.verification_status === 'verified' && (
-                                <div className="bg-green-500 text-white rounded-full p-1.5 shadow-lg shadow-green-100" title="Terverifikasi">
-                                    <BadgeCheck size={18} />
-                                </div>
-                            )}
-                        </div>
-                        <p className="text-gray-400 font-bold text-xs uppercase tracking-widest">{formData.phone || initialUser?.email}</p>
-                        <div className="mt-4 flex flex-wrap gap-2 justify-center md:justify-start text-[10px] font-black uppercase tracking-widest">
-                            <span className={`px-4 py-1.5 rounded-full border ${formData.verification_status === 'verified' ? 'bg-green-50 text-green-600 border-green-100' : 'bg-orange-50 text-orange-600 border-orange-100'}`}>
-                                {formData.verification_status === 'verified' ? 'Mitra Terverifikasi ✓' : 'Status: ' + formData.verification_status}
-                            </span>
-                        </div>
-                    </div>
-                </div>
-            )}
-
             {isEditing && formData.verification_status !== 'banned' ? (
-                <div className="bg-white rounded-[2.5rem] p-8 md:p-12 border border-gray-100 shadow-sm relative overflow-hidden">
+                <div className="bg-white rounded-[2.5rem] p-6 sm:p-8 md:p-12 border border-gray-100 shadow-sm relative overflow-hidden">
                     <div className="absolute top-0 right-0 w-64 h-64 bg-orange-50 rounded-full blur-3xl opacity-30 -translate-y-1/2 translate-x-1/2 pointer-events-none"></div>
                     <div className="relative z-10">
+                        {/* Tombol Kembali ke Menu Profil Hub */}
+                        <div className="mb-6">
+                            <button
+                                type="button"
+                                onClick={handleCancel}
+                                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-gray-50 hover:bg-gray-100 text-gray-600 hover:text-gray-900 text-xs font-black uppercase tracking-wider transition-all active:scale-95 cursor-pointer"
+                            >
+                                <ArrowLeft size={16} /> Kembali ke Menu Profil
+                            </button>
+                        </div>
                         <div className="flex items-center justify-between mb-8 pb-6 border-b border-gray-100">
                             <div className="flex items-center gap-4">
                                 <div className="w-12 h-12 rounded-2xl bg-orange-50 flex items-center justify-center text-orange-500"><User size={24} /></div>
@@ -1296,18 +1292,94 @@ const MitraProfile: React.FC<MitraProfileProps> = ({ uid, user: initialUser, onB
                 </div>
             ) : (
                 <div className="space-y-6">
-                    {/* Verification Section on Top */}
-                    {formData.verification_status === 'verified' ? (
-                        <div onClick={() => setSearchParams({ edit: 'true', step: '1' })} className="cursor-pointer bg-green-50 border border-green-100 rounded-[2.5rem] p-8 flex flex-col md:flex-row items-center justify-between gap-6 shadow-sm hover:scale-[1.01] active:scale-[0.99] transition-all">
-                            <div className="flex items-center gap-5 text-left">
-                                <div className="w-16 h-16 rounded-3xl bg-green-500 text-white flex items-center justify-center shadow-xl shadow-green-100">
-                                    <BadgeCheck size={32} />
+                    {/* ── USER PROFILE CARD (Ala Profile Role User) ── */}
+                    <div className="bg-white rounded-3xl p-5 sm:p-6 border border-gray-100 shadow-xs">
+                        <div className="flex items-center gap-4">
+                            {/* Avatar */}
+                            <div className="relative group shrink-0">
+                                <div className="w-16 h-16 sm:w-20 sm:h-20 bg-slate-900 rounded-2xl sm:rounded-3xl flex items-center justify-center text-2xl sm:text-3xl text-white font-black shadow-lg shadow-slate-900/10 overflow-hidden relative border-2 border-white">
+                                    {formData.photo_url ? (
+                                        <img src={formData.photo_url} className="w-full h-full object-cover" alt="Profile" />
+                                    ) : (
+                                        <span>{formData.display_name?.charAt(0).toUpperCase() || 'M'}</span>
+                                    )}
+                                    {isUploadingPhoto && (
+                                        <div className="absolute inset-0 bg-black/40 backdrop-blur-[1px] flex items-center justify-center">
+                                            <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                                        </div>
+                                    )}
                                 </div>
-                                <div>
-                                    <h3 className="text-lg font-black text-green-900 uppercase tracking-tight">Akun Terverifikasi</h3>
-                                    <p className="text-xs font-bold text-green-600/70 uppercase tracking-widest mt-1 italic">Selamat! Anda sudah bisa mengelola dan mempublikasikan listing kost.</p>
+                                {formData.verification_status === 'verified' && (
+                                    <div className="absolute -bottom-1 -right-1 bg-green-500 text-white rounded-full p-1 border-2 border-white shadow-xs" title="Terverifikasi">
+                                        <BadgeCheck size={14} />
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* User Info */}
+                            <div className="min-w-0 flex-1">
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                    <h2 className="text-base sm:text-lg font-black text-gray-900 truncate">
+                                        {formData.display_name || initialUser?.name || 'Pemilik Kost'}
+                                    </h2>
+                                    {formData.verification_status === 'verified' ? (
+                                        <CheckCircle2 className="w-4 h-4 text-green-500 fill-green-100 shrink-0" />
+                                    ) : (
+                                        <CheckCircle2 className="w-4 h-4 text-[#ff7a00] fill-orange-100 shrink-0" />
+                                    )}
+                                </div>
+                                <p className="text-xs text-gray-400 font-bold truncate mt-0.5 tracking-wider">
+                                    {formData.phone || formData.email || initialUser?.email}
+                                </p>
+                                <div className="mt-1.5">
+                                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black bg-orange-50 text-orange-700 border border-orange-200">
+                                        <Sparkles className="w-3 h-3 text-orange-500" />
+                                        Pemilik Kost (Mitra)
+                                    </span>
                                 </div>
                             </div>
+                        </div>
+
+                        {/* Banner Action: Data Kontak Pribadi */}
+                        <button
+                            type="button"
+                            onClick={() => {
+                                if (formData.verification_status === 'pending') {
+                                    alert('Data profil Anda sedang dalam proses peninjauan verifikasi admin sehingga terkunci sementara.');
+                                    return;
+                                }
+                                setSearchParams({ edit: 'true', step: '1' });
+                            }}
+                            className="w-full mt-5 bg-orange-500/5 hover:bg-orange-500/10 border border-orange-200 rounded-2xl p-3 sm:p-3.5 flex items-center justify-between transition-all group active:scale-[0.99] cursor-pointer"
+                        >
+                            <div className="flex items-center gap-2.5 text-xs font-bold text-gray-800">
+                                <div className="w-7 h-7 rounded-xl bg-orange-500 text-white flex items-center justify-center shadow-xs">
+                                    <Edit3 className="w-3.5 h-3.5" />
+                                </div>
+                                <span className="truncate">Data Kontak Pribadi</span>
+                            </div>
+                            <div className="flex items-center gap-1 text-[11px] font-extrabold text-orange-600 shrink-0 ml-2">
+                                <span>{formData.verification_status === 'pending' ? 'Terkunci (Sedang Ditinjau)' : 'Lihat / Ubah'}</span>
+                                <ChevronRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
+                            </div>
+                        </button>
+                    </div>
+
+                    {/* ── STATUS VERIFIKASI IDENTITAS (Ringkas & Proporsional) ── */}
+                    {formData.verification_status === 'verified' ? (
+                        <div className="bg-green-50/80 border border-green-200/80 rounded-3xl p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-xs">
+                            <div className="flex items-center gap-4 text-left">
+                                <div className="w-12 h-12 rounded-2xl bg-green-500/10 border border-green-300/40 text-green-600 flex items-center justify-center shrink-0 shadow-xs">
+                                    <BadgeCheck size={24} />
+                                </div>
+                                <div>
+                                    <h3 className="text-sm sm:text-base font-black text-green-950 uppercase tracking-tight">Akun Mitra Terverifikasi</h3>
+                                    <p className="text-xs font-medium text-green-800/80 mt-0.5 leading-relaxed">Selamat! Anda sudah dapat mengelola, mempublikasikan, dan menerima transaksi sewa kost.</p>
+                                </div>
+                            </div>
+                            <span className="shrink-0 self-end sm:self-center px-3 py-1 rounded-full bg-green-100 text-green-800 border border-green-200 text-[10px] font-black uppercase tracking-wider">
+                                Terverifikasi ✓
+                            </span>
                         </div>
                     ) : formData.verification_status === 'pending' ? (
                         <div className="bg-gradient-to-r from-amber-500/[0.08] via-orange-500/[0.04] to-amber-500/[0.02] border border-amber-200/90 rounded-3xl p-5 sm:p-6 shadow-xs relative overflow-hidden flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
@@ -1334,175 +1406,323 @@ const MitraProfile: React.FC<MitraProfileProps> = ({ uid, user: initialUser, onB
                             </div>
                         </div>
                     ) : formData.verification_status === 'banned' ? (
-                        <div className="bg-red-50 border border-red-100 rounded-[2.5rem] p-8 flex flex-col md:flex-row items-center justify-between gap-6 shadow-sm">
-                            <div className="flex items-center gap-5 text-left">
-                                <div className="w-16 h-16 rounded-3xl bg-red-600 text-white flex items-center justify-center border border-red-200">
-                                    <AlertCircle size={32} />
+                        <div className="bg-red-50 border border-red-200 rounded-3xl p-5 sm:p-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-xs">
+                            <div className="flex items-center gap-4 text-left">
+                                <div className="w-12 h-12 rounded-2xl bg-red-600 text-white flex items-center justify-center shrink-0">
+                                    <AlertCircle size={24} />
                                 </div>
                                 <div>
-                                    <h3 className="text-lg font-black text-red-900 uppercase tracking-tight">Akses Kemitraan Diblokir Permanen</h3>
-                                    <p className="text-xs font-bold text-red-600 uppercase mt-1 italic">Alasan: {formData.verification_notes || 'Melanggar ketentuan layanan atau penolakan berulang kali.'}</p>
-                                    <p className="text-xs font-bold text-gray-500 uppercase mt-2">
-                                        Anda tidak dapat mengajukan verifikasi identitas sebagai pemilik kost lagi. Status akun Anda diturunkan menjadi tipe pengguna biasa.
-                                    </p>
+                                    <h3 className="text-sm sm:text-base font-black text-red-900 uppercase tracking-tight">Akses Kemitraan Diblokir Permanen</h3>
+                                    <p className="text-xs font-medium text-red-700 mt-1">Alasan: {formData.verification_notes || 'Melanggar ketentuan layanan atau penolakan berulang kali.'}</p>
                                 </div>
                             </div>
                         </div>
                     ) : formData.verification_status === 'rejected' ? (
-                        <div onClick={() => setSearchParams({ edit: 'true', step: '1' })} className="cursor-pointer bg-rose-50 border border-rose-100 rounded-[2.5rem] p-8 flex flex-col md:flex-row items-center justify-between gap-6 shadow-sm hover:scale-[1.01] active:scale-[0.99] transition-all">
-                            <div className="flex items-center gap-5 text-left">
-                                <div className="w-16 h-16 rounded-3xl bg-rose-100 text-rose-600 flex items-center justify-center border border-rose-200">
-                                    <AlertCircle size={32} />
+                        <div className="bg-rose-50 border border-rose-200 rounded-3xl p-5 sm:p-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-xs">
+                            <div className="flex items-center gap-4 text-left">
+                                <div className="w-12 h-12 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center shrink-0 border border-rose-200">
+                                    <AlertCircle size={24} />
                                 </div>
                                 <div>
-                                    <h3 className="text-lg font-black text-rose-900 uppercase tracking-tight">Verifikasi Ditolak</h3>
-                                    <p className="text-xs font-bold text-rose-600 uppercase mt-1 italic">Alasan: {formData.verification_notes || 'Data tidak sesuai atau buram.'}</p>
+                                    <h3 className="text-sm sm:text-base font-black text-rose-900 uppercase tracking-tight">Verifikasi Ditolak</h3>
+                                    <p className="text-xs font-medium text-rose-700 mt-0.5">Alasan: {formData.verification_notes || 'Data tidak sesuai atau berkas buram.'}</p>
                                 </div>
                             </div>
-                            <button onClick={(e) => { e.stopPropagation(); setSearchParams({ edit: 'true', step: '1' }); }} className="px-10 py-4 bg-rose-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-rose-700 transition-all shadow-lg shadow-rose-100">Perbaiki Data</button>
+                            <button onClick={() => setSearchParams({ edit: 'true', step: '1' })} className="shrink-0 self-end sm:self-center px-6 py-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-[10px] font-black uppercase tracking-wider transition-all shadow-md shadow-rose-200 cursor-pointer">
+                                Perbaiki Data
+                            </button>
                         </div>
                     ) : (
-                        <div onClick={() => setSearchParams({ edit: 'true', step: '1' })} className="cursor-pointer bg-white rounded-[2.5rem] p-8 border border-gray-100 shadow-sm flex flex-col md:flex-row items-center justify-between gap-6 hover:scale-[1.01] active:scale-[0.99] transition-all">
+                        <div className="bg-white rounded-3xl p-5 sm:p-6 border border-gray-100 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                             <div className="flex items-center gap-4 text-left">
-                                <div className="w-16 h-16 rounded-[1.5rem] bg-orange-50 text-orange-600 flex items-center justify-center border border-orange-100"><ShieldCheck size={32} /></div>
+                                <div className="w-12 h-12 rounded-2xl bg-orange-50 text-orange-600 flex items-center justify-center border border-orange-100 shrink-0">
+                                    <ShieldCheck size={24} />
+                                </div>
                                 <div>
-                                    <h3 className="text-lg font-black text-gray-900 uppercase tracking-tight">Belum Terverifikasi</h3>
-                                    <p className="text-xs font-bold text-gray-400 uppercase mt-1">Verifikasi identitas diperlukan untuk keamanan transaksi</p>
+                                    <h3 className="text-sm sm:text-base font-black text-gray-900 uppercase tracking-tight">Identitas Belum Diverifikasi</h3>
+                                    <p className="text-xs text-gray-400 font-medium mt-0.5">Verifikasi identitas diperlukan untuk mempublikasikan kost dan menerima transaksi.</p>
                                 </div>
                             </div>
-                            <button onClick={(e) => { e.stopPropagation(); setSearchParams({ edit: 'true', step: '1' }); }} className="px-10 py-4 bg-orange-500 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-orange-600 transition-all shadow-lg shadow-orange-100">Lengkapi & Verifikasi</button>
+                            <button onClick={() => setSearchParams({ edit: 'true', step: '1' })} className="shrink-0 self-end sm:self-center px-6 py-2.5 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-[10px] font-black uppercase tracking-wider transition-all shadow-md shadow-orange-500/20 cursor-pointer">
+                                Lengkapi & Verifikasi
+                            </button>
                         </div>
                     )}
 
+                    {/* ── GROUP 1: KEUANGAN & SALDO KOST (Cek Dompet & Tarik Dana) ── */}
+                    <div className="mb-2">
+                        <h3 className="text-[11px] font-black uppercase text-gray-400 tracking-wider mb-2.5 px-1">
+                            KEUANGAN & SALDO KOST
+                        </h3>
+                        <div className="bg-white rounded-3xl border border-gray-100 shadow-xs divide-y divide-gray-50 overflow-hidden">
+                            {/* Tarik Saldo Kost (Cek Dompet) */}
+                            <button
+                                type="button"
+                                onClick={() => onNavigateMenu ? onNavigateMenu('wallet') : null}
+                                className="w-full p-4 flex items-center justify-between text-left hover:bg-orange-50/40 transition-colors group cursor-pointer"
+                            >
+                                <div className="flex items-center gap-3.5 min-w-0">
+                                    <div className="w-10 h-10 rounded-2xl bg-orange-50 text-orange-600 flex items-center justify-center shrink-0">
+                                        <Wallet className="w-5 h-5" />
+                                    </div>
+                                    <div className="min-w-0">
+                                        <h4 className="text-sm font-black text-gray-900 group-hover:text-orange-600 transition-colors">
+                                            Tarik Saldo Kost (Cek Dompet)
+                                        </h4>
+                                        <p className="text-xs text-gray-400 font-medium truncate mt-0.5">
+                                            Pencairan pendapatan sewa, penarikan dana & saldo aktif
+                                        </p>
+                                    </div>
+                                </div>
+                                <div className="flex items-center gap-2 shrink-0 ml-2">
+                                    <span className="px-2.5 py-1 rounded-full bg-orange-50 text-orange-700 text-xs font-black border border-orange-200 shadow-xs">
+                                        {availableBalance !== undefined ? FORMAT_CURRENCY(availableBalance) : 'Buka Dompet'}
+                                    </span>
+                                    <ChevronRight className="w-4 h-4 text-gray-400 group-hover:text-orange-500 group-hover:translate-x-0.5 transition-all" />
+                                </div>
+                            </button>
 
-                    {/* Membership Status Card */}
-                    {(() => {
-                        const CLOSED_KM_STATUSES = ['COMPLETED', 'ACTIVE', 'INACTIVE', 'CANCELLED', 'REJECTED', 'CLOSED', 'TERMINATED'];
-                        const activeKmReq = (kmRequests || []).find((r: any) => {
-                            const s = (r.status || '').toUpperCase();
-                            return s && !CLOSED_KM_STATUSES.includes(s);
-                        }) || null;
-                        const hasActiveKmRequest = Boolean(activeKmReq);
-                        return (
-                            <div 
+                            {/* Rekening Penarikan Bank */}
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    if (onEditBank) {
+                                        onEditBank();
+                                    } else if (onNavigateMenu) {
+                                        onNavigateMenu('wallet');
+                                    }
+                                }}
+                                className="w-full p-4 flex items-center justify-between text-left hover:bg-orange-50/40 transition-colors group cursor-pointer"
+                            >
+                                <div className="flex items-center gap-3.5 min-w-0">
+                                    <div className="w-10 h-10 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
+                                        <Landmark className="w-5 h-5" />
+                                    </div>
+                                    <div className="min-w-0">
+                                        <h4 className="text-sm font-black text-gray-900 group-hover:text-orange-600 transition-colors">
+                                            Rekening Penarikan
+                                        </h4>
+                                        <p className="text-xs text-gray-400 font-medium truncate mt-0.5">
+                                            Atur nomor rekening bank tujuan pencairan saldo sewa kost
+                                        </p>
+                                    </div>
+                                </div>
+                                <div className="flex items-center gap-2 shrink-0 ml-2">
+                                    <ChevronRight className="w-4 h-4 text-gray-400 group-hover:text-orange-500 group-hover:translate-x-0.5 transition-all" />
+                                </div>
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* ── GROUP 2: INFORMASI PRIBADI & DOKUMEN ── */}
+                    <div className="mb-2">
+                        <h3 className="text-[11px] font-black uppercase text-gray-400 tracking-wider mb-2.5 px-1">
+                            INFORMASI PRIBADI & DOKUMEN
+                        </h3>
+                        <div className="bg-white rounded-3xl border border-gray-100 shadow-xs divide-y divide-gray-50 overflow-hidden">
+                            {/* Data Profil & Domisili */}
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    if (formData.verification_status === 'pending') {
+                                        alert('Data profil Anda sedang dalam proses peninjauan verifikasi admin sehingga terkunci sementara.');
+                                        return;
+                                    }
+                                    setSearchParams({ edit: 'true', step: '1' });
+                                }}
+                                className="w-full p-4 flex items-center justify-between text-left hover:bg-orange-50/40 transition-colors group cursor-pointer"
+                            >
+                                <div className="flex items-center gap-3.5 min-w-0">
+                                    <div className="w-10 h-10 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center shrink-0">
+                                        <User className="w-5 h-5" />
+                                    </div>
+                                    <div className="min-w-0">
+                                        <h4 className="text-sm font-black text-gray-900 group-hover:text-orange-600 transition-colors">
+                                            Data Profil & Domisili
+                                        </h4>
+                                        <p className="text-xs text-gray-400 font-medium truncate mt-0.5">
+                                            Nama, nomor WhatsApp, tempat lahir & alamat domisili
+                                        </p>
+                                    </div>
+                                </div>
+                                <div className="flex items-center gap-2 shrink-0 ml-2">
+                                    {formData.verification_status === 'pending' ? (
+                                        <span className="px-2.5 py-0.5 rounded-full bg-amber-50 text-amber-700 text-[10px] font-bold border border-amber-200">
+                                            Terkunci
+                                        </span>
+                                    ) : (
+                                        <ChevronRight className="w-4 h-4 text-gray-400 group-hover:text-orange-500 group-hover:translate-x-0.5 transition-all" />
+                                    )}
+                                </div>
+                            </button>
+
+                            {/* Verifikasi Identitas (KTP) */}
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    if (formData.verification_status === 'pending') {
+                                        alert('Data KTP Anda sedang dalam proses peninjauan verifikasi admin (maks 1x24 jam).');
+                                        return;
+                                    }
+                                    if (formData.verification_status === 'verified') {
+                                        alert('Akun Anda sudah terverifikasi resmi. Data KTP tidak dapat diubah.');
+                                        return;
+                                    }
+                                    setSearchParams({ edit: 'true', step: '2' });
+                                }}
+                                className="w-full p-4 flex items-center justify-between text-left hover:bg-orange-50/40 transition-colors group cursor-pointer"
+                            >
+                                <div className="flex items-center gap-3.5 min-w-0">
+                                    <div className="w-10 h-10 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
+                                        <ShieldCheck className="w-5 h-5" />
+                                    </div>
+                                    <div className="min-w-0">
+                                        <h4 className="text-sm font-black text-gray-900 group-hover:text-orange-600 transition-colors">
+                                            Verifikasi Identitas (KTP)
+                                        </h4>
+                                        <p className="text-xs text-gray-400 font-medium truncate mt-0.5">
+                                            Dokumen identitas resmi KTP pemilik kost & status validasi
+                                        </p>
+                                    </div>
+                                </div>
+                                <div className="flex items-center gap-2 shrink-0 ml-2">
+                                    <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black border ${
+                                        formData.verification_status === 'verified'
+                                            ? 'bg-green-50 text-green-700 border-green-200'
+                                            : formData.verification_status === 'pending'
+                                            ? 'bg-amber-50 text-amber-700 border-amber-200'
+                                            : formData.verification_status === 'rejected'
+                                            ? 'bg-rose-50 text-rose-700 border-rose-200'
+                                            : 'bg-gray-50 text-gray-600 border-gray-200'
+                                    }`}>
+                                        {formData.verification_status === 'verified'
+                                            ? 'Terverifikasi ✓'
+                                            : formData.verification_status === 'pending'
+                                            ? 'Sedang Ditinjau'
+                                            : formData.verification_status === 'rejected'
+                                            ? 'Perlu Revisi'
+                                            : 'Belum Verifikasi'}
+                                    </span>
+                                    <ChevronRight className="w-4 h-4 text-gray-400 group-hover:text-orange-500 group-hover:translate-x-0.5 transition-all" />
+                                </div>
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* ── GROUP 3: PROGRAM & BANTUAN KEMITRAAN ── */}
+                    <div className="mb-2">
+                        <h3 className="text-[11px] font-black uppercase text-gray-400 tracking-wider mb-2.5 px-1">
+                            PROGRAM & BANTUAN KEMITRAAN
+                        </h3>
+                        <div className="bg-white rounded-3xl border border-gray-100 shadow-xs divide-y divide-gray-50 overflow-hidden">
+                            {/* Solusi KostManager Auto-Pilot */}
+                            <button
+                                type="button"
                                 onClick={() => {
                                     if (hasActiveKmRequest) {
                                         navigate('/dashboard-mitra/profile/km-progress');
+                                    } else {
+                                        navigate('/kostmanager');
                                     }
                                 }}
-                                className={`bg-white rounded-[2.5rem] p-8 border border-gray-100 shadow-sm text-left relative overflow-hidden group ${
-                                    hasActiveKmRequest 
-                                        ? 'cursor-pointer hover:scale-[1.01] active:scale-[0.99] transition-all' 
-                                        : 'cursor-default'
-                                }`}
+                                className="w-full p-4 flex items-center justify-between text-left hover:bg-orange-50/40 transition-colors group cursor-pointer"
                             >
-                                <div className="absolute top-0 right-0 w-32 h-32 bg-orange-50 rounded-full blur-3xl opacity-50 -translate-y-1/2 translate-x-1/2 pointer-events-none"></div>
-                                <div className="flex justify-between items-center mb-6">
-                                    <h3 className="text-sm font-black uppercase text-gray-900 tracking-widest">Status Program & Layanan</h3>
-                                    {hasActiveKmRequest && (
-                                        <span className="text-[10px] font-black text-orange-500 uppercase tracking-wider group-hover:underline">Lihat Progress →</span>
-                                    )}
-                                </div>
-                        
-                        {/* If they are actively a kostmanager */}
-                        {subscriptionStatus === 'kostmanager' ? (
-                            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-5 rounded-2xl border bg-amber-50/30 border-amber-100">
-                                <div className="flex items-center gap-4">
-                                    <div className="w-14 h-14 rounded-2xl flex items-center justify-center text-2xl border bg-amber-100 border-amber-200 text-amber-600 shrink-0">
-                                        👑
+                                <div className="flex items-center gap-3.5 min-w-0">
+                                    <div className="w-10 h-10 rounded-2xl bg-purple-50 text-purple-600 flex items-center justify-center shrink-0">
+                                        <Sparkles className="w-5 h-5" />
                                     </div>
-                                    <div>
-                                        <h4 className="font-black text-amber-900 text-sm uppercase tracking-tight">
-                                            Mitra KostManager (Autopilot)
+                                    <div className="min-w-0">
+                                        <h4 className="text-sm font-black text-gray-900 group-hover:text-orange-600 transition-colors">
+                                            Program KostManager Auto-Pilot
                                         </h4>
-                                        <p className="text-[10px] text-amber-600 font-bold mt-1 uppercase tracking-widest">
-                                            Properti Anda dikelola penuh secara otomatis
+                                        <p className="text-xs text-gray-400 font-medium truncate mt-0.5">
+                                            {subscriptionStatus === 'kostmanager'
+                                                ? 'Mitra KostManager aktif • Properti dikelola otomatis'
+                                                : hasActiveKmRequest
+                                                ? 'Pengajuan aktif • Pantau progres verifikasi & survei'
+                                                : 'Solusi operasional kost terima beres tanpa repot'}
                                         </p>
                                     </div>
                                 </div>
-                            </div>
-                        ) : activeKmReq ? (
-                            /* If they have a pending onboarding request, show the pending status preview */
-                            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-5 rounded-2xl border border-orange-100 bg-orange-50/20">
-                                <div className="flex items-center gap-4">
-                                    <div className="w-14 h-14 rounded-2xl flex items-center justify-center text-2xl border bg-orange-100 border-orange-200 text-orange-600 shrink-0 animate-pulse">
-                                        ⚙️
-                                    </div>
-                                    <div>
-                                        <h4 className="font-black text-gray-900 text-sm uppercase tracking-tight">
-                                            Upgrade KostManager (Sedang Diproses)
-                                        </h4>
-                                        <p className="text-[10px] text-gray-500 font-bold mt-1 uppercase tracking-widest leading-relaxed">
-                                            Proses: {activeKmReq.kost_name || 'Properti Anda'} • Menunggu survey lokasi
-                                        </p>
-                                    </div>
+                                <div className="flex items-center gap-2 shrink-0 ml-2">
+                                    {subscriptionStatus === 'kostmanager' ? (
+                                        <span className="px-2.5 py-0.5 rounded-full bg-amber-50 text-amber-800 text-[10px] font-black border border-amber-200">
+                                            Autopilot 👑
+                                        </span>
+                                    ) : hasActiveKmRequest ? (
+                                        <span className="px-2.5 py-0.5 rounded-full bg-purple-50 text-purple-700 text-[10px] font-black border border-purple-200">
+                                            Diproses
+                                        </span>
+                                    ) : null}
+                                    <ChevronRight className="w-4 h-4 text-gray-400 group-hover:text-orange-500 group-hover:translate-x-0.5 transition-all" />
                                 </div>
-                                <span className="text-[9px] font-black uppercase px-2.5 py-1 bg-orange-100 text-orange-600 rounded-full border border-orange-200 shrink-0">
-                                    Pantau Progress
-                                </span>
-                            </div>
-                        ) : (
-                            /* If they are regular, show regular Mitra box with Upgrade button */
-                            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-5 rounded-2xl border bg-gray-50/50">
-                                <div className="flex items-center gap-4">
-                                    <div className="w-14 h-14 rounded-2xl flex items-center justify-center text-2xl border bg-gray-100 border-gray-200 text-gray-400 shrink-0">
-                                        👤
-                                    </div>
-                                    <div>
-                                        <h4 className="font-black text-gray-900 text-sm uppercase tracking-tight">
-                                            Mitra Reguler
-                                        </h4>
-                                        <p className="text-[10px] text-gray-500 font-bold mt-1 uppercase tracking-widest">
-                                            Kelola properti kost Anda secara manual
-                                        </p>
-                                    </div>
-                                </div>
-                                <button
-                                    onClick={(e) => {
-                                        e.stopPropagation();
-                                        if (formData.verification_status !== 'verified') {
-                                            alert('Syarat Mendaftar KostManager: Anda harus menyelesaikan verifikasi identitas terlebih dahulu. Silakan lengkapi data dan dokumen identitas pada formulir berikut.');
-                                            setSearchParams({ edit: 'true', step: '2' });
-                                            return;
-                                        }
-                                        navigate('/kostmanager');
-                                    }}
-                                    className="w-full sm:w-auto px-5 py-2.5 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-[10px] font-black uppercase tracking-wider transition-all active:scale-95 shadow-md shadow-orange-500/10 shrink-0 text-center"
-                                >
-                                    Upgrade ke KostManager
-                                </button>
-                            </div>
-                        )}
-                            </div>
-                        );
-                    })()}
+                            </button>
 
-                    {/* Account Info Card */}
-                    <div className="bg-white rounded-[2.5rem] p-8 border border-gray-100 shadow-sm text-left relative overflow-hidden">
-                        <div className="absolute top-0 right-0 w-32 h-32 bg-orange-50 rounded-full blur-3xl opacity-50 -translate-y-1/2 translate-x-1/2 pointer-events-none"></div>
-                        <div className="flex items-center justify-between mb-8 relative z-10">
-                            <h3 className="text-sm font-black uppercase text-gray-900 tracking-widest">Profil Anda</h3>
-                            {formData.verification_status === 'pending' ? (
-                                <span className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-[10px] font-black uppercase tracking-wider rounded-xl bg-amber-50 text-amber-700 border border-amber-200/90 shadow-2xs cursor-not-allowed">
-                                    <Lock size={12} className="text-amber-600" /> Data Terkunci (Sedang Ditinjau)
-                                </span>
-                            ) : formData.verification_status === 'banned' ? null : (
-                                <button onClick={() => setSearchParams({ edit: 'true', step: '1' })} className="px-5 py-2 text-[10px] font-black uppercase rounded-xl transition-all shadow-sm bg-gray-50 text-gray-600 border border-gray-200 hover:bg-gray-100">
-                                    Edit Profil
-                                </button>
-                            )}
-                        </div>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 relative z-10">
-                            <ProfileItemRead icon={<User size={18} />} label="Nama Lengkap" value={formData.display_name} isEditing={false} name="display_name" onChange={handleInputChange} />
-                            <ProfileItemRead icon={<Mail size={18} />} label="Alamat Email" value={formData.email} isEditing={false} name="email" onChange={handleInputChange} />
-                            <ProfileItemRead icon={<Phone size={18} />} label="No. WhatsApp" value={formData.phone} isEditing={false} name="phone" onChange={handleInputChange} showWhatsappVerify={false} />
-                            <ProfileItemRead icon={<MapPin size={18} />} label="Tempat Lahir" value={formData.birth_place} isEditing={false} name="birth_place" onChange={handleInputChange} />
-                            <ProfileItemRead icon={<Calendar size={18} />} label="Tanggal Lahir" value={formData.birth_date ? new Date(formData.birth_date).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }) : ''} isEditing={false} name="birth_date" onChange={handleInputChange} />
-                            <div className="md:col-span-2">
-                                <ProfileItemRead icon={<MapPin size={18} />} label="Alamat Domisili" value={formData.address} isEditing={false} name="address" onChange={handleInputChange} isTextArea />
-                            </div>
+                            {/* Pusat Bantuan 24/7 */}
+                            <button
+                                type="button"
+                                onClick={() => window.open('https://wa.me/6282291584984?text=Halo%20Admin%20RuangSinggah,%20saya%20mitra%20pemilik%20kost%20butuh%20bantuan', '_blank')}
+                                className="w-full p-4 flex items-center justify-between text-left hover:bg-orange-50/40 transition-colors group cursor-pointer"
+                            >
+                                <div className="flex items-center gap-3.5 min-w-0">
+                                    <div className="w-10 h-10 rounded-2xl bg-teal-50 text-teal-600 flex items-center justify-center shrink-0">
+                                        <HelpCircle className="w-5 h-5" />
+                                    </div>
+                                    <div className="min-w-0">
+                                        <h4 className="text-sm font-black text-gray-900 group-hover:text-orange-600 transition-colors">
+                                            Pusat Bantuan 24/7
+                                        </h4>
+                                        <p className="text-xs text-gray-400 font-medium truncate mt-0.5">
+                                            Hubungi CS WhatsApp & tim operasional RuangSinggah
+                                        </p>
+                                    </div>
+                                </div>
+                                <div className="flex items-center gap-2 shrink-0 ml-2">
+                                    <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-600 text-[10px] font-bold border border-emerald-200">
+                                        Online
+                                    </span>
+                                    <ChevronRight className="w-4 h-4 text-gray-400 group-hover:text-orange-500 group-hover:translate-x-0.5 transition-all" />
+                                </div>
+                            </button>
+
+                            {/* Ketentuan Layanan Kemitraan */}
+                            <button
+                                type="button"
+                                onClick={() => navigate('/terms')}
+                                className="w-full p-4 flex items-center justify-between text-left hover:bg-orange-50/40 transition-colors group cursor-pointer"
+                            >
+                                <div className="flex items-center gap-3.5 min-w-0">
+                                    <div className="w-10 h-10 rounded-2xl bg-gray-50 text-gray-600 flex items-center justify-center shrink-0">
+                                        <FileText className="w-5 h-5" />
+                                    </div>
+                                    <div className="min-w-0">
+                                        <h4 className="text-sm font-black text-gray-900 group-hover:text-orange-600 transition-colors">
+                                            Ketentuan Layanan Kemitraan
+                                        </h4>
+                                        <p className="text-xs text-gray-400 font-medium truncate mt-0.5">
+                                            Syarat, ketentuan & panduan hukum pemilik kost
+                                        </p>
+                                    </div>
+                                </div>
+                                <div className="flex items-center gap-2 shrink-0 ml-2">
+                                    <ChevronRight className="w-4 h-4 text-gray-400 group-hover:text-orange-500 group-hover:translate-x-0.5 transition-all" />
+                                </div>
+                            </button>
                         </div>
                     </div>
+
+                    {/* Tombol Logout */}
+                    {onLogout && (
+                        <div className="pt-2">
+                            <button
+                                type="button"
+                                onClick={onLogout}
+                                className="w-full py-4 px-6 bg-white hover:bg-rose-50/80 border border-gray-200 hover:border-rose-200 text-gray-700 hover:text-rose-600 rounded-3xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2.5 transition-all shadow-2xs active:scale-[0.99] cursor-pointer"
+                            >
+                                <LogOut size={16} /> Keluar dari Akun Mitra
+                            </button>
+                        </div>
+                    )}
                 </div>
             )}
 
