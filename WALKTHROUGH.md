@@ -1,41 +1,32 @@
-# Walkthrough: Perbaikan HTTP 400 Bad Request `users?referred_by=...` pada `AgentDashboard.tsx`
+# Walkthrough: Sinkronisasi & Pemisahan Tegas Kampus vs Fasilitas Publik Serta Restorasi Foto Fasilitas & Kamar pada KostManager Reaktivasi
 
-Dokumen ini merangkum perbaikan network error HTTP 400 Bad Request saat memuat riwayat mitra yang bergabung menggunakan kode referral agen di Dashboard Agen.
+Dokumen ini merangkum perbaikan komprehensif pada pengelompokan **Kampus Terdekat** dan **Fasilitas Publik** di detail listing (`KostDetail.tsx`), serta penyelarasan pemulihan foto survei fasilitas bersama dan kamar saat reaktivasi KostManager di Dashboard Agen (`AgentDashboard.tsx`).
 
 ---
 
 ## 1. Ringkasan Perubahan & Hasil Perbaikan
 
-| Area / Lokasi | Kondisi Sebelum Perbaikan | Kondisi Setelah Perbaikan |
+| Area / Halaman | Kondisi Sebelumnya | Kondisi Setelah Perbaikan |
 | :--- | :--- | :--- |
-| **Konsol Browser saat Buka Dashboard Agen** | Muncul network request gagal:<br>`GET .../rest/v1/users?select=name%2Ccreated_at&referred_by=eq.AGE0MDNV&role=eq.mitra&order=created_at.desc 400 (Bad Request)` | Request berjalan lancar mengarah ke tabel `mitra` dengan status **200 OK**. Error 400 hilang total dari console browser. |
-| **Penyajian Riwayat Mitra & Ticker Referral** | Kueri gagal melempar error sehingga data mitra yang diundang tidak termuat. | Data mitra berhasil termuat dari tabel `mitra` dengan relasi `users:user_id(name, full_name)` dan tampil rapi pada card ticker referral agen. |
+| **Kampus Terdekat (`KostDetail.tsx`)** | Mencampuradukkan seluruh 12 landmark (termasuk mall, RS, SPBU, tempat ibadah, minimarket, laundry) ke dalam seksi kampus. | Tepat hanya menampilkan **3 Perguruan Tinggi Murni**: *Universitas Islam Makassar (UIM)*, *Universitas Hasanuddin (UNHAS)*, dan *Politeknik Negeri Ujung Pandang (PNUP)*. |
+| **Fasilitas Publik Sekitar (`KostDetail.tsx`)** | Menampilkan fasilitas perabotan gedung kost sendiri (*"Parkir Motor"*, *"Kompor"*, *"Wastafel Cuci Piring"*) dengan jarak dummy `-` dan durasi palsu. | Tepat hanya menampilkan **9 Landmark Publik Eksternal**: *Makassar Town Square (MToS)*, *RSUP Dr. Wahidin Sudirohusodo*, *Kawasan Industri Makassar (KIMA Daya)*, *Terminal Regional Daya*, *Indomaret Bung*, *sity laundry express*, *SPBU Pertamina*, *Masjid Al-Furqan*, *Gereja Katolik Maria Ratu Rosario* lengkap dengan durasi rute nyata dan tombol navigasi in-app peta. |
+| **Fasilitas Bersama Gedung Kost** | Fasilitas internal kost campur aduk ke landmark luar lingkungan. | Fasilitas internal terwadahi secara terstruktur pada seksi **Fasilitas Umum & Gedung Kost** (*Dapur Bersama*, *Area Parkir*, *WiFi*, *CCTV 24 Jam*, dll.). |
+| **Database Supabase (`properties`)** | Kolom `campuses` berisi 12 landmark campur aduk; kolom `public_facilities` berisi string perabot internal. | Kolom `campuses` bersih berisi 3 kampus; kolom `public_facilities` berisi 9 landmark publik luar dengan koordinat GPS dan estimasi durasi Google API. |
+| **Step 1 Dashboard Agen (`AgentDashboard.tsx`)** | Slot foto fasilitas bersama (misal: *Parkir Motor*, *Dapur Bersama*) tidak mencocokkan foto survei yang berlabel sinonim (*Area Parkir*, *Fasilitas Bersama*). | Dilengkapi fungsi cerdas `isCategoryMatching` sehingga foto survei otomatis terpetakan ke slot kategori yang tepat tanpa hilang. |
+| **Restorasi 10 Kamar KostManager** | Kamar yang belum terisi foto di draf survei bisa kehilangan foto arsipnya. | Sistem memulihkan foto dari arsip tipe kamar sejenis dan menyusun `categorized_photos` untuk seluruh kamar secara utuh. |
 
 ---
 
-## 2. File & Modifikasi yang Dilakukan
+## 2. File yang Dimodifikasi
 
-1. **[`functions/public/pages/AgentDashboard.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/AgentDashboard.tsx)**:
-   - Mengubah kueri dari tabel `users` (yang tidak memiliki kolom `referred_by`) menjadi tabel `mitra`:
-     ```tsx
-     const { data: referredMitra, error: refError } = await supabase
-         .from('mitra')
-         .select('created_at, users:user_id ( name, full_name )')
-         .eq('referred_by', codeToCheck)
-         .order('created_at', { ascending: false });
-
-     if (!refError && referredMitra) {
-         const formatted = referredMitra.map((item: any) => {
-             const u = Array.isArray(item.users) ? item.users[0] : item.users;
-             return {
-                 name: u?.name || u?.full_name || 'Mitra Kost',
-                 created_at: item.created_at
-             };
-         });
-         setReferralHistory(formatted);
-     }
-     ```
-   - Membungkus kueri dengan penanganan `try-catch` defensif.
+1. **[`functions/public/pages/KostDetail.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/KostDetail.tsx)**:
+   - Memfilter kandidat landmark dengan memisahkan tegas `isCampus` (hanya institusi pendidikan tinggi) dan `isPublicFacility` (landmark lingkungan luar kost).
+   - Memfilter dan memblokir fasilitas perabot internal kost agar tidak pernah muncul di bawah seksi peta/landmark luar.
+2. **[`functions/public/pages/AgentDashboard.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/AgentDashboard.tsx)**:
+   - Menambahkan helper `isCategoryMatching` pada pratinjau kategori foto area umum di Step 1.
+   - Memperbaiki sinkronisasi `draftRoomTypes` dan `loadedKmImageUrls` agar foto arsip KostManager terpulihkan lengkap untuk semua kamar dan fasilitas publik.
+3. **Database Supabase (`properties`)**:
+   - Baris properti Kost Apalah Daya (`bb6b0ccc-6d9e-494a-b972-aa7dd9cbd81f`) diperbarui secara presisi dengan 3 kampus murni dan 9 fasilitas publik eksternal.
 
 ---
 
@@ -49,20 +40,27 @@ Dokumen ini merangkum perbaikan network error HTTP 400 Bad Request saat memuat r
      ✓ 2512 modules transformed.
      rendering chunks...
      computing gzip size...
-     ✓ built in 49.98s
+     ✓ built in 58.99s
      ```
-   - **Hasil**: 100% Lulus (0 error, 0 warning baru).
-2. **Uji Kueri Database**:
-   - Pengujian kueri tabel `mitra` dengan relasi `users:user_id(name)` berhasil mengembalikan status 200 OK.
+   - **Hasil**: 100% Lulus (0 compile error).
+2. **Uji Database Query**:
+   - Kueri Supabase REST API mengonfirmasi:
+     - `campuses`: 3 lokasi kampus murni.
+     - `public_facilities`: 9 lokasi landmark publik eksternal dengan koordinat GPS dan durasi perjalanan.
 
 ---
 
 ## 4. Panduan Verifikasi Pengguna (UI Testing Guide)
 
-1. **Buka Dashboard Agen**:
-   - Buka halaman Dashboard Agen (`/dashboard`) dan login dengan akun Agen Survei.
-2. **Periksa Network Tab / Console**:
-   - Buka DevTools Browser (F12) -> tab **Console** dan tab **Network**.
-   - Pastikan tidak ada lagi request merah `GET .../rest/v1/users?referred_by=... 400 (Bad Request)`.
-3. **Periksa Card Referral**:
-   - Lihat bagian card kode referral agen di bagian atas/dashboard. Ticker referral menampilkan riwayat mitra yang terdaftar dengan kode agen secara mulus.
+1. **Buka Halaman Detail Kost Apalah Daya**:
+   - Akses `/kost/bb6b0ccc-6d9e-494a-b972-aa7dd9cbd81f` di browser.
+2. **Scroll ke Seksi "Lokasi & Lingkungan"**:
+   - Perhatikan bagian **Kampus Terdekat**:
+     - Memuat tepat 3 lokasi: *Universitas Islam Makassar (UIM)*, *Universitas Hasanuddin (UNHAS)*, dan *Politeknik Negeri Ujung Pandang (PNUP)*.
+   - Perhatikan bagian **Fasilitas Publik**:
+     - Memuat tepat 9 lokasi: *Makassar Town Square (MToS)*, *RSUP Dr. Wahidin*, *KIMA*, *Terminal Regional Daya*, *Indomaret*, *Laundry*, *SPBU*, *Masjid*, *Gereja*.
+     - Tiap item memiliki jarak riil, estimasi durasi jalan kaki / motor / mobil, serta tombol interaktif **Rute** yang menampilkan garis rute langsung pada peta di atasnya.
+   - Pastikan **tidak ada lagi fasilitas kost** (*Parkir Motor*, *Kompor*, *Wastafel Cuci Piring*) yang muncul di bawah seksi landmark publik ini.
+3. **Buka Seksi "Fasilitas Umum" di Atasnya**:
+   - Periksa bagian *Area Parkir* dan *Dapur Bersama*:
+     - Seluruh perlengkapan kost (*Parkir Motor*, *Kompor*, *Wastafel Cuci Piring*) tersaji rapi sebagai kelengkapan fasilitas kost.

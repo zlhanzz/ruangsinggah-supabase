@@ -837,59 +837,6 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
     };
 
     // Helper to get structured categorized photos from room or property object
-    const getRoomCategorizedPhotos = (item: any): Record<string, string[]> => {
-        if (!item) return {};
-        const cleanUrls = (urls: any[]) => (urls || []).map((u: any) => getImageUrlString(u)).filter(Boolean);
-
-        if (item.categorized_photos && typeof item.categorized_photos === 'object' && !Array.isArray(item.categorized_photos)) {
-            const raw = JSON.parse(JSON.stringify(item.categorized_photos));
-            const cleaned: Record<string, string[]> = {};
-            Object.entries(raw).forEach(([k, urls]) => {
-                if (Array.isArray(urls)) cleaned[k] = cleanUrls(urls);
-            });
-            return cleaned;
-        }
-        if (item.categorizedPhotos && typeof item.categorizedPhotos === 'object' && !Array.isArray(item.categorizedPhotos)) {
-            const raw = JSON.parse(JSON.stringify(item.categorizedPhotos));
-            const cleaned: Record<string, string[]> = {};
-            Object.entries(raw).forEach(([k, urls]) => {
-                if (Array.isArray(urls)) cleaned[k] = cleanUrls(urls);
-            });
-            return cleaned;
-        }
-        // Fallback from legacy parallel arrays
-        const result: Record<string, string[]> = {};
-        const images = Array.isArray(item.images) ? item.images : (Array.isArray(item.image_urls) ? item.image_urls : []);
-        const categories = Array.isArray(item.photoCategories) ? item.photoCategories : [];
-        images.forEach((urlItem: any, idx: number) => {
-            const urlStr = getImageUrlString(urlItem);
-            if (!urlStr) return;
-            const cat = (typeof urlItem === 'object' && urlItem.label) 
-                ? urlItem.label 
-                : (categories[idx] || (idx === 0 ? 'Interior Kamar *Wajib' : 'Foto Kamar'));
-            if (!result[cat]) result[cat] = [];
-            result[cat].push(urlStr);
-        });
-        return result;
-    };
-
-    // Helper to export categorized photos into flat arrays for legacy database compatibility
-    const exportCategorizedPhotos = (categorized: Record<string, string[]>) => {
-        const images: string[] = [];
-        const photoCategories: string[] = [];
-        Object.entries(categorized || {}).forEach(([cat, urls]) => {
-            if (Array.isArray(urls)) {
-                urls.forEach(url => {
-                    if (url) {
-                        images.push(url);
-                        photoCategories.push(cat);
-                    }
-                });
-            }
-        });
-        return { images, photoCategories };
-    };
-
     // Helper to dynamically compute room photo categories based on checked room facilities
     const computeDynamicRoomPhotoCategories = (roomFacilities: string[] = [], status: string = 'Kosong', manualExtras: string[] = []): string[] => {
         const baseLabel = status === 'Terisi' ? 'Interior Kamar (Opsional)' : 'Interior Kamar *Wajib';
@@ -932,6 +879,72 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
         });
 
         return categories;
+    };
+
+    // Helper to get structured categorized photos from room or property object
+    const getRoomCategorizedPhotos = (item: any): Record<string, string[]> => {
+        if (!item) return {};
+        const cleanUrls = (urls: any[]) => (urls || []).map((u: any) => getImageUrlString(u)).filter(Boolean);
+
+        if (item.categorized_photos && typeof item.categorized_photos === 'object' && !Array.isArray(item.categorized_photos)) {
+            const raw = JSON.parse(JSON.stringify(item.categorized_photos));
+            const cleaned: Record<string, string[]> = {};
+            Object.entries(raw).forEach(([k, urls]) => {
+                const arr = Array.isArray(urls) ? cleanUrls(urls) : [];
+                if (arr.length > 0) cleaned[k] = arr;
+            });
+            if (Object.keys(cleaned).length > 0) return cleaned;
+        }
+        if (item.categorizedPhotos && typeof item.categorizedPhotos === 'object' && !Array.isArray(item.categorizedPhotos)) {
+            const raw = JSON.parse(JSON.stringify(item.categorizedPhotos));
+            const cleaned: Record<string, string[]> = {};
+            Object.entries(raw).forEach(([k, urls]) => {
+                const arr = Array.isArray(urls) ? cleanUrls(urls) : [];
+                if (arr.length > 0) cleaned[k] = arr;
+            });
+            if (Object.keys(cleaned).length > 0) return cleaned;
+        }
+        // Fallback from legacy parallel arrays or unorganized image URLs
+        const result: Record<string, string[]> = {};
+        const images = Array.isArray(item.images) ? item.images : (Array.isArray(item.image_urls) ? item.image_urls : []);
+        const categories = Array.isArray(item.photoCategories) ? item.photoCategories : [];
+        const activeCats = computeDynamicRoomPhotoCategories(
+            item.roomFacilities || item.features || [],
+            item.status || 'Kosong'
+        );
+
+        images.forEach((urlItem: any, idx: number) => {
+            const urlStr = getImageUrlString(urlItem);
+            if (!urlStr) return;
+            let cat = (typeof urlItem === 'object' && (urlItem.label || urlItem.category)) 
+                ? (urlItem.label || urlItem.category) 
+                : (categories[idx] || '');
+            
+            // Map sequentially to active dynamic room categories if generic or empty
+            if (!cat || cat === 'Foto Kamar' || cat === 'Foto Lainnya') {
+                cat = activeCats[idx] || (idx === 0 ? (item.status === 'Terisi' ? 'Interior Kamar (Opsional)' : 'Interior Kamar *Wajib') : 'Interior Kamar *Wajib');
+            }
+            if (!result[cat]) result[cat] = [];
+            result[cat].push(urlStr);
+        });
+        return result;
+    };
+
+    // Helper to export categorized photos into flat arrays for legacy database compatibility
+    const exportCategorizedPhotos = (categorized: Record<string, string[]>) => {
+        const images: string[] = [];
+        const photoCategories: string[] = [];
+        Object.entries(categorized || {}).forEach(([cat, urls]) => {
+            if (Array.isArray(urls)) {
+                urls.forEach(url => {
+                    if (url) {
+                        images.push(url);
+                        photoCategories.push(cat);
+                    }
+                });
+            }
+        });
+        return { images, photoCategories };
     };
 
     const startDrawing = (e: any) => {
@@ -3222,6 +3235,57 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                             categorizedPhotos: {}
                         }));
                     }
+
+                    // If previous KostManager reactivation, ensure all 10 archived rooms and their photos are fully restored
+                    if (isPreviousKm && archivedKm && Array.isArray(archivedKm.room_types) && archivedKm.room_types.length > 0) {
+                        if (draftRoomTypes.length < archivedKm.room_types.length) {
+                            draftRoomTypes = archivedKm.room_types.map((ar: any, aIdx: number) => {
+                                const existingDraftMatch = draftRoomTypes.find((dr: any) => 
+                                    (dr.name && ar.name && dr.name.toString().trim() === ar.name.toString().trim()) ||
+                                    (dr.room_number && ar.room_number && dr.room_number.toString().trim() === ar.room_number.toString().trim())
+                                );
+                                return existingDraftMatch || { ...ar, name: ar.name || `Kamar ${aIdx + 1}`, room_number: ar.room_number || `${aIdx + 1}` };
+                            });
+                        }
+
+                        draftRoomTypes = draftRoomTypes.map((rm: any) => {
+                            let roomImgs = (rm.images || []).filter(isValidSurveyPhoto);
+                            if (roomImgs.length === 0) {
+                                const matchedArchived = (archivedKm.room_types || []).find((ar: any) =>
+                                    (ar.name && rm.name && ar.name.toString().trim() === rm.name.toString().trim()) ||
+                                    (ar.room_number && rm.room_number && ar.room_number.toString().trim() === rm.room_number.toString().trim())
+                                );
+                                if (matchedArchived && Array.isArray(matchedArchived.images) && matchedArchived.images.length > 0) {
+                                    roomImgs = matchedArchived.images.map(getImageUrlString).filter(Boolean);
+                                }
+                            }
+                            if (roomImgs.length === 0) {
+                                const siblingWithPhotos = (archivedKm.room_types || []).find((other: any) =>
+                                    (other.type || '').toLowerCase().trim() === (rm.type || '').toLowerCase().trim() &&
+                                    Array.isArray(other.images) && other.images.length > 0
+                                );
+                                if (siblingWithPhotos) {
+                                    roomImgs = siblingWithPhotos.images.map(getImageUrlString).filter(Boolean);
+                                } else {
+                                    const selfMatch = (dbPropertyRecord?.metadata?.self_listing_room_types || []).find((sr: any) =>
+                                        (sr.type || sr.name || '').toLowerCase().trim() === (rm.type || '').toLowerCase().trim() &&
+                                        Array.isArray(sr.images) && sr.images.length > 0
+                                    );
+                                    if (selfMatch) {
+                                        roomImgs = selfMatch.images.map(getImageUrlString).filter(Boolean);
+                                    }
+                                }
+                            }
+                            const roomCategorized = getRoomCategorizedPhotos({ ...rm, images: roomImgs });
+                            return {
+                                ...rm,
+                                images: roomImgs,
+                                categorized_photos: roomCategorized,
+                                categorizedPhotos: roomCategorized
+                            };
+                        });
+                    }
+
                     parsed.kmListingForm.roomTypes = draftRoomTypes;
 
                     // Fallback campuses to database if draft has none (helps heal corrupted drafts or empty states)
@@ -3249,28 +3313,51 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                         draftImageUrls.push({ original: urlStr, url: urlStr, label: cat });
                         draftPhotoCats.push(cat);
                     });
-                    // Fallback to archived KostManager photos if draft image_urls is empty
-                    if (draftImageUrls.length === 0 && isPreviousKm && archivedKm && Array.isArray(archivedKm.image_urls) && archivedKm.image_urls.length > 0) {
-                        archivedKm.image_urls.forEach((img: any, idx: number) => {
+                    // Fallback & synchronization with archived KostManager photos
+                    if (isPreviousKm && archivedKm && Array.isArray(archivedKm.image_urls) && archivedKm.image_urls.length > 0) {
+                        const archivedKmPhotos = [
+                            ...archivedKm.image_urls,
+                            ...(archivedKm.metadata?.categorized_photos?.['Area Parkir'] || []).map((u: string) => ({ url: u, label: 'Parkir Motor', caption: 'Area Parkir Motor' })),
+                            ...(archivedKm.metadata?.categorized_photos?.['Bangunan Depan'] || []).map((u: string) => ({ url: u, label: 'Bangunan Depan', caption: 'Tampak Depan' })),
+                            ...(archivedKm.metadata?.categorized_photos?.['Fasilitas Bersama'] || []).map((u: string) => ({ url: u, label: 'Dapur Bersama', caption: 'Fasilitas Bersama & Dapur' }))
+                        ];
+                        archivedKmPhotos.forEach((img: any, idx: number) => {
                             const urlStr = getImageUrlString(img);
                             if (!urlStr) return;
                             let cat = (typeof img === 'object' && img.label) ? img.label : '';
                             const caption = (typeof img === 'object' && img.caption) ? String(img.caption).toLowerCase() : '';
-                            if (cat.toLowerCase() === 'area umum' || cat.toLowerCase() === 'parkiran') cat = 'Area Parkir';
-                            if (cat.toLowerCase() === 'fasilitas bersama') {
-                                if (caption.includes('koridor') || caption.includes('tangga')) {
-                                    cat = 'Koridor';
-                                } else if (caption.includes('dapur')) {
+                            if (caption.includes('parkir motor') || (cat.toLowerCase().includes('parkir') && !caption.includes('mobil'))) {
+                                cat = 'Parkir Motor';
+                            } else if (cat.toLowerCase() === 'area umum' || cat.toLowerCase() === 'parkiran' || cat.toLowerCase() === 'area parkir') {
+                                cat = 'Parkir Motor';
+                            }
+                            if (caption.includes('dapur') || cat.toLowerCase().includes('dapur')) {
+                                cat = 'Dapur Bersama';
+                            } else if (caption.includes('kompor') || cat.toLowerCase().includes('kompor')) {
+                                cat = 'Kompor';
+                            } else if (cat.toLowerCase() === 'fasilitas bersama') {
+                                if (caption.includes('dapur')) {
                                     cat = 'Dapur Bersama';
-                                } else {
+                                } else if (caption.includes('koridor') || caption.includes('tangga')) {
                                     cat = 'Koridor';
+                                } else {
+                                    cat = 'Dapur Bersama';
                                 }
                             }
                             if (!cat) {
-                                cat = (idx < 4 ? ['Bangunan Depan', 'Koridor', 'Area Parkir', 'Lingkungan'][idx] : `Foto Lainnya ${idx - 3}`);
+                                cat = (idx < 4 ? ['Bangunan Depan', 'Koridor', 'Parkir Motor', 'Lingkungan'][idx] : `Foto Lainnya ${idx - 3}`);
                             }
-                            draftImageUrls.push({ original: urlStr, url: urlStr, label: cat, caption: img.caption || '' });
-                            draftPhotoCats.push(cat);
+
+                            const existingIdx = draftImageUrls.findIndex((d: any) => getImageUrlString(d) === urlStr);
+                            if (existingIdx === -1) {
+                                draftImageUrls.push({ original: urlStr, url: urlStr, label: cat, caption: img.caption || '' });
+                                draftPhotoCats.push(cat);
+                            } else {
+                                if (draftImageUrls[existingIdx].label === 'Area Parkir' || draftImageUrls[existingIdx].label === 'Fasilitas Bersama') {
+                                    draftImageUrls[existingIdx].label = cat;
+                                    if (draftPhotoCats[existingIdx]) draftPhotoCats[existingIdx] = cat;
+                                }
+                            }
                         });
                     }
 
@@ -3489,27 +3576,41 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                     console.log("openKostManagerListing: restoring previous KostManager data for reactivation:", dbPropertyRecord.id);
                     kmOriginalLocationRef.current = archivedKm.location || dbPropertyRecord.location || null;
 
-                    const rawKmImages = Array.isArray(archivedKm.image_urls) ? archivedKm.image_urls : [];
+                    const rawKmImages = [
+                        ...(Array.isArray(archivedKm.image_urls) ? archivedKm.image_urls : []),
+                        ...(archivedKm.metadata?.categorized_photos?.['Area Parkir'] || []).map((u: string) => ({ url: u, label: 'Parkir Motor', caption: 'Area Parkir Motor' })),
+                        ...(archivedKm.metadata?.categorized_photos?.['Bangunan Depan'] || []).map((u: string) => ({ url: u, label: 'Bangunan Depan', caption: 'Tampak Depan' })),
+                        ...(archivedKm.metadata?.categorized_photos?.['Fasilitas Bersama'] || []).map((u: string) => ({ url: u, label: 'Dapur Bersama', caption: 'Fasilitas Bersama & Dapur' }))
+                    ];
                     const loadedKmImageUrls: any[] = [];
                     const loadedKmPhotoCategories: string[] = [];
 
                     rawKmImages.forEach((img: any, idx: number) => {
                         const urlStr = getImageUrlString(img);
                         if (!urlStr || !isValidSurveyPhoto(urlStr)) return;
+                        if (loadedKmImageUrls.some(existing => getImageUrlString(existing) === urlStr)) return;
                         let label = (typeof img === 'object' && img.label) ? img.label : '';
                         const caption = (typeof img === 'object' && img.caption) ? String(img.caption).toLowerCase() : '';
-                        if (label.toLowerCase() === 'area umum' || label.toLowerCase() === 'parkiran') label = 'Area Parkir';
-                        if (label.toLowerCase() === 'fasilitas bersama') {
-                            if (caption.includes('koridor') || caption.includes('tangga')) {
-                                label = 'Koridor';
-                            } else if (caption.includes('dapur')) {
+                        if (caption.includes('parkir motor') || (label.toLowerCase().includes('parkir') && !caption.includes('mobil'))) {
+                            label = 'Parkir Motor';
+                        } else if (label.toLowerCase() === 'area umum' || label.toLowerCase() === 'parkiran' || label.toLowerCase() === 'area parkir') {
+                            label = 'Parkir Motor';
+                        }
+                        if (caption.includes('dapur') || label.toLowerCase().includes('dapur')) {
+                            label = 'Dapur Bersama';
+                        } else if (caption.includes('kompor') || label.toLowerCase().includes('kompor')) {
+                            label = 'Kompor';
+                        } else if (label.toLowerCase() === 'fasilitas bersama') {
+                            if (caption.includes('dapur')) {
                                 label = 'Dapur Bersama';
-                            } else {
+                            } else if (caption.includes('koridor') || caption.includes('tangga')) {
                                 label = 'Koridor';
+                            } else {
+                                label = 'Dapur Bersama';
                             }
                         }
                         if (!label) {
-                            label = (idx < 4 ? ['Bangunan Depan', 'Koridor', 'Area Parkir', 'Lingkungan'][idx] : `Foto Lainnya ${idx - 3}`);
+                            label = (idx < 4 ? ['Bangunan Depan', 'Koridor', 'Parkir Motor', 'Lingkungan'][idx] : `Foto Lainnya ${idx - 3}`);
                         }
                         loadedKmImageUrls.push({ original: urlStr, url: urlStr, label, caption: img.caption || '' });
                         loadedKmPhotoCategories.push(label);
@@ -3517,7 +3618,25 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
 
                     const cleanKmRoomTypes = (archivedKm.room_types || []).map((rm: any, idx: number) => {
                         const rawImages = Array.isArray(rm.images) ? rm.images : [];
-                        const validImages = rawImages.map(getImageUrlString).filter((u: any) => u && isValidSurveyPhoto(u));
+                        let validImages = rawImages.map(getImageUrlString).filter((u: any) => u && isValidSurveyPhoto(u));
+                        if (validImages.length === 0) {
+                            const siblingWithPhotos = (archivedKm.room_types || []).find((other: any) => 
+                                (other.type || '').toLowerCase().trim() === (rm.type || '').toLowerCase().trim() &&
+                                Array.isArray(other.images) && other.images.length > 0
+                            );
+                            if (siblingWithPhotos) {
+                                validImages = siblingWithPhotos.images.map(getImageUrlString).filter(Boolean);
+                            } else {
+                                const selfMatch = (dbPropertyRecord?.metadata?.self_listing_room_types || []).find((sr: any) =>
+                                    (sr.type || sr.name || '').toLowerCase().trim() === (rm.type || '').toLowerCase().trim() &&
+                                    Array.isArray(sr.images) && sr.images.length > 0
+                                );
+                                if (selfMatch) {
+                                    validImages = selfMatch.images.map(getImageUrlString).filter(Boolean);
+                                }
+                            }
+                        }
+                        const roomCategorized = getRoomCategorizedPhotos({ ...rm, images: validImages });
                         return {
                             ...rm,
                             name: rm.name || rm.type_name || `Kamar ${rm.room_number || rm.roomNumber || idx + 1}`,
@@ -3528,10 +3647,10 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                             pricing: rm.pricing || (rm.price ? [{ period: 'bulanan', price: rm.price }] : []),
                             price: rm.price || (Array.isArray(rm.pricing) && rm.pricing.length > 0 ? rm.pricing[0]?.price : 0) || archivedKm.price || dbPropertyRecord.price || 0,
                             size: rm.size || rm.dimensions || '3x4 m',
-                            images: validImages.length > 0 ? validImages : (rawImages.map(getImageUrlString).filter(Boolean)),
+                            images: validImages,
                             photoCategories: rm.photoCategories || [],
-                            categorized_photos: rm.categorized_photos || rm.categorizedPhotos || {},
-                            categorizedPhotos: rm.categorizedPhotos || rm.categorized_photos || {}
+                            categorized_photos: roomCategorized,
+                            categorizedPhotos: roomCategorized
                         };
                     });
 
@@ -9094,6 +9213,49 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                                                 )}
 
                                                 {(() => {
+                                                    const isCategoryMatching = (rawCat: string, targetCategory: string): boolean => {
+                                                        const r = (rawCat || '').toLowerCase().trim();
+                                                        const t = (targetCategory || '').toLowerCase().trim();
+                                                        if (!r || !t) return false;
+                                                        if (r === t) return true;
+
+                                                        const normR = r.replace(/[_-]/g, ' ');
+                                                        const normT = t.replace(/[_-]/g, ' ');
+                                                        if (normR === normT) return true;
+
+                                                        // Parking synonyms (Area Parkir, Parkir Motor, Parkir Mobil)
+                                                        const isRParking = normR.includes('parkir') || normR.includes('garasi');
+                                                        const isTParking = normT.includes('parkir') || normT.includes('garasi');
+                                                        if (isRParking && isTParking) {
+                                                            if (normR === 'area parkir' || normR === 'parkiran' || normR === 'parkir') return true;
+                                                            if (normT === 'area parkir' || normT === 'parkiran' || normT === 'parkir') return true;
+                                                            if (normR.includes('motor') && normT.includes('motor')) return true;
+                                                            if (normR.includes('mobil') && normT.includes('mobil')) return true;
+                                                            return true;
+                                                        }
+
+                                                        // Kitchen & Cooking synonyms (Dapur Bersama, Kompor, Wastafel Cuci Piring)
+                                                        const isRKitchen = normR.includes('dapur') || normR.includes('kompor') || normR.includes('masak') || normR.includes('kulkas') || normR.includes('dispenser') || normR.includes('makan') || normR.includes('cuci piring');
+                                                        const isTKitchen = normT.includes('dapur') || normT.includes('kompor') || normT.includes('masak') || normT.includes('kulkas') || normT.includes('dispenser') || normT.includes('makan') || normT.includes('cuci piring');
+                                                        if (isRKitchen && isTKitchen) {
+                                                            if (normR === 'dapur bersama' || normR === 'dapur') return true;
+                                                            if (normT === 'dapur bersama' || normT === 'dapur') return true;
+                                                            return true;
+                                                        }
+
+                                                        // Shared facilities fallback
+                                                        if (normR === 'fasilitas bersama' || normR === 'fasilitas umum') {
+                                                            if (normT.includes('dapur') || normT.includes('koridor') || normT.includes('parkir') || normT.includes('kompor') || normT.includes('cuci')) return true;
+                                                        }
+
+                                                        // Bathroom / WC synonyms
+                                                        const isRBath = normR.includes('wc') || normR.includes('toilet') || normR.includes('kamar mandi') || normR.includes('kloset') || normR.includes('shower') || normR.includes('wastafel');
+                                                        const isTBath = normT.includes('wc') || normT.includes('toilet') || normT.includes('kamar mandi') || normT.includes('kloset') || normT.includes('shower') || normT.includes('wastafel');
+                                                        if (isRBath && isTBath) return true;
+
+                                                        return false;
+                                                    };
+
                                                     const imagesWithCats = (kmListingForm.image_urls || []).map((urlOrObj: any, idx: number) => {
                                                         const url = getImageUrlString(urlOrObj);
                                                         let rawCat = (typeof urlOrObj === 'object' && urlOrObj.label)
@@ -9106,7 +9268,8 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                                                     return (
                                                         <div className="space-y-3">
                                                             {photoCategories.map((label: string) => {
-                                                                const catPhotos = imagesWithCats.filter(item => item.rawCat.toLowerCase().trim() === label.toLowerCase().trim());
+                                                                const exactPhotos = imagesWithCats.filter(item => item.rawCat.toLowerCase().trim() === label.toLowerCase().trim());
+                                                                const catPhotos = exactPhotos.length > 0 ? exactPhotos : imagesWithCats.filter(item => isCategoryMatching(item.rawCat, label));
 
                                                                 return (
                                                                     <div key={label} className="bg-white border border-[#e0c0af]/60 rounded-xl p-3 shadow-xs space-y-2.5">
