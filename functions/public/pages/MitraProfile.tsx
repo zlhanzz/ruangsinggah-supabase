@@ -945,6 +945,24 @@ const MitraProfile: React.FC<MitraProfileProps> = ({
     }) || null;
     const hasActiveKmRequest = Boolean(activeKmReq);
 
+    const handleLogoutClick = async () => {
+        if (!window.confirm('Apakah Anda yakin ingin keluar dari akun mitra?')) return;
+        try {
+            sessionStorage.removeItem('km_promo_popup_closed_session');
+        } catch { }
+        if (onLogout) {
+            onLogout();
+        } else {
+            try {
+                await supabase.auth.signOut();
+            } catch (e) {
+                console.error('SignOut error:', e);
+            } finally {
+                window.location.href = '/';
+            }
+        }
+    };
+
     if (loading && !initialUser) return <div className="p-20 text-center">Loading...</div>;
 
     return (
@@ -1877,17 +1895,15 @@ const MitraProfile: React.FC<MitraProfileProps> = ({
                     </div>
 
                     {/* Tombol Logout */}
-                    {onLogout && (
-                        <div className="pt-2">
-                            <button
-                                type="button"
-                                onClick={onLogout}
-                                className="w-full py-4 px-6 bg-white hover:bg-rose-50/80 border border-gray-200 hover:border-rose-200 text-gray-700 hover:text-rose-600 rounded-3xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2.5 transition-all shadow-2xs active:scale-[0.99] cursor-pointer"
-                            >
-                                <LogOut size={16} /> Keluar dari Akun Mitra
-                            </button>
-                        </div>
-                    )}
+                    <div className="pt-2">
+                        <button
+                            type="button"
+                            onClick={handleLogoutClick}
+                            className="w-full py-4 px-6 bg-white hover:bg-rose-50/80 border border-gray-200 hover:border-rose-200 text-gray-700 hover:text-rose-600 rounded-3xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2.5 transition-all shadow-2xs active:scale-[0.99] cursor-pointer"
+                        >
+                            <LogOut size={16} /> Keluar dari Akun Mitra
+                        </button>
+                    </div>
                 </div>
             )}
 

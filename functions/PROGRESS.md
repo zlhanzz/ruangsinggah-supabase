@@ -2,6 +2,30 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 435. Perbaikan Fungsionalitas Tombol Keluar / Logout pada Tab Profil Dashboard Mitra (`MitraDashboard.tsx` & `MitraProfile.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna melaporkan bahwa tombol keluar akun atau logout pada profil dashboard mitra (`/dashboard-mitra/profile`) belum berfungsi dengan baik ("keluar akun atau logout pada profile dashboard mitra belum berfungsi dengan baik").
+  2. Saat tombol "Keluar dari Akun Mitra" di tab profil diklik, sistem tidak melakukan sign out dari sesi Supabase Auth dan tidak membersihkan state autentikasi pengguna secara tuntas.
+- **Akar Masalah**:
+  1. Pada `MitraDashboard.tsx` (baris ~2656), komponen `<MitraProfile>` dipanggil dengan prop `onLogout={() => onPageChange?.(Page.HOME)}`. Ini hanya memicu navigasi rute ke beranda tanpa memanggil fungsi `handleLogout` yang disediakan `App.tsx` atau `supabase.auth.signOut()`. Akibatnya, sesi login Supabase pengguna tetap aktif.
+  2. Fungsi `handleLogoutWithCleanup` pada `MitraDashboard.tsx` belum memiliki *fallback resilience* (jika prop `onLogout` tidak terdefinisi) untuk memanggil `supabase.auth.signOut()` secara langsung.
+  3. Pada `MitraProfile.tsx`, tombol logout belum memiliki konfirmasi interaktif dialog untuk mencegah ketidaksengajaan klik, serta terikat dengan conditional `{onLogout && (...)}` tanpa proteksi fallback internal.
+- **Implementasi Solusi**:
+  1. **Penyambungan Handler Logout Otentik (`MitraDashboard.tsx`)**:
+     - Mengubah pemanggilan prop `onLogout` pada `<MitraProfile>` dari `() => onPageChange?.(Page.HOME)` menjadi `handleLogoutWithCleanup`.
+     - Menyempurnakan `handleLogoutWithCleanup` dengan *fallback resilience*: menghapus session token promo, memanggil `onLogout()` dari `App.tsx` (yang menjalankan `supabase.auth.signOut()`, mengosongkan state user, menghapus `portal_view`, dan redirect ke `Page.HOME`), serta menyediakan fallback darurat `supabase.auth.signOut()` + redirect jika prop tidak tersedia.
+  2. **Interaktivitas & Proteksi Logout Aman (`MitraProfile.tsx`)**:
+     - Menambahkan fungsi `handleLogoutClick` yang menyertakan konfirmasi `window.confirm('Apakah Anda yakin ingin keluar dari akun mitra?')` sebelum memproses sign out.
+     - Memastikan tombol "Keluar dari Akun Mitra" selalu aktif dan memiliki penanganan graceful fallback ke `supabase.auth.signOut()` dan redirect ke beranda.
+- **File Tersentuh**:
+  - `functions/public/pages/MitraDashboard.tsx`
+  - `functions/public/pages/MitraProfile.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Uji kompilasi frontend Vite (`cmd.exe /c npm run build`) sukses 100% (`✓ built in 34.84s`, 0 error).
+  - Menekan tombol "Keluar dari Akun Mitra" pada profil dashboard kini menampilkan dialog konfirmasi, memanggil `supabase.auth.signOut()`, membersihkan sesi auth, dan mengarahkan pengguna kembali ke halaman utama sebagai tamu (guest).
+
 ### 434. Peninjauan Data Pribadi KTP Lengkap & Daftar Properti Terkait pada Manajemen Mitra Aktif (`MitraManagement.tsx`, `Dashboard.tsx`, & `adminService.ts`) (September 2026)
 - **Permintaan & Masalah**:
   1. Pengguna melaporkan bahwa pada menu manajemen dan peninjauan mitra aktif di Admin Panel (`/dashboard-admin/mitra`), admin tidak dapat melihat data pribadi lengkap dari mitra terkait (foto KTP, data sipil, rekening bank) yang sangat krusial sebagai bahan evaluasi/investigasi jika terjadi kendala operasional.

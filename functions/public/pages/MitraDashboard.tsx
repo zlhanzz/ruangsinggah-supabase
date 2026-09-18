@@ -231,11 +231,21 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
         } catch { }
     }, []);
 
-    const handleLogoutWithCleanup = useCallback(() => {
+    const handleLogoutWithCleanup = useCallback(async () => {
         try {
             sessionStorage.removeItem('km_promo_popup_closed_session');
         } catch { }
-        onLogout?.();
+        if (onLogout) {
+            onLogout();
+        } else {
+            try {
+                await supabase.auth.signOut();
+            } catch (e) {
+                console.error('Logout error:', e);
+            } finally {
+                window.location.href = '/';
+            }
+        }
     }, [onLogout]);
 
     // Load promo popup setting on mount (hanya jika identitas terverifikasi dan bukan KostManager)
@@ -2643,7 +2653,7 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                                 uid={uid}
                                 user={user}
                                 onBack={() => handleMenuChange('overview')}
-                                onLogout={() => onPageChange?.(Page.HOME)}
+                                onLogout={handleLogoutWithCleanup}
                                 autoOpenKmProgress={tab === 'profile/km-progress'}
                                 onNavigateMenu={handleMenuChange}
                                 availableBalance={stats.availableBalance}
