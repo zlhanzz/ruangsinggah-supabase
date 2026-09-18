@@ -319,92 +319,104 @@ Tim Admin RuangSinggah.id`)}`}
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {filteredMitra.map((mitra: any) => (
-                    <div key={mitra.id} className="bg-white border border-gray-100 rounded-2xl p-6 shadow-sm hover:shadow-md transition-all">
-                        <div className="flex items-center gap-4 mb-4">
-                            <div className="w-12 h-12 rounded-full bg-emerald-100 flex items-center justify-center text-xl overflow-hidden">
-                                {mitra.photo_url ? (
-                                    <img src={mitra.photo_url} className="w-full h-full object-cover" />
-                                ) : (
-                                    <span>🏢</span>
-                                )}
-                            </div>
-                            <div>
-                                <h3 className="font-bold text-gray-900 leading-tight">{mitra.name || mitra.display_name}</h3>
-                                <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-1">Mitra Pemilik Kost</p>
-                            </div>
-                        </div>
-                        <div className="space-y-2 mb-6 text-xs transition-all">
-                            <div className="flex justify-between">
-                                <span className="text-gray-400 font-bold">WHATSAPP</span>
-                                <span className="text-gray-900 font-black">{mitra.phone || '-'}</span>
-                            </div>
-                            <div className="flex justify-between">
-                                <span className="text-gray-400 font-bold">EMAIL</span>
-                                <span className="text-gray-900 font-black truncate max-w-[150px]">{mitra.email || '-'}</span>
-                            </div>
-                            <div className="flex justify-between">
-                                <span className="text-gray-400 font-bold">TERDAFTAR</span>
-                                <span className="text-gray-900 font-black">
-                                    {mitra.created_at ? new Date(mitra.created_at).toLocaleDateString('id-ID') : '-'}
+                    <div key={mitra.id} className="bg-white border border-gray-100 rounded-2xl p-6 shadow-sm hover:shadow-md transition-all flex flex-col justify-between">
+                        <div>
+                            <div className="flex items-start justify-between gap-3 mb-4">
+                                <div className="flex items-center gap-3.5 min-w-0">
+                                    <div className="w-12 h-12 rounded-2xl bg-emerald-100 flex items-center justify-center text-xl overflow-hidden shrink-0 border border-emerald-200/50 shadow-xs">
+                                        {mitra.photo_url ? (
+                                            <img src={mitra.photo_url} className="w-full h-full object-cover" alt={mitra.name} />
+                                        ) : (
+                                            <span>🏢</span>
+                                        )}
+                                    </div>
+                                    <div className="min-w-0">
+                                        <h3 className="font-bold text-gray-900 leading-tight truncate">{mitra.name || mitra.display_name}</h3>
+                                        <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-0.5">Mitra Pemilik Kost</p>
+                                    </div>
+                                </div>
+                                <span className="shrink-0 px-2.5 py-1 rounded-full text-[10px] font-black bg-blue-50 text-blue-700 border border-blue-200 shadow-2xs">
+                                    🏠 {mitra.propertyCount || 0} Kost
                                 </span>
                             </div>
+
+                            <div className="space-y-2 mb-6 text-xs transition-all bg-gray-50/60 p-3.5 rounded-xl border border-gray-100">
+                                <div className="flex justify-between items-center">
+                                    <span className="text-gray-400 font-bold">VERIFIKASI KTP</span>
+                                    <span className={`px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider border ${
+                                        mitra.verification_status === 'verified'
+                                            ? 'bg-green-50 text-green-700 border-green-200'
+                                            : mitra.verification_status === 'pending'
+                                            ? 'bg-amber-50 text-amber-700 border-amber-200'
+                                            : 'bg-gray-100 text-gray-500 border-gray-200'
+                                    }`}>
+                                        {mitra.verification_status === 'verified' ? 'Terverifikasi ✓' : mitra.verification_status === 'pending' ? 'Ditinjau' : 'Belum Verifikasi'}
+                                    </span>
+                                </div>
+                                <div className="flex justify-between items-center">
+                                    <span className="text-gray-400 font-bold">WHATSAPP</span>
+                                    <span className="text-gray-900 font-black">{mitra.phone || '-'}</span>
+                                </div>
+                                <div className="flex justify-between items-center">
+                                    <span className="text-gray-400 font-bold">EMAIL</span>
+                                    <span className="text-gray-900 font-black truncate max-w-[150px]">{mitra.email || '-'}</span>
+                                </div>
+                                <div className="flex justify-between items-center">
+                                    <span className="text-gray-400 font-bold">TERDAFTAR</span>
+                                    <span className="text-gray-900 font-black">
+                                        {mitra.created_at ? new Date(mitra.created_at).toLocaleDateString('id-ID') : '-'}
+                                    </span>
+                                </div>
+                            </div>
                         </div>
-                        <div className="flex flex-col gap-2">
-                             <div className="flex gap-2">
+
+                        <div className="flex flex-col gap-2 pt-2 border-t border-gray-100">
+                            <div className="flex gap-2">
                                 <button 
                                     onClick={() => window.open(`https://wa.me/${mitra.phone}`, '_blank')}
-                                    className="flex-1 py-2.5 bg-green-50 text-green-600 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-green-600 hover:text-white transition-all border border-green-100"
+                                    className="flex-1 py-2.5 bg-green-50 text-green-600 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-green-600 hover:text-white transition-all border border-green-100 cursor-pointer text-center"
                                 >
                                     Chat
                                 </button>
                                 <button 
-                                    className="flex-1 py-2.5 bg-gray-50 text-gray-600 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-gray-100 transition-all border border-gray-100"
+                                    onClick={() => onViewProfile && onViewProfile(mitra.id)}
+                                    className="flex-1 py-2.5 bg-blue-50 text-blue-600 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-blue-600 hover:text-white transition-all border border-blue-100 cursor-pointer text-center shadow-xs"
                                 >
-                                    Detail
+                                    Detail & Properti
                                 </button>
                             </div>
                             {onTransferProperty && (
                                 <button 
                                     onClick={() => onTransferProperty(mitra)}
-                                    className="w-full py-2.5 bg-emerald-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-emerald-700 transition-all shadow-md shadow-emerald-100 active:scale-95 flex items-center justify-center gap-2"
+                                    className="w-full py-2.5 bg-emerald-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-emerald-700 transition-all shadow-md shadow-emerald-100 active:scale-95 flex items-center justify-center gap-2 cursor-pointer"
                                 >
                                     <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4-4m-4 4l4 4" /></svg>
                                     Transfer Properti Baru
                                 </button>
                             )}
 
-                            <div className="grid grid-cols-3 gap-2">
-                                <button 
-                                    onClick={() => onViewProfile && onViewProfile(mitra.id)}
-                                    className="flex flex-col items-center justify-center p-2 bg-blue-50 text-blue-600 rounded-xl hover:bg-blue-600 hover:text-white transition-all border border-blue-100 group"
-                                    title="Lihat Profil"
-                                >
-                                    <span className="text-[14px] mb-0.5 group-hover:scale-110 transition-transform">👁️</span>
-                                    <span className="text-[8px] font-black uppercase tracking-tighter">Detail</span>
-                                </button>
+                            <div className="grid grid-cols-2 gap-2">
                                 <button 
                                     onClick={() => onBlockUser && onBlockUser(mitra.id, mitra.name || mitra.display_name, mitra.status === 'blocked')}
-                                    className={`flex flex-col items-center justify-center p-2 rounded-xl transition-all border group ${
+                                    className={`flex items-center justify-center gap-1.5 p-2 rounded-xl transition-all border font-bold text-xs cursor-pointer ${
                                         mitra.status === 'blocked' 
                                         ? 'bg-green-50 text-green-600 border-green-100 hover:bg-green-600 hover:text-white' 
                                         : 'bg-red-50 text-red-600 border-red-100 hover:bg-red-600 hover:text-white'
                                     }`}
                                     title={mitra.status === 'blocked' ? 'Buka Blokir' : 'Blokir'}
                                 >
-                                    <span className="text-[14px] mb-0.5 group-hover:scale-110 transition-transform">
-                                        {mitra.status === 'blocked' ? '🔓' : '🚫'}
-                                    </span>
-                                    <span className="text-[8px] font-black uppercase tracking-tighter">
-                                        {mitra.status === 'blocked' ? 'Unblock' : 'Blokir'}
+                                    <span>{mitra.status === 'blocked' ? '🔓' : '🚫'}</span>
+                                    <span className="text-[10px] font-black uppercase tracking-wider">
+                                        {mitra.status === 'blocked' ? 'Buka Blokir' : 'Blokir'}
                                     </span>
                                 </button>
                                 <button 
                                     onClick={() => onDeleteUser && onDeleteUser(mitra.id, mitra.name || mitra.display_name)}
-                                    className="flex flex-col items-center justify-center p-2 bg-gray-50 text-gray-400 rounded-xl hover:bg-gray-900 hover:text-white transition-all border border-gray-100 group"
+                                    className="flex items-center justify-center gap-1.5 p-2 bg-gray-50 text-gray-500 rounded-xl hover:bg-gray-900 hover:text-white transition-all border border-gray-100 text-xs font-bold cursor-pointer"
                                     title="Hapus User"
                                 >
-                                    <span className="text-[14px] mb-0.5 group-hover:scale-110 transition-transform">🗑️</span>
-                                    <span className="text-[8px] font-black uppercase tracking-tighter">Hapus</span>
+                                    <span>🗑️</span>
+                                    <span className="text-[10px] font-black uppercase tracking-wider">Hapus</span>
                                 </button>
                             </div>
                         </div>

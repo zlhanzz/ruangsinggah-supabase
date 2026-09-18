@@ -2,6 +2,43 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 434. Peninjauan Data Pribadi KTP Lengkap & Daftar Properti Terkait pada Manajemen Mitra Aktif (`MitraManagement.tsx`, `Dashboard.tsx`, & `adminService.ts`) (September 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna melaporkan bahwa pada menu manajemen dan peninjauan mitra aktif di Admin Panel (`/dashboard-admin/mitra`), admin tidak dapat melihat data pribadi lengkap dari mitra terkait (foto KTP, data sipil, rekening bank) yang sangat krusial sebagai bahan evaluasi/investigasi jika terjadi kendala operasional.
+  2. Admin juga tidak dapat melihat properti mana saja yang terhubung dengan mitra tersebut, sehingga tidak mengetahui portofolio listing dari setiap mitra yang aktif.
+  3. Tombol utama "Detail" di kartu mitra sebelumnya tidak memiliki event handler (`onClick`) sehingga tidak merespon saat diklik, dan terdapat duplikasi tombol kecil "Detail" di baris bawah.
+- **Akar Masalah**:
+  1. Fungsi `getUserFullDetails` di `adminService.ts` sebelumnya hanya mengambil `id, title, city, status` dari tabel properti tanpa data foto, harga sewa, kamar, alamat lengkap, dan status KostManager.
+  2. Modal profil user di `Dashboard.tsx` sebelumnya sangat minimalis (hanya teks ID, email, role, phone, dan NIK string) tanpa pratinjau dokumen fisik KTP, tanpa data sipil lengkap (tempat/tgl lahir, gender, agama, pekerjaan, status nikah, alamat KTP/domisili), serta tanpa tampilan visual portofolio properti.
+  3. Tombol "Detail" utama di `MitraManagement.tsx` tidak memiliki handler `onClick` dan kartu tidak menampilkan ringkasan jumlah properti serta status verifikasi KTP.
+- **Implementasi Solusi**:
+  1. **Optimalisasi Data Fetching (`adminService.ts`)**:
+     - Memperluas query properti di `getUserFullDetails(userId)` untuk mengambil seluruh informasi komprehensif: `id, title, city, area, address, status, price, image_urls, room_types, is_managed, is_verified, created_at` berdasarkan `owner_uid`.
+     - Menggabungkan data `user_verifications` (foto KTP, NIK, alamat KTP, catatan verifikasi) dan `user_bank_accounts` (nama bank, nomor rekening, nama pemilik).
+  2. **Penyempurnaan Kartu Mitra Aktif (`MitraManagement.tsx`)**:
+     - Menghidupkan tombol utama **"Detail & Properti"** agar memicu pembukaan modal detail mitra secara instan.
+     - Menghapus tombol kecil duplikat "Detail" di baris bawah kartu sehingga tata letak tombol rapi dan fokus pada aksi administratif (**Blokir** dan **Hapus**).
+     - Menambahkan badge ringkasan pada kartu: jumlah listing (`🏠 X Kost`) dan status verifikasi KTP (`✓ Terverifikasi` / `Ditinjau` / `Belum Verifikasi`).
+  3. **Pengembangan Modal Inspeksi Komprehensif 2 Tab (`Dashboard.tsx`)**:
+     - **Tab 1: Data Pribadi & KTP**:
+       - Pratinjau dokumen fisik KTP asli dengan tombol *Perbesar Gambar* (lightbox fullscreen) dan *Buka Tab Baru*.
+       - Ringkasan profil, status akun, status verifikasi KTP, dan WhatsApp OTP.
+       - Rincian data sipil lengkap: NIK 16 digit, Nama Lengkap KTP, Tempat & Tanggal Lahir, Jenis Kelamin, Agama, Status Perkawinan, Pekerjaan, Alamat KTP, Alamat Domisili, dan Kontak.
+       - Informasi Rekening Bank Penarikan Saldo (Bank, No. Rekening, Atas Nama).
+     - **Tab 2: Properti Terkait (`properties.length`)**:
+       - Ringkasan total unit kost yang terdaftar atas nama mitra tersebut.
+       - Grid kartu properti visual: foto thumbnail utama, judul kost, harga sewa bulanan, lokasi/area, badge status (Published/Draft/KostManager), jumlah tipe kamar, dan tombol langsung **"Buka Halaman Kost"** (`/kost/:id`).
+       - Opsi cepat transfer properti baru jika diperlukan.
+- **File Tersentuh**:
+  - `functions/public/adminService.ts`
+  - `functions/public/components/admin/MitraManagement.tsx`
+  - `functions/public/pages/Dashboard.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi build frontend Vite (`cmd.exe /c npm run build`) sukses 100% (`✓ built in 30.59s`, 0 error).
+  - Modal detail mitra aktif kini menyajikan foto KTP asli, data sipil lengkap, serta seluruh listing properti kost terkait dengan mulus.
+
 ### 433. Pembersihan Diksi Internal ("Instan") & Standarisasi Hasil Evaluasi Protokol AI Verifikasi Mitra (`MitraProfile.tsx` & `MitraDashboard.tsx`) (September 2026)
 - **Permintaan & Masalah**:
   1. Pengguna menegaskan bahwa tidak boleh ada istilah teknis atau logika dapur seperti "instan", "kilat", "auto-acc", dsb. yang tampil di antarmuka sistem (tombol pengajuan, alert dialog, kartu status, atau banner).

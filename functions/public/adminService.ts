@@ -5525,13 +5525,17 @@ export async function getUserFullDetails(userId: string): Promise<any> {
         ...(bankRes.data || {})
     };
 
-    // Optional: Get brief history/summary
-    // 1. If owner: get properties
-    let properties = [];
-    if (['owner', 'mitra'].includes(userData.role?.toLowerCase())) {
-        const { data: props } = await supabase.from('properties').select('id, title, city, status').eq('owner_uid', userId);
-        properties = props || [];
+    // 1. Fetch all properties owned by this user (by owner_uid)
+    const { data: props, error: propsError } = await supabase
+        .from('properties')
+        .select('id, title, city, area, address, status, price, image_urls, room_types, is_managed, is_verified, created_at')
+        .eq('owner_uid', userId)
+        .order('created_at', { ascending: false });
+    
+    if (propsError) {
+        console.warn('Failed to load user properties in getUserFullDetails:', propsError);
     }
+    const properties = props || [];
 
     // 2. If agent: get surveys count
     let surveysCount = 0;

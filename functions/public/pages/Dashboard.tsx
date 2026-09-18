@@ -50,7 +50,7 @@ import {
     AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer,
     BarChart, Bar, Legend
 } from 'recharts';
-import { Zap, Eye, Clock, Calendar, RefreshCcw, ArrowRight } from 'lucide-react';
+import { Zap, Eye, Clock, Calendar, RefreshCcw, ArrowRight, ShieldCheck, CheckCircle2, Building, ExternalLink, MapPin, CreditCard, FileText, X as CloseIcon, User as UserIcon } from 'lucide-react';
 import { getCurrentDate, setMockDate, getMockDateStr } from '../utils/timeUtils';
 import TimeSimulator from '../components/TimeSimulator';
 
@@ -283,6 +283,8 @@ const Dashboard: React.FC<DashboardProps> = ({ role, uid, user, onPageChange, on
     const [selectedUserForDetail, setSelectedUserForDetail] = useState<any>(null);
     const [isUserDetailModalOpen, setIsUserDetailModalOpen] = useState(false);
     const [isLoadingUserDetail, setIsLoadingUserDetail] = useState(false);
+    const [userDetailTab, setUserDetailTab] = useState<'profile' | 'properties'>('profile');
+    const [previewKtpImage, setPreviewKtpImage] = useState<string | null>(null);
     // --- AKHIR STATE UNTUK TRANSFER PROPERTI ---
 
     // Form State (Property)
@@ -779,6 +781,8 @@ const Dashboard: React.FC<DashboardProps> = ({ role, uid, user, onPageChange, on
     const handleViewProfile = async (userId: string) => {
         setIsLoadingUserDetail(true);
         setIsUserDetailModalOpen(true);
+        setUserDetailTab('profile');
+        setPreviewKtpImage(null);
         try {
             const details = await getUserFullDetails(userId);
             setSelectedUserForDetail(details);
@@ -3147,75 +3151,344 @@ const Dashboard: React.FC<DashboardProps> = ({ role, uid, user, onPageChange, on
                 )}
             </div>
 
-            {/* MODAL: DETAIL USER LENGKAP */}
+            {/* MODAL: DETAIL USER & PROPERTI LENGKAP */}
             {isUserDetailModalOpen && (
                 <div className="fixed inset-0 z-[120] flex items-center justify-center p-4">
                     <div className="absolute inset-0 bg-gray-900/80 backdrop-blur-sm" onClick={() => setIsUserDetailModalOpen(false)}></div>
-                    <div className="bg-white w-full max-w-2xl rounded-[2.5rem] shadow-2xl relative z-10 flex flex-col max-h-[90vh] overflow-hidden animate-in zoom-in-95 duration-300">
+                    <div className="bg-white w-full max-w-4xl rounded-[2.5rem] shadow-2xl relative z-10 flex flex-col max-h-[92vh] overflow-hidden animate-in zoom-in-95 duration-300">
                         {/* Header */}
-                        <div className="p-8 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
+                        <div className="p-6 sm:p-8 border-b border-gray-100 flex justify-between items-center bg-gray-50/70">
                             <div>
-                                <h3 className="text-xl font-black text-gray-900 uppercase tracking-tight leading-none">Profil Lengkap User</h3>
-                                <p className="text-[10px] font-black text-orange-500 uppercase tracking-widest mt-2 leading-none">Informasi Administratif platform</p>
+                                <h3 className="text-xl sm:text-2xl font-black text-gray-900 uppercase tracking-tight leading-none">
+                                    {['owner', 'mitra'].includes(selectedUserForDetail?.role?.toLowerCase()) 
+                                        ? 'Detail Mitra & Properti Listing' 
+                                        : 'Profil Lengkap User'}
+                                </h3>
+                                <p className="text-[10px] font-black text-orange-500 uppercase tracking-widest mt-2 leading-none">
+                                    Informasi Administratif, Verifikasi KTP & Portofolio Kost
+                                </p>
                             </div>
-                            <button onClick={() => setIsUserDetailModalOpen(false)} className="w-10 h-10 flex items-center justify-center bg-white border border-gray-200 rounded-xl text-gray-400 hover:text-red-500 transition-all active:scale-95 shadow-sm">&times;</button>
+                            <button 
+                                onClick={() => setIsUserDetailModalOpen(false)} 
+                                className="w-10 h-10 flex items-center justify-center bg-white border border-gray-200 rounded-xl text-gray-400 hover:text-red-500 hover:border-red-200 transition-all active:scale-95 shadow-sm cursor-pointer"
+                            >
+                                <CloseIcon size={20} />
+                            </button>
                         </div>
+
+                        {/* Navigation Tabs (Khususnya jika memiliki properti atau role mitra/owner) */}
+                        {selectedUserForDetail && (
+                            <div className="flex border-b border-gray-100 px-6 sm:px-8 bg-white gap-2 pt-2">
+                                <button
+                                    type="button"
+                                    onClick={() => setUserDetailTab('profile')}
+                                    className={`py-3 px-4 font-black text-xs uppercase tracking-wider border-b-2 transition-all flex items-center gap-2 cursor-pointer ${
+                                        userDetailTab === 'profile'
+                                            ? 'border-orange-500 text-orange-600 bg-orange-50/50 rounded-t-xl'
+                                            : 'border-transparent text-gray-400 hover:text-gray-700'
+                                    }`}
+                                >
+                                    <UserIcon size={16} />
+                                    Data Pribadi & KTP
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setUserDetailTab('properties')}
+                                    className={`py-3 px-4 font-black text-xs uppercase tracking-wider border-b-2 transition-all flex items-center gap-2 cursor-pointer ${
+                                        userDetailTab === 'properties'
+                                            ? 'border-orange-500 text-orange-600 bg-orange-50/50 rounded-t-xl'
+                                            : 'border-transparent text-gray-400 hover:text-gray-700'
+                                    }`}
+                                >
+                                    <Building size={16} />
+                                    Properti Terkait ({selectedUserForDetail.properties?.length || 0})
+                                </button>
+                            </div>
+                        )}
 
                         {/* Content */}
-                        <div className="flex-grow overflow-y-auto p-8">
+                        <div className="flex-grow overflow-y-auto p-6 sm:p-8">
                             {isLoadingUserDetail ? (
-                                <div className="py-20 text-center"><div className="animate-spin rounded-full h-10 w-10 border-b-2 border-orange-500 mx-auto"></div></div>
-                            ) : selectedUserForDetail && (
-                                <div className="space-y-8">
-                                    <div className="flex items-center gap-6">
-                                        <div className="w-24 h-24 rounded-full bg-orange-100 flex items-center justify-center text-3xl overflow-hidden border-4 border-white shadow-lg ring-1 ring-gray-100">
-                                            {selectedUserForDetail.photo_url ? <img src={selectedUserForDetail.photo_url} className="w-full h-full object-cover" /> : <span>👤</span>}
-                                        </div>
-                                        <div>
-                                            <h4 className="text-2xl font-black text-gray-900">{selectedUserForDetail.name || selectedUserForDetail.display_name}</h4>
-                                            <span className={`inline-flex px-3 py-1 mt-2 text-[10px] font-black uppercase tracking-widest rounded-full border ${
-                                                selectedUserForDetail.status === 'blocked' ? 'bg-red-50 text-red-600 border-red-100' : 'bg-green-50 text-green-600 border-green-100'
-                                            }`}>
-                                                Status: {selectedUserForDetail.status || 'active'}
-                                            </span>
-                                        </div>
-                                    </div>
-
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                        <DetailItem label="User ID" value={selectedUserForDetail.id} />
-                                        <DetailItem label="Role Sistem" value={selectedUserForDetail.role || 'user'} isOrange />
-                                        <DetailItem label="Email" value={selectedUserForDetail.email || '-'} />
-                                        <DetailItem label="Nomor Telepon" value={selectedUserForDetail.phone || '-'} />
-                                        <DetailItem label="Terdaftar Sejak" value={new Date(selectedUserForDetail.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })} />
-                                        <DetailItem label="NIK / KTP" value={selectedUserForDetail.ktp_number || 'Belum Terverifikasi'} />
-                                    </div>
-
-                                    {/* Additional context based on role */}
-                                    {selectedUserForDetail.properties?.length > 0 && (
-                                        <div className="pt-6 border-t border-gray-100">
-                                            <h5 className="text-xs font-black text-gray-400 uppercase tracking-widest mb-4">Daftar Properti ({selectedUserForDetail.properties.length})</h5>
-                                            <div className="space-y-2">
-                                                {selectedUserForDetail.properties.map((p: any) => (
-                                                    <div key={p.id} className="flex justify-between items-center p-4 bg-gray-50 rounded-2xl border border-gray-100">
-                                                        <span className="font-bold text-gray-900">{p.title}</span>
-                                                        <span className="text-[10px] font-black uppercase text-gray-400">{p.city} • {p.status}</span>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        </div>
-                                    )}
-
-                                    {selectedUserForDetail.surveysCount !== undefined && selectedUserForDetail.surveysCount > 0 && (
-                                        <div className="pt-6 border-t border-gray-100">
-                                            <h5 className="text-xs font-black text-gray-400 uppercase tracking-widest mb-4">Statistik Agen</h5>
-                                            <div className="p-5 bg-orange-50 rounded-3xl border border-orange-100">
-                                                <p className="text-sm font-bold text-orange-900">Total Survey Selesai: <span className="text-lg font-black">{selectedUserForDetail.surveysCount}</span></p>
-                                            </div>
-                                        </div>
-                                    )}
+                                <div className="py-20 text-center">
+                                    <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-orange-500 mx-auto"></div>
+                                    <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mt-4">Memuat data lengkap...</p>
                                 </div>
+                            ) : selectedUserForDetail && (
+                                <>
+                                    {userDetailTab === 'profile' ? (
+                                        <div className="space-y-8">
+                                            {/* Profile Summary Card */}
+                                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6 bg-gray-50/70 p-6 rounded-3xl border border-gray-100">
+                                                <div className="flex items-center gap-5">
+                                                    <div className="w-20 h-20 rounded-2xl bg-orange-100 flex items-center justify-center text-3xl overflow-hidden border-2 border-white shadow-md shrink-0">
+                                                        {selectedUserForDetail.photo_url ? (
+                                                            <img src={selectedUserForDetail.photo_url} className="w-full h-full object-cover" alt={selectedUserForDetail.name} />
+                                                        ) : (
+                                                            <span>👤</span>
+                                                        )}
+                                                    </div>
+                                                    <div>
+                                                        <h4 className="text-xl sm:text-2xl font-black text-gray-900 leading-tight">
+                                                            {selectedUserForDetail.name || selectedUserForDetail.display_name}
+                                                        </h4>
+                                                        <div className="flex flex-wrap items-center gap-2 mt-2">
+                                                            <span className={`inline-flex px-2.5 py-0.5 text-[10px] font-black uppercase tracking-wider rounded-md border ${
+                                                                selectedUserForDetail.status === 'blocked' 
+                                                                    ? 'bg-red-50 text-red-600 border-red-200' 
+                                                                    : 'bg-green-50 text-green-600 border-green-200'
+                                                            }`}>
+                                                                Status: {selectedUserForDetail.status || 'active'}
+                                                            </span>
+                                                            <span className="inline-flex px-2.5 py-0.5 text-[10px] font-black uppercase tracking-wider rounded-md bg-blue-50 text-blue-700 border border-blue-200">
+                                                                Role: {selectedUserForDetail.role || 'mitra'}
+                                                            </span>
+                                                            <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 text-[10px] font-black uppercase tracking-wider rounded-md border ${
+                                                                selectedUserForDetail.verification_status === 'verified'
+                                                                    ? 'bg-green-50 text-green-700 border-green-200'
+                                                                    : selectedUserForDetail.verification_status === 'pending'
+                                                                    ? 'bg-amber-50 text-amber-700 border-amber-200'
+                                                                    : 'bg-gray-100 text-gray-600 border-gray-200'
+                                                            }`}>
+                                                                <ShieldCheck size={12} />
+                                                                KTP: {selectedUserForDetail.verification_status === 'verified' ? 'Terverifikasi' : selectedUserForDetail.verification_status === 'pending' ? 'Ditinjau' : 'Belum Diverifikasi'}
+                                                            </span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                {selectedUserForDetail.phone && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => window.open(`https://wa.me/${selectedUserForDetail.phone}`, '_blank')}
+                                                        className="px-5 py-2.5 bg-green-500 hover:bg-green-600 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-md shadow-green-500/20 active:scale-95 flex items-center justify-center gap-2 self-start sm:self-center cursor-pointer"
+                                                    >
+                                                        Hubungi via WA
+                                                    </button>
+                                                )}
+                                            </div>
+
+                                            {/* Dokumen Foto KTP Fisik */}
+                                            <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-xs space-y-3">
+                                                <div className="flex items-center justify-between">
+                                                    <div className="flex items-center gap-2">
+                                                        <FileText size={18} className="text-orange-500" />
+                                                        <h5 className="text-xs font-black text-gray-900 uppercase tracking-widest">
+                                                            Dokumen Foto KTP Fisik
+                                                        </h5>
+                                                    </div>
+                                                    {(selectedUserForDetail.ktp_photo_url || selectedUserForDetail.ktp_photo) && (
+                                                        <span className="text-[10px] font-black text-green-600 bg-green-50 border border-green-200 px-2.5 py-0.5 rounded-full uppercase tracking-wider">
+                                                            Dokumen Terlampir ✓
+                                                        </span>
+                                                    )}
+                                                </div>
+
+                                                {(selectedUserForDetail.ktp_photo_url || selectedUserForDetail.ktp_photo) ? (
+                                                    <div className="flex flex-col sm:flex-row items-start sm:items-center gap-5 pt-2">
+                                                        <div 
+                                                            onClick={() => setPreviewKtpImage(selectedUserForDetail.ktp_photo_url || selectedUserForDetail.ktp_photo)}
+                                                            className="w-full sm:w-72 aspect-[16/10] bg-gray-100 rounded-2xl overflow-hidden border-2 border-gray-200 hover:border-orange-500 transition-all cursor-pointer relative group shadow-sm shrink-0"
+                                                        >
+                                                            <img 
+                                                                src={selectedUserForDetail.ktp_photo_url || selectedUserForDetail.ktp_photo} 
+                                                                alt="Foto KTP Fisik" 
+                                                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                                                            />
+                                                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2 text-white text-xs font-bold">
+                                                                <Eye size={18} /> Klik untuk Perbesar
+                                                            </div>
+                                                        </div>
+                                                        <div className="space-y-2">
+                                                            <p className="text-xs text-gray-600 leading-relaxed font-medium">
+                                                                Periksa keaslian dokumen KTP, ketajaman teks NIK, foto wajah pemilik, dan kesesuaian data sipil di bawah ini.
+                                                            </p>
+                                                            <div className="flex flex-wrap gap-2 pt-1">
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => setPreviewKtpImage(selectedUserForDetail.ktp_photo_url || selectedUserForDetail.ktp_photo)}
+                                                                    className="px-3 py-1.5 bg-orange-50 hover:bg-orange-100 text-orange-700 rounded-xl text-[10px] font-black uppercase tracking-wider border border-orange-200 transition-all cursor-pointer"
+                                                                >
+                                                                    🔍 Perbesar Gambar
+                                                                </button>
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => window.open(selectedUserForDetail.ktp_photo_url || selectedUserForDetail.ktp_photo, '_blank')}
+                                                                    className="px-3 py-1.5 bg-gray-50 hover:bg-gray-100 text-gray-700 rounded-xl text-[10px] font-black uppercase tracking-wider border border-gray-200 transition-all flex items-center gap-1 cursor-pointer"
+                                                                >
+                                                                    <ExternalLink size={12} /> Buka Tab Baru
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                ) : (
+                                                    <div className="p-8 text-center bg-gray-50 rounded-2xl border border-dashed border-gray-200">
+                                                        <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Belum ada dokumen foto KTP yang diunggah</p>
+                                                    </div>
+                                                )}
+                                            </div>
+
+                                            {/* Rincian Data KTP & Sipil */}
+                                            <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-xs space-y-4">
+                                                <h5 className="text-xs font-black text-gray-900 uppercase tracking-widest flex items-center gap-2">
+                                                    <ShieldCheck size={18} className="text-orange-500" />
+                                                    Rincian Data Identitas Sipil
+                                                </h5>
+                                                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-5">
+                                                    <DetailItem label="NIK (16 Digit)" value={selectedUserForDetail.ktp_number || '-'} isOrange />
+                                                    <DetailItem label="Nama Lengkap Sesuai KTP" value={selectedUserForDetail.full_name || selectedUserForDetail.name || '-'} />
+                                                    <DetailItem 
+                                                        label="Tempat & Tanggal Lahir" 
+                                                        value={`${selectedUserForDetail.birth_place || '-'}${selectedUserForDetail.birth_date ? ', ' + new Date(selectedUserForDetail.birth_date).toLocaleDateString('id-ID') : ''}`} 
+                                                    />
+                                                    <DetailItem label="Jenis Kelamin" value={selectedUserForDetail.gender || '-'} />
+                                                    <DetailItem label="Agama" value={selectedUserForDetail.religion || '-'} />
+                                                    <DetailItem 
+                                                        label="Status Perkawinan" 
+                                                        value={selectedUserForDetail.relationship_status === 'Single' ? 'Belum Kawin' : selectedUserForDetail.relationship_status === 'Menikah' ? 'Kawin' : selectedUserForDetail.relationship_status || '-'} 
+                                                    />
+                                                    <DetailItem label="Pekerjaan" value={selectedUserForDetail.occupation || '-'} />
+                                                    <DetailItem label="WhatsApp Terverifikasi" value={selectedUserForDetail.whatsapp_verified ? 'Terverifikasi (OTP) ✓' : 'Belum Diverifikasi'} />
+                                                    <DetailItem label="Terdaftar Sejak" value={new Date(selectedUserForDetail.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })} />
+                                                    <div className="sm:col-span-2 md:col-span-3">
+                                                        <DetailItem label="Alamat Sesuai KTP" value={selectedUserForDetail.ktp_address || selectedUserForDetail.address || '-'} />
+                                                    </div>
+                                                    <div className="sm:col-span-2 md:col-span-3">
+                                                        <DetailItem label="Alamat Domisili / Kontak" value={selectedUserForDetail.address || '-'} />
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            {/* Rekening Bank Penarikan */}
+                                            {(selectedUserForDetail.bank_name || selectedUserForDetail.bank_account) && (
+                                                <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-xs space-y-4">
+                                                    <h5 className="text-xs font-black text-gray-900 uppercase tracking-widest flex items-center gap-2">
+                                                        <CreditCard size={18} className="text-orange-500" />
+                                                        Rekening Bank Penarikan Saldo
+                                                    </h5>
+                                                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-5 bg-orange-50/40 p-4 rounded-2xl border border-orange-100">
+                                                        <DetailItem label="Bank" value={selectedUserForDetail.bank_name || '-'} />
+                                                        <DetailItem label="Nomor Rekening" value={selectedUserForDetail.bank_account || '-'} isOrange />
+                                                        <DetailItem label="Atas Nama" value={selectedUserForDetail.bank_account_name || '-'} />
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+                                    ) : (
+                                        /* TAB 2: PROPERTI TERKAIT */
+                                        <div className="space-y-6">
+                                            <div className="flex justify-between items-center bg-gray-50/80 p-4 rounded-2xl border border-gray-100">
+                                                <div>
+                                                    <h4 className="text-sm font-black text-gray-900 uppercase tracking-tight">
+                                                        Daftar Properti Listing Milik Mitra
+                                                    </h4>
+                                                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mt-0.5">
+                                                        Total: {selectedUserForDetail.properties?.length || 0} unit kost terdaftar
+                                                    </p>
+                                                </div>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        setIsUserDetailModalOpen(false);
+                                                        handleOpenTransferModal('mitra', selectedUserForDetail);
+                                                    }}
+                                                    className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-[10px] font-black uppercase tracking-wider transition-all shadow-md shadow-emerald-600/20 active:scale-95 flex items-center gap-1.5 cursor-pointer"
+                                                >
+                                                    + Transfer Properti Baru
+                                                </button>
+                                            </div>
+
+                                            {selectedUserForDetail.properties?.length > 0 ? (
+                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                    {selectedUserForDetail.properties.map((p: any) => {
+                                                        const firstImage = Array.isArray(p.image_urls) && p.image_urls.length > 0 
+                                                            ? p.image_urls[0] 
+                                                            : 'https://images.unsplash.com/photo-1555854877-bab0e564b8d5?auto=format&fit=crop&w=400&q=80';
+                                                        const roomCount = Array.isArray(p.room_types) ? p.room_types.length : 0;
+                                                        return (
+                                                            <div key={p.id} className="bg-white border border-gray-100 rounded-3xl p-4 shadow-sm hover:shadow-md transition-all flex flex-col justify-between group">
+                                                                <div>
+                                                                    <div className="aspect-[16/9] rounded-2xl overflow-hidden relative bg-gray-100 mb-3 border border-gray-100">
+                                                                        <img src={firstImage} alt={p.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                                                                        <div className="absolute top-2.5 left-2.5 flex flex-wrap gap-1.5">
+                                                                            <span className={`px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider border shadow-xs ${
+                                                                                p.status === 'published'
+                                                                                    ? 'bg-green-500 text-white border-green-600'
+                                                                                    : 'bg-gray-800 text-white border-gray-900'
+                                                                            }`}>
+                                                                                {p.status === 'published' ? 'Published' : 'Draft'}
+                                                                            </span>
+                                                                            {p.is_managed && (
+                                                                                <span className="px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-orange-500 text-white border border-orange-600 shadow-xs">
+                                                                                    KostManager
+                                                                                </span>
+                                                                            )}
+                                                                        </div>
+                                                                    </div>
+
+                                                                    <h5 className="font-black text-base text-gray-900 line-clamp-1 group-hover:text-orange-600 transition-colors">
+                                                                        {p.title}
+                                                                    </h5>
+                                                                    <p className="text-xs text-gray-400 font-medium flex items-center gap-1 mt-1 truncate">
+                                                                        <MapPin size={13} className="shrink-0 text-gray-400" />
+                                                                        {p.city || '-'} • {p.area || p.address || '-'}
+                                                                    </p>
+
+                                                                    <div className="flex items-center justify-between pt-3 mt-3 border-t border-gray-50 text-xs">
+                                                                        <span className="text-[10px] font-black uppercase text-gray-400">Harga Sewa</span>
+                                                                        <span className="font-black text-orange-600 text-sm">
+                                                                            {p.price ? FORMAT_CURRENCY(p.price) : 'Hubungi Mitra'} <span className="text-[10px] text-gray-400 font-medium">/bln</span>
+                                                                        </span>
+                                                                    </div>
+                                                                    <div className="flex items-center justify-between pt-1 text-xs">
+                                                                        <span className="text-[10px] font-black uppercase text-gray-400">Tipe Kamar</span>
+                                                                        <span className="font-bold text-gray-700 text-xs">
+                                                                            {roomCount > 0 ? `${roomCount} Tipe Kamar` : 'Belum Atur Kamar'}
+                                                                        </span>
+                                                                    </div>
+                                                                </div>
+
+                                                                <div className="pt-4 mt-2">
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => window.open(`/kost/${p.id}`, '_blank')}
+                                                                        className="w-full py-2.5 bg-gray-50 hover:bg-orange-50 text-gray-700 hover:text-orange-600 rounded-xl text-xs font-black uppercase tracking-wider transition-all border border-gray-200 hover:border-orange-200 flex items-center justify-center gap-1.5 cursor-pointer"
+                                                                    >
+                                                                        <ExternalLink size={13} /> Buka Halaman Kost
+                                                                    </button>
+                                                                </div>
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
+                                            ) : (
+                                                <div className="py-16 text-center bg-gray-50 rounded-3xl border border-dashed border-gray-200 space-y-3">
+                                                    <div className="text-4xl">🏢</div>
+                                                    <h5 className="font-bold text-gray-900 text-sm">Belum Ada Properti Terdaftar</h5>
+                                                    <p className="text-xs text-gray-400 max-w-sm mx-auto font-medium">
+                                                        Mitra ini belum memiliki unit kost yang terdaftar atau dipublikasikan di platform.
+                                                    </p>
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+                                </>
                             )}
                         </div>
+                    </div>
+                </div>
+            )}
+
+            {/* LIGHTBOX: PREVIEW FOTO KTP FULLSCREEN */}
+            {previewKtpImage && (
+                <div className="fixed inset-0 z-[140] flex items-center justify-center p-4 bg-black/90 backdrop-blur-md animate-in fade-in duration-200">
+                    <button 
+                        onClick={() => setPreviewKtpImage(null)} 
+                        className="absolute top-6 right-6 w-12 h-12 bg-white/10 hover:bg-white/20 text-white rounded-full flex items-center justify-center text-xl transition-all cursor-pointer"
+                    >
+                        <CloseIcon size={24} />
+                    </button>
+                    <div className="max-w-4xl max-h-[85vh] overflow-hidden rounded-2xl shadow-2xl border border-white/20">
+                        <img src={previewKtpImage} alt="KTP Preview Full" className="w-full h-full object-contain max-h-[85vh]" />
                     </div>
                 </div>
             )}
