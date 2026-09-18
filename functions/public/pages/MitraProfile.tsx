@@ -996,9 +996,13 @@ const MitraProfile: React.FC<MitraProfileProps> = ({ uid, user: initialUser, onB
                                                             <span className="flex items-center gap-1 text-[9px] font-black uppercase text-green-600 bg-green-50 px-2 py-1 rounded-md border border-green-100">
                                                                 <BadgeCheck size={12} className="text-green-500" /> Terverifikasi
                                                             </span>
+                                                        ) : waOtpCode ? (
+                                                            <span className="flex items-center gap-1 text-[9px] font-black uppercase text-orange-600 bg-orange-50 px-2.5 py-1 rounded-md border border-orange-100">
+                                                                <Clock size={12} className="text-orange-500" /> Kode Terkirim
+                                                            </span>
                                                         ) : (
                                                             <button type="button" onClick={handleSendWaOtp} className="text-[9px] font-black uppercase tracking-widest text-orange-500 hover:text-orange-600 bg-orange-50 hover:bg-orange-100 px-2.5 py-1.5 rounded-lg transition-colors border border-orange-100">
-                                                                {waOtpCode ? 'Kirim Ulang' : 'Kirim OTP'}
+                                                                Kirim OTP
                                                             </button>
                                                         )}
                                                     </div>
@@ -1016,7 +1020,7 @@ const MitraProfile: React.FC<MitraProfileProps> = ({ uid, user: initialUser, onB
                                                         )}
                                                     </div>
                                                     
-                                                    {!waOtpVerified && (
+                                                    {!waOtpVerified && (waOtpCode !== '' || isVerifyingWaOtp) && (
                                                         <div className="mt-2 p-5 bg-orange-50/50 rounded-2xl border border-orange-100 space-y-4 text-center">
                                                             <div className="flex items-center justify-between">
                                                                 <span className="text-[10px] font-black text-orange-800 uppercase tracking-widest">Masukkan 6 Digit OTP</span>
@@ -1048,12 +1052,6 @@ const MitraProfile: React.FC<MitraProfileProps> = ({ uid, user: initialUser, onB
                                                             <button type="button" onClick={handleVerifyWaOtp} className="w-full py-3 bg-orange-500 hover:bg-orange-600 text-white font-bold text-xs rounded-xl active:scale-95 transition-all uppercase tracking-widest shadow-lg shadow-orange-500/20">
                                                                 Verifikasi WhatsApp
                                                             </button>
-
-                                                            {!waOtpCode && (
-                                                                <p className="text-[10px] text-orange-600/80 font-bold leading-normal text-left px-1">
-                                                                    ⚠️ Silakan klik tombol <span className="underline text-orange-700">Kirim OTP</span> di kanan atas label terlebih dahulu untuk menerima kode verifikasi OTP.
-                                                                </p>
-                                                            )}
                                                         </div>
                                                     )}
                                                 </div>
@@ -1061,10 +1059,6 @@ const MitraProfile: React.FC<MitraProfileProps> = ({ uid, user: initialUser, onB
                                         </div>
 
                                         <ProfileItemRead icon={<Mail size={18} />} label="Alamat Email" value={formData.email} isEditing={false} name="email" />
-                                        <div className="grid grid-cols-2 gap-4">
-                                            <ProfileItemRead icon={<MapPin size={18} />} label="Tempat Lahir" value={formData.birth_place} isEditing={true} name="birth_place" onChange={handleInputChange} placeholder="Tempat Lahir" />
-                                            <ProfileItemRead icon={<Calendar size={18} />} label="Tanggal Lahir" value={formData.birth_date} isEditing={true} name="birth_date" onChange={handleInputChange} type="date" />
-                                        </div>
                                         <div className="md:col-span-2">
                                             <ProfileItemRead icon={<MapPin size={18} />} label="Alamat Domisili" value={formData.address} isEditing={true} name="address" onChange={handleInputChange} isTextArea={true} />
                                         </div>
@@ -1227,8 +1221,6 @@ const MitraProfile: React.FC<MitraProfileProps> = ({ uid, user: initialUser, onB
                                                     formData.display_name.trim() !== '' &&
                                                     formData.phone.trim() !== '' &&
                                                     waOtpVerified &&
-                                                    formData.birth_place.trim() !== '' &&
-                                                    formData.birth_date.trim() !== '' &&
                                                     formData.address.trim() !== '';
                                                 return (
                                                     <button

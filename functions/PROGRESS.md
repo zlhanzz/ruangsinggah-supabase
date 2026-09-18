@@ -2,6 +2,36 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 418. Optimalisasi Alur Verifikasi Identitas Mitra & Agen: Eliminasi Tombol Ganda OTP WhatsApp dan Penghapusan Input Redundan Tempat/Tanggal Lahir di Tahap 1 (`MitraProfile.tsx`, `AgentProfile.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  1. Pada form verifikasi identitas (Step 1), terdapat dua tombol "Kirim Ulang" yang membingungkan dan tidak optimal: satu tombol berada di atas input No. WhatsApp (label header), dan tombol lainnya berada di dalam kartu input 6-digit OTP bersama timer hitung mundur.
+  2. Pada Step 1 data profil mitra, terdapat input "Tempat Lahir" dan "Tanggal Lahir" yang tidak perlu diisi manual, karena pada tahap berikutnya (Step 2: Verifikasi KTP) kedua data tersebut sudah tersedia dan otomatis terisi via pemindaian OCR KTP.
+  3. Validasi tombol "LANJUTKAN" pada Step 1 sebelumnya memblokir pengguna jika tempat dan tanggal lahir belum diisi.
+- **Akar Masalah**:
+  1. **Dual Button Render**: Kondisi tombol di header label WhatsApp mengubah teks menjadi `'Kirim Ulang'` ketika `waOtpCode` telah terisi, sementara kartu OTP di bawahnya juga merender tombol `'Kirim Ulang'` dengan timer. Hal ini memicu kebingungan pengguna mengenai tombol mana yang harus ditekan.
+  2. **Redundansi Form & Blocking Validation**: Field `birth_place` dan `birth_date` ditampilkan dua kali (di Step 1 dan Step 2 KTP). Pengecekan `isStep1Complete` mensyaratkan `formData.birth_place.trim() !== ''` dan `formData.birth_date.trim() !== ''`, sehingga pengguna dipaksa mengisi data lahir di Step 1 meskipun OCR KTP di Step 2 dapat mengekstraknya secara otomatis.
+- **Implementasi Solusi**:
+  1. **Eliminasi Tombol Ganda & Badge Status WhatsApp**:
+     - Pada `MitraProfile.tsx` dan `AgentProfile.tsx`, tombol di sebelah label header "No. WhatsApp" hanya menampilkan tombol "Kirim OTP" saat awal.
+     - Setelah OTP dikirim (`waOtpCode !== ''`), tombol header berganti menjadi badge informatif `<Clock size={12} /> Kode Terkirim` (tanpa aksi klik duplikat).
+     - Tombol "Kirim Ulang" kini hanya berpusat tunggal di dalam kartu OTP, terintegrasi penuh dengan timer hitung mundur (`Kirim ulang dalam {waResendTimer}s`).
+     - Kartu input 6-digit OTP hanya dimunculkan secara rapi ketika OTP telah dikirim (`!waOtpVerified && (waOtpCode !== '' || isVerifyingWaOtp)`).
+  2. **Penghapusan Input Redundan Tempat & Tanggal Lahir di Step 1**:
+     - Menghapus grid input `Tempat Lahir` dan `Tanggal Lahir` dari Step 1 pada `MitraProfile.tsx` dan `AgentProfile.tsx`.
+     - Data tempat dan tanggal lahir kini terpusat penuh di Step 2 (Verifikasi KTP), yang otomatis terisi oleh OCR AI (`analyze-ktp`) saat foto KTP diunggah dan tetap dapat dikoreksi manual oleh pengguna.
+  3. **Penyelarasan Validasi Tombol Lanjutkan (`isStep1Complete`)**:
+     - Memperbarui konstanta `isStep1Complete` agar hanya memeriksa `display_name`, `phone`, `waOtpVerified`, dan `address`.
+     - Pengguna dapat langsung menekan tombol **"LANJUTKAN"** menuju Step 2 segera setelah nomor WhatsApp terverifikasi dan data domisili terisi.
+- **File Tersentuh**:
+  - `functions/public/pages/MitraProfile.tsx`
+  - `functions/public/pages/AgentProfile.tsx`
+  - `functions/PROGRESS.md`
+  - `IMPLEMENTATION_PLAN.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Uji kompilasi frontend Vite di `functions/public` sukses 100% tanpa error (`✓ built in 35.60s`, 0 error).
+  - Tampilan Step 1 kini bersih dan ringkas tanpa field duplikat tempat/tanggal lahir, tombol OTP rapi dengan timer tunggal, dan transisi ke Step 2 berjalan mulus.
+
 ### 417. Konfigurasi Nomor WhatsApp Operasional Resmi RuangSinggah.id (+62 878-8784-5584), Pembaruan WABA ID & Penyelarasan Template URL Button OTP (`whatsappService.ts`, `.env.local`) (September 2026)
 - **Permintaan & Masalah**:
   1. Pengguna meminta agar sistem WhatsApp di `ruangsinggah.id` secara resmi beralih dari nomor uji coba/sandbox ke nomor WhatsApp operasional sistem yang sesungguhnya.
