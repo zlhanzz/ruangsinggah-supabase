@@ -2,6 +2,38 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 427. Konsolidasi Menu Profil Mitra Menjadi Penarikan Saldo, Informasi Pribadi & Penambahan Menu Pengaturan (`MitraProfile.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna meminta 4 menu profil mitra yang sebelumnya terpisah ("Tarik Saldo Kost", "Rekening Penarikan", "Data Profil & Domisili", "Verifikasi Identitas KTP") disederhanakan menjadi 2 menu inti ("Penarikan Saldo" dan "Informasi Pribadi"), karena masing-masing pasangan fungsi sudah saling terhubung dan terintegrasi di dalam satu tampilan yang sama.
+  2. Pengguna juga meminta penambahan menu baru: "Pengaturan" untuk melengkapi menu profil dengan manajemen keamanan akun.
+- **Akar Masalah**:
+  1. Menu keuangan dan rekening bank penarikan sebelumnya dipisah menjadi dua tombol, padahal di dalam tampilan halaman dompet (`wallet`), saldo, pencairan dana, dan rekening bank penarikan sudah ditampilkan dan dikelola bersama.
+  2. Menu profil dan dokumen verifikasi KTP sebelumnya juga dipisah, padahal keduanya menggunakan modal formulir bertahap yang sama dan memiliki status verifikasi peninjauan yang terkunci secara terikat.
+  3. Belum ada menu khusus pengaturan akun dan ganti kata sandi pada hub profil mitra.
+- **Implementasi Solusi**:
+  1. **Konsolidasi Menu Penarikan Saldo**:
+     - Menggabungkan akses dompet dan rekening bank menjadi 1 menu: **Penarikan Saldo**.
+     - Menampilkan pill badge saldo aktif (`FORMAT_CURRENCY(availableBalance)`), ikon `<Wallet />`, dan navigasi langsung ke tab dompet (`onNavigateMenu('wallet')`).
+  2. **Konsolidasi Menu Informasi Pribadi**:
+     - Menggabungkan pengisian biodata dan dokumen identitas menjadi 1 menu: **Informasi Pribadi**.
+     - Menampilkan pill badge status verifikasi real-time (`Terverifikasi ✓`, `Sedang Ditinjau`, `Perlu Revisi`, atau `Belum Verifikasi`), ikon `<UserCheck />`, proteksi terkunci jika status `pending`, dan navigasi langsung ke formulir perbaikan jika `rejected` atau edit profil.
+  3. **Penambahan Menu & Modal Pengaturan Akun**:
+     - Menambahkan menu **Pengaturan** dengan ikon `<Settings />` yang membuka modal dialog modern (`rounded-[2rem]`).
+     - Di dalam modal Pengaturan, mitra dapat:
+       - Melihat email login terhubung yang aktif.
+       - Memperbarui kata sandi baru dan konfirmasi kata sandi via `supabase.auth.updateUser`.
+       - Mengirimkan link pemulihan/reset kata sandi ke email terdaftar via `supabase.auth.resetPasswordForEmail`.
+       - Menampilkan feedback status sukses/gagal yang responsif dan elegan.
+  4. **Pencegahan FOUT (100% Vector Lucide React)**:
+     - Seluruh ikon menggunakan SVG murni (`Wallet`, `UserCheck`, `Settings`, `Lock`, `Mail`, `Eye`, `EyeOff`, `RefreshCw`, `Check`, `CheckCircle2`, `AlertCircle`, `X`) tanpa FOUT ligature font.
+- **File Tersentuh**:
+  - `functions/public/pages/MitraProfile.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi build frontend Vite (`cmd.exe /c npm run build`) sukses 100% (`✓ built in 35.01s`, 0 error).
+  - Tampilan menu profil kini rapi menjadi 3 menu terpadu: Penarikan Saldo, Informasi Pribadi, dan Pengaturan.
+
 ### 426. Penyelarasan Z-Index Pop-Up Promosi KostManager Menjadi z-[100] Agar Memayungi Seluruh Lapisan Layar Mobile (`MitraDashboard.tsx`) (September 2026)
 - **Permintaan & Masalah**:
   1. Pengguna menemukan anomali visual saat pop-up promosi KostManager muncul di layar mobile: tombol melayang (FAB) Chat tampil menembus di atas modal iklan promosi dan tidak ikut ter-blur/meredup bersama navbar dan konten latar belakang.

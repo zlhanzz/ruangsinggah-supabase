@@ -4,7 +4,8 @@ import { supabase } from '../supabase';
 import { 
     User, ShieldCheck, MapPin, Phone, ChevronRight, LogOut, Upload, BadgeCheck, 
     AlertCircle, Clock, Search, X, Mail, Calendar, Gift, Lock, Wallet, Landmark, 
-    Sparkles, HelpCircle, FileText, CheckCircle2, Edit3, ArrowLeft 
+    Sparkles, HelpCircle, FileText, CheckCircle2, Edit3, ArrowLeft, Settings,
+    UserCheck, Eye, EyeOff, RefreshCw, Check
 } from 'lucide-react';
 import { sendWhatsAppTemplate, sendWaOtpVerification } from '../whatsappService';
 import { notifyAdminIdentityVerification } from '../emailService';
@@ -89,6 +90,68 @@ const MitraProfile: React.FC<MitraProfileProps> = ({
     const [loadingKm, setLoadingKm] = useState(false);
     const [subscriptionStatus, setSubscriptionStatus] = useState<string>('regular');
     const [showKmProgressModal, setShowKmProgressModal] = useState(false);
+
+    // Settings (Pengaturan) modal states
+    const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
+    const [newPassword, setNewPassword] = useState('');
+    const [confirmPassword, setConfirmPassword] = useState('');
+    const [showPassword, setShowPassword] = useState(false);
+    const [passwordLoading, setPasswordLoading] = useState(false);
+    const [passwordMessage, setPasswordMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+    const handlePasswordChange = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (newPassword.length < 6) {
+            setPasswordMessage({ type: 'error', text: 'Kata sandi minimal 6 karakter.' });
+            return;
+        }
+        if (newPassword !== confirmPassword) {
+            setPasswordMessage({ type: 'error', text: 'Konfirmasi kata sandi tidak cocok.' });
+            return;
+        }
+
+        setPasswordLoading(true);
+        setPasswordMessage(null);
+
+        try {
+            const { error } = await supabase.auth.updateUser({ password: newPassword });
+            if (error) throw error;
+
+            setPasswordMessage({ type: 'success', text: 'Kata sandi berhasil diperbarui!' });
+            setTimeout(() => {
+                setIsSettingsModalOpen(false);
+                setNewPassword('');
+                setConfirmPassword('');
+                setPasswordMessage(null);
+            }, 1500);
+        } catch (err: any) {
+            setPasswordMessage({ type: 'error', text: err.message || 'Gagal mengubah kata sandi.' });
+        } finally {
+            setPasswordLoading(false);
+        }
+    };
+
+    const handleSendResetEmail = async () => {
+        const emailToReset = formData.email || initialUser?.email;
+        if (!emailToReset) {
+            setPasswordMessage({ type: 'error', text: 'Email akun mitra tidak ditemukan.' });
+            return;
+        }
+        setPasswordLoading(true);
+        setPasswordMessage(null);
+
+        try {
+            const { error } = await supabase.auth.resetPasswordForEmail(emailToReset, {
+                redirectTo: `${window.location.origin}/login?mode=recovery`
+            });
+            if (error) throw error;
+            setPasswordMessage({ type: 'success', text: `Link reset sandi telah dikirim ke ${emailToReset}.` });
+        } catch (err: any) {
+            setPasswordMessage({ type: 'error', text: err.message || 'Gagal mengirim email reset.' });
+        } finally {
+            setPasswordLoading(false);
+        }
+    };
 
     useEffect(() => {
         if (autoOpenKmProgress) {
@@ -1449,13 +1512,10 @@ const MitraProfile: React.FC<MitraProfileProps> = ({
                         </div>
                     )}
 
-                    {/* ── GROUP 1: KEUANGAN & SALDO KOST (Cek Dompet & Tarik Dana) ── */}
+                    {/* ── MENU UTAMA: PENARIKAN SALDO, INFORMASI PRIBADI & PENGATURAN ── */}
                     <div className="mb-2">
-                        <h3 className="text-[11px] font-black uppercase text-gray-400 tracking-wider mb-2.5 px-1">
-                            KEUANGAN & SALDO KOST
-                        </h3>
                         <div className="bg-white rounded-3xl border border-gray-100 shadow-xs divide-y divide-gray-50 overflow-hidden">
-                            {/* Tarik Saldo Kost (Cek Dompet) */}
+                            {/* 1. Penarikan Saldo */}
                             <button
                                 type="button"
                                 onClick={() => onNavigateMenu ? onNavigateMenu('wallet') : null}
@@ -1467,10 +1527,10 @@ const MitraProfile: React.FC<MitraProfileProps> = ({
                                     </div>
                                     <div className="min-w-0">
                                         <h4 className="text-sm font-black text-gray-900 group-hover:text-orange-600 transition-colors">
-                                            Tarik Saldo Kost (Cek Dompet)
+                                            Penarikan Saldo
                                         </h4>
                                         <p className="text-xs text-gray-400 font-medium truncate mt-0.5">
-                                            Pencairan pendapatan sewa, penarikan dana & saldo aktif
+                                            Pencairan pendapatan sewa, cek dompet & atur rekening bank
                                         </p>
                                     </div>
                                 </div>
@@ -1482,106 +1542,32 @@ const MitraProfile: React.FC<MitraProfileProps> = ({
                                 </div>
                             </button>
 
-                            {/* Rekening Penarikan Bank */}
-                            <button
-                                type="button"
-                                onClick={() => {
-                                    if (onEditBank) {
-                                        onEditBank();
-                                    } else if (onNavigateMenu) {
-                                        onNavigateMenu('wallet');
-                                    }
-                                }}
-                                className="w-full p-4 flex items-center justify-between text-left hover:bg-orange-50/40 transition-colors group cursor-pointer"
-                            >
-                                <div className="flex items-center gap-3.5 min-w-0">
-                                    <div className="w-10 h-10 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
-                                        <Landmark className="w-5 h-5" />
-                                    </div>
-                                    <div className="min-w-0">
-                                        <h4 className="text-sm font-black text-gray-900 group-hover:text-orange-600 transition-colors">
-                                            Rekening Penarikan
-                                        </h4>
-                                        <p className="text-xs text-gray-400 font-medium truncate mt-0.5">
-                                            Atur nomor rekening bank tujuan pencairan saldo sewa kost
-                                        </p>
-                                    </div>
-                                </div>
-                                <div className="flex items-center gap-2 shrink-0 ml-2">
-                                    <ChevronRight className="w-4 h-4 text-gray-400 group-hover:text-orange-500 group-hover:translate-x-0.5 transition-all" />
-                                </div>
-                            </button>
-                        </div>
-                    </div>
-
-                    {/* ── GROUP 2: INFORMASI PRIBADI & DOKUMEN ── */}
-                    <div className="mb-2">
-                        <h3 className="text-[11px] font-black uppercase text-gray-400 tracking-wider mb-2.5 px-1">
-                            INFORMASI PRIBADI & DOKUMEN
-                        </h3>
-                        <div className="bg-white rounded-3xl border border-gray-100 shadow-xs divide-y divide-gray-50 overflow-hidden">
-                            {/* Data Profil & Domisili */}
+                            {/* 2. Informasi Pribadi */}
                             <button
                                 type="button"
                                 onClick={() => {
                                     if (formData.verification_status === 'pending') {
-                                        alert('Data profil Anda sedang dalam proses peninjauan verifikasi admin sehingga terkunci sementara.');
+                                        alert('Data profil dan verifikasi identitas Anda sedang dalam proses peninjauan oleh admin (maks 1x24 jam).');
                                         return;
                                     }
-                                    setSearchParams({ edit: 'true', step: '1' });
-                                }}
-                                className="w-full p-4 flex items-center justify-between text-left hover:bg-orange-50/40 transition-colors group cursor-pointer"
-                            >
-                                <div className="flex items-center gap-3.5 min-w-0">
-                                    <div className="w-10 h-10 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center shrink-0">
-                                        <User className="w-5 h-5" />
-                                    </div>
-                                    <div className="min-w-0">
-                                        <h4 className="text-sm font-black text-gray-900 group-hover:text-orange-600 transition-colors">
-                                            Data Profil & Domisili
-                                        </h4>
-                                        <p className="text-xs text-gray-400 font-medium truncate mt-0.5">
-                                            Nama, nomor WhatsApp, tempat lahir & alamat domisili
-                                        </p>
-                                    </div>
-                                </div>
-                                <div className="flex items-center gap-2 shrink-0 ml-2">
-                                    {formData.verification_status === 'pending' ? (
-                                        <span className="px-2.5 py-0.5 rounded-full bg-amber-50 text-amber-700 text-[10px] font-bold border border-amber-200">
-                                            Terkunci
-                                        </span>
-                                    ) : (
-                                        <ChevronRight className="w-4 h-4 text-gray-400 group-hover:text-orange-500 group-hover:translate-x-0.5 transition-all" />
-                                    )}
-                                </div>
-                            </button>
-
-                            {/* Verifikasi Identitas (KTP) */}
-                            <button
-                                type="button"
-                                onClick={() => {
-                                    if (formData.verification_status === 'pending') {
-                                        alert('Data KTP Anda sedang dalam proses peninjauan verifikasi admin (maks 1x24 jam).');
-                                        return;
+                                    if (formData.verification_status === 'rejected') {
+                                        setSearchParams({ edit: 'true', step: '2' });
+                                    } else {
+                                        setSearchParams({ edit: 'true', step: '1' });
                                     }
-                                    if (formData.verification_status === 'verified') {
-                                        alert('Akun Anda sudah terverifikasi resmi. Data KTP tidak dapat diubah.');
-                                        return;
-                                    }
-                                    setSearchParams({ edit: 'true', step: '2' });
                                 }}
                                 className="w-full p-4 flex items-center justify-between text-left hover:bg-orange-50/40 transition-colors group cursor-pointer"
                             >
                                 <div className="flex items-center gap-3.5 min-w-0">
                                     <div className="w-10 h-10 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
-                                        <ShieldCheck className="w-5 h-5" />
+                                        <UserCheck className="w-5 h-5" />
                                     </div>
                                     <div className="min-w-0">
                                         <h4 className="text-sm font-black text-gray-900 group-hover:text-orange-600 transition-colors">
-                                            Verifikasi Identitas (KTP)
+                                            Informasi Pribadi
                                         </h4>
                                         <p className="text-xs text-gray-400 font-medium truncate mt-0.5">
-                                            Dokumen identitas resmi KTP pemilik kost & status validasi
+                                            Data kontak pribadi, domisili & verifikasi dokumen KTP
                                         </p>
                                     </div>
                                 </div>
@@ -1603,6 +1589,35 @@ const MitraProfile: React.FC<MitraProfileProps> = ({
                                             ? 'Perlu Revisi'
                                             : 'Belum Verifikasi'}
                                     </span>
+                                    <ChevronRight className="w-4 h-4 text-gray-400 group-hover:text-orange-500 group-hover:translate-x-0.5 transition-all" />
+                                </div>
+                            </button>
+
+                            {/* 3. Pengaturan */}
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setIsSettingsModalOpen(true);
+                                    setPasswordMessage(null);
+                                    setNewPassword('');
+                                    setConfirmPassword('');
+                                }}
+                                className="w-full p-4 flex items-center justify-between text-left hover:bg-orange-50/40 transition-colors group cursor-pointer"
+                            >
+                                <div className="flex items-center gap-3.5 min-w-0">
+                                    <div className="w-10 h-10 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
+                                        <Settings className="w-5 h-5" />
+                                    </div>
+                                    <div className="min-w-0">
+                                        <h4 className="text-sm font-black text-gray-900 group-hover:text-orange-600 transition-colors">
+                                            Pengaturan
+                                        </h4>
+                                        <p className="text-xs text-gray-400 font-medium truncate mt-0.5">
+                                            Keamanan akun, ganti kata sandi & pengaturan login
+                                        </p>
+                                    </div>
+                                </div>
+                                <div className="flex items-center gap-2 shrink-0 ml-2">
                                     <ChevronRight className="w-4 h-4 text-gray-400 group-hover:text-orange-500 group-hover:translate-x-0.5 transition-all" />
                                 </div>
                             </button>
@@ -1865,6 +1880,128 @@ const MitraProfile: React.FC<MitraProfileProps> = ({
                                 </div>
                             )}
                         </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Modal Pengaturan Akun & Keamanan */}
+            {isSettingsModalOpen && (
+                <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
+                    <div className="bg-white rounded-[2rem] w-full max-w-md overflow-hidden p-6 sm:p-7 border border-slate-100 shadow-2xl relative text-left flex flex-col">
+                        {/* Header */}
+                        <div className="flex items-center justify-between pb-4 border-b border-gray-100 mb-5 shrink-0">
+                            <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
+                                    <Lock className="w-5 h-5" />
+                                </div>
+                                <div>
+                                    <h3 className="text-base font-black text-gray-900 tracking-tight">Pengaturan Akun</h3>
+                                    <p className="text-xs text-gray-400 font-medium mt-0.5">Keamanan kata sandi & akses login</p>
+                                </div>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setIsSettingsModalOpen(false);
+                                    setPasswordMessage(null);
+                                    setNewPassword('');
+                                    setConfirmPassword('');
+                                }}
+                                className="p-2 text-gray-400 hover:text-gray-600 rounded-xl hover:bg-gray-100 transition-colors cursor-pointer"
+                            >
+                                <X className="w-5 h-5" />
+                            </button>
+                        </div>
+
+                        {/* Connected Email Info */}
+                        <div className="mb-5 p-3.5 rounded-2xl bg-gray-50 border border-gray-100 flex items-center justify-between gap-3">
+                            <div className="min-w-0">
+                                <span className="text-[10px] font-black uppercase tracking-wider text-gray-400 block">Email Terdaftar</span>
+                                <span className="text-xs font-bold text-gray-800 truncate block mt-0.5">
+                                    {formData.email || initialUser?.email || 'Email tidak tersedia'}
+                                </span>
+                            </div>
+                            <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-[10px] font-black border border-emerald-200 shrink-0">
+                                Aktif
+                            </span>
+                        </div>
+
+                        {/* Status Message */}
+                        {passwordMessage && (
+                            <div className={`mb-5 p-4 rounded-2xl text-xs font-bold flex items-center gap-2.5 ${
+                                passwordMessage.type === 'success'
+                                    ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                    : 'bg-red-50 text-red-700 border border-red-200'
+                            }`}>
+                                {passwordMessage.type === 'success' ? (
+                                    <CheckCircle2 className="w-4 h-4 shrink-0" />
+                                ) : (
+                                    <AlertCircle className="w-4 h-4 shrink-0" />
+                                )}
+                                <span>{passwordMessage.text}</span>
+                            </div>
+                        )}
+
+                        {/* Password Change Form */}
+                        <form onSubmit={handlePasswordChange} className="space-y-4">
+                            <div className="space-y-1.5">
+                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block">
+                                    KATA SANDI BARU
+                                </label>
+                                <div className="relative">
+                                    <input
+                                        type={showPassword ? 'text' : 'password'}
+                                        value={newPassword}
+                                        onChange={(e) => setNewPassword(e.target.value)}
+                                        className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 pr-10 text-sm font-bold text-gray-900 focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none"
+                                        placeholder="Minimal 6 karakter"
+                                        required
+                                    />
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowPassword(!showPassword)}
+                                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 cursor-pointer"
+                                    >
+                                        {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div className="space-y-1.5">
+                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block">
+                                    KONFIRMASI KATA SANDI BARU
+                                </label>
+                                <input
+                                    type={showPassword ? 'text' : 'password'}
+                                    value={confirmPassword}
+                                    onChange={(e) => setConfirmPassword(e.target.value)}
+                                    className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm font-bold text-gray-900 focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none"
+                                    placeholder="Ulangi kata sandi baru"
+                                    required
+                                />
+                            </div>
+
+                            <div className="pt-2 flex flex-col gap-2.5">
+                                <button
+                                    type="submit"
+                                    disabled={passwordLoading}
+                                    className="w-full py-3 bg-[#ff7a00] hover:bg-orange-600 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-md shadow-orange-500/20 active:scale-95 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                                >
+                                    {passwordLoading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                                    Perbarui Kata Sandi
+                                </button>
+
+                                <button
+                                    type="button"
+                                    onClick={handleSendResetEmail}
+                                    disabled={passwordLoading}
+                                    className="w-full py-2.5 bg-gray-50 hover:bg-gray-100 text-gray-600 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer"
+                                >
+                                    <Mail className="w-3.5 h-3.5 text-gray-400" />
+                                    Kirim Link Reset ke Email
+                                </button>
+                            </div>
+                        </form>
                     </div>
                 </div>
             )}
