@@ -1,3 +1,5 @@
+import { supabase } from './supabase';
+
 const getWhatsAppAccessToken = () => 
   (typeof import.meta !== 'undefined' && import.meta.env && (import.meta.env as any).VITE_WHATSAPP_ACCESS_TOKEN) || '';
 
@@ -31,7 +33,7 @@ export interface SendWhatsAppParams {
 }
 
 /**
- * Mengirim pesan WhatsApp menggunakan Template Meta Cloud API
+ * Mengirim pesan WhatsApp menggunakan Serverless Edge Function / Meta Cloud API (Bebas CORS)
  */
 export async function sendWhatsAppTemplate({
   to,
@@ -41,16 +43,52 @@ export async function sendWhatsAppTemplate({
 }: SendWhatsAppParams) {
   const token = getWhatsAppAccessToken();
   const phoneId = getPhoneNumberId();
-
-  if (!token || !phoneId) {
-    console.error('[WHATSAPP_API] Kredensial WhatsApp (Token / Phone ID) belum dikonfigurasi di .env.local');
-    return { success: false, error: 'Kredensial WhatsApp API belum dikonfigurasi.' };
-  }
-
   const cleanTo = formatWhatsAppNumber(to);
+
   if (!cleanTo || cleanTo.length < 9) {
     console.warn('[WHATSAPP_API] Nomor telepon tidak valid:', to);
     return { success: false, error: 'Nomor telepon WhatsApp tidak valid.' };
+  }
+
+  // ── 1. Coba kirim via Supabase Edge Function 'send-wa-message' (Server-Side, Bebas CORS) ──
+  try {
+    const { data: edgeData, error: edgeError } = await supabase.functions.invoke('send-wa-message', {
+      body: {
+        to: cleanTo,
+        templateName,
+        languageCode,
+        components,
+        token: token || undefined,
+        phoneId: phoneId || undefined
+      }
+    });
+
+    if (!edgeError && edgeData && edgeData.success) {
+      console.log(`[WHATSAPP_API] Berhasil kirim template ${templateName} via Edge Function ke ${cleanTo}:`, edgeData);
+      return { success: true, data: edgeData.data };
+    }
+
+    if (edgeError || (edgeData && !edgeData.success)) {
+      const errMsg = edgeData?.error || edgeError?.message || 'Gagal mengirim pesan via Edge Function';
+      console.warn(`[WHATSAPP_API] Edge Function mengembalikan error:`, errMsg, edgeData?.details);
+      
+      // Jika error spesifik dari Meta API (misal template tidak cocok), kembalikan detailnya
+      if (edgeData?.details) {
+        return { success: false, error: errMsg, details: edgeData.details };
+      }
+    }
+  } catch (edgeInvokeErr: any) {
+    console.warn('[WHATSAPP_API] Panggilan invoke Edge Function gagal, mencoba fallback langsung:', edgeInvokeErr?.message);
+  }
+
+  // ── 2. Fallback: Panggilan langsung dari client (hanya jika token & phoneId ada) ──
+  if (!token || !phoneId) {
+    console.warn('[WHATSAPP_API] Kredensial WhatsApp lokal (Token/Phone ID) belum diset di .env.local.');
+    return { 
+      success: false, 
+      error: 'Kredensial WhatsApp API belum lengkap di server/klien.',
+      isConfigMissing: true
+    };
   }
 
   try {
@@ -68,9 +106,7 @@ export async function sendWhatsAppTemplate({
           type: 'template',
           template: {
             name: templateName,
-            language: {
-              code: languageCode
-            },
+            language: { code: languageCode },
             components: components
           }
         })
@@ -80,43 +116,88 @@ export async function sendWhatsAppTemplate({
     const result = await response.json();
 
     if (!response.ok) {
-      console.warn(`[WHATSAPP_API] Gagal mengirim template ${templateName} ke ${cleanTo}:`, result);
-      return { success: false, error: result?.error?.message || result };
+      console.warn(`[WHATSAPP_API] Direct fetch gagal (${templateName} ke ${cleanTo}):`, result);
+      return { success: false, error: result?.error?.message || 'Gagal mengirim template WhatsApp', details: result };
     }
 
-    console.log(`[WHATSAPP_API] Berhasil mengirim template ${templateName} ke ${cleanTo}:`, result);
     return { success: true, data: result };
-  } catch (error: any) {
-    console.error('[WHATSAPP_API] Exception saat menghubungi Meta Graph API:', error);
-    return { success: false, error: error?.message || error };
+  } catch (fetchErr: any) {
+    console.error('[WHATSAPP_API] Network/CORS exception saat direct fetch:', fetchErr);
+    return { 
+      success: false, 
+      error: fetchErr?.message?.includes('Failed to fetch') 
+        ? 'Koneksi ke Meta WhatsApp API dibatasi browser (CORS). Silakan deploy Supabase Edge Function send-wa-message.'
+        : fetchErr?.message || 'Gagal menghubungi WhatsApp API'
+    };
   }
 }
 
 /**
  * 1. Kirim Kode OTP Verifikasi Akun / Nomor WhatsApp
+ * Mendukung template dengan tombol URL/Copy Code, serta auto-retry dengan body-only jika tombol tidak cocok.
  */
 export async function sendWaOtpVerification(phone: string, otpCode: string, languageCode = 'id') {
-  return sendWhatsAppTemplate({
+  // Opsi A: Template standar dengan Parameter Body & Tombol URL / Copy Code
+  const primaryComponents = [
+    {
+      type: 'body',
+      parameters: [
+        { type: 'text', text: otpCode }
+      ]
+    },
+    {
+      type: 'button',
+      sub_type: 'url',
+      index: '0',
+      parameters: [
+        { type: 'text', text: otpCode }
+      ]
+    }
+  ];
+
+  const primaryRes = await sendWhatsAppTemplate({
     to: phone,
     templateName: 'otp_verification',
     languageCode: languageCode,
-    components: [
+    components: primaryComponents
+  });
+
+  if (primaryRes.success) {
+    return primaryRes;
+  }
+
+  // Jika gagal karena struktur komponen tombol tidak sesuai dengan konfigurasi template di Meta Business Manager,
+  // lakukan fallback ke Opsi B (Hanya parameter body)
+  const isComponentMismatch = 
+    primaryRes.error?.toLowerCase().includes('component') ||
+    primaryRes.error?.toLowerCase().includes('parameter') ||
+    primaryRes.error?.toLowerCase().includes('button') ||
+    primaryRes.error?.toLowerCase().includes('does not exist');
+
+  if (isComponentMismatch) {
+    console.log('[WHATSAPP_API] Mencoba ulang kirim OTP dengan parameter body murni tanpa tombol...');
+    const bodyOnlyComponents = [
       {
         type: 'body',
         parameters: [
           { type: 'text', text: otpCode }
         ]
-      },
-      {
-        type: 'button',
-        sub_type: 'url',
-        index: '0',
-        parameters: [
-          { type: 'text', text: otpCode }
-        ]
       }
-    ]
-  });
+    ];
+
+    const retryRes = await sendWhatsAppTemplate({
+      to: phone,
+      templateName: 'otp_verification',
+      languageCode: languageCode,
+      components: bodyOnlyComponents
+    });
+
+    if (retryRes.success) {
+      return retryRes;
+    }
+  }
+
+  return primaryRes;
 }
 
 /**
@@ -211,15 +292,32 @@ export async function sendWaMonthlyFinancialReport(phone: string, details: {
 }
 
 /**
- * Mengirim pesan teks biasa (Hanya bisa dikirim jika session chat 24-jam sudah terbuka)
+ * Mengirim pesan teks biasa (Server-side via Edge Function / Meta Cloud API)
  */
 export async function sendWhatsAppText(to: string, message: string) {
+  const cleanTo = formatWhatsAppNumber(to);
+  if (!cleanTo) return { success: false, error: 'Nomor tujuan tidak valid.' };
+
+  // 1. Coba via Edge Function
+  try {
+    const { data, error } = await supabase.functions.invoke('send-wa-message', {
+      body: {
+        to: cleanTo,
+        text: message
+      }
+    });
+    if (!error && data?.success) {
+      return { success: true, data: data.data };
+    }
+  } catch (err) {
+    console.warn('[WHATSAPP_API] Send text via edge function failed, falling back:', err);
+  }
+
+  // 2. Direct Fallback
   const token = getWhatsAppAccessToken();
   const phoneId = getPhoneNumberId();
-  const cleanTo = formatWhatsAppNumber(to);
-
-  if (!token || !phoneId || !cleanTo) {
-    return { success: false, error: 'Kredensial atau nomor tidak valid.' };
+  if (!token || !phoneId) {
+    return { success: false, error: 'Kredensial WhatsApp API belum dikonfigurasi.' };
   }
 
   try {
@@ -240,7 +338,6 @@ export async function sendWhatsAppText(to: string, message: string) {
         })
       }
     );
-
     const result = await response.json();
     return { success: response.ok, data: result };
   } catch (error: any) {
@@ -259,4 +356,3 @@ const whatsappService = {
 };
 
 export default whatsappService;
-

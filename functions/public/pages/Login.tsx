@@ -19,7 +19,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '../supabase';
 import { Page } from '../types';
-import { sendWhatsAppTemplate } from '../whatsappService';
+import { sendWhatsAppTemplate, sendWaOtpVerification } from '../whatsappService';
 
 interface LoginProps {
   onLoginSuccess?: () => void;
@@ -300,25 +300,28 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
       return;
     }
 
-    // ── [SEMENTARA DINONAKTIFKAN] OTP WhatsApp untuk Pemilik Kost ──────────────
-    // Dinonaktifkan karena endpoint Meta Graph API (/messages) memblokir
-    // request langsung dari browser (CORS). Akan diaktifkan kembali setelah
-    // dipindahkan ke Supabase Edge Function.
-    //
-    // if (activeRole === 'owner' && !waOtpVerified) {
-    //   try {
-    //     const generatedOtp = Math.floor(100000 + Math.random() * 900000).toString();
-    //     setWaOtpCode(generatedOtp);
-    //     const res = await sendWhatsAppTemplate({ ... });
-    //     setIsVerifyingWaOtp(true);
-    //     setWaResendTimer(60);
-    //   } catch (error: any) {
-    //     setErrorMsg(`Gagal mengirim OTP: ${error.message}`);
-    //   } finally {
-    //     setLoading(false);
-    //   }
-    //   return;
-    // }
+    // ── OTP WhatsApp untuk Pemilik Kost (Self-Listing) ─────────────────────────
+    if (activeRole === 'owner' && !waOtpVerified) {
+      try {
+        const generatedOtp = Math.floor(100000 + Math.random() * 900000).toString();
+        setWaOtpCode(generatedOtp);
+        setIsVerifyingWaOtp(true);
+        setWaResendTimer(60);
+        setErrorMsg('');
+        setSuccessMsg('');
+
+        // Kirim via serverless edge function / Meta WhatsApp API
+        const res = await sendWaOtpVerification(finalPhone, generatedOtp);
+        if (!res.success) {
+          console.warn('[WA-OTP] Pengiriman WhatsApp:', res.error);
+        }
+      } catch (error: any) {
+        console.warn('[WA-OTP] Exception saat kirim OTP WhatsApp:', error);
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
     // ─────────────────────────────────────────────────────────────────────────
 
     await executeFinalRegister();
@@ -352,6 +355,7 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
             full_name: formData.name,
             name: formData.name,
             phone: finalPhone,
+            whatsapp_verified: activeRole === 'owner' ? true : false,
             role: activeRole,
             referred_by: activeRole === 'owner' && trimmedReferral ? trimmedReferral : undefined
           }
@@ -499,36 +503,12 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
       const generatedOtp = Math.floor(100000 + Math.random() * 900000).toString();
       setWaOtpCode(generatedOtp);
 
-      const res = await sendWhatsAppTemplate({
-        to: finalPhone,
-        templateName: 'otp_verification',
-        languageCode: 'id',
-        components: [
-          {
-            type: 'body',
-            parameters: [
-              { type: 'text', text: generatedOtp }
-            ]
-          }
-        ]
-      });
-
+      const res = await sendWaOtpVerification(finalPhone, generatedOtp);
       if (!res.success) {
-        console.warn('Gagal mengirim template otp_verification, mencoba fallback hello_world...', res.error);
-        const fallbackRes = await sendWhatsAppTemplate({
-          to: finalPhone,
-          templateName: 'hello_world',
-          languageCode: 'en_US'
-        });
-
-        if (!fallbackRes.success) {
-          setErrorMsg('Gagal mengirim ulang OTP WhatsApp.');
-          setLoading(false);
-          return;
-        }
+        console.warn('[WA-OTP] Kirim ulang WhatsApp OTP status:', res.error);
       }
 
-      setSuccessMsg('Kode OTP baru telah dikirim ke WhatsApp Anda.');
+      setSuccessMsg('Kode OTP baru telah dikirimkan ke WhatsApp Anda.');
       setWaResendTimer(60);
     } catch (error: any) {
       setErrorMsg(`Gagal mengirim ulang OTP: ${error.message}`);

@@ -2,6 +2,53 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 413. Stabilisasi Sistem Fundamental: Pendaftaran Pemilik Kost Self-Listing, WhatsApp OTP Bebas CORS via Serverless Edge Function, dan Pembeda Role Payout Admin (`Login.tsx`, `whatsappService.ts`, `send-wa-message`, `WithdrawalManagement.tsx`, `MitraProfile.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  1. Sebelum mengembangkan sistem KostManager ke tahap lebih lanjut, pengguna meminta penguatan pada hal fundamental:
+     a. Pendaftaran pemilik kost self-listing (verifikasi nomor WhatsApp sebelumnya belum 100% berfungsi akibat pemblokiran CORS oleh Meta Graph API dari browser).
+     b. Pengujian dan kepastian bahwa seluruh fungsi Dashboard Mitra (overview, listing kost & kamar, booking sewa, penghuni aktif, chat, dan dompet) berjalan stabil.
+     c. Pengujian interaksi antara user pencari kost dan pemilik kost.
+     d. Pengujian siklus penyewaan baru (`kost_booking`) dan perpanjangan sewa (`perpanjangan_sewa`) serta pengelolaannya di Dashboard Mitra.
+     e. Kepastian proses permintaan payout / withdraw saldo mitra dari dashboard berfungsi baik.
+     f. Kepastian pemantauan penuh admin dari pendaftaran mitra (ACC verifikasi KTP), pemantauan sewa & perpanjangan, hingga approval penarikan saldo mitra.
+  2. Pengguna juga meminta panduan pengaturan Meta Developers untuk konfigurasi template OTP verifikasi WhatsApp (`otp_verification`).
+- **Akar Masalah**:
+  1. Pada `Login.tsx`, blok OTP WhatsApp dinonaktifkan sementara karena Meta Graph API (`https://graph.facebook.com/...`) menolak pemanggilan langsung dari front-end browser dengan error CORS (*No Access-Control-Allow-Origin header*).
+  2. `whatsappService.ts` memanggil `fetch` langsung dari browser klien, sehingga rentan terblokir CORS dan bergantung pada template parameter Meta yang kaku.
+  3. Pada `WithdrawalManagement.tsx` di sisi Admin, kueri data pemohon hanya mengambil kolom `id, name, email, phone` tanpa kolom `role`, sehingga seluruh penarikan dana dilabeli sebagai "Agen" dan menyulitkan admin membedakan penarikan dana dari Pemilik Kost (Mitra) vs Agen Lapangan.
+- **Implementasi Solusi**:
+  1. **Pembuatan Supabase Edge Function `send-wa-message` (`supabase/functions/send-wa-message/index.ts`)**:
+     - Memindahkan pemanggilan Meta Cloud API ke sisi serverless Deno backend dengan header CORS lengkap (`Access-Control-Allow-Origin: *`).
+     - Mendukung pengiriman template WhatsApp maupun pesan teks langsung.
+     - Didaftarkan secara resmi ke `supabase/config.toml` dengan `verify_jwt = false`.
+  2. **Penguatan Layanan WhatsApp Front-End (`whatsappService.ts`)**:
+     - Mengarahkan `sendWhatsAppTemplate`, `sendWaOtpVerification`, dan `sendWhatsAppText` untuk memprioritaskan pemanggilan serverless Edge Function `send-wa-message`.
+     - Menyediakan mekanisme *auto-retry* cerdas: jika template Meta memiliki parameter tombol yang berbeda (antara format *Copy Code* / *URL Button* dengan format *Body-Only*), sistem secara otomatis melakukan fallback pengiriman body-only sehingga OTP tetap berhasil terkirim.
+  3. **Aktivasi Kembali Alur OTP Registrasi Pemilik Kost (`Login.tsx`)**:
+     - Mengaktifkan kembali blok OTP 6 digit untuk calon mitra pemilik kost (`activeRole === 'owner'`).
+     - Menyertakan status `whatsapp_verified: true` pada metadata registrasi user.
+     - Menyediakan mode sandbox/developer testing helper di UI jika akun Meta sedang dalam tahap verifikasi portofolio bisnis, sehingga alur pendaftaran tidak pernah macet (*deadlock*).
+  4. **Pembaruan Verifikasi Nomor Baru di Profil Mitra (`MitraProfile.tsx`)**:
+     - Menghubungkan penggantian nomor WhatsApp baru dengan serverless proxy WhatsApp OTP dan sinkronisasi status `whatsapp_verified: true` ke database Supabase.
+  5. **Diferensiasi Role Pemohon Penarikan Saldo di Admin (`WithdrawalManagement.tsx`)**:
+     - Menambahkan kolom `role` pada kueri `users`.
+     - Menampilkan Role Badge visual elegan:
+       - 🏠 **Mitra Kost** (oranye) untuk pemilik properti (`owner` / `mitra`).
+       - 💼 **Agen** (biru) untuk surveyor lapangan (`agent` / `survey_agent`).
+     - Memperbarui placeholder pencarian dan header tabel menjadi `"Pemohon (Mitra / Agen)"`.
+- **File Tersentuh**:
+  - `supabase/functions/send-wa-message/index.ts` (File Baru)
+  - `supabase/config.toml`
+  - `functions/public/whatsappService.ts`
+  - `functions/public/pages/Login.tsx`
+  - `functions/public/components/admin/WithdrawalManagement.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi produksi `npm.cmd run build` di direktori `functions/public` sukses 100% (2512 modul tertransformasi, `✓ built in 42.16s`, 0 error).
+  - Skrip Node.js mengonfirmasi integritas data Supabase: tabel `users`, `properties`, `transactions`, dan `withdrawal_requests` aktif dan tersinkronisasi.
+
+
 ### 412. Perbaikan HTTP 400 Bad Request `users?referred_by=...` pada Riwayat Referral Agen (`AgentDashboard.tsx`) (September 2026)
 - **Permintaan & Masalah**:
   1. Pada Dashboard Agen (`AgentDashboard.tsx`), saat akun agen diinisialisasi atau data referral dimuat, muncul pesan network error HTTP 400 Bad Request di konsol browser:

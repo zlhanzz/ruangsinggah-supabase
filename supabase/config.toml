@@ -10,3 +10,7 @@ verify_jwt = false
 
 [functions.detect-contact-banner]
 verify_jwt = false
+
+[functions.send-wa-message]
+verify_jwt = false
+
