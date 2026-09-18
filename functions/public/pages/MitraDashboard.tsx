@@ -2658,7 +2658,7 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                 {activeMenu !== 'chat' && (
                     <button
                         onClick={() => handleMenuChange('chat')}
-                        className="lg:hidden fixed bottom-24 right-5 z-40 w-14 h-14 rounded-full bg-gradient-to-tr from-orange-500 via-orange-500 to-amber-500 text-white shadow-[0_8px_25px_rgba(249,115,22,0.45)] flex items-center justify-center hover:scale-105 active:scale-95 transition-all cursor-pointer border-2 border-white/90"
+                        className="lg:hidden fixed bottom-[calc(6.75rem+env(safe-area-inset-bottom,0px))] sm:bottom-32 right-5 z-[60] w-14 h-14 rounded-full bg-gradient-to-tr from-orange-500 via-orange-500 to-amber-500 text-white shadow-[0_8px_25px_rgba(249,115,22,0.45)] flex items-center justify-center hover:scale-105 active:scale-95 transition-all cursor-pointer border-2 border-white/90"
                         aria-label="Buka Chat / Pesan Masuk"
                         title="Pesan Masuk"
                     >

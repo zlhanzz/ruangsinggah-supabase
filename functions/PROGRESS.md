@@ -2,6 +2,27 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 425. Elevasi Adaptif dan Penyesuaian Z-Index Floating Chat FAB di Atas Bottom Navigation Bar (`MitraDashboard.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna melaporkan bahwa tombol melayang (FAB) Chat di sudut kanan bawah terpotong dan tertutup separuh bagian bawahnya oleh Bottom Navigation Bar.
+  2. Tombol chat seharusnya melayang sepenuhnya di atas (*float above*) bar navigasi bawah dan berada di lapisan terdepan antarmuka, bukan tertimpa oleh navbar.
+- **Akar Masalah**:
+  1. **Tinggi Navbar Dinamis**: Navbar mobile memiliki total tinggi 95px hingga 130px karena menampung padding, ikon menu, label teks, serta safe area inset perangkat (`pb-safe`). Jarak statis `bottom-24` (96px) sebelumnya tidak cukup tinggi sehingga bagian bawah tombol menabrak navbar.
+  2. **Z-Index Terbalik**: Navbar memiliki `z-50` sedangkan tombol FAB sebelumnya memiliki `z-40`, sehingga navbar merender lapisannya di atas tombol dan menutupi separuh tombol chat.
+- **Implementasi Solusi**:
+  1. **Elevasi Adaptif Berbasis Safe Area**:
+     - Mengubah posisi vertikal tombol FAB menjadi `bottom-[calc(6.75rem+env(safe-area-inset-bottom,0px))] sm:bottom-32`, memastikan tombol selalu berada 14–20px di atas garis batas atas navbar di setiap jenis perangkat (termasuk ponsel dengan navigasi gestur).
+  2. **Koreksi Z-Index Stacking Context**:
+     - Menaikkan z-index tombol FAB menjadi `z-[60]` (lebih tinggi dari navbar `z-50`), menjamin tombol selalu mengambang bebas di lapisan teratas tanpa pernah tertutup komponen lain.
+- **File Tersentuh**:
+  - `functions/public/pages/MitraDashboard.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi build frontend Vite (`cmd.exe /c npm run build`) sukses 100% (`✓ built in 45.15s`, 0 error).
+  - Tombol FAB Chat oranye melayang utuh, proporsional, dan bebas di atas bottom navbar.
+
+
 ### 424. Transformasi Chat Menjadi Floating Action Button (FAB) Oranye di Sudut Kanan Bawah & Pembersihan Header Mobile (`MitraDashboard.tsx`) (September 2026)
 - **Permintaan & Masalah**:
   1. Pengguna memberikan masukan cerdas bahwa posisi tombol mengambang (*floating button*) di sudut kanan bawah (yang sebelumnya digunakan oleh Time Travel Simulator untuk pengujian perpanjangan sewa) jauh lebih strategis jika digantikan oleh tombol **Chat / Pesan Masuk**.
