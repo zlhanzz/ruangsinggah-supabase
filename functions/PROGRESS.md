@@ -2,6 +2,35 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 412. Perbaikan HTTP 400 Bad Request `users?referred_by=...` pada Riwayat Referral Agen (`AgentDashboard.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  1. Pada Dashboard Agen (`AgentDashboard.tsx`), saat akun agen diinisialisasi atau data referral dimuat, muncul pesan network error HTTP 400 Bad Request di konsol browser:
+     ```
+     GET https://sgcmnsnokrztocnhxnqm.supabase.co/rest/v1/users?select=name%2Ccreated_at&referred_by=eq.AGE0MDNV&role=eq.mitra&order=created_at.desc 400 (Bad Request)
+     ```
+- **Akar Masalah**:
+  1. Pada `AgentDashboard.tsx` baris 437–444, sistem mencoba memanggil `supabase.from('users').select('name, created_at').eq('referred_by', codeToCheck)`.
+  2. Pada basis data Supabase, tabel `users` tidak memiliki kolom `referred_by`. Kolom `referred_by` berada pada tabel `mitra` yang terhubung via foreign key `user_id` ke tabel `users`.
+  3. Akibatnya, PostgREST menolak kueri dengan error `code: 42703, message: column users.referred_by does not exist` (HTTP 400 Bad Request).
+- **Implementasi Solusi**:
+  1. Mengarahkan kueri ke tabel yang benar (`mitra`):
+     ```tsx
+     supabase
+       .from('mitra')
+       .select('created_at, users:user_id ( name, full_name )')
+       .eq('referred_by', codeToCheck)
+       .order('created_at', { ascending: false });
+     ```
+  2. Melakukan ekstraksi dan pemetaan data secara aman (`item.users?.name || item.users?.full_name || 'Mitra Kost'`) untuk mengisi state `referralHistory` pada card dan ticker referral agen.
+  3. Menambahkan blok `try-catch` defensif sehingga kegagalan jaringan tidak menghambat inisialisasi Dashboard Agen.
+- **File Tersentuh**:
+  - `functions/public/pages/AgentDashboard.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi produksi `npm.cmd run build` di direktori `functions/public` lulus 100% (2512 modul tertransformasi, 0 error).
+  - Kueri kini mengarah ke tabel `mitra` dan mengembalikan respons valid (200 OK) tanpa error 400.
+
 ### 411. Perbaikan Bug ReferenceError `setSurveyRequests is not defined` pada Simpan Draf KostManager (`AgentDashboard.tsx`) (September 2026)
 - **Permintaan & Masalah**:
   1. Pada Dashboard Agen (`AgentDashboard.tsx`), saat agen menyimpan draf formulir onboarding KostManager atau menekan tombol navigasi *"Lanjut ke Step 2"*, muncul runtime error pada konsol browser:

@@ -1,6 +1,6 @@
-# Walkthrough: Perbaikan Bug ReferenceError `setSurveyRequests is not defined` pada `AgentDashboard.tsx`
+# Walkthrough: Perbaikan HTTP 400 Bad Request `users?referred_by=...` pada `AgentDashboard.tsx`
 
-Dokumen ini merangkum perbaikan bug runtime exception yang terjadi saat penyimpanan draf formulir survei/onboarding KostManager di Dashboard Agen.
+Dokumen ini merangkum perbaikan network error HTTP 400 Bad Request saat memuat riwayat mitra yang bergabung menggunakan kode referral agen di Dashboard Agen.
 
 ---
 
@@ -8,22 +8,34 @@ Dokumen ini merangkum perbaikan bug runtime exception yang terjadi saat penyimpa
 
 | Area / Lokasi | Kondisi Sebelum Perbaikan | Kondisi Setelah Perbaikan |
 | :--- | :--- | :--- |
-| **Konsol Browser saat Simpan Draf / Pindah Step Form** | Muncul pesan peringatan error:<br>`Silent background draft save warning: ReferenceError: setSurveyRequests is not defined`<br>`at saveKostManagerDraftToDatabase (AgentDashboard.tsx:2428:13)` | Pesan error **0% hilang total**. Alur auto-save dan simpan draf manual berjalan senyap (*silent*), lancar, dan bersih tanpa exception. |
-| **Penyimpanan State In-Memory** | Terganggu oleh exception pada baris 2428 sehingga kode melompat ke blok `catch`. | Berjalan normal dan sinkron melalui `setIsEditingKostManager` tanpa kegagalan alur eksekusi. |
+| **Konsol Browser saat Buka Dashboard Agen** | Muncul network request gagal:<br>`GET .../rest/v1/users?select=name%2Ccreated_at&referred_by=eq.AGE0MDNV&role=eq.mitra&order=created_at.desc 400 (Bad Request)` | Request berjalan lancar mengarah ke tabel `mitra` dengan status **200 OK**. Error 400 hilang total dari console browser. |
+| **Penyajian Riwayat Mitra & Ticker Referral** | Kueri gagal melempar error sehingga data mitra yang diundang tidak termuat. | Data mitra berhasil termuat dari tabel `mitra` dengan relasi `users:user_id(name, full_name)` dan tampil rapi pada card ticker referral agen. |
 
 ---
 
 ## 2. File & Modifikasi yang Dilakukan
 
 1. **[`functions/public/pages/AgentDashboard.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/AgentDashboard.tsx)**:
-   - Menghapus blok pengecekan variabel undeclared:
+   - Mengubah kueri dari tabel `users` (yang tidak memiliki kolom `referred_by`) menjadi tabel `mitra`:
      ```tsx
-     // Dihapus karena setSurveyRequests tidak terdefinisi dalam scope komponen
-     if (setSurveyRequests) {
-         // optional setter
+     const { data: referredMitra, error: refError } = await supabase
+         .from('mitra')
+         .select('created_at, users:user_id ( name, full_name )')
+         .eq('referred_by', codeToCheck)
+         .order('created_at', { ascending: false });
+
+     if (!refError && referredMitra) {
+         const formatted = referredMitra.map((item: any) => {
+             const u = Array.isArray(item.users) ? item.users[0] : item.users;
+             return {
+                 name: u?.name || u?.full_name || 'Mitra Kost',
+                 created_at: item.created_at
+             };
+         });
+         setReferralHistory(formatted);
      }
      ```
-   - Memastikan `saveKostManagerDraftToDatabase` memperbarui `isEditingKostManager` secara in-memory dan menyimpan snapshot draf ke Cloud Database Supabase serta LocalStorage secara mulus.
+   - Membungkus kueri dengan penanganan `try-catch` defensif.
 
 ---
 
@@ -37,22 +49,20 @@ Dokumen ini merangkum perbaikan bug runtime exception yang terjadi saat penyimpa
      ✓ 2512 modules transformed.
      rendering chunks...
      computing gzip size...
-     ✓ built in 1m 4s
+     ✓ built in 49.98s
      ```
    - **Hasil**: 100% Lulus (0 error, 0 warning baru).
-2. **Uji Runtime / Integrasi**:
-   - Pengujian pemanggilan `saveKostManagerDraftToDatabase` dan navigasi step formulir mengonfirmasi tidak ada lagi pelemparan exception `ReferenceError`.
+2. **Uji Kueri Database**:
+   - Pengujian kueri tabel `mitra` dengan relasi `users:user_id(name)` berhasil mengembalikan status 200 OK.
 
 ---
 
 ## 4. Panduan Verifikasi Pengguna (UI Testing Guide)
 
 1. **Buka Dashboard Agen**:
-   - Masuk ke menu survei (`/dashboard?menu=my_surveys`) menggunakan akun Agen.
-2. **Buka Modal Onboarding / Evaluasi KostManager**:
-   - Klik kartu properti survei KostManager untuk membuka formulir.
-3. **Lakukan Navigasi Langkah atau Simpan Draf**:
-   - Masukkan total kamar (misal `10`) lalu klik tombol **"Lanjut ke Step 2"**.
-   - Buka DevTools Console browser (F12 / Console tab).
-4. **Periksa Konsol**:
-   - Pastikan log `Silent background draft save warning: ReferenceError: setSurveyRequests is not defined` sudah **tidak pernah muncul lagi**.
+   - Buka halaman Dashboard Agen (`/dashboard`) dan login dengan akun Agen Survei.
+2. **Periksa Network Tab / Console**:
+   - Buka DevTools Browser (F12) -> tab **Console** dan tab **Network**.
+   - Pastikan tidak ada lagi request merah `GET .../rest/v1/users?referred_by=... 400 (Bad Request)`.
+3. **Periksa Card Referral**:
+   - Lihat bagian card kode referral agen di bagian atas/dashboard. Ticker referral menampilkan riwayat mitra yang terdaftar dengan kode agen secara mulus.

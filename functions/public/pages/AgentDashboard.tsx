@@ -434,13 +434,26 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                     // Fetch riwayat pemilik kost yang bergabung via referral kode ini
                     const codeToCheck = data?.referral_code || agentReferralCode;
                     if (codeToCheck) {
-                        const { data: referredMitra } = await supabase
-                            .from('users')
-                            .select('name, created_at')
-                            .eq('referred_by', codeToCheck)
-                            .eq('role', 'mitra')
-                            .order('created_at', { ascending: false });
-                        if (referredMitra) setReferralHistory(referredMitra);
+                        try {
+                            const { data: referredMitra, error: refError } = await supabase
+                                .from('mitra')
+                                .select('created_at, users:user_id ( name, full_name )')
+                                .eq('referred_by', codeToCheck)
+                                .order('created_at', { ascending: false });
+
+                            if (!refError && referredMitra) {
+                                const formatted = referredMitra.map((item: any) => {
+                                    const u = Array.isArray(item.users) ? item.users[0] : item.users;
+                                    return {
+                                        name: u?.name || u?.full_name || 'Mitra Kost',
+                                        created_at: item.created_at
+                                    };
+                                });
+                                setReferralHistory(formatted);
+                            }
+                        } catch (refErr) {
+                            console.warn("Gagal memuat riwayat referral mitra:", refErr);
+                        }
                     }
                 } catch (err) {
                     console.error("Error fetching/generating referral code:", err);
