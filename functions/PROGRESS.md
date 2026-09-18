@@ -2,6 +2,36 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 424. Transformasi Chat Menjadi Floating Action Button (FAB) Oranye di Sudut Kanan Bawah & Pembersihan Header Mobile (`MitraDashboard.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna memberikan masukan cerdas bahwa posisi tombol mengambang (*floating button*) di sudut kanan bawah (yang sebelumnya digunakan oleh Time Travel Simulator untuk pengujian perpanjangan sewa) jauh lebih strategis jika digantikan oleh tombol **Chat / Pesan Masuk**.
+  2. Dengan tombol Chat yang mengambang di sudut kanan bawah (*primary thumb zone* ponsel), sistem tidak perlu lagi memaksakan tampilan bergaya Facebook Messenger di header atas hanya demi menarik perhatian (*get noticed*).
+  3. Header mobile atas dibersihkan agar tampil lebih natural, elegan, simetris, dan bernuansa asli RuangSinggah.
+- **Akar Masalah**:
+  1. Tombol TimeSimulator di pojok kanan bawah (`bottom-24 right-5/6`) hanya berfungsi sebagai alat bantu simulasi testing tanggal sewa bagi developer, sehingga mubazir dan menghabiskan ruang interaksi jempol pengguna.
+  2. Tombol Messenger tiruan di header mobile atas terasa kurang selaras dengan identitas visual merek RuangSinggah.
+- **Implementasi Solusi**:
+  1. **Floating Action Button (FAB) Chat Sudut Kanan Bawah (`MitraDashboard.tsx`)**:
+     - Menempatkan tombol mengambang melingkar elegan (`w-14 h-14 rounded-full bg-gradient-to-tr from-orange-500 via-orange-500 to-amber-500 text-white shadow-[0_8px_25px_rgba(249,115,22,0.45)] border-2 border-white/90`) di posisi `fixed bottom-24 right-5 z-40 lg:hidden`.
+     - Menggunakan ikon vector murni Lucide `<MessageSquare size={24} strokeWidth={2.3} />` (100% bebas FOUT).
+     - Menyematkan badge notifikasi merah cerah (`bg-rose-500 min-w-[20px] h-5 rounded-full border-2 border-white shadow-sm animate-pulse`) yang menampilkan jumlah pesan belum dibaca (`chatUnreadCount > 0`).
+     - Aksi klik instan membuka menu Chat (`handleMenuChange('chat')`).
+     - FAB secara otomatis disembunyikan jika pengguna sedang berada di dalam menu chat (`activeMenu === 'chat'`) agar tidak menghalangi obrolan.
+  2. **Pembersihan & Penataan Header Mobile Atas (`MitraDashboard.tsx`)**:
+     - Menghapus tombol Messenger dan fungsi `MessengerIcon` dari header mobile atas.
+     - Mempertahankan posisi header mobile floating fixed (`fixed top-0 inset-x-0 h-16 z-40 lg:hidden bg-white/90 backdrop-blur-md border-b border-gray-100/80 shadow-xs`).
+     - Memasang elemen penyeimbang simetris (`<div className="w-10 h-10" aria-hidden="true" />`) di sisi kanan sehingga logo `RuangSinggah.id` berada tepat di tengah layar secara presisi.
+  3. **Penyisihan Komponen TimeSimulator**:
+     - Menghapus pemanggilan `<TimeSimulator />` dari dashboard mitra agar sudut kanan bawah bersih dan terdedikasi sepenuhnya untuk pesan masuk.
+- **File Tersentuh**:
+  - `functions/public/pages/MitraDashboard.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi build frontend Vite (`cmd.exe /c npm run build`) sukses 100% (`✓ built in 35.44s`, 0 error).
+  - Floating Action Button (FAB) Chat tampil memikat dan responsif di sudut kanan bawah, dan header mobile atas tampil bersih dan simetris.
+
+
 ### 423. Penguncian Floating Mobile Header Anti-Scroll (`position: fixed`) dan Desain Ikon Pesan Messenger Pop-Art Eksklusif (`MitraDashboard.tsx`) (September 2026)
 - **Permintaan & Masalah**:
   1. Pengguna meminta agar header mobile dibuat benar-benar mengambang (*floating*) dan tidak ikut tergulung (scrolled away) saat konten halaman di-scroll ke bawah.

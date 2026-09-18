@@ -11,7 +11,6 @@ import { getCurrentDate, setMockDate, getMockDateStr, parseDateSafely } from '..
 import { createKostSlug } from '../utils/slugUtils';
 import MitraKostPreviewModal from '../components/mitra/MitraKostPreviewModal';
 import { notifyAdminWithdrawalRequest } from '../emailService';
-import TimeSimulator from '../components/TimeSimulator';
 import {
     AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer
 } from 'recharts';
@@ -137,27 +136,6 @@ const BottomNavItem: React.FC<{ active: boolean; icon: React.ReactNode; label: s
         </div>
         <span className={`text-[10px] font-bold uppercase tracking-wider mt-0.5 ${active ? 'text-orange-600' : 'text-gray-500'}`}>{label}</span>
     </button>
-);
-
-// ── Vector SVG Messenger Icon ────────────────────────────────────────────────
-const MessengerIcon: React.FC<{ className?: string }> = ({ className = "w-6 h-6" }) => (
-    <svg viewBox="0 0 28 28" className={className} fill="none" xmlns="http://www.w3.org/2000/svg">
-        <defs>
-            <linearGradient id="msgGradMitra" x1="0%" y1="100%" x2="100%" y2="0%">
-                <stop offset="0%" stopColor="#0084FF" />
-                <stop offset="50%" stopColor="#A824FF" />
-                <stop offset="100%" stopColor="#FF5A5F" />
-            </linearGradient>
-        </defs>
-        <path
-            d="M14 2C7.1 2 1.5 7.1 1.5 13.5c0 3.7 1.8 6.9 4.6 9V26l3.4-1.9c1.4.4 2.9.6 4.5.6 6.9 0 12.5-5.1 12.5-11.5S20.9 2 14 2z"
-            fill="url(#msgGradMitra)"
-        />
-        <path
-            d="M15.4 17.5l-3.6-3.8-7 3.8 7.7-8.2 3.7 3.8 6.9-3.8-7.7 8.2z"
-            fill="#ffffff"
-        />
-    </svg>
 );
 
 // ── Main Component ────────────────────────────────────────────────────────────
@@ -1267,23 +1245,7 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                         </span>
                         <span className="text-[8px] font-black text-orange-500 uppercase tracking-widest mt-0.5">Mitra Dashboard</span>
                     </div>
-                    <button
-                        onClick={() => handleMenuChange('chat')}
-                        className={`w-10 h-10 rounded-full flex items-center justify-center relative transition-all active:scale-95 cursor-pointer shadow-xs ${
-                            activeMenu === 'chat'
-                                ? 'bg-blue-50 ring-2 ring-blue-500/40 shadow-blue-500/10'
-                                : 'bg-gray-100/90 hover:bg-gray-200/80'
-                        }`}
-                        title="Pesan Masuk"
-                        aria-label="Pesan Masuk"
-                    >
-                        <MessengerIcon className="w-6 h-6" />
-                        {chatUnreadCount > 0 && (
-                            <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 bg-rose-500 text-white text-[9px] font-black rounded-full flex items-center justify-center border-2 border-white shadow-xs animate-pulse">
-                                {chatUnreadCount > 9 ? '9+' : chatUnreadCount}
-                            </span>
-                        )}
-                    </button>
+                    <div className="w-10 h-10" aria-hidden="true" />
                 </header>
 
                 {/* ── PAGE CONTENT ─────────────────────────────────────────── */}
@@ -2691,8 +2653,24 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                         />
                     ))}
                 </nav>
+
+                {/* ── MOBILE FLOATING CHAT BUTTON (FAB) ────────────────────── */}
+                {activeMenu !== 'chat' && (
+                    <button
+                        onClick={() => handleMenuChange('chat')}
+                        className="lg:hidden fixed bottom-24 right-5 z-40 w-14 h-14 rounded-full bg-gradient-to-tr from-orange-500 via-orange-500 to-amber-500 text-white shadow-[0_8px_25px_rgba(249,115,22,0.45)] flex items-center justify-center hover:scale-105 active:scale-95 transition-all cursor-pointer border-2 border-white/90"
+                        aria-label="Buka Chat / Pesan Masuk"
+                        title="Pesan Masuk"
+                    >
+                        <MessageSquare size={24} strokeWidth={2.3} />
+                        {chatUnreadCount > 0 && (
+                            <span className="absolute -top-1 -right-1 min-w-[20px] h-5 px-1 bg-rose-500 text-white text-[10px] font-black rounded-full flex items-center justify-center border-2 border-white shadow-sm animate-pulse">
+                                {chatUnreadCount > 9 ? '9+' : chatUnreadCount}
+                            </span>
+                        )}
+                    </button>
+                )}
             </div>
-            <TimeSimulator />
         </div>
     );
 
@@ -4105,9 +4083,6 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                     </div>
                 </div>
             )}
-
-            {/* Time Travel Controller */}
-            <TimeSimulator />
         </>
     );
 };

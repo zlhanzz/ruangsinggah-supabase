@@ -1,32 +1,30 @@
-# Laporan Penyelesaian (Walkthrough): Floating Mobile Header Anti-Scroll & Ikon Pesan Gaya Messenger
+# Laporan Penyelesaian (Walkthrough): Floating Action Button (FAB) Chat di Pojok Kanan Bawah & Pembersihan Header Mobile
 
-Dokumen ini memuat ringkasan penyelesaian perbaikan posisi header mobile agar melayang (*floating* kokoh dan tidak ikut tergulung saat halaman di-scroll) serta pembaruan ikon tombol pesan menjadi ikon khas **Messenger** yang mencolok, estetik, dan mudah dikenali (*easy to notice*).
+Dokumen ini memuat ringkasan penyelesaian implementasi **Floating Action Button (FAB) Chat** di sudut kanan bawah antarmuka mobile (menggantikan tombol simulasi waktu Time Simulator) serta penyederhanaan header mobile menjadi bersih, simetris, dan bernuansa asli RuangSinggah.
 
 ---
 
 ## 1. Ringkasan Perubahan
 
-### A. Penguncian Floating Mobile Header Anti-Scroll (`MitraDashboard.tsx`)
-- **Masalah Sebelumnya**:
-  - Penggunaan `sticky top-0 z-40` sebelumnya tidak bekerja optimal karena elemen kontainer pembungkus utama memiliki class `overflow-x-hidden`.
-  - Properti `overflow` pada elemen leluhur (ancestor) membatalkan konteks viewport dari `position: sticky`, sehingga saat body di-scroll, header ikut tergeser dan menghilang dari layar.
-- **Implementasi**:
-  - Mengubah posisi header mobile menjadi **`fixed top-0 inset-x-0 z-40 lg:hidden h-16`** dengan efek glassmorphism modern (`bg-white/90 backdrop-blur-md border-b border-gray-100/80 shadow-xs`).
-  - Karena terikat langsung pada viewport perangkat (`position: fixed`), header **100% kebal terhadap scroll halaman** dan selalu melayang di posisi paling atas layar saat konten di bawahnya digulir.
-  - Memberikan kompensasi padding atas pada elemen kontainer konten (`<main className="flex-1 p-4 pt-20 lg:p-8 ...">`):
-    - Pada mobile: `pt-20` (80px) memberikan ruang 16px di bawah header (64px) sehingga kartu *"Selamat Datang Kembali"* atau konten aktif tidak tertimpa oleh header.
-    - Pada desktop: `lg:p-8` tetap mempertahankan padding proporsional tanpa perubahan.
+### A. Floating Action Button (FAB) Chat di Sudut Kanan Bawah (`MitraDashboard.tsx`)
+- **Sebelumnya**:
+  - Tombol melayang di sudut kanan bawah (`bottom-24 right-5`) ditempati oleh tombol oranye bergambar jam milik komponen `<TimeSimulator />`.
+  - Tombol simulasi ini hanya dipakai sementara untuk pengujian perpanjangan sewa oleh tim internal, dan tidak memiliki urgensi operasional bagi pemilik kost.
+- **Sesudah**:
+  - Tombol jam tersebut disisihkan dan digantikan secara permanen oleh **Floating Action Button (FAB) Chat / Pesan Masuk**:
+    - **Posisi Ergonomis**: `fixed bottom-24 right-5 z-40 lg:hidden` (berada tepat di atas tab navigation bawah, dalam jangkauan jempol satu tangan).
+    - **Desain Premium**: Lingkaran mewah berdiameter 56px (`w-14 h-14 rounded-full bg-gradient-to-tr from-orange-500 via-orange-500 to-amber-500 text-white shadow-[0_8px_25px_rgba(249,115,22,0.45)] border-2 border-white/90 hover:scale-105 active:scale-95 transition-all`).
+    - **Ikon Asli RuangSinggah**: Menggunakan SVG vector murni `<MessageSquare size={24} strokeWidth={2.3} />` yang selaras 100% dengan identitas visual platform.
+    - **Badge Notifikasi Denyut**: Badge merah menyala (`bg-rose-500 min-w-[20px] h-5`) beranimasi denyut (*pulse*) saat ada pesan belum dibaca (`chatUnreadCount > 0`).
+    - **Smart Auto-Hide**: FAB otomatis disembunyikan jika pengguna sedang berada di dalam menu chat (`activeMenu === 'chat'`) agar obrolan tidak terhalang.
 
-### B. Desain Ikon Pesan Gaya Messenger (`MitraDashboard.tsx`)
-- **Masalah Sebelumnya**:
-  - Ikon sebelumnya menggunakan kotak garis tipis `<MessageSquare size={19} />` yang menyerupai ikon komentar atau formulir biasa, sehingga kurang mencolok bagi pengguna.
-- **Implementasi**:
-  - Membangun komponen vector SVG murni **`MessengerIcon`**:
-    - Siluet balon pesan khas aplikasi Messenger dengan petir zig-zag diagonal di bagian tengah.
-    - Gradasi multi-stop warna cerah khas Messenger (`#0084FF` $\rightarrow$ `#A824FF` $\rightarrow$ `#FF5A5F`).
-    - Ditempatkan di dalam tombol lingkaran (*circular button* `w-10 h-10 rounded-full bg-gray-100/90 hover:bg-gray-200/80 active:scale-95 shadow-xs`) identik dengan header aplikasi pesan modern.
-    - Ketika tab chat aktif, tombol mendapatkan ring fokus biru halus (`bg-blue-50 ring-2 ring-blue-500/40`).
-    - Badge counter notifikasi merah cerah (`bg-rose-500`) dengan animasi denyut (*pulse*) halus jika terdapat pesan yang belum dibaca (`chatUnreadCount > 0`).
+### B. Pembersihan & Simetri Header Mobile Atas (`MitraDashboard.tsx`)
+- **Sebelumnya**:
+  - Header mobile memuat tombol Messenger bergaya Facebook di sisi kanan.
+- **Sesudah**:
+  - Tombol Messenger dihapus sepenuhnya karena fungsi chat sudah diakomodasi secara superior oleh FAB di sudut kanan bawah.
+  - Header tetap mengambang kokoh (*fixed floating top-0 inset-x-0 h-16 z-40 lg:hidden bg-white/90 backdrop-blur-md border-b border-gray-100/80 shadow-xs*), kebal terhadap scroll halaman.
+  - Sisi kanan header dipasangi spacer penyeimbang berukuran sama (`w-10 h-10`), sehingga logo `RuangSinggah.id` berada tepat di tengah layar secara simetris dan elegan.
 
 ---
 
@@ -41,7 +39,7 @@ Dokumen ini memuat ringkasan penyelesaian perbaikan posisi header mobile agar me
   ✓ 2512 modules transformed.
   rendering chunks...
   computing gzip size...
-  ✓ built in 32.13s
+  ✓ built in 35.44s
   The command exited with code 0.
   ```
 - **Status**: **100% LULUS (0 Error, Exit Code 0)**.
@@ -50,13 +48,12 @@ Dokumen ini memuat ringkasan penyelesaian perbaikan posisi header mobile agar me
 
 ## 3. Panduan Pengujian bagi Pengguna (User Testing Guide)
 
-1. **Uji Floating Header**:
-   - Buka `/mitra` pada browser smartphone atau perkecil jendela browser ke mode mobile (`< 1024px`).
-   - Lakukan scroll ke bawah pada halaman Beranda hingga daftar transaksi paling bawah.
-   - Perhatikan bahwa **Header RuangSinggah.id Mitra Dashboard tetap melayang kokoh di puncak layar** tanpa bergerak atau tergulung sama sekali, dengan efek blur semi-transparan yang memantulkan konten di bawahnya.
-2. **Uji Ikon Messenger**:
-   - Perhatikan sudut kanan atas header mobile.
-   - Terlihat tombol lingkaran dengan **ikon Messenger berwarna gradasi biru-ungu-merah muda** dengan petir zig-zag putih di tengahnya.
-   - Klik tombol Messenger: sistem langsung mengarahkan tampilan ke tab **Pesan / Chat**.
-3. **Uji Penataan Konten Atas**:
-   - Perhatikan kartu *"Selamat Datang Kembali"* atau konten awal halaman tidak tertimpa/terpotong oleh floating header karena adanya kompensasi padding `pt-20`.
+1. **Buka Tampilan Mobile**:
+   - Buka `/mitra` pada browser smartphone atau perkecil resolusi layar desktop ke mobile (`< 1024px`).
+2. **Periksa Sudut Kanan Bawah**:
+   - Perhatikan bahwa tombol jam Time Simulator sudah tidak ada lagi.
+   - Posisi tersebut kini digantikan oleh **Tombol Melayang Chat Oranye Khas RuangSinggah** dengan ikon pesan `<MessageSquare />` dan badge counter notifikasi.
+   - Klik tombol FAB tersebut: sistem langsung membuka tab **Pesan / Chat**, dan tombol FAB otomatis menghilang saat berada di ruang obrolan.
+3. **Periksa Header Atas**:
+   - Perhatikan header atas mobile: Ikon Messenger telah dibersihkan.
+   - Header tampil sangat bersih, rapi, simetris, dan tetap mengambang (*floating*) tanpa tergulung saat halaman di-scroll ke bawah.
