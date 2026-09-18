@@ -1,84 +1,102 @@
-# Rencana Implementasi: Sederhanakan Menjadi 2 Menu Inti (Penarikan Saldo & Informasi Pribadi) + Penambahan Menu Pengaturan (`MitraProfile.tsx`)
+# Rencana Implementasi: Peningkatan Keamanan Ganti Kata Sandi Berbasis Verifikasi Email OTP (`Profile.tsx` & `MitraProfile.tsx`)
 
-Dokumen ini merinci rencana revisi menu profil mitra sesuai arahan terbaru pengguna:
-1. Menyederhanakan 4 menu sebelumnya menjadi **2 menu inti**: **Penarikan Saldo** dan **Informasi Pribadi**.
-2. Menambahkan menu baru: **Pengaturan** (Keamanan Akun & Ganti Kata Sandi).
+Dokumen ini merinci rencana penanganan celah keamanan (*security anomaly*) pada fitur perubahan kata sandi di RuangSinggah.
 
 ---
 
-## 1. Analisis Kebutuhan Pengguna
+## 1. Analisis Masalah Keamanan
 
-### Latar Belakang & Masukan Pengguna
-- Pengguna menginstruksikan:
-  > *"cukup 2 menu aja, yaitu penarikan saldo dan juga informasi pribadi. dua itu aja. sama tambah menu pengaturan juga"*
-- Dari 4 menu yang sebelumnya terpencar di dua kategori ("Tarik Saldo Kost", "Rekening Penarikan", "Data Profil & Domisili", "Verifikasi Identitas KTP"), dipadatkan menjadi 2 menu inti karena fungsi-fungsinya sudah terintegrasi dalam tampilan yang sama:
-  - **Penarikan Saldo**: Menggabungkan akses dompet, penarikan dana sewa, dan pengaturan rekening bank ke dalam 1 tampilan terintegrasi.
-  - **Informasi Pribadi**: Menggabungkan data kontak, domisili, dan dokumen verifikasi KTP.
-- Ditambahkan menu baru:
-  - **Pengaturan**: Menu pengaturan akun & keamanan (ganti kata sandi, link reset kata sandi ke email), mengadopsi arsitektur profil user yang elegan.
+### Celah Keamanan Saat Ini
+Saat ini, baik pada antarmuka **Profil Pengguna (`Profile.tsx`)** maupun **Profil Mitra (`MitraProfile.tsx`)**:
+- Pengguna yang sedang login dapat langsung mengganti kata sandi hanya dengan mengetikkan *Kata Sandi Baru* dan *Konfirmasi Kata Sandi Baru*, lalu menekan tombol simpan (`supabase.auth.updateUser({ password: newPassword })`).
+- **Risiko Fatal (*Account Takeover*)**:
+  Jika perangkat pengguna tertinggal dalam keadaan login (misal di warnet, laptop bersama, atau ponsel pinjaman), pihak yang tidak berwenang dapat langsung mengubah kata sandi akun tanpa memerlukan izin atau verifikasi apa pun ke pemilik akun yang sah. Akibatnya, pemilik asli terkunci dari akunnya sendiri.
 
----
-
-## 2. Struktur Menu Baru
-
-### Rincian 3 Menu Utama:
-
-#### 1. Menu: **Penarikan Saldo**
-- **Ikon**: `<Wallet className="w-5 h-5" />` (aksen oranye `bg-orange-50 text-orange-600`)
-- **Judul**: `Penarikan Saldo`
-- **Subjudul**: `Pencairan pendapatan sewa, cek dompet & atur rekening bank`
-- **Badge Kanan**: Saldo aktif mitra (`availableBalance !== undefined ? FORMAT_CURRENCY(availableBalance) : 'Buka Dompet'`) + ikon `<ChevronRight />`
-- **Aksi Klik**: Membuka tab Dompet (`onNavigateMenu('wallet')`), tempat mitra mencairkan saldo sekaligus mengelola rekening bank penarikan.
-
-#### 2. Menu: **Informasi Pribadi**
-- **Ikon**: `<UserCheck className="w-5 h-5" />` (aksen emerald `bg-emerald-50 text-emerald-600`)
-- **Judul**: `Informasi Pribadi`
-- **Subjudul**: `Data kontak pribadi, alamat domisili & verifikasi dokumen KTP`
-- **Badge Kanan**: Badge status verifikasi akun secara holistik (`Terverifikasi ✓`, `Sedang Ditinjau`, `Perlu Revisi`, atau `Belum Verifikasi`) + ikon `<ChevronRight />`
-- **Aksi Klik**:
-  - Jika status `pending`: Alert proteksi bahwa data sedang dalam proses peninjauan tim admin (maks 1x24 jam).
-  - Jika status `rejected`: Langsung membuka form langkah perbaikan KTP (`step: '2'`).
-  - Selain itu: Membuka form langkah 1 data diri (`step: '1'`).
-
-#### 3. Menu: **Pengaturan** *(Menu Baru)*
-- **Ikon**: `<Settings className="w-5 h-5" />` (aksen biru `bg-blue-50 text-blue-600`)
-- **Judul**: `Pengaturan`
-- **Subjudul**: `Keamanan akun, ganti kata sandi & pengaturan login`
-- **Badge Kanan**: Ikon `<ChevronRight />`
-- **Aksi Klik**: Membuka modal pop-up **Pengaturan Akun & Keamanan**.
+### Solusi Standar Keamanan
+Untuk memastikan integritas dan keamanan akun, setiap perubahan kata sandi wajib melewati **Verifikasi Kepemilikan Email (Two-Step Email OTP Verification)**:
+1. Sistem mengirimkan **Kode OTP 6-Digit** khusus ke alamat email terdaftar pengguna.
+2. Form perubahan kata sandi **hanya akan memproses kata sandi baru jika kode OTP yang dimasukkan dari email terbukti valid dan belum kedaluwarsa**.
+3. Sistem memberikan notifikasi peringatan jika ada upaya perubahan kata sandi yang tidak dikenali.
 
 ---
 
-## 3. Fitur Modal Pengaturan (Keamanan & Kata Sandi)
-Di dalam modal pop-up Pengaturan:
-1. **Ganti Kata Sandi**:
-   - Form input *Kata Sandi Baru* dan *Konfirmasi Kata Sandi Baru* (dengan toggle lihat/sembunyikan sandi `<Eye />` / `<EyeOff />`).
-   - Validasi minimal 6 karakter.
-   - Panggilan Supabase Auth `supabase.auth.updateUser({ password: newPassword })`.
-2. **Kirim Link Reset Sandi ke Email**:
-   - Panggilan `supabase.auth.resetPasswordForEmail(user.email)`.
-   - Feedback notifikasi sukses/gagal langsung di dalam modal.
-3. Desain modal bergaya rounded modern (`rounded-[2rem]`), responsif, dan ramah mobile dengan tombol tutup `X`.
+## 2. Alur Pengalaman Pengguna (Security Flow)
+
+### Rincian Alur:
+1. Pengguna membuka modal Keamanan & Ganti Sandi.
+2. Modal menampilkan email terdaftar pengguna yang aktif.
+3. Pengguna menekan tombol **"Kirim Kode Verifikasi ke Email"**.
+4. Sistem men-generate kode OTP 6-digit dan mengirimkannya ke email resmi pengguna.
+5. Timer hitung mundur (*cooldown* 60 detik) aktif untuk mencegah spam.
+6. Pengguna memasukkan:
+   - **Kode OTP 6-Digit**
+   - **Kata Sandi Baru** (minimal 6 karakter)
+   - **Konfirmasi Kata Sandi Baru**
+7. Sistem memvalidasi kesesuaian OTP:
+   - Jika OTP salah atau kedaluwarsa (> 10 menit): Ditolak dengan pesan kesalahan yang jelas.
+   - Jika OTP valid: Kata sandi diperbarui via `supabase.auth.updateUser({ password })`.
+
+---
+
+## 3. Rincian Fitur yang Akan Diterapkan
+
+### A. Penambahan Fungsi Pengiriman Email OTP di `emailService.ts`
+- Membuat fungsi `sendPasswordChangeOtp(email: string, otp: string, name?: string)`:
+  - Mengirim email dengan template keamanan resmi RuangSinggah.
+  - Subjek: `[RuangSinggah.id] Kode Keamanan Verifikasi Ganti Kata Sandi`.
+  - Berisi kode OTP 6-digit, masa berlaku (10 menit), dan peringatan keamanan bahwa jika bukan pemilik akun yang meminta, pemilik dapat segera mengabaikan pesan tersebut.
+
+### B. Pembaruan Modal Ganti Kata Sandi pada `MitraProfile.tsx` (Profil Mitra)
+1. **Langkah 1 (Verifikasi Email)**:
+   - Menampilkan email terdaftar secara jelas.
+   - Tombol *"Kirim Kode OTP"* dengan countdown cooldown timer (60 detik) untuk mencegah spam pengiriman.
+2. **Langkah 2 (Input Data)**:
+   - Field input **Kode OTP Email (6 digit)** dengan validasi angka.
+   - Field input **Kata Sandi Baru** & **Konfirmasi Kata Sandi** (toggle intip sandi).
+3. **Langkah 3 (Validasi & Eksekusi)**:
+   - Verifikasi kecocokan OTP dan masa aktif (maks 10 menit).
+   - Eksekusi `supabase.auth.updateUser({ password: newPassword })` hanya setelah OTP lolos validasi.
+   - Tetap menyediakan opsi bantuan *"Kirim Link Reset via Email"* sebagai metode alternatif.
+
+### C. Pembaruan Modal Ganti Kata Sandi pada `Profile.tsx` (Profil User Biasa)
+- Menggantikan modal ganti kata sandi lama di `Profile.tsx` dengan alur verifikasi email OTP yang sama persis dan konsisten dengan `MitraProfile.tsx`.
 
 ---
 
 ## 4. Dampak File yang Tersentuh
 
-1. **`functions/public/pages/MitraProfile.tsx`**:
-   - Menambahkan state modal pengaturan (`isSettingsModalOpen`, `newPassword`, `confirmPassword`, `passwordLoading`, `passwordMessage`, dsb.).
-   - Menyederhanakan blok menu keuangan & identitas menjadi 2 menu inti (`Penarikan Saldo` dan `Informasi Pribadi`) + 1 menu `Pengaturan`.
-   - Menambahkan render komponen modal dialog Pengaturan Akun & Kata Sandi.
-2. **`functions/PROGRESS.md`**:
-   - Pencatatan penyelesaian progres nomor #427 setelah user menyetujui.
-3. **`WALKTHROUGH.md`**:
-   - Laporan pengujian dan dokumentasi visual fitur.
+1. **`functions/public/emailService.ts`**:
+   - Menambahkan fungsi helper `sendPasswordChangeOtp`.
+2. **`functions/public/pages/MitraProfile.tsx`**:
+   - Menambahkan state OTP (`emailOtp`, `inputOtp`, `isOtpSent`, `otpTimer`, `otpExpiresAt`).
+   - Memperbarui modal pengaturan ganti kata sandi dengan verifikasi OTP.
+3. **`functions/public/pages/Profile.tsx`**:
+   - Menambahkan state OTP dan memperbarui modal ganti sandi user dengan verifikasi OTP.
+4. **`functions/PROGRESS.md`**:
+   - Pencatatan progres perbaikan celah keamanan nomor #428.
+5. **`WALKTHROUGH.md`**:
+   - Dokumentasi hasil pengujian keamanan.
 
 ---
 
-## 5. Rencana Verifikasi
+## 5. Langkah-Langkah Eksekusi (Fase 2)
 
-- [ ] **Kompilasi Sukses**: `npm run build` di `functions/public` lulus tanpa error (0 error).
-- [ ] **Tampilan Menu Baru**: Tampil 3 menu yang rapi: *Penarikan Saldo*, *Informasi Pribadi*, dan *Pengaturan*.
-- [ ] **Fungsionalitas Penarikan Saldo**: Mengarahkan ke menu dompet dan menampilkan saldo riil.
-- [ ] **Fungsionalitas Informasi Pribadi**: Menampilkan status verifikasi dan membuka pengisian formulir data diri / KTP.
-- [ ] **Fungsionalitas Pengaturan**: Mengklik menu Pengaturan berhasil memunculkan modal ganti kata sandi / reset sandi akun mitra.
+1. Menambahkan fungsi `sendPasswordChangeOtp` di `emailService.ts`.
+2. Mengintegrasikan logika OTP dan pembaruan antarmuka modal pada `MitraProfile.tsx`.
+3. Mengintegrasikan logika OTP dan pembaruan antarmuka modal pada `Profile.tsx`.
+4. Menjalankan kompilasi `npm run build` di `functions/public` untuk memastikan 0 error tipe TypeScript.
+5. Mencatat riwayat di `functions/PROGRESS.md` dan memperbarui `WALKTHROUGH.md`.
+6. Melakukan git commit dan push ke branch `bukan-productions`.
+
+---
+
+## 6. Rencana Verifikasi
+
+- [ ] **Kompilasi Sukses**: `npm run build` selesai tanpa error.
+- [ ] **Uji Coba Profil Mitra**:
+  - Modal ganti kata sandi meminta pengiriman OTP ke email terlebih dahulu.
+  - Tombol simpan terkunci/memvalidasi jika OTP belum diisi atau salah.
+  - Jika OTP benar, kata sandi berhasil diperbarui.
+- [ ] **Uji Coba Profil User**:
+  - Alur verifikasi OTP email berjalan mulus dan protektif seperti pada profil mitra.
+- [ ] **Rate Limiting & Cooldown**: Timer hitung mundur 60 detik mencegah pengiriman berulang tak terkontrol.

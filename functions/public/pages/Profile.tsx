@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { supabase } from '../supabase';
-import { notifyAdminIdentityVerification } from '../emailService';
+import { notifyAdminIdentityVerification, sendPasswordChangeOtp } from '../emailService';
 import { Page, Kost } from '../types';
 import KostCard from '../components/KostCard';
 import { 
@@ -84,6 +84,25 @@ const Profile: React.FC<ProfileProps> = ({ user, onLogout, onSaveSuccess, forceE
   const [showPassword, setShowPassword] = useState(false);
   const [passwordLoading, setPasswordLoading] = useState(false);
   const [passwordMessage, setPasswordMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  // Email OTP verification states for Password Change
+  const [passwordOtpInput, setPasswordOtpInput] = useState('');
+  const [generatedPasswordOtp, setGeneratedPasswordOtp] = useState('');
+  const [otpExpiresAt, setOtpExpiresAt] = useState<number | null>(null);
+  const [otpCooldown, setOtpCooldown] = useState(0);
+  const [isSendingOtp, setIsSendingOtp] = useState(false);
+  const [isOtpSent, setIsOtpSent] = useState(false);
+
+  // Cooldown interval timer for OTP resend
+  useEffect(() => {
+    let timer: any;
+    if (otpCooldown > 0) {
+      timer = setInterval(() => {
+        setOtpCooldown(prev => prev - 1);
+      }, 1000);
+    }
+    return () => clearInterval(timer);
+  }, [otpCooldown]);
 
   // Modal Preferensi Notifikasi
   const [isNotifModalOpen, setIsNotifModalOpen] = useState(false);
@@ -546,10 +565,59 @@ const Profile: React.FC<ProfileProps> = ({ user, onLogout, onSaveSuccess, forceE
     }
   };
 
+  const handleSendPasswordOtp = async () => {
+    const targetEmail = user?.email || formData.email;
+    if (!targetEmail) {
+      setPasswordMessage({ type: 'error', text: 'Email akun pengguna tidak ditemukan.' });
+      return;
+    }
+
+    setIsSendingOtp(true);
+    setPasswordMessage(null);
+
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const expires = Date.now() + 10 * 60 * 1000; // 10 minutes expiry
+
+    try {
+      const sent = await sendPasswordChangeOtp(targetEmail, otp, formData.displayName || user?.name);
+      if (sent) {
+        setGeneratedPasswordOtp(otp);
+        setOtpExpiresAt(expires);
+        setIsOtpSent(true);
+        setOtpCooldown(60);
+        setPasswordMessage({ type: 'success', text: `Kode verifikasi 6-digit telah dikirim ke ${targetEmail}. Periksa kotak masuk/spam email Anda.` });
+      } else {
+        setPasswordMessage({ type: 'error', text: 'Gagal mengirim kode verifikasi ke email. Silakan coba beberapa saat lagi.' });
+      }
+    } catch (err: any) {
+      setPasswordMessage({ type: 'error', text: err.message || 'Terjadi kesalahan saat mengirim kode verifikasi.' });
+    } finally {
+      setIsSendingOtp(false);
+    }
+  };
+
   const handlePasswordChange = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // 1. Validasi OTP Email
+    if (!isOtpSent || !generatedPasswordOtp) {
+      setPasswordMessage({ type: 'error', text: 'Silakan minta dan masukkan kode verifikasi email terlebih dahulu.' });
+      return;
+    }
+
+    if (passwordOtpInput.trim() !== generatedPasswordOtp) {
+      setPasswordMessage({ type: 'error', text: 'Kode verifikasi email salah. Periksa kembali 6 digit kode yang dikirim ke email Anda.' });
+      return;
+    }
+
+    if (otpExpiresAt && Date.now() > otpExpiresAt) {
+      setPasswordMessage({ type: 'error', text: 'Kode verifikasi email telah kedaluwarsa. Silakan kirim ulang kode baru.' });
+      return;
+    }
+
+    // 2. Validasi Kata Sandi
     if (newPassword.length < 6) {
-      setPasswordMessage({ type: 'error', text: 'Kata sandi minimal 6 karakter.' });
+      setPasswordMessage({ type: 'error', text: 'Kata sandi baru minimal 6 karakter.' });
       return;
     }
     if (newPassword !== confirmPassword) {
@@ -564,13 +632,16 @@ const Profile: React.FC<ProfileProps> = ({ user, onLogout, onSaveSuccess, forceE
       const { error } = await supabase.auth.updateUser({ password: newPassword });
       if (error) throw error;
 
-      setPasswordMessage({ type: 'success', text: 'Kata sandi berhasil diperbarui!' });
+      setPasswordMessage({ type: 'success', text: 'Kata sandi berhasil diperbarui dengan aman!' });
       setTimeout(() => {
         setIsPasswordModalOpen(false);
         setNewPassword('');
         setConfirmPassword('');
+        setPasswordOtpInput('');
+        setGeneratedPasswordOtp('');
+        setIsOtpSent(false);
         setPasswordMessage(null);
-      }, 1500);
+      }, 1800);
     } catch (err: any) {
       setPasswordMessage({ type: 'error', text: err.message || 'Gagal mengubah kata sandi.' });
     } finally {
@@ -2124,11 +2195,32 @@ const Profile: React.FC<ProfileProps> = ({ user, onLogout, onSaveSuccess, forceE
                 </div>
               </div>
               <button
-                onClick={() => setIsPasswordModalOpen(false)}
+                onClick={() => {
+                  setIsPasswordModalOpen(false);
+                  setPasswordMessage(null);
+                  setNewPassword('');
+                  setConfirmPassword('');
+                  setPasswordOtpInput('');
+                  setGeneratedPasswordOtp('');
+                  setIsOtpSent(false);
+                }}
                 className="p-2 text-gray-400 hover:text-gray-600 rounded-xl hover:bg-gray-100 transition-colors cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
+            </div>
+
+            {/* Connected Email Info */}
+            <div className="mb-5 p-3.5 rounded-2xl bg-gray-50 border border-gray-100 flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <span className="text-[10px] font-black uppercase tracking-wider text-gray-400 block">Email Terdaftar</span>
+                <span className="text-xs font-bold text-gray-800 truncate block mt-0.5">
+                  {user?.email || formData.email || 'Email tidak tersedia'}
+                </span>
+              </div>
+              <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-[10px] font-black border border-emerald-200 shrink-0">
+                Aktif
+              </span>
             </div>
 
             {passwordMessage && (
@@ -2141,6 +2233,64 @@ const Profile: React.FC<ProfileProps> = ({ user, onLogout, onSaveSuccess, forceE
             )}
 
             <form onSubmit={handlePasswordChange} className="space-y-4">
+              {/* Step 1: Request OTP Code */}
+              <div className="p-3.5 rounded-2xl bg-orange-50/60 border border-orange-200/80">
+                <div className="flex items-center justify-between gap-2 mb-2">
+                  <span className="text-[10px] font-black uppercase tracking-wider text-orange-800 flex items-center gap-1.5">
+                    <ShieldCheck className="w-3.5 h-3.5 text-orange-600" />
+                    Verifikasi Email Pemilik
+                  </span>
+                  {isOtpSent && (
+                    <span className="text-[10px] font-bold text-emerald-600 flex items-center gap-1">
+                      <Check className="w-3 h-3" /> Terkirim
+                    </span>
+                  )}
+                </div>
+                <p className="text-[11px] text-gray-500 font-medium mb-3">
+                  Demi keamanan akun, masukkan kode 6-digit yang dikirim ke email terdaftar Anda.
+                </p>
+                <button
+                  type="button"
+                  onClick={handleSendPasswordOtp}
+                  disabled={isSendingOtp || otpCooldown > 0}
+                  className="w-full py-2 px-3 bg-white hover:bg-orange-50 text-orange-600 border border-orange-300 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed shadow-2xs"
+                >
+                  {isSendingOtp ? (
+                    <>
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      Mengirim Kode...
+                    </>
+                  ) : otpCooldown > 0 ? (
+                    <>
+                      <Clock className="w-3.5 h-3.5" />
+                      Kirim Ulang ({otpCooldown}s)
+                    </>
+                  ) : (
+                    <>
+                      <Mail className="w-3.5 h-3.5" />
+                      {isOtpSent ? 'Kirim Ulang Kode OTP' : 'Kirim Kode Verifikasi ke Email'}
+                    </>
+                  )}
+                </button>
+              </div>
+
+              {/* OTP Code Input */}
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block">
+                  KODE VERIFIKASI EMAIL (6 DIGIT)
+                </label>
+                <input
+                  type="text"
+                  maxLength={6}
+                  value={passwordOtpInput}
+                  onChange={(e) => setPasswordOtpInput(e.target.value.replace(/\D/g, ''))}
+                  className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-base font-black tracking-widest text-gray-900 focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none text-center"
+                  placeholder="Contoh: 123456"
+                  required
+                />
+              </div>
+
+              {/* New Password Input */}
               <div className="space-y-1.5">
                 <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block">
                   KATA SANDI BARU
@@ -2164,6 +2314,7 @@ const Profile: React.FC<ProfileProps> = ({ user, onLogout, onSaveSuccess, forceE
                 </div>
               </div>
 
+              {/* Confirm New Password Input */}
               <div className="space-y-1.5">
                 <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block">
                   KONFIRMASI KATA SANDI BARU
@@ -2178,14 +2329,15 @@ const Profile: React.FC<ProfileProps> = ({ user, onLogout, onSaveSuccess, forceE
                 />
               </div>
 
+              {/* Action Buttons */}
               <div className="pt-2 flex flex-col gap-2.5">
                 <button
                   type="submit"
-                  disabled={passwordLoading}
-                  className="w-full py-3 bg-[#ff7a00] hover:bg-orange-600 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-orange-500/20 active:scale-95 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                  disabled={passwordLoading || !passwordOtpInput || passwordOtpInput.length < 6}
+                  className="w-full py-3.5 bg-[#ff7a00] hover:bg-orange-600 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-md shadow-orange-500/20 active:scale-95 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {passwordLoading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-                  Perbarui Kata Sandi
+                  Verifikasi & Simpan Kata Sandi
                 </button>
 
                 <button
@@ -2195,7 +2347,7 @@ const Profile: React.FC<ProfileProps> = ({ user, onLogout, onSaveSuccess, forceE
                   className="w-full py-2.5 bg-gray-50 hover:bg-gray-100 text-gray-600 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer"
                 >
                   <Mail className="w-3.5 h-3.5 text-gray-400" />
-                  Kirim Link Reset ke Email ({user.email})
+                  Atau Kirim Link Reset ke Email ({user?.email})
                 </button>
               </div>
             </form>

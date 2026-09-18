@@ -2,6 +2,35 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 428. Penguatan Keamanan Ganti Kata Sandi Berbasis Verifikasi Email OTP (`emailService.ts`, `MitraProfile.tsx`, & `Profile.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna mengevaluasi bahwa alur ganti kata sandi di tampilan user dan mitra sangat lemah secara keamanan (*security anomaly*), karena hanya disuruh memasukkan kata sandi baru tanpa adanya verifikasi email pemilik akun.
+  2. Tanpa verifikasi email, siapa pun yang mengakses perangkat yang sedang login dapat langsung mengganti kata sandi dan mengambil alih akun (*account takeover*).
+- **Akar Masalah**:
+  1. Form ganti kata sandi di `Profile.tsx` dan `MitraProfile.tsx` sebelumnya langsung memanggil `supabase.auth.updateUser({ password })` tanpa validasi kepemilikan email atau autentikasi dua langkah (OTP).
+- **Implementasi Solusi**:
+  1. **Helper Service Pengiriman OTP Email (`emailService.ts`)**:
+     - Menambahkan fungsi `sendPasswordChangeOtp(email, otp, name)` dengan template resmi RuangSinggah.
+     - Memuat kode OTP 6-digit dengan masa aktif 10 menit dan pesan peringatan keamanan jika pengguna tidak meminta perubahan tersebut.
+  2. **Verifikasi Email OTP pada Profil Mitra (`MitraProfile.tsx`)**:
+     - Menambahkan alur pengiriman OTP ke email terdaftar pemilik kost dengan tombol *Kirim Kode Verifikasi ke Email*.
+     - Cooldown timer 60 detik untuk mencegah spam pengiriman (*rate limiting*).
+     - Validasi ketat: kata sandi baru hanya akan dieksekusi oleh `supabase.auth.updateUser` jika 6 digit kode OTP cocok dan belum kedaluwarsa.
+  3. **Verifikasi Email OTP pada Profil User (`Profile.tsx`)**:
+     - Menerapkan alur pengiriman dan validasi OTP email yang identik pada modal ganti kata sandi profil pencari kost.
+     - Tetap menyediakan opsi cadangan pengiriman link reset kata sandi ke email.
+  4. **Kepatuhan UI/UX & Bebas FOUT**:
+     - Seluruh ikon menggunakan pure bundled vector SVG dari `lucide-react`.
+- **File Tersentuh**:
+  - `functions/public/emailService.ts`
+  - `functions/public/pages/MitraProfile.tsx`
+  - `functions/public/pages/Profile.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi build frontend Vite (`cmd.exe /c npm run build`) sukses 100% (`✓ built in 34.95s`, 0 error).
+  - Modal ganti kata sandi di profil mitra dan profil user kini memproteksi akun dengan verifikasi OTP email 6-digit.
+
 ### 427. Konsolidasi Menu Profil Mitra Menjadi Penarikan Saldo, Informasi Pribadi & Penambahan Menu Pengaturan (`MitraProfile.tsx`) (September 2026)
 - **Permintaan & Masalah**:
   1. Pengguna meminta 4 menu profil mitra yang sebelumnya terpisah ("Tarik Saldo Kost", "Rekening Penarikan", "Data Profil & Domisili", "Verifikasi Identitas KTP") disederhanakan menjadi 2 menu inti ("Penarikan Saldo" dan "Informasi Pribadi"), karena masing-masing pasangan fungsi sudah saling terhubung dan terintegrasi di dalam satu tampilan yang sama.

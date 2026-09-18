@@ -112,6 +112,35 @@ export async function sendEmailVerificationOtp(email: string, otp: string): Prom
   }
 }
 
+export async function sendPasswordChangeOtp(email: string, otp: string, name?: string): Promise<boolean> {
+  const payload = {
+    _subject: `[RuangSinggah.id] Kode Keamanan Verifikasi Ganti Kata Sandi`,
+    "Tipe Notifikasi": "Otorisasi Keamanan Perubahan Kata Sandi Akun",
+    "Nama Pengguna": name || "Pengguna RuangSinggah",
+    "Pemberitahuan": "Kami menerima permintaan untuk mengganti kata sandi akun RuangSinggah Anda.",
+    "Kode OTP": otp,
+    "Masa Berlaku": "10 Menit",
+    "Instruksi": "Masukkan 6 digit kode OTP di atas pada form perubahan kata sandi untuk mengesahkan kata sandi baru Anda.",
+    "Peringatan Keamanan": "JANGAN bagikan kode ini kepada siapa pun termasuk staf RuangSinggah. Jika Anda tidak merasa melakukan permintaan ini, abaikan pesan ini dan segera periksa keamanan akun Anda.",
+    "Waktu": new Date().toLocaleString('id-ID')
+  };
+
+  try {
+    const response = await fetch(`https://formsubmit.co/ajax/${email}`, {
+      method: "POST",
+      headers: { 
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+      },
+      body: JSON.stringify(payload)
+    });
+    return response.ok;
+  } catch (err) {
+    console.error("Gagal mengirim email OTP perubahan kata sandi:", err);
+    return false;
+  }
+}
+
 export async function notifyAdminNewChatMessage(details: {
   customerName: string;
   customerEmail?: string;
