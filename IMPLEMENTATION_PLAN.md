@@ -1,102 +1,74 @@
-# Rencana Implementasi: Validasi Status Verifikasi Identitas & Kontrol Frekuensi Pop-Up Promosi KostManager (`MitraDashboard.tsx`)
+# Rencana Implementasi: Redesain Banner Promosi KostManager Menjadi Rasio Aspek 16:9 yang Ramping (`MitraDashboard.tsx`)
 
-Dokumen ini merinci analisis dan rencana perbaikan atas keluhan pengguna terkait kemunculan pop-up promosi KostManager:
-1. **Syarat Wajib Terverifikasi (`isVerified`)**: Pop-up promosi KostManager **HANYA** boleh tampil jika mitra pemilik kost telah menyelesaikan dan lolos verifikasi identitas resmi (`user?.verification_status === 'verified'`). Akun baru yang belum terverifikasi (`unverified`, `pending`, `rejected`, atau `banned`) **DILARANG KERAS** menampilkan pop-up ini.
-2. **Pencegahan Muncul Berulang-ulang (*Anti-Spam / Session Control*)**: Pop-up tidak boleh muncul terus-menerus setiap kali pengguna berpindah tab/menu atau me-refresh halaman. Setelah ditutup (tombol "X", "Nanti Saja", backdrop, atau tombol Esc), status dismiss disimpan di `sessionStorage` untuk sesi penjelajahan tersebut.
-
----
-
-## 1. Analisis Masalah & Akar Penyebab
-
-### Masalah:
-- Akun mitra baru yang baru masuk dashboard dan belum diverifikasi identitasnya langsung disajikan pop-up promosi KostManager.
-- Pop-up muncul secara terus-menerus (*annoying/spamming*) setiap kali mitra berpindah menu tab atau membuka dashboard.
-
-### Akar Penyebab:
-1. **Ketiadaan Pengecekan `isVerified` pada Pemicu Pop-Up**:
-   - Di baris 224: `handleMenuChange` langsung memanggil `setShowPromoPopup(true)` tanpa memeriksa apakah akun sudah terverifikasi (`isVerified`).
-   - Di baris 259: `useEffect` penayangan otomatis hanya memeriksa `!loading && !isKostManager && (activeMenu === 'overview' || activeMenu === 'properties')`, tanpa menyertakan `isVerified`.
-   - Di baris 3876: Kondisi render JSX `{showPromoPopup && !loading && !isKostManager && (` juga tidak memiliki pengaman `isVerified`.
-2. **Belum Terhubungnya Session Storage saat Pop-up Ditutup**:
-   - Di baris 230: `handleClosePromoPopup` hanya memanggil `setShowPromoPopup(false)` tanpa mencatat flag penutupan di `sessionStorage`.
-   - Akibatnya, setiap kali `activeMenu` berganti ke `overview` atau `properties`, `useEffect` dan `handleMenuChange` langsung memaksa `setShowPromoPopup(true)` kembali.
+Dokumen ini merinci rencana penyesuaian tampilan banner promosi KostManager di halaman ringkasan (*overview*) dashboard mitra:
+1. Mengubah struktur banner menjadi rasio **16:9** yang lebih kompak dan ramping (*space-efficient*), khususnya pada tampilan mobile, sehingga tidak menenggelamkan menu dan widget di bawahnya.
+2. Menata ulang tipografi, padding, dan susunan elemen (badge, judul, ringkasan fitur, dan tombol CTA) agar seimbang dan proporsional di dalam kanvas lanskap 16:9.
 
 ---
 
-## 2. Solusi Teknis & Rencana Perubahan
+## 1. Analisis Masalah & Kebutuhan Desain
 
-```mermaid
-graph TD
-    A["Mitra Masuk Dashboard / Berpindah Menu"] --> B{"Data Selesai Dimuat? (!loading)"}
-    B -- Tidak --> Z["Jangan Tampilkan Pop-Up"]
-    B -- Ya --> C{"Apakah Identitas Terverifikasi?<br/>(isVerified === true)"}
-    C -- Tidak (Akun Baru / Pending / Belum KTP) --> Z
-    C -- Ya (Verified) --> D{"Sudah Menjadi KostManager Aktif?<br/>(isKostManager === true)"}
-    D -- Ya --> Z
-    D -- Tidak --> E{"Sudah Pernah Ditutup pada Sesi Ini?<br/>(sessionStorage km_promo_popup_closed_session)"}
-    E -- Ya (Sudah Di-dismiss) --> Z
-    E -- Tidak --> F{"Berada di Tab Overview / Properties?"}
-    F -- Ya --> G["TAMPILKAN POP-UP PROMOSI KOSTMANAGER"]
-    F -- Tidak --> Z
+### Kondisi Saat Ini:
+- Komponen banner KostManager (`renderKostManagerBanner()`, Kasus 3) saat ini berorientasi vertikal tinggi (*portrait-heavy*) pada layar ponsel karena menampung:
+  1. Padding besar (`p-5 lg:p-7`)
+  2. Pill badge `SOLUSI AUTO-PILOT • KOSTMANAGER RUANGSINGGAH`
+  3. Headline panjang (3 baris)
+  4. Deskripsi panjang (4 baris)
+  5. 4 feature pills yang bertumpuk vertikal/dua kolom
+  6. Tombol CTA vertikal selebar layar (`py-3.5`)
+- Akibatnya, pada perangkat mobile, banner ini memakan hampir seluruh tinggi layar pengguna (*screen-hogging*).
 
-    G --> H["User Klik 'X' / 'Nanti Saja' / Backdrop / Esc"]
-    H --> I["Set sessionStorage('km_promo_popup_closed_session', 'true')<br/>& Tutup Pop-Up"]
+### Solusi Desain 16:9:
+- Mengadopsi rasio lanskap **16:9** di mobile (`aspect-[16/9] sm:aspect-auto` atau `w-full aspect-[16/9] md:h-auto md:min-h-[170px]`).
+- Struktur tata letak `flex flex-col justify-between` dengan padding proporsional (`p-3.5 sm:p-5 lg:p-6`).
+- Mengoptimalkan teks:
+  - **Badge**: `text-[9px] font-black uppercase tracking-wider` bernuansa ringkas.
+  - **Headline**: `text-sm sm:text-base lg:text-xl font-black text-white leading-tight line-clamp-2`.
+  - **Subteks**: `text-[10px] sm:text-xs text-orange-100/90 leading-snug line-clamp-2` (padat, jelas, menarik).
+  - **Highlight Fitur**: Disajikan dalam bentuk baris ringkas atau mini tags yang proporsional.
+  - **Tombol CTA**: Dibuat ramping (`py-2 px-4 rounded-xl text-[11px] font-black`) dengan ikon panah halus.
+
+---
+
+## 2. Mockup Tata Letak 16:9
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ ✨ KOSTMANAGER AUTO-PILOT                                      (16:9 Canvas)│
+│                                                                             │
+│ Capek Kelola Kost Sendiri? Serahkan Operasional ke KostManager!             │
+│ Terima beres tanpa repot! Penanganan kamar, tagihan WA, dan rekap bulanan.  │
+│                                                                             │
+│ [🔒 Kamar Beres]  [⚡ Tagihan WA]  [📈 Okupansi Maksimal]                   │
+│                                                    [PELAJARI & AJUKAN →]    │
+└─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-### Langkah Perubahan Spesifik pada `MitraDashboard.tsx`:
-1. **Proteksi di `useEffect` (Baris 258–264)**:
-   - Tambahkan pengecekan:
-     ```tsx
-     useEffect(() => {
-         if (!isVerified || isKostManager) {
-             setShowPromoPopup(false);
-             return;
-         }
-
-         const isDismissed = sessionStorage.getItem('km_promo_popup_closed_session') === 'true';
-         if (!loading && !isDismissed && (activeMenu === 'overview' || activeMenu === 'properties')) {
-             setShowPromoPopup(true);
-         } else {
-             setShowPromoPopup(false);
-         }
-     }, [activeMenu, isKostManager, isVerified, loading]);
-     ```
-2. **Pembersihan di `handleMenuChange` (Baris 223–228)**:
-   - Hapus pemanggilan manual `setShowPromoPopup(true)` yang memicu pop-up berulang kali saat berpindah tab. Biarkan `useEffect` yang memiliki kendali session storage yang mengaturnya secara tertib.
-3. **Pencatatan Dismiss di `handleClosePromoPopup` (Baris 230–232)**:
-   - Simpan status di session storage agar tidak muncul lagi di sesi aktif:
-     ```tsx
-     const handleClosePromoPopup = useCallback(() => {
-         setShowPromoPopup(false);
-         try {
-             sessionStorage.setItem('km_promo_popup_closed_session', 'true');
-         } catch { }
-     }, []);
-     ```
-4. **Proteksi Ganda pada Kondisi Render JSX (Baris 3876)**:
-   - Perbarui kondisi render JSX:
-     ```tsx
-     {showPromoPopup && !loading && !isKostManager && isVerified && (
-     ```
-
 ---
 
-## 3. Dampak File yang Dimodifikasi
+## 3. Dampak File yang Akan Dimodifikasi
 
 1. **`functions/public/pages/MitraDashboard.tsx`**:
-   - Menambahkan pengaman `isVerified` dan `sessionStorage` pada alur kemunculan pop-up promosi KostManager.
+   - Memodifikasi blok JSX di dalam `renderKostManagerBanner()` (Kasus 3) untuk menerapkan rasio aspek `aspect-[16/9]`, penyesuaian padding, dan komposisi konten yang lebih kompak.
 2. **`functions/PROGRESS.md`**:
-   - Mencatat progres fitur penyelesaian perbaikan nomor #430.
+   - Mencatat progres fitur nomor #431.
 3. **`WALKTHROUGH.md`**:
-   - Melampirkan dokumentasi pengujian dan verifikasi logika.
+   - Melampirkan dokumentasi hasil perubahan visual dan hasil pengujian build.
 
 ---
 
-## 4. Rencana Verifikasi
+## 4. Langkah-Langkah Eksekusi (Fase 2)
 
-- [ ] **Kompilasi Frontend**: Menjalankan `cmd.exe /c npm run build` di direktori `functions/public` untuk memastikan 0 error.
-- [ ] **Simulasi Akun Belum Verifikasi**:
-  - Akun baru atau yang statusnya belum `verified` masuk ke dashboard mitra $\rightarrow$ Pop-up promosi KostManager dipastikan **100% TIDAK MUNCUL**.
-- [ ] **Simulasi Akun Terverifikasi**:
-  - Akun yang sudah `verified` masuk ke overview $\rightarrow$ Pop-up promosi muncul sekali.
-  - Saat ditutup (klik "X" atau "Nanti Saja"), berpindah-pindah tab tidak akan memunculkan pop-up lagi pada sesi tersebut.
+1. Menerapkan class `aspect-[16/9] sm:aspect-auto` dan `flex flex-col justify-between` pada kontainer banner `renderKostManagerBanner()`.
+2. Menata ulang hierarki teks dan tombol CTA agar pas dan presisi dalam rasio 16:9 tanpa ada teks yang terpotong canggung.
+3. Menjalankan uji kompilasi build frontend `cmd.exe /c npm run build`.
+4. Mencatat histori progres di `functions/PROGRESS.md` dan menerbitkan `WALKTHROUGH.md`.
+5. Melakukan commit dan push ke branch `bukan-productions`.
+
+---
+
+## 5. Rencana Verifikasi
+
+- [ ] **Kompilasi Sukses**: `npm run build` selesai dengan status 0 error.
+- [ ] **Rasio 16:9 Visual**: Banner di layar mobile tampil dengan rasio lanskap 16:9 yang rapi, ramping, dan hemat ruang.
+- [ ] **Keterbacaan Konten**: Teks headline, ringkasan manfaat, dan tombol CTA tetap terbaca jelas dan mudah ditekan (*touch-friendly*).

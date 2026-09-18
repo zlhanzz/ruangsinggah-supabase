@@ -2,6 +2,29 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 431. Redesain Banner Promosi KostManager Menjadi Rasio 16:9 yang Ramping & Hemat Ruang (`MitraDashboard.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna meminta agar banner promosi KostManager di halaman ringkasan (*overview*) dashboard mitra dibuat lebih kecil dan mengadopsi rasio lanskap 16:9 agar tidak terlalu memakan ruang vertikal layar (*screen-hogging*), khususnya pada perangkat mobile.
+- **Akar Masalah**:
+  1. Banner Kasus 3 sebelumnya memiliki struktur bertumpuk ke bawah (*portrait-heavy*) dengan padding besar (`p-5 lg:p-7`), headline dan deskripsi 3-4 baris penuh, 4 feature pills dua baris, serta tombol CTA selebar layar, sehingga memakan hampir seluruh tinggi tampilan ponsel.
+- **Implementasi Solusi**:
+  1. **Penerapan Rasio Lanskap 16:9 yang Ramping**:
+     - Mengubah kontainer banner menjadi `w-full aspect-[16/9] sm:aspect-auto sm:min-h-[170px]` dengan layout `flex flex-col justify-between`.
+     - Padding disesuaikan proporsional `p-3.5 sm:p-5 lg:p-6`.
+  2. **Optimalisasi Tipografi & Hierarki Konten**:
+     - Badge kategori dibuat lebih ringkas: `text-[9px] sm:text-[10px] uppercase tracking-widest`.
+     - Headline disesuaikan menjadi `text-sm sm:text-base lg:text-xl font-black line-clamp-2`.
+     - Deskripsi manfaat diringkas padat dengan `line-clamp-2` agar pas dan tidak meluap (*no overflow*).
+  3. **Penataan Horizontal Feature Tags & Tombol CTA**:
+     - Menata tombol "Pelajari & Ajukan" (`py-2 sm:py-2.5 px-3.5 sm:px-5 text-[10px] sm:text-xs`) dan mini tags (`Kamar Terima Beres`, `Tagihan WA Otomatis`) sejajar di baris bawah.
+- **File Tersentuh**:
+  - `functions/public/pages/MitraDashboard.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi build frontend Vite (`cmd.exe /c npm run build`) sukses 100% (`✓ built in 35.38s`, 0 error).
+  - Tampilan banner di overview dashboard kini tampil proporsional dalam rasio 16:9 di mobile, bersih, elegan, dan hemat ruang.
+
 ### 430. Validasi Status Verifikasi Identitas & Kontrol Sesi Pop-Up Promosi KostManager (`MitraDashboard.tsx`) (September 2026)
 - **Permintaan & Masalah**:
   1. Pengguna menegaskan kembali bahwa pop-up promosi KostManager ("Capek Kelola Kost Sendiri? Serahkan Operasional ke KostManager!") hanya boleh muncul apabila identitas pemilik kost telah terverifikasi resmi (`isVerified === true`).
