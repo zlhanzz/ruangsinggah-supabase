@@ -2,6 +2,36 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 436. Redesain UI/UX Komunikatif Verifikasi WhatsApp & Formulir Profil Mitra Langkah 1 (`MitraProfile.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  1. Calon mitra baru yang pertama kali mendaftar dan masuk ke tahap pengisian identitas (Langkah 1 Data Profil di `/dashboard-mitra/profile?edit=true&step=1`) mengalami kebingungan karena nomor WhatsApp otomatis terisi dari akun registrasi, menimbulkan ilusi bahwa data sudah beres padahal statusnya belum terverifikasi (`whatsapp_verified === false`).
+  2. Indikator verifikasi sebelumnya sangat minim, hanya berupa tombol teks kecil 9px (`KIRIM OTP`) di pojok label tanpa penanda status/badge bahwa ini adalah tahap wajib.
+  3. Kotak input 6 digit OTP sebelumnya tersembunyi (*hidden state*) sampai tombol kecil tersebut diklik, sehingga mitra tidak tahu apa yang harus dilakukan.
+  4. Tombol "LANJUTKAN" di bagian bawah formulir terkunci bisu (*silent disabled*) dengan warna abu-abu tanpa penjelasan pesan apapun saat WhatsApp belum diverifikasi, membuat calon mitra bingung mengira sistem error padahal semua input teks sudah terisi.
+- **Akar Masalah**:
+  1. Input No. WhatsApp sebelumnya memakai komponen input biasa bersanding dengan nama lengkap, email, dan alamat tanpa kartu penegas verifikasi khusus.
+  2. Ketiadaan *open state* untuk alur OTP: kolom OTP dan panduannya tidak terlihat langsung.
+  3. Tombol "LANJUTKAN" di-disable secara kaku (`disabled={!isStep1Complete}`) tanpa event handler atau checklist syarat kelengkapan.
+- **Implementasi Solusi**:
+  1. **Banner Panduan Alur Langkah 1**:
+     - Menambahkan banner informatif di atas formulir yang menerangkan bahwa Langkah 1 adalah pengisian profil dasar dan verifikasi nomor WhatsApp menggunakan kode OTP sebelum dapat lanjut ke Langkah 2 (Unggah KTP).
+  2. **Dedicated WhatsApp Verification Card (Terbuka Langsung)**:
+     - Merombak total bagian WhatsApp menjadi kartu interaktif khusus dengan status badge yang sangat jelas: `⚠️ BUTUH VERIFIKASI OTP (WAJIB)`, `⏳ MENUNGGU KODE OTP`, atau `✓ TERVERIFIKASI RESMI`.
+     - Menyajikan tombol aksi utama berukuran besar **"📲 KIRIM KODE OTP WHATSAPP"** yang langsung terlihat, lengkap dengan penjelasan interaktif.
+     - Menyediakan 6 kotak digit OTP (font mono tebal, autofocus otomatis) dan tombol konfirmasi **"VERIFIKASI WHATSAPP SEKARANG"** serta hitung mundur kirim ulang kode.
+     - Kartu otomatis berubah menjadi hijau sukses terverifikasi dengan opsi ganti nomor jika diperlukan.
+  3. **Checklist Kelengkapan & Umpan Balik Cerdas Tombol "LANJUTKAN" (No Silent Disabled)**:
+     - Menambahkan ringkasan *Requirement Checklist Pills* di atas tombol aksi (Nama Lengkap, Verifikasi WA, Alamat Domisili).
+     - Menghilangkan sifat mati bisu tombol "LANJUTKAN": jika diklik sebelum verifikasi WhatsApp selesai, sistem memberikan alert panduan ramah, secara otomatis melakukan *smooth scroll* ke kartu WhatsApp, serta memberikan efek *highlight/flash* oranye visual pada kartu WhatsApp.
+  4. **Pembersihan State pada Tombol "BATAL"**:
+     - Memastikan tombol BATAL membersihkan state OTP dan mengembalikan mitra ke pratinjau profil dengan mulus.
+- **File Tersentuh**:
+  - `functions/public/pages/MitraProfile.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Uji kompilasi build frontend Vite (`cmd.exe /c npm run build`) sukses 100% (`✓ built in 1m 2s`, 0 error).
+
 ### 435. Perbaikan Fungsionalitas Tombol Keluar / Logout pada Tab Profil Dashboard Mitra (`MitraDashboard.tsx` & `MitraProfile.tsx`) (September 2026)
 - **Permintaan & Masalah**:
   1. Pengguna melaporkan bahwa tombol keluar akun atau logout pada profil dashboard mitra (`/dashboard-mitra/profile`) belum berfungsi dengan baik ("keluar akun atau logout pada profile dashboard mitra belum berfungsi dengan baik").

@@ -53,6 +53,8 @@ const MitraProfile: React.FC<MitraProfileProps> = ({
     const [waResendTimer, setWaResendTimer] = useState(0);
     const [otpDigits, setOtpDigits] = useState(['', '', '', '', '', '']);
     const otpRefs = React.useRef<Array<HTMLInputElement | null>>([]);
+    const waSectionRef = React.useRef<HTMLDivElement | null>(null);
+    const [highlightWaCard, setHighlightWaCard] = useState(false);
 
     // Double OTP states for WhatsApp change (verified Mitras)
     const [phoneEditStep, setPhoneEditStep] = useState<'none' | 'security_otp' | 'new_phone_input' | 'new_phone_otp'>('none');
@@ -364,9 +366,39 @@ const MitraProfile: React.FC<MitraProfileProps> = ({
     const handleCancel = () => {
         setIsEditing(false);
         setCurrentStep(1);
+        setWaOtpCode('');
+        setWaOtpInput('');
+        setOtpDigits(['', '', '', '', '', '']);
+        setIsVerifyingWaOtp(false);
+        setHighlightWaCard(false);
         // Hapus query params
         setSearchParams(new URLSearchParams());
         loadProfile();
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    };
+
+    const handleStep1Submit = async () => {
+        if (!formData.display_name || formData.display_name.trim() === '') {
+            alert('Silakan isi Nama Lengkap Anda terlebih dahulu.');
+            return;
+        }
+        if (!formData.phone || formData.phone.trim() === '') {
+            alert('Silakan isi Nomor WhatsApp Anda terlebih dahulu.');
+            waSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            return;
+        }
+        if (!waOtpVerified && !initialUser?.whatsapp_verified) {
+            setHighlightWaCard(true);
+            setTimeout(() => setHighlightWaCard(false), 3500);
+            waSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            alert('⚠️ Nomor WhatsApp Anda belum terverifikasi!\n\nUntuk keamanan akun dan kelancaran notifikasi sewa, Anda wajib memverifikasi nomor WhatsApp dengan 6 digit kode OTP terlebih dahulu sebelum dapat melanjutkan ke verifikasi identitas (KTP).');
+            return;
+        }
+        if (!formData.address || formData.address.trim() === '') {
+            alert('Silakan lengkapi Alamat Domisili Anda terlebih dahulu.');
+            return;
+        }
+        await saveStep1Draft();
         window.scrollTo({ top: 0, behavior: 'smooth' });
     };
 
@@ -440,6 +472,9 @@ const MitraProfile: React.FC<MitraProfileProps> = ({
             setWaResendTimer(60);
             setOtpDigits(['', '', '', '', '', '']);
             setWaOtpInput('');
+            setTimeout(() => {
+                otpRefs.current[0]?.focus();
+            }, 250);
             alert('Kode OTP 6 digit telah berhasil dikirim ke WhatsApp Anda. Silakan masukkan kode untuk menyelesaikan verifikasi.');
         } catch (error: any) {
             alert(`Gagal mengirim OTP: ${error.message}`);
@@ -997,6 +1032,21 @@ const MitraProfile: React.FC<MitraProfileProps> = ({
                         <div className="space-y-10">
                             {currentStep === 1 ? (
                                 <div>
+                                    {/* Banner Petunjuk Alur Langkah 1 */}
+                                    <div className="bg-gradient-to-r from-orange-500/10 via-amber-500/5 to-transparent border border-orange-200/80 rounded-2xl p-4 sm:p-4.5 flex items-start gap-3.5 mb-6">
+                                        <div className="w-8 h-8 rounded-xl bg-orange-500 text-white flex items-center justify-center shrink-0 shadow-xs mt-0.5">
+                                            <Sparkles size={16} />
+                                        </div>
+                                        <div className="text-left space-y-0.5">
+                                            <h5 className="text-xs font-black uppercase tracking-wider text-orange-950">
+                                                Langkah 1 dari 2: Data Profil & Verifikasi WhatsApp
+                                            </h5>
+                                            <p className="text-xs text-gray-600 font-medium leading-relaxed">
+                                                Harap lengkapi nama, nomor WhatsApp (wajib verifikasi kode OTP), dan alamat domisili Anda. Setelah nomor WhatsApp terverifikasi, Anda dapat melanjutkan ke Langkah 2 untuk mengunggah dokumen KTP.
+                                            </p>
+                                        </div>
+                                    </div>
+
                                     <h4 className="text-xs font-black uppercase tracking-widest text-orange-500 mb-6 flex items-center gap-2">
                                         <span className="w-1.5 h-3 bg-orange-500 rounded-full"></span>
                                         Data Profil
@@ -1193,87 +1243,192 @@ const MitraProfile: React.FC<MitraProfileProps> = ({
                                                     ) : null}
                                                 </div>
                                             ) : (
-                                                <div className="space-y-2">
-                                                    <div className="flex items-center justify-between">
-                                                        <div className="flex items-center gap-3 text-gray-400">
-                                                            <div className="w-8 h-8 rounded-lg bg-gray-50 flex items-center justify-center text-gray-400"><Phone size={18} /></div>
-                                                            <p className="text-[10px] font-black uppercase tracking-widest leading-none text-gray-500">No. WhatsApp</p>
-                                                        </div>
-                                                        {waOtpVerified ? (
-                                                            <div className="flex items-center gap-2">
-                                                                <span className="flex items-center gap-1 text-[9px] font-black uppercase text-green-600 bg-green-50 px-2 py-1 rounded-md border border-green-100">
-                                                                    <BadgeCheck size={12} className="text-green-500" /> Terverifikasi
-                                                                </span>
-                                                                <button
-                                                                    type="button"
-                                                                    onClick={handleInitiateChangePhone}
-                                                                    className="text-[9px] font-black uppercase tracking-widest text-orange-600 hover:text-orange-700 bg-orange-50 hover:bg-orange-100 px-2.5 py-1 rounded-md border border-orange-200 transition-all active:scale-95"
-                                                                >
-                                                                    Ganti Nomor
-                                                                </button>
-                                                            </div>
-                                                        ) : waOtpCode ? (
-                                                            <span className="flex items-center gap-1 text-[9px] font-black uppercase text-orange-600 bg-orange-50 px-2.5 py-1 rounded-md border border-orange-100">
-                                                                <Clock size={12} className="text-orange-500" /> Kode Terkirim
-                                                            </span>
-                                                        ) : (
-                                                            <button type="button" onClick={handleSendWaOtp} className="text-[9px] font-black uppercase tracking-widest text-orange-500 hover:text-orange-600 bg-orange-50 hover:bg-orange-100 px-2.5 py-1.5 rounded-lg transition-colors border border-orange-100">
-                                                                Kirim OTP
-                                                            </button>
-                                                        )}
-                                                    </div>
-                                                    <div className="relative">
-                                                        <input
-                                                            name="phone"
-                                                            value={formData.phone}
-                                                            onChange={handleInputChange}
-                                                            readOnly={waOtpVerified}
-                                                            placeholder="Contoh: 081234567890"
-                                                            className={`w-full border ${waOtpVerified ? 'border-green-200 bg-green-50/20 text-gray-700 cursor-not-allowed select-none' : 'bg-gray-50 border-gray-200 focus:border-orange-500 focus:bg-white text-gray-900'} p-4 pr-12 rounded-2xl outline-none font-bold text-sm transition-colors`}
-                                                        />
-                                                        {waOtpVerified && (
-                                                            <div className="absolute right-4 top-1/2 -translate-y-1/2 text-green-500 flex items-center gap-1.5 pointer-events-none">
-                                                                <BadgeCheck size={20} />
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                    
-                                                    {!waOtpVerified && (waOtpCode !== '' || isVerifyingWaOtp) && (
-                                                        <div className="mt-2 p-5 bg-orange-50/50 rounded-2xl border border-orange-100 space-y-4 text-center">
-                                                            <div className="flex items-center justify-between">
-                                                                <span className="text-[10px] font-black text-orange-800 uppercase tracking-widest">Masukkan 6 Digit OTP</span>
-                                                                {waResendTimer > 0 ? (
-                                                                    <span className="text-[9px] font-bold text-gray-400 uppercase">Kirim ulang dalam {waResendTimer}s</span>
-                                                                ) : (
-                                                                    <button type="button" onClick={handleSendWaOtp} className="text-[9px] font-black text-orange-500 hover:underline uppercase">
-                                                                        Kirim Ulang
-                                                                    </button>
-                                                                )}
-                                                            </div>
+                                                 <div 
+                                                     ref={waSectionRef} 
+                                                     className={`transition-all duration-500 rounded-3xl p-5 sm:p-6 border-2 ${
+                                                         highlightWaCard 
+                                                             ? 'ring-4 ring-orange-500/40 border-orange-500 bg-orange-50/80 shadow-lg scale-[1.01]' 
+                                                             : waOtpVerified 
+                                                                 ? 'bg-green-50/20 border-green-200' 
+                                                                 : 'bg-gradient-to-b from-orange-50/40 via-white to-orange-50/15 border-orange-200/90 shadow-sm'
+                                                     }`}
+                                                 >
+                                                     {/* Header Kartu WhatsApp */}
+                                                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+                                                         <div className="flex items-center gap-3">
+                                                             <div className={`w-9 h-9 rounded-xl flex items-center justify-center transition-colors ${
+                                                                 waOtpVerified 
+                                                                     ? 'bg-green-100 text-green-700' 
+                                                                     : 'bg-orange-100 text-orange-600'
+                                                             }`}>
+                                                                 <Phone size={18} />
+                                                             </div>
+                                                             <div>
+                                                                 <div className="flex items-center gap-2">
+                                                                     <p className="text-xs font-black uppercase tracking-wider text-gray-900 leading-none">No. WhatsApp</p>
+                                                                     {!waOtpVerified && (
+                                                                         <span className="text-[9px] font-bold text-red-500 uppercase tracking-tight bg-red-50 px-1.5 py-0.5 rounded border border-red-100">
+                                                                             Wajib OTP
+                                                                         </span>
+                                                                     )}
+                                                                 </div>
+                                                                 <p className="text-[11px] text-gray-400 font-bold mt-1">
+                                                                     {waOtpVerified 
+                                                                         ? 'Nomor WhatsApp telah diverifikasi resmi' 
+                                                                         : 'Wajib verifikasi OTP agar sistem dapat terhubung'}
+                                                                 </p>
+                                                             </div>
+                                                         </div>
 
-                                                            <div className="flex justify-center gap-2">
-                                                                {otpDigits.map((digit, idx) => (
-                                                                    <input
-                                                                        key={idx}
-                                                                        ref={el => { otpRefs.current[idx] = el; }}
-                                                                        type="text"
-                                                                        maxLength={1}
-                                                                        value={digit}
-                                                                        onChange={e => handleOtpDigitChange(idx, e.target.value)}
-                                                                        onKeyDown={e => handleOtpKeyDown(idx, e)}
-                                                                        onPaste={handleOtpPaste}
-                                                                        className="w-10 h-12 text-center font-mono font-bold text-lg bg-white border border-gray-200 rounded-xl focus:border-orange-500 outline-none transition-all shadow-sm"
-                                                                    />
-                                                                ))}
-                                                            </div>
+                                                         {/* Status Badge */}
+                                                         <div>
+                                                             {waOtpVerified ? (
+                                                                 <div className="flex items-center gap-2">
+                                                                     <span className="flex items-center gap-1.5 text-[10px] font-black uppercase text-green-700 bg-green-100/90 px-3 py-1.5 rounded-xl border border-green-200 shadow-xs">
+                                                                         <BadgeCheck size={14} className="text-green-600" /> Terverifikasi
+                                                                     </span>
+                                                                     <button
+                                                                         type="button"
+                                                                         onClick={handleInitiateChangePhone}
+                                                                         className="text-[10px] font-black uppercase tracking-wider text-orange-600 hover:text-orange-700 bg-white hover:bg-orange-50 px-3 py-1.5 rounded-xl border border-orange-200 transition-all active:scale-95 shadow-xs cursor-pointer"
+                                                                     >
+                                                                         Ganti Nomor
+                                                                     </button>
+                                                                 </div>
+                                                             ) : waOtpCode || isVerifyingWaOtp ? (
+                                                                 <span className="flex items-center gap-1.5 text-[10px] font-black uppercase text-amber-800 bg-amber-100 px-3 py-1.5 rounded-xl border border-amber-200 shadow-xs animate-pulse">
+                                                                     <Clock size={14} className="text-amber-600" /> Menunggu Kode OTP
+                                                                 </span>
+                                                             ) : (
+                                                                 <span className="flex items-center gap-1.5 text-[10px] font-black uppercase text-red-700 bg-red-100 px-3 py-1.5 rounded-xl border border-red-200 shadow-xs">
+                                                                     <AlertCircle size={14} className="text-red-500" /> Butuh Verifikasi OTP
+                                                                 </span>
+                                                             )}
+                                                         </div>
+                                                     </div>
 
-                                                            <button type="button" onClick={handleVerifyWaOtp} className="w-full py-3 bg-orange-500 hover:bg-orange-600 text-white font-bold text-xs rounded-xl active:scale-95 transition-all uppercase tracking-widest shadow-lg shadow-orange-500/20">
-                                                                Verifikasi WhatsApp
-                                                            </button>
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            )}
+                                                     {/* Input Nomor Telepon */}
+                                                     <div className="space-y-1.5">
+                                                         <div className="relative">
+                                                             <input
+                                                                 name="phone"
+                                                                 value={formData.phone}
+                                                                 onChange={handleInputChange}
+                                                                 readOnly={waOtpVerified}
+                                                                 placeholder="Contoh: 081234567890 atau +6281234567890"
+                                                                 className={`w-full border text-base font-bold p-4 pr-12 rounded-2xl outline-none transition-all ${
+                                                                     waOtpVerified 
+                                                                         ? 'border-green-200 bg-green-50/30 text-gray-800 cursor-not-allowed select-none' 
+                                                                         : 'bg-white border-orange-200 focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 text-gray-900 shadow-xs'
+                                                                 }`}
+                                                             />
+                                                             {waOtpVerified && (
+                                                                 <div className="absolute right-4 top-1/2 -translate-y-1/2 text-green-500 flex items-center gap-1.5 pointer-events-none">
+                                                                     <BadgeCheck size={22} />
+                                                                 </div>
+                                                             )}
+                                                         </div>
+                                                         <p className="text-[11px] text-gray-500 font-medium leading-relaxed">
+                                                             {waOtpVerified 
+                                                                 ? 'Nomor ini digunakan untuk segala notifikasi operasional kost dan koordinasi mitra.' 
+                                                                 : 'Pastikan nomor WhatsApp ini aktif di smartphone Anda untuk menerima 6 digit kode OTP verifikasi.'}
+                                                         </p>
+                                                     </div>
+                                                     
+                                                     {/* Area Verifikasi OTP Terbuka Langsung */}
+                                                     {!waOtpVerified && (
+                                                         <div className="mt-4 pt-4 border-t border-orange-100/90 space-y-3.5">
+                                                             {!waOtpCode && !isVerifyingWaOtp ? (
+                                                                 <div className="bg-white/95 border border-orange-200 rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-xs">
+                                                                     <div className="text-left space-y-1">
+                                                                         <div className="flex items-center gap-2">
+                                                                             <span className="w-2 h-2 rounded-full bg-orange-500 animate-ping"></span>
+                                                                             <h5 className="text-xs font-black uppercase tracking-wider text-orange-950">
+                                                                                 Verifikasi Nomor WhatsApp Anda
+                                                                             </h5>
+                                                                         </div>
+                                                                         <p className="text-xs text-gray-600 leading-relaxed font-medium">
+                                                                             Klik tombol di samping untuk menerima 6 digit kode OTP pada nomor <strong className="text-gray-900">{formData.phone || '(Belum diisi)'}</strong>.
+                                                                         </p>
+                                                                     </div>
+                                                                     <button
+                                                                         type="button"
+                                                                         onClick={handleSendWaOtp}
+                                                                         disabled={isSubmitting || !formData.phone?.trim()}
+                                                                         className="w-full sm:w-auto shrink-0 px-6 py-3.5 bg-orange-500 hover:bg-orange-600 disabled:opacity-50 text-white rounded-xl text-xs font-black uppercase tracking-widest shadow-md shadow-orange-500/20 active:scale-95 transition-all flex items-center justify-center gap-2 cursor-pointer"
+                                                                     >
+                                                                         {isSubmitting ? (
+                                                                             <RefreshCw size={14} className="animate-spin" />
+                                                                         ) : (
+                                                                             <Phone size={14} />
+                                                                         )}
+                                                                         <span>Kirim Kode OTP WhatsApp</span>
+                                                                     </button>
+                                                                 </div>
+                                                             ) : (
+                                                                 <div className="bg-white border-2 border-orange-200 rounded-2xl p-5 space-y-4 text-center shadow-xs animate-in fade-in duration-300">
+                                                                     <div className="flex flex-col sm:flex-row items-center justify-between gap-2 border-b border-gray-100 pb-3">
+                                                                         <div className="text-left">
+                                                                             <span className="text-[11px] font-black text-orange-900 uppercase tracking-wider block">
+                                                                                 Masukkan 6 Digit Kode OTP
+                                                                             </span>
+                                                                             <span className="text-[11px] text-gray-500 font-medium">
+                                                                                 Kode dikirim ke WhatsApp: <strong className="text-gray-900">{formData.phone}</strong>
+                                                                             </span>
+                                                                         </div>
+                                                                         {waResendTimer > 0 ? (
+                                                                             <span className="text-[10px] font-bold text-gray-400 uppercase bg-gray-100 px-3 py-1 rounded-lg">
+                                                                                 Kirim ulang dalam {waResendTimer}s
+                                                                             </span>
+                                                                         ) : (
+                                                                             <button
+                                                                                 type="button"
+                                                                                 onClick={handleSendWaOtp}
+                                                                                 disabled={isSubmitting}
+                                                                                 className="text-[10px] font-black text-orange-600 hover:text-orange-700 uppercase bg-orange-50 hover:bg-orange-100 px-3 py-1.5 rounded-lg transition-all border border-orange-200 cursor-pointer"
+                                                                             >
+                                                                                 Kirim Ulang OTP
+                                                                             </button>
+                                                                         )}
+                                                                     </div>
+
+                                                                     {/* 6 Digit Inputs */}
+                                                                     <div className="py-2">
+                                                                         <div className="flex justify-center gap-2 sm:gap-3">
+                                                                             {otpDigits.map((digit, idx) => (
+                                                                                 <input
+                                                                                     key={idx}
+                                                                                     ref={el => { otpRefs.current[idx] = el; }}
+                                                                                     type="text"
+                                                                                     inputMode="numeric"
+                                                                                     maxLength={1}
+                                                                                     value={digit}
+                                                                                     onChange={e => handleOtpDigitChange(idx, e.target.value)}
+                                                                                     onKeyDown={e => handleOtpKeyDown(idx, e)}
+                                                                                     onPaste={handleOtpPaste}
+                                                                                     className="w-10 sm:w-12 h-12 sm:h-14 text-center font-mono font-black text-xl bg-orange-50/40 border-2 border-gray-200 rounded-xl focus:border-orange-500 focus:bg-white outline-none transition-all shadow-xs"
+                                                                                 />
+                                                                             ))}
+                                                                         </div>
+                                                                         <p className="text-[10px] text-gray-400 font-medium mt-2">
+                                                                             Buka pesan WhatsApp Anda dan masukkan 6 angka verifikasi.
+                                                                         </p>
+                                                                     </div>
+
+                                                                     <button
+                                                                         type="button"
+                                                                         onClick={handleVerifyWaOtp}
+                                                                         disabled={otpDigits.join('').length !== 6}
+                                                                         className="w-full py-3.5 bg-orange-500 hover:bg-orange-600 disabled:bg-gray-200 disabled:text-gray-400 text-white font-black text-xs rounded-xl active:scale-95 transition-all uppercase tracking-widest shadow-md shadow-orange-500/20 cursor-pointer"
+                                                                     >
+                                                                         Verifikasi WhatsApp Sekarang
+                                                                     </button>
+                                                                 </div>
+                                                             )}
+                                                         </div>
+                                                     )}
+                                                 </div>
+                                             )}
                                         </div>
 
                                         <ProfileItemRead icon={<Mail size={18} />} label="Alamat Email" value={formData.email} isEditing={false} name="email" />
@@ -1423,45 +1578,89 @@ const MitraProfile: React.FC<MitraProfileProps> = ({
 
 
                             {/* Action Buttons */}
-                            <div className="pt-8 border-t border-gray-100 flex flex-col sm:flex-row items-center justify-end gap-4">
+                            <div className="pt-8 border-t border-gray-100 flex flex-col gap-4">
                                 {currentStep === 1 ? (
                                     <>
-                                        <button type="button" onClick={handleCancel} className="w-full sm:w-auto px-8 py-4 bg-gray-100 text-gray-600 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-gray-200 active:scale-95 transition-all text-center">
-                                            BATAL
-                                        </button>
-                                        {formData.verification_status === 'verified' ? (
-                                            <button type="button" onClick={handleSave} disabled={isSubmitting} className="w-full sm:w-auto px-10 py-4 bg-orange-500 text-white rounded-xl text-xs font-black uppercase tracking-widest hover:bg-orange-600 active:scale-95 disabled:opacity-50 disabled:active:scale-100 transition-all shadow-lg shadow-orange-500/20 text-center">
-                                                {isSubmitting ? 'MEMPROSES...' : 'SIMPAN SEMUA DATA'}
-                                            </button>
-                                        ) : (
-                                            (() => {
-                                                const isStep1Complete =
-                                                    formData.display_name.trim() !== '' &&
-                                                    formData.phone.trim() !== '' &&
-                                                    waOtpVerified &&
-                                                    formData.address.trim() !== '';
-                                                return (
-                                                    <button
-                                                        type="button"
-                                                        disabled={!isStep1Complete}
-                                                        onClick={async () => {
-                                                            if (!waOtpVerified) {
-                                                                alert('Silakan verifikasi nomor WhatsApp Anda terlebih dahulu sebelum melanjutkan.');
-                                                                return;
-                                                            }
-                                                            await saveStep1Draft();
-                                                            window.scrollTo({ top: 0, behavior: 'smooth' });
-                                                        }}
-                                                        className={`w-full sm:w-auto px-10 py-4 rounded-xl text-xs font-black uppercase tracking-widest transition-all text-center flex items-center justify-center gap-2 ${isStep1Complete
-                                                                ? 'bg-orange-500 text-white hover:bg-orange-600 active:scale-95 shadow-lg shadow-orange-500/20 cursor-pointer'
-                                                                : 'bg-gray-200 text-gray-400 cursor-not-allowed'
-                                                            }`}
-                                                    >
-                                                        LANJUTKAN <ChevronRight size={16} />
-                                                    </button>
-                                                );
-                                            })()
-                                        )}
+                                        {/* Requirement Checklist Helper when not yet complete */}
+                                        {(() => {
+                                            const isComplete =
+                                                formData.display_name.trim() !== '' &&
+                                                formData.phone.trim() !== '' &&
+                                                waOtpVerified &&
+                                                formData.address.trim() !== '';
+
+                                            return (
+                                                <>
+                                                    {!isComplete && (
+                                                        <div className="bg-amber-50/70 border border-amber-200/80 rounded-2xl p-3.5 sm:p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                                                            <div className="flex items-center gap-2 text-amber-900 text-xs font-bold">
+                                                                <AlertCircle size={16} className="text-amber-600 shrink-0" />
+                                                                <span>Kelengkapan sebelum melanjutkan ke verifikasi KTP:</span>
+                                                            </div>
+                                                            <div className="flex flex-wrap items-center gap-2 text-[10px] font-black uppercase tracking-wider">
+                                                                <span className={`px-2.5 py-1 rounded-lg flex items-center gap-1 border ${
+                                                                    formData.display_name.trim() 
+                                                                        ? 'bg-green-100/80 text-green-800 border-green-200' 
+                                                                        : 'bg-white text-gray-500 border-gray-200'
+                                                                }`}>
+                                                                    {formData.display_name.trim() ? <Check size={12} className="text-green-600" /> : <span className="w-1.5 h-1.5 rounded-full bg-gray-400"></span>}
+                                                                    Nama Lengkap
+                                                                </span>
+                                                                <span className={`px-2.5 py-1 rounded-lg flex items-center gap-1 border ${
+                                                                    waOtpVerified 
+                                                                        ? 'bg-green-100/80 text-green-800 border-green-200' 
+                                                                        : 'bg-red-50 text-red-700 border-red-200 animate-pulse'
+                                                                }`}>
+                                                                    {waOtpVerified ? <Check size={12} className="text-green-600" /> : <AlertCircle size={12} className="text-red-500" />}
+                                                                    Verifikasi WA {waOtpVerified ? '' : '(Wajib)'}
+                                                                </span>
+                                                                <span className={`px-2.5 py-1 rounded-lg flex items-center gap-1 border ${
+                                                                    formData.address.trim() 
+                                                                        ? 'bg-green-100/80 text-green-800 border-green-200' 
+                                                                        : 'bg-white text-gray-500 border-gray-200'
+                                                                }`}>
+                                                                    {formData.address.trim() ? <Check size={12} className="text-green-600" /> : <span className="w-1.5 h-1.5 rounded-full bg-gray-400"></span>}
+                                                                    Alamat Domisili
+                                                                </span>
+                                                            </div>
+                                                        </div>
+                                                    )}
+
+                                                    <div className="flex flex-col sm:flex-row items-center justify-end gap-4">
+                                                        <button 
+                                                            type="button" 
+                                                            onClick={handleCancel} 
+                                                            className="w-full sm:w-auto px-8 py-4 bg-gray-100 text-gray-600 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-gray-200 active:scale-95 transition-all text-center cursor-pointer"
+                                                        >
+                                                            BATAL
+                                                        </button>
+                                                        {formData.verification_status === 'verified' ? (
+                                                            <button 
+                                                                type="button" 
+                                                                onClick={handleSave} 
+                                                                disabled={isSubmitting} 
+                                                                className="w-full sm:w-auto px-10 py-4 bg-orange-500 text-white rounded-xl text-xs font-black uppercase tracking-widest hover:bg-orange-600 active:scale-95 disabled:opacity-50 disabled:active:scale-100 transition-all shadow-lg shadow-orange-500/20 text-center cursor-pointer"
+                                                            >
+                                                                {isSubmitting ? 'MEMPROSES...' : 'SIMPAN SEMUA DATA'}
+                                                            </button>
+                                                        ) : (
+                                                            <button
+                                                                type="button"
+                                                                onClick={handleStep1Submit}
+                                                                className={`w-full sm:w-auto px-10 py-4 rounded-xl text-xs font-black uppercase tracking-widest transition-all text-center flex items-center justify-center gap-2 cursor-pointer ${
+                                                                    isComplete
+                                                                        ? 'bg-orange-500 text-white hover:bg-orange-600 active:scale-95 shadow-lg shadow-orange-500/20'
+                                                                        : 'bg-gradient-to-r from-orange-400 to-amber-500 text-white hover:opacity-95 active:scale-95 shadow-md shadow-orange-500/10'
+                                                                }`}
+                                                            >
+                                                                <span>LANJUTKAN KE LANGKAH 2 (KTP)</span>
+                                                                <ChevronRight size={16} />
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                </>
+                                            );
+                                        })()}
                                     </>
                                 ) : (
                                     <>
