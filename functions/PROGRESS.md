@@ -2,6 +2,33 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 437. Penyederhanaan UI/UX Form Profil Langkah 1 & Input Verifikasi WhatsApp Kompak (`MitraProfile.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  1. Desain verifikasi WhatsApp pada formulir profil mitra Langkah 1 sebelumnya dirasa terlalu besar dan bertele-tele (memiliki banner petunjuk raksasa di atas, kartu bertingkat di dalam kartu, serta checklist tebal di bawah tombol).
+  2. Tampilan tersebut merusak keselarasan desain formulir yang sudah rapi pada field lainnya (*Nama Lengkap*, *Email*, dan *Alamat Domisili*).
+- **Akar Masalah**:
+  1. Tata letak sebelumnya menggunakan kartu mandiri yang terlalu dominan dengan nesting elemen berlapis-lapis.
+  2. Adanya banner panduan panjang dan checklist pills ganda yang memakan ruang vertikal secara berlebihan.
+- **Implementasi Solusi**:
+  1. **Penataan Ulang Selaras (100% Coherent Design System)**:
+     - Menghapus banner pembuka berlebih di atas form Langkah 1, mengembalikan header ringkas "Lengkapi Profil & Verifikasi".
+     - Merestrukturisasi input No. WhatsApp agar kembali selaras dengan baris dan grid form lainnya (`ProfileItemRead`).
+  2. **Tombol Kirim OTP & Indikator Kompak**:
+     - Meletakkan tombol aksi *"Kirim OTP"* langsung di dalam field input nomor WhatsApp secara rapi (posisi absolut di kanan).
+     - Menampilkan badge status ringkas di samping label: `Wajib OTP` (amber) saat belum diverifikasi, atau `Terverifikasi` (hijau) lengkap dengan ikon `BadgeCheck`.
+  3. **Input 6 Digit OTP Ringkas**:
+     - Kotak input 6 digit angka OTP kini muncul sebagai kontainer kompak tepat di bawah kolom nomor WhatsApp hanya saat kode sedang dikirim, lengkap dengan hitung mundur kirim ulang dan tombol verifikasi yang proporsional.
+  4. **Pembersihan Tombol Aksi Bawah**:
+     - Menghapus checklist tebal di atas tombol bawah, mengembalikan tombol *"BATAL"* dan *"LANJUTKAN KE LANGKAH 2 (KTP)"* yang bersih, proporsional, dan minimalis.
+  5. **Perbaikan Hierarki Tag JSX**:
+     - Memperbaiki tag pembungkus dan menghilangkan div penutup ganda sehingga kompilasi esbuild Vite berjalan 100% mulus tanpa kendala.
+- **File Tersentuh**:
+  - `functions/public/pages/MitraProfile.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi Vite build (`cmd.exe /c npm run build`) sukses 100% (`✓ built in 34.21s`, exit code 0).
+
 ### 436. Redesain UI/UX Komunikatif Verifikasi WhatsApp & Formulir Profil Mitra Langkah 1 (`MitraProfile.tsx`) (September 2026)
 - **Permintaan & Masalah**:
   1. Calon mitra baru yang pertama kali mendaftar dan masuk ke tahap pengisian identitas (Langkah 1 Data Profil di `/dashboard-mitra/profile?edit=true&step=1`) mengalami kebingungan karena nomor WhatsApp otomatis terisi dari akun registrasi, menimbulkan ilusi bahwa data sudah beres padahal statusnya belum terverifikasi (`whatsapp_verified === false`).

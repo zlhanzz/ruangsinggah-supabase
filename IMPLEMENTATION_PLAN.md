@@ -1,77 +1,68 @@
-# Rencana Implementasi: Redesain UI/UX Komunikatif Verifikasi WhatsApp & Formulir Profil Mitra (Langkah 1)
+# Rencana Implementasi: Penyederhanaan UI/UX Verifikasi WhatsApp pada Formulir Profil Mitra (Langkah 1)
 
-## 1. Analisis Masalah & Kebutuhan Pengguna
-
-### Konteks & Gejala Masalah
-Saat calon mitra baru membuat akun dan masuk ke tahap pengisian profil & verifikasi identitas di Dashboard Mitra (`/dashboard-mitra/profile?edit=true&step=1`):
-1. **Ilusi Nomor WhatsApp Sudah Selesai**:
-   - Nomor WhatsApp otomatis terisi dari akun pendaftaran (misal: `+6281527080656`). Karena tampilan kolom input sama persis dengan input teks biasa lainnya, calon mitra merasa kolom tersebut sudah lengkap dan tidak perlu tindakan apapun.
-2. **Indikator Verifikasi Sangat Minim & Tidak Komunikatif**:
-   - Satu-satunya penanda verifikasi adalah tombol kecil 9px bertuliskan `KIRIM OTP` di pojok kanan label input. Tidak ada badge peringatan, tidak ada warna pembeda, dan tidak ada teks instruksi bahwa nomor ini **wajib diverifikasi dengan kode OTP** sebelum bisa lanjut.
-3. **Kolom Input OTP Tersembunyi (Hidden State)**:
-   - Kotak 6-digit OTP baru muncul setelah tombol kecil tersebut diklik. Sebelum diklik, calon mitra sama sekali tidak tahu bahwa ada kode OTP yang harus dimasukkan.
-4. **Tombol "LANJUTKAN" Mati Bisu (Silent Disabled)**:
-   - Di bagian bawah form, tombol "LANJUTKAN" di-disable secara kaku (`disabled={!isStep1Complete}`) dengan warna abu-abu `bg-gray-200 text-gray-400 cursor-not-allowed`.
-   - Ketika calon mitra telah mengisi Nama Lengkap dan Alamat Domisili, lalu melihat Nomor WhatsApp sudah terisi, mereka mencoba menekan tombol "LANJUTKAN". Namun tombol tersebut **tidak merespon sama sekali tanpa ada pesan penjelasan/umpan balik**, sehingga membuat calon mitra bingung dan mengira sistem bermasalah.
-5. **Kurangnya Kejelasan Panduan Alur & Tombol Batal**:
-   - Tidak ada petunjuk alur jelas di bagian atas form yang menerangkan bahwa proses terdiri dari 2 tahap (Tahap 1: Data Profil & Verifikasi WhatsApp, Tahap 2: KTP). Calon mitra juga membutuhkan kejelasan saat ingin membatalkan atau kembali ke menu sebelumnya.
+## 1. Analisis Masalah / Kebutuhan
+Berdasarkan feedback pengguna:
+- Tampilan verifikasi WhatsApp yang sebelumnya diimplementasikan terlalu besar, memakan *space layout* berlebihan, dan merusak keseragaman/pola desain form yang sudah ada di sekitarnya (seperti *Nama Lengkap*, *Alamat Email*, dan *Alamat Domisili*).
+- Terdapat elemen yang dirasa terlalu "bertele-tele" dan repetitif (seperti banner petunjuk besar di atas form, kartu di dalam kartu bertingkat, teks ganda, serta kotak checklist kelengkapan yang tebal di bawah).
+- **Kebutuhan Pengguna**:
+  - UI/UX kembali selaras (*seamless & coherent*) dengan pola desain form yang ada: menggunakan format baris & kotak input standar (`ProfileItemRead`).
+  - Fungsionalitas verifikasi nomor WhatsApp tetap bekerja secara efektif dan mudah dipahami:
+    1. Label input standar dengan ikon telepon & indikator status verifikasi yang ringkas.
+    2. Input nomor telepon dengan tombol aksi yang kompak (misal tombol *"Kirim OTP"* di dalam/samping input).
+    3. Jika kode OTP sudah dikirim, area input 6 digit OTP muncul secara ringkas tepat di bawah input nomor tanpa pembungkus kartu raksasa yang merusak ritme form.
+    4. Menghapus banner petunjuk berlebih di atas form dan kotak checklist tebal di bawah form, mengembalikan tombol navigasi bawah yang bersih (*Batal* & *Lanjutkan*).
 
 ---
 
-## 2. Dampak Perubahan (Files Touched)
-
+## 2. Dampak Perubahan
+File yang akan disentuh:
 - `functions/public/pages/MitraProfile.tsx`:
-  - Perombakan tata letak dan UI/UX pada Formulir Langkah 1 (Data Profil & Verifikasi WhatsApp).
-  - Pembuatan **Dedicated WhatsApp Verification Card** (Kartu Verifikasi WhatsApp Interaktif & Terbuka Langsung).
-  - Penambahan badge status tegas (`⚠️ WAJIB VERIFIKASI OTP` vs `✓ TERVERIFIKASI RESMI`).
-  - Penyajian area input OTP yang komunikatif dengan tombol kirim OTP yang mencolok dan instruksi jelas.
-  - Perbaikan tombol "LANJUTKAN" dengan *interactive feedback* (checklist persyaratan kelengkapan, pesan arahan jika belum diverifikasi, dan *auto smooth-scroll* berfokus ke kartu WhatsApp).
-  - Penyempurnaan tombol "BATAL" agar dapat keluar dari form edit secara responsif dan bersih.
+  - Menghapus banner pembuka Langkah 1 yang memakan ruang layout.
+  - Merestrukturisasi blok input nomor WhatsApp agar menggunakan pola visual yang sama persis dengan `ProfileItemRead` (1 kolom pada grid 2 kolom, atau selaras dengan field form lainnya).
+  - Menyederhanakan area input OTP 6 digit menjadi baris kompak tepat di bawah kolom nomor WhatsApp.
+  - Menghapus kotak checklist pills di atas tombol aksi bawah.
+  - Mempertahankan proteksi tombol *"Lanjutkan"* (memberi notifikasi panduan ramah & mengarahkan fokus ke input OTP jika pengguna mencoba lanjut tanpa verifikasi WA).
 
 ---
 
-## 3. Langkah-Langkah Eksekusi Bertahap
+## 3. Langkah-Langkah Eksekusi (Fase 2 Setelah ACC)
 
-### Langkah 1: Banner & Stepper Edukatif di Puncak Formulir
-- Menambahkan banner informatif yang ramah dan jelas di bagian atas Formulir Langkah 1:
-  > *"ℹ️ **Langkah 1 dari 2**: Lengkapi data diri Anda dan lakukan verifikasi nomor WhatsApp menggunakan kode OTP resmi. Nomor WhatsApp yang terverifikasi diperlukan untuk menerima notifikasi operasional kost."*
+### Langkah 1: Menghapus Elemen Berlebih (De-clutter)
+- Hapus banner petunjuk berlebih di atas `Data Profil` pada Langkah 1.
+- Hapus kotak checklist kelengkapan di atas tombol bawah (*Batal* dan *Lanjutkan*).
 
-### Langkah 2: Pembuatan Dedicated WhatsApp Verification Card (Terbuka Langsung)
-- Merombak total bagian Nomor WhatsApp dari sekadar input biasa menjadi sebuah kartu khusus berbingkai kontras:
-  - **Status Header**:
-    - Jika belum terverifikasi: Tampilkan badge mencolok berwarna oranye/merah `⚠️ BUTUH VERIFIKASI OTP (WAJIB)`.
-    - Jika kode OTP sudah dikirim: Tampilkan badge `⏳ KODE OTP TERKIRIM KE WA`.
-    - Jika sudah terverifikasi: Tampilkan badge hijau `✓ NOMOR TERVERIFIKASI`.
-  - **Input Nomor Telepon**:
-    - Input nomor WhatsApp dengan panduan teks jelas di bawahnya: *"Pastikan nomor WhatsApp ini aktif di smartphone Anda untuk menerima pesan kode verifikasi."*
-  - **Area Verifikasi OTP yang Terbuka & Komunikatif**:
-    - Jika belum terverifikasi dan belum meminta OTP: Tampilkan tombol utama berukuran besar yang menarik perhatian: **"📲 KIRIM KODE OTP KE WHATSAPP"** disertai instruksi langkah demi langkah.
-    - Jika OTP telah dikirim: Tampilkan 6 kotak digit OTP (font mono tebal, autofocus otomatis) + tombol **"VERIFIKASI WHATSAPP SEKARANG"** + hitung mundur kirim ulang.
-  - **Keadaan Terverifikasi**:
-    - Menampilkan kartu hijau sukses dengan nomor terkunci aman dan opsi tombol *"Ganti Nomor WhatsApp"* jika mitra perlu mengubahnya di kemudian hari.
+### Langkah 2: Merestrukturisasi Input No. WhatsApp Menjadi Kompak & Selaras
+- Gunakan grid standar `ProfileItemRead`:
+  - **Header Bar**: Ikon telepon dalam box 8x8 + label `NO. WHATSAPP` + badge status ringkas di sisi kanan (`✓ Terverifikasi` warna hijau atau `Belum Verifikasi` warna amber).
+  - **Input Box**: Menggunakan styling input form standar (`w-full bg-gray-50 border border-gray-200 rounded-2xl p-4 text-sm font-bold text-gray-900 focus:bg-white focus:border-orange-500`).
+  - **Aksi Kirim OTP**:
+    - Jika nomor belum terverifikasi: tombol *"Kirim OTP"* ringkas diletakkan di sisi kanan dalam input (posisi absolute/flex) sehingga tidak memakan baris baru secara boros.
+    - Jika nomor sudah terverifikasi: menampilkan ikon centang hijau `<BadgeCheck />` dan opsi teks kecil *"Ubah"*.
 
-### Langkah 3: Umpan Balik Cerdas pada Tombol "LANJUTKAN" (No Silent Disabled)
-- Menghilangkan sifat mati bisu pada tombol "LANJUTKAN":
-  - Tampilkan mini checklist di atas tombol:
-    - `[✓] Nama Lengkap`
-    - `[⚠️] Nomor WhatsApp Terverifikasi (Belum)`
-    - `[✓] Alamat Domisili`
-  - Jika mitra menekan tombol "LANJUTKAN" sebelum WhatsApp diverifikasi:
-    - Sistem tidak hanya diam, melainkan menampilkan alert/toast ramah: *"Silakan lakukan verifikasi nomor WhatsApp Anda dengan kode OTP terlebih dahulu sebelum melanjutkan ke Langkah 2."*
-    - Halaman melakukan *smooth scroll* otomatis ke Kartu WhatsApp dan memberikan efek kedip/highlight oranye lembut agar perhatian mitra langsung tertuju ke sana.
+### Langkah 3: Desain Kompak untuk Input 6 Digit OTP
+- Saat status sedang menunggu OTP (`waOtpCode` aktif / `isVerifyingWaOtp`):
+  - Tampilkan baris kompak tepat di bawah input nomor WhatsApp:
+    - 6 kotak digit angka berukuran proporsional (w-9 h-11 atau w-10 h-12).
+    - Tombol *"Verifikasi"* yang ringkas di samping/bawahnya.
+    - Info waktu kirim ulang (*"Kirim ulang dalam Xs"* / tombol teks *"Kirim Ulang"*).
+  - Tanpa nesting kartu berlapis-lapis dan tanpa teks pengantar yang panjang.
 
-### Langkah 4: Kejelasan dan Keandalan Tombol "BATAL"
-- Memastikan tombol "BATAL" mereset form dan mengarahkan kembali ke tampilan ringkasan profil mitra tanpa kendala.
+### Langkah 4: Tombol Aksi Bawah yang Bersih
+- Tombol navigasi bawah tetap bersih dan proporsional:
+  - Tombol *"BATAL"*
+  - Tombol *"LANJUTKAN KE LANGKAH 2 (KTP)"* (tetap memiliki proteksi cerdas: jika diklik saat WA belum diverifikasi, memunculkan pesan ramah dan langsung memfokuskan kursor ke input OTP).
 
 ---
 
 ## 4. Rencana Verifikasi
-
-1. **Uji Kompilasi & Build**:
-   - Menjalankan `cmd.exe /c npm run build` di direktori `functions/public` untuk memastikan 100% bebas dari error TypeScript dan build lolos (exit code 0).
-2. **Uji Tampilan & Interaktivitas**:
-   - Buka `/dashboard-mitra/profile?edit=true&step=1` dalam mode mobile dan desktop.
-   - Verifikasi bahwa kartu WhatsApp langsung menonjolkan status belum terverifikasi dan tombol Kirim OTP sangat jelas.
-   - Verifikasi bahwa kotak OTP mudah diisi dan komunikatif.
-   - Verifikasi saat tombol "LANJUTKAN" diklik sebelum OTP diverifikasi, sistem memberikan umpan balik dan mengarahkan fokus ke kartu WhatsApp.
-   - Verifikasi bahwa setelah WhatsApp diverifikasi, tombol "LANJUTKAN" berubah aktif dan mengantar ke Langkah 2 (Unggah KTP).
+1. **Verifikasi Tampilan Visual**:
+   - Memastikan tidak ada layout shift atau kartu berbingkai raksasa yang merusak pola form.
+   - Memastikan nomor WhatsApp sejajar dan selaras dengan field lain (seperti Nama Lengkap dan Email).
+2. **Verifikasi Fungsionalitas**:
+   - Uji klik *"Kirim OTP"* pada nomor WhatsApp.
+   - Uji input 6 digit angka OTP dan tombol *"Verifikasi"*.
+   - Uji klik tombol *"Lanjutkan"* sebelum vs setelah nomor WhatsApp terverifikasi.
+3. **Uji Kompilasi**:
+   - Menjalankan `npm run build` di folder `functions/public` untuk memastikan 0 error TypeScript/Vite.
+4. **Git Push**:
+   - Commit dan push ke branch `bukan-productions`.
