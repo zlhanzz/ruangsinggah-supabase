@@ -1,21 +1,22 @@
 
 import React, { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { 
-  Compass, 
-  Building2, 
-  CheckCircle2, 
-  MapPin, 
-  ShieldCheck, 
-  Store, 
-  Layers, 
-  Wallet, 
-  ArrowRight, 
-  User, 
-  RotateCcw, 
-  Eye, 
-  EyeOff, 
-  AlertCircle 
+import {
+  Compass,
+  Building2,
+  CheckCircle2,
+  MapPin,
+  ShieldCheck,
+  Store,
+  Layers,
+  Wallet,
+  ArrowRight,
+  User,
+  RotateCcw,
+  Eye,
+  EyeOff,
+  AlertCircle,
+  Mail
 } from 'lucide-react';
 import { supabase } from '../supabase';
 import { Page } from '../types';
@@ -28,20 +29,20 @@ interface LoginProps {
 type AuthMode = 'LOGIN' | 'REGISTER' | 'FORGOT_PASSWORD' | 'PASSWORD_UPDATE';
 
 // --- REUSABLE PASSWORD FIELD COMPONENT (DEFINED OUTSIDE TO PREVENT RE-MOUNTING/FOCUS LOSS) ---
-const PasswordInput = ({ 
-  label, 
+const PasswordInput = ({
+  label,
   rightLabel,
-  value, 
-  onChange, 
-  show, 
-  setShow, 
+  value,
+  onChange,
+  show,
+  setShow,
   placeholder = "••••••••",
-  required = true 
+  required = true
 }: any) => (
   <div>
     <div className="flex justify-between items-center mb-2">
-       <label className="block text-xs font-bold text-gray-400 uppercase">{label}</label>
-       {rightLabel}
+      <label className="block text-xs font-bold text-gray-400 uppercase">{label}</label>
+      {rightLabel}
     </div>
     <div className="relative">
       <input
@@ -99,6 +100,11 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
     localStorage.setItem('portal_view', activeRole);
   }, [activeRole]);
 
+  // Email OTP states (6-Digit)
+  const [emailOtpCode, setEmailOtpCode] = useState('');
+  const [emailOtpInput, setEmailOtpInput] = useState('');
+  const [emailResendTimer, setEmailResendTimer] = useState(0);
+
   // WhatsApp OTP states
   const [waOtpCode, setWaOtpCode] = useState('');
   const [waOtpInput, setWaOtpInput] = useState('');
@@ -140,6 +146,9 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
     setShowConfirmPassword(false);
     setResendTimer(0);
     setReferralCode('');
+    setEmailOtpCode('');
+    setEmailOtpInput('');
+    setEmailResendTimer(0);
     setWaOtpCode('');
     setWaOtpInput('');
     setIsVerifyingWaOtp(false);
@@ -163,7 +172,7 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
       setMode('PASSWORD_UPDATE');
       setIsRoleSelected(true);
       setSuccessMsg('Silakan masukkan kata sandi baru Anda.');
-      
+
       const checkSession = async () => {
         const { data: { session } } = await supabase.auth.getSession();
         if (!session) {
@@ -234,15 +243,16 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
 
   useEffect(() => {
     let interval: any;
-    if (resendTimer > 0 || waResendTimer > 0 || upgradeResendTimer > 0) {
+    if (resendTimer > 0 || emailResendTimer > 0 || waResendTimer > 0 || upgradeResendTimer > 0) {
       interval = setInterval(() => {
         if (resendTimer > 0) setResendTimer((prev) => prev - 1);
+        if (emailResendTimer > 0) setEmailResendTimer((prev) => prev - 1);
         if (waResendTimer > 0) setWaResendTimer((prev) => prev - 1);
         if (upgradeResendTimer > 0) setUpgradeResendTimer((prev) => prev - 1);
       }, 1000);
     }
     return () => clearInterval(interval);
-  }, [resendTimer, waResendTimer, upgradeResendTimer]);
+  }, [resendTimer, emailResendTimer, waResendTimer, upgradeResendTimer]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -283,10 +293,11 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
     if (e) e.preventDefault();
     setLoading(true);
     setErrorMsg('');
+    setSuccessMsg('');
 
     const normalizePhone = (p: string) => {
       if (!p) return '';
-      let clean = p.replace(/\D/g, ''); 
+      let clean = p.replace(/\D/g, '');
       if (clean.startsWith('0')) clean = clean.substring(1);
       if (clean.startsWith('62')) clean = clean.substring(2);
       return `+62${clean}`;
@@ -294,53 +305,17 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
 
     const finalPhone = normalizePhone(formData.phone);
 
-    if (!formData.name || !finalPhone) {
-      setErrorMsg('Mohon lengkapi Nama dan Nomor WhatsApp.');
+    if (!formData.name || !finalPhone || !formData.email || !formData.password) {
+      setErrorMsg('Mohon lengkapi Nama, Nomor WhatsApp, Email, dan Kata Sandi.');
       setLoading(false);
       return;
     }
 
-    // ── OTP WhatsApp untuk Pemilik Kost (Self-Listing) ─────────────────────────
-    if (activeRole === 'owner' && !waOtpVerified) {
-      try {
-        const generatedOtp = Math.floor(100000 + Math.random() * 900000).toString();
-        setWaOtpCode(generatedOtp);
-        setIsVerifyingWaOtp(true);
-        setWaResendTimer(60);
-        setErrorMsg('');
-        setSuccessMsg('');
-
-        // Kirim via serverless edge function / Meta WhatsApp API
-        const res = await sendWaOtpVerification(finalPhone, generatedOtp);
-        if (!res.success) {
-          console.warn('[WA-OTP] Pengiriman WhatsApp:', res.error);
-        }
-      } catch (error: any) {
-        console.warn('[WA-OTP] Exception saat kirim OTP WhatsApp:', error);
-      } finally {
-        setLoading(false);
-      }
+    if (formData.password.length < 6) {
+      setErrorMsg('Kata sandi minimal 6 karakter.');
+      setLoading(false);
       return;
     }
-    // ─────────────────────────────────────────────────────────────────────────
-
-    await executeFinalRegister();
-
-  };
-
-  const executeFinalRegister = async () => {
-    setLoading(true);
-    setErrorMsg('');
-
-    const normalizePhone = (p: string) => {
-      if (!p) return '';
-      let clean = p.replace(/\D/g, ''); 
-      if (clean.startsWith('0')) clean = clean.substring(1);
-      if (clean.startsWith('62')) clean = clean.substring(2);
-      return `+62${clean}`;
-    };
-
-    const finalPhone = normalizePhone(formData.phone);
 
     try {
       const trimmedReferral = referralCode.trim().toUpperCase();
@@ -349,13 +324,13 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           type: 'signup',
-          email: formData.email,
+          email: formData.email.trim(),
           password: formData.password,
           metadata: {
             full_name: formData.name,
             name: formData.name,
             phone: finalPhone,
-            whatsapp_verified: activeRole === 'owner' ? true : false,
+            whatsapp_verified: false, // Opsi B: Diverifikasi pada tab Verifikasi Identitas (KYC) Dashboard Mitra
             role: activeRole,
             referred_by: activeRole === 'owner' && trimmedReferral ? trimmedReferral : undefined
           }
@@ -363,12 +338,12 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
       });
 
       if (!response.ok) {
-        const errData = await response.json();
+        const errData = await response.json().catch(() => ({}));
         const rawMsg = errData.message || 'Gagal mendaftar';
 
         // Deteksi email sudah terdaftar saat mendaftar sebagai Pemilik Kost
         if (activeRole === 'owner' &&
-            (rawMsg.includes('already been registered') || rawMsg.includes('already registered') || rawMsg.includes('User already registered'))) {
+          (rawMsg.includes('already been registered') || rawMsg.includes('already registered') || rawMsg.includes('User already registered'))) {
           setShowUpgradeModal(true);
           return;
         }
@@ -377,7 +352,13 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
         return;
       }
 
+      const resData = await response.json().catch(() => ({}));
+      if (resData?.emailOtp) {
+        setEmailOtpCode(resData.emailOtp);
+      }
+      setEmailOtpInput('');
       setVerificationSent(true);
+      setEmailResendTimer(60);
       setResendTimer(120);
     } catch (error: any) {
       setErrorMsg(getErrorMessage(error.message || 'unknown'));
@@ -467,51 +448,101 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
   };
   // ──────────────────────────────────────────────────────────────────────────
 
-  const handleVerifyWaOtp = (e: React.FormEvent) => {
+  const handleVerifyEmailOtp = async (e: React.FormEvent) => {
     e.preventDefault();
-    setErrorMsg('');
-    
-    if (waOtpInput.trim() === waOtpCode) {
-      setWaOtpVerified(true);
-      setIsVerifyingWaOtp(false);
-      // Pemicu pendaftaran email sesungguhnya setelah OTP WA sukses
-      setTimeout(() => {
-        executeFinalRegister();
-      }, 100);
-    } else {
-      setErrorMsg('Kode OTP WhatsApp yang Anda masukkan salah. Silakan periksa kembali.');
-    }
-  };
-
-  const handleResendWaOtp = async () => {
-    if (waResendTimer > 0) return;
     setErrorMsg('');
     setSuccessMsg('');
     setLoading(true);
 
-    const normalizePhone = (p: string) => {
-      if (!p) return '';
-      let clean = p.replace(/\D/g, ''); 
-      if (clean.startsWith('0')) clean = clean.substring(1);
-      if (clean.startsWith('62')) clean = clean.substring(2);
-      return `+62${clean}`;
-    };
-
-    const finalPhone = normalizePhone(formData.phone);
+    if (emailOtpInput.trim().length !== 6) {
+      setErrorMsg('Masukkan 6-digit kode verifikasi email.');
+      setLoading(false);
+      return;
+    }
 
     try {
-      const generatedOtp = Math.floor(100000 + Math.random() * 900000).toString();
-      setWaOtpCode(generatedOtp);
+      const { data, error } = await supabase.auth.verifyOtp({
+        email: formData.email.trim(),
+        token: emailOtpInput.trim(),
+        type: 'signup'
+      });
 
-      const res = await sendWaOtpVerification(finalPhone, generatedOtp);
-      if (!res.success) {
-        console.warn('[WA-OTP] Kirim ulang WhatsApp OTP status:', res.error);
+      if (error) {
+        // Fallback dengan type 'email' jika token tersimpan sebagai email verification
+        const fallback = await supabase.auth.verifyOtp({
+          email: formData.email.trim(),
+          token: emailOtpInput.trim(),
+          type: 'email'
+        });
+        if (fallback.error) {
+          throw error;
+        }
       }
 
-      setSuccessMsg('Kode OTP baru telah dikirimkan ke WhatsApp Anda.');
-      setWaResendTimer(60);
-    } catch (error: any) {
-      setErrorMsg(`Gagal mengirim ulang OTP: ${error.message}`);
+      setSuccessMsg('Email berhasil diverifikasi! Mengalihkan ke dashboard...');
+      setTimeout(() => {
+        if (activeRole === 'owner') {
+          window.location.href = Page.DASHBOARD_MITRA;
+        } else {
+          window.location.href = Page.HOME;
+        }
+      }, 800);
+    } catch (err: any) {
+      console.error('[EMAIL-OTP] Gagal verifikasi:', err);
+      setErrorMsg(err.message || 'Kode verifikasi email salah atau sudah kedaluwarsa.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResendEmailOtp = async () => {
+    if (emailResendTimer > 0) return;
+    setErrorMsg('');
+    setSuccessMsg('');
+    setLoading(true);
+
+    try {
+      const trimmedReferral = referralCode.trim().toUpperCase();
+      const normalizePhone = (p: string) => {
+        if (!p) return '';
+        let clean = p.replace(/\D/g, '');
+        if (clean.startsWith('0')) clean = clean.substring(1);
+        if (clean.startsWith('62')) clean = clean.substring(2);
+        return `+62${clean}`;
+      };
+      const finalPhone = normalizePhone(formData.phone);
+
+      const response = await fetch('https://handlecustomauthemail-hzxlewhsuq-uc.a.run.app', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'signup',
+          email: formData.email.trim(),
+          password: formData.password,
+          metadata: {
+            full_name: formData.name,
+            name: formData.name,
+            phone: finalPhone,
+            whatsapp_verified: false,
+            role: activeRole,
+            referred_by: activeRole === 'owner' && trimmedReferral ? trimmedReferral : undefined
+          }
+        })
+      });
+
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        setErrorMsg(errData.message || 'Gagal mengirim ulang kode verifikasi.');
+      } else {
+        const resData = await response.json().catch(() => ({}));
+        if (resData?.emailOtp) {
+          setEmailOtpCode(resData.emailOtp);
+        }
+        setSuccessMsg('Kode verifikasi baru telah dikirimkan ke email Anda.');
+        setEmailResendTimer(60);
+      }
+    } catch (err: any) {
+      setErrorMsg(`Gagal mengirim ulang: ${err.message}`);
     } finally {
       setLoading(false);
     }
@@ -619,76 +650,72 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
     }
   };
 
-  if (isVerifyingWaOtp) {
+  if (verificationSent) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8 animate-in fade-in duration-300">
         <div className="max-w-md w-full bg-white rounded-[2.5rem] shadow-xl border border-gray-100 overflow-hidden p-8 text-center animate-in zoom-in-95">
           <div className="w-20 h-20 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-6">
-            <svg className="w-10 h-10 text-orange-600" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946C.06 5.348 5.397.01 12.008.01c3.202.001 6.212 1.246 8.477 3.514 2.266 2.268 3.507 5.28 3.505 8.484-.004 6.657-5.34 11.997-11.953 11.997-2.005-.001-3.973-.502-5.717-1.454L0 24zm6.59-4.846c1.6.95 3.167 1.485 4.95 1.486 5.432-.001 9.853-4.425 9.856-9.86.002-2.63-1.023-5.105-2.887-6.97-1.863-1.865-4.343-2.893-6.975-2.894-5.436 0-9.86 4.423-9.863 9.859 0 1.802.474 3.562 1.378 5.124l-.993 3.629 3.734-.974zm11.315-7.3c-.302-.15-1.786-.882-2.062-.983-.277-.1-.478-.15-.679.15-.2.3-.778.983-.954 1.184-.176.2-.352.225-.654.075-.302-.15-1.276-.47-2.43-1.499-.898-.8-1.503-1.79-1.679-2.091-.176-.3-.019-.462.131-.612.135-.135.302-.35.453-.525.151-.175.201-.3.302-.5.101-.2.05-.376-.025-.526-.075-.15-.679-1.636-.93-2.24-.244-.587-.492-.507-.679-.517-.176-.009-.377-.01-.578-.01-.2 0-.528.075-.804.376-.277.301-1.057 1.033-1.057 2.52 0 1.488 1.082 2.922 1.233 3.123.15.201 2.13 3.253 5.16 4.561.72.311 1.282.497 1.719.636.724.23 1.383.197 1.902.12.578-.086 1.786-.73 2.038-1.434.252-.703.252-1.306.176-1.433-.075-.127-.277-.202-.579-.352z"/>
-            </svg>
+            <Mail className="w-10 h-10 text-orange-600" />
           </div>
-          
-          <h2 className="text-2xl font-black text-gray-900 mb-2 leading-tight">Verifikasi OTP WhatsApp</h2>
+
+          <h2 className="text-2xl font-black text-gray-900 mb-2 leading-tight">Verifikasi Email Anda</h2>
           <p className="text-gray-500 mb-6 leading-relaxed text-sm">
-            Kami telah mengirimkan kode OTP 6-digit ke nomor WhatsApp Anda:<br />
-            <strong className="text-gray-800">{formData.phone.startsWith('+62') ? formData.phone : `+62 ${formData.phone}`}</strong>
+            Kami telah mengirimkan 6-digit kode verifikasi ke email:<br />
+            <strong className="text-gray-800">{formData.email}</strong>
           </p>
 
           {errorMsg && (
             <div className="mb-6 p-4 bg-red-50 border border-red-100 rounded-xl flex items-center gap-3 animate-in fade-in slide-in-from-top-2">
-              <svg className="w-5 h-5 text-red-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+              <AlertCircle className="w-5 h-5 text-red-500 shrink-0" />
               <p className="text-xs font-bold text-red-500 text-left">{errorMsg}</p>
             </div>
           )}
 
           {successMsg && (
             <div className="mb-6 p-4 bg-green-50 border border-green-100 rounded-xl flex items-center gap-3 animate-in fade-in slide-in-from-top-2">
-              <svg className="w-5 h-5 text-green-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+              <CheckCircle2 className="w-5 h-5 text-green-500 shrink-0" />
               <p className="text-xs font-bold text-green-500 text-left">{successMsg}</p>
             </div>
           )}
 
           {/* Developer Sandbox Testing Helper */}
-          {waOtpCode && (
+          {emailOtpCode && (
             <div className="mb-6 p-4 bg-orange-50 border border-orange-100 rounded-xl text-left animate-in fade-in slide-in-from-top-2">
               <div className="flex items-center gap-2 mb-1">
                 <span className="w-2 h-2 rounded-full bg-orange-500 animate-pulse"></span>
-                <span className="text-[10px] font-black text-orange-600 uppercase tracking-wider">Mode Pengujian Sandbox</span>
+                <span className="text-[10px] font-black text-orange-600 uppercase tracking-wider">Mode Pengujian Cepat</span>
               </div>
               <p className="text-xs text-gray-600 leading-relaxed">
-                Karena portofolio bisnis Meta Anda sedang dalam verifikasi, masukkan kode OTP pengujian berikut: <strong className="text-orange-600 font-mono text-sm">{waOtpCode}</strong>
+                Kode OTP verifikasi email Anda: <strong className="text-orange-600 font-mono text-sm">{emailOtpCode}</strong>
               </p>
             </div>
           )}
 
-          <form onSubmit={handleVerifyWaOtp} className="space-y-6">
+          <form onSubmit={handleVerifyEmailOtp} className="space-y-6">
             <div>
               <input
                 type="text"
                 required
                 maxLength={6}
                 placeholder="000000"
-                className="w-full text-center tracking-[1em] font-mono text-3xl bg-gray-50 border border-gray-100 rounded-2xl py-4 focus:outline-none focus:ring-2 focus:ring-orange-500/10 focus:border-orange-500 transition-all"
-                value={waOtpInput}
-                onChange={(e) => setWaOtpInput(e.target.value.replace(/\D/g, ''))}
+                className="w-full text-center tracking-[1em] font-mono text-3xl bg-gray-50 border border-gray-100 rounded-2xl py-4 focus:outline-none focus:ring-2 focus:ring-orange-500/10 focus:border-orange-500 transition-all font-bold"
+                value={emailOtpInput}
+                onChange={(e) => setEmailOtpInput(e.target.value.replace(/\D/g, ''))}
               />
             </div>
 
             <div className="flex gap-4">
               <button
                 type="button"
-                onClick={() => { setIsVerifyingWaOtp(false); setErrorMsg(''); setSuccessMsg(''); }}
+                onClick={() => { setVerificationSent(false); resetForm(); }}
                 className="flex-1 bg-gray-100 text-gray-700 font-bold py-4 rounded-xl hover:bg-gray-200 transition-all active:scale-95"
               >
                 Batal
               </button>
               <button
                 type="submit"
-                disabled={loading || waOtpInput.length !== 6}
-                className={`flex-1 bg-orange-500 text-white font-bold py-4 rounded-xl shadow-lg transition-all active:scale-95 flex items-center justify-center gap-2 ${
-                  (loading || waOtpInput.length !== 6) ? 'opacity-70 cursor-not-allowed' : 'hover:bg-orange-600'
-                }`}
+                disabled={loading || emailOtpInput.length !== 6}
+                className={`flex-1 bg-orange-500 text-white font-bold py-4 rounded-xl shadow-lg transition-all active:scale-95 flex items-center justify-center gap-2 ${(loading || emailOtpInput.length !== 6) ? 'opacity-70 cursor-not-allowed' : 'hover:bg-orange-600'}`}
               >
                 {loading && (
                   <svg className="animate-spin h-5 w-5 text-white" fill="none" viewBox="0 0 24 24">
@@ -696,73 +723,28 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                   </svg>
                 )}
-                Verifikasi
+                Verifikasi & Masuk
               </button>
             </div>
           </form>
 
-          <div className="mt-8 text-center">
-            {waResendTimer > 0 ? (
+          <div className="mt-8 text-center space-y-3">
+            {emailResendTimer > 0 ? (
               <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">
-                Kirim ulang OTP dalam {waResendTimer} detik
+                Kirim ulang kode dalam {emailResendTimer} detik
               </p>
             ) : (
               <button
                 type="button"
-                onClick={handleResendWaOtp}
+                onClick={handleResendEmailOtp}
                 className="text-orange-500 font-bold text-sm hover:underline"
               >
-                Kirim Ulang Kode OTP via WhatsApp
+                Kirim Ulang Kode Verifikasi
               </button>
             )}
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  if (verificationSent) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-md w-full bg-white rounded-[2.5rem] shadow-xl border border-gray-100 overflow-hidden p-8 text-center animate-in zoom-in-95">
-          <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6">
-            <svg className="w-10 h-10 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 19v-8.93a2 2 0 01.89-1.664l7-4.666a2 2 0 012.22 0l7 4.666A2 2 0 0121 10.07V19M3 19a2 2 0 002 2h14a2 2 0 002-2M3 19l6.75-4.5M21 19l-6.75-4.5M3 10l6.75 4.5M21 10l-6.75 4.5m0 0l-1.14.76a2 2 0 01-2.22 0l-1.14-.76" /></svg>
-          </div>
-          <h2 className="text-2xl font-black text-gray-900 mb-2 leading-tight">Verifikasi Email Terkirim</h2>
-          <p className="text-gray-500 mb-2 leading-relaxed">
-            Link verifikasi telah dikirim ke <strong>{formData.email}</strong>.<br />
-            Silakan cek kotak masuk atau folder spam Anda.
-          </p>
-
-          <button
-            onClick={() => setVerificationSent(false)}
-            className="text-[10px] uppercase tracking-widest font-bold text-orange-500 hover:text-orange-600 mb-6 flex items-center gap-1 mx-auto transition-colors"
-          >
-            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
-            Salah email? Ubah disini
-          </button>
-
-          <div className="space-y-3 mb-8">
-            {resendTimer > 0 ? (
-               <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">
-                 Kirim ulang tersedia dalam {resendTimer} detik
-               </p>
-            ) : (
-              <button
-                onClick={() => handleRegister()}
-                disabled={loading}
-                className="text-orange-500 font-bold text-sm hover:underline flex items-center justify-center gap-2 mx-auto"
-              >
-                Belum terima email? Kirim Ulang
-              </button>
-            )}
-            
-            <button
-              onClick={() => { setVerificationSent(false); setMode('LOGIN'); resetForm(); }}
-              className="w-full bg-orange-500 text-white font-bold py-3 rounded-xl shadow-lg hover:bg-orange-600 transition-all"
-            >
-              Kembali ke Login
-            </button>
+            <p className="text-[11px] text-gray-400">
+              Atau Anda juga dapat mengklik tombol konfirmasi di dalam pesan email yang Anda terima.
+            </p>
           </div>
         </div>
       </div>
@@ -965,14 +947,13 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
                 type="button"
                 onClick={handleUpgradeToOwner}
                 disabled={loading}
-                className={`flex-1 bg-orange-500 text-white font-bold py-3.5 rounded-xl shadow-lg transition-all flex items-center justify-center gap-2 ${
-                  loading ? 'opacity-70 cursor-not-allowed' : 'hover:bg-orange-600 active:scale-95'
-                }`}
+                className={`flex-1 bg-orange-500 text-white font-bold py-3.5 rounded-xl shadow-lg transition-all flex items-center justify-center gap-2 ${loading ? 'opacity-70 cursor-not-allowed' : 'hover:bg-orange-600 active:scale-95'
+                  }`}
               >
                 {loading && (
                   <svg className="animate-spin h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"/>
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                   </svg>
                 )}
                 {loading ? 'Memproses...' : 'Ya, Upgrade Sekarang'}
@@ -985,23 +966,21 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
 
       <div className="max-w-md w-full bg-white rounded-[2.5rem] shadow-xl border border-gray-100 overflow-hidden">
         <div className="p-8 sm:p-12">
-          
+
           {/* Header Status Peran Aktif & Tombol Ganti Peran */}
           {(mode === 'LOGIN' || mode === 'REGISTER') && (
             <div className="mb-6 pb-5 border-b border-gray-100 flex items-center justify-between">
               <div className="flex items-center gap-2.5">
-                <div className={`w-8 h-8 rounded-xl flex items-center justify-center text-sm ${
-                  activeRole === 'user' ? 'bg-orange-100 text-orange-600' : 'bg-indigo-100 text-indigo-600'
-                }`}>
+                <div className={`w-8 h-8 rounded-xl flex items-center justify-center text-sm ${activeRole === 'user' ? 'bg-orange-100 text-orange-600' : 'bg-indigo-100 text-indigo-600'
+                  }`}>
                   {activeRole === 'user' ? <User className="w-4 h-4" /> : <Building2 className="w-4 h-4" />}
                 </div>
                 <div>
                   <span className="text-[10px] font-black uppercase tracking-wider text-gray-400 block">
                     Akses Masuk
                   </span>
-                  <span className={`text-xs font-extrabold ${
-                    activeRole === 'user' ? 'text-orange-600' : 'text-indigo-600'
-                  }`}>
+                  <span className={`text-xs font-extrabold ${activeRole === 'user' ? 'text-orange-600' : 'text-indigo-600'
+                    }`}>
                     {activeRole === 'user' ? 'Pencari Kost' : 'Pemilik / Mitra Kost'}
                   </span>
                 </div>
@@ -1046,25 +1025,25 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
 
           {successMsg && (
             <div className="mb-6 p-4 bg-green-50 border border-green-100 rounded-xl flex flex-col gap-2 animate-in fade-in slide-in-from-top-2">
-                <div className="flex items-center gap-3">
-                    <svg className="w-5 h-5 text-green-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                    <p className="text-xs font-bold text-green-500 text-left">{successMsg}</p>
+              <div className="flex items-center gap-3">
+                <svg className="w-5 h-5 text-green-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                <p className="text-xs font-bold text-green-500 text-left">{successMsg}</p>
+              </div>
+              {mode === 'FORGOT_PASSWORD' && (
+                <div className="pl-8">
+                  {resendTimer > 0 ? (
+                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Kirim ulang tersedia dalam {resendTimer}s</span>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => handleForgotPassword()}
+                      className="text-[10px] font-bold text-green-600 hover:text-green-700 hover:underline uppercase tracking-widest transition-all"
+                    >
+                      Kirim Ulang Sekarang
+                    </button>
+                  )}
                 </div>
-                {mode === 'FORGOT_PASSWORD' && (
-                    <div className="pl-8">
-                         {resendTimer > 0 ? (
-                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Kirim ulang tersedia dalam {resendTimer}s</span>
-                         ) : (
-                            <button 
-                                type="button" 
-                                onClick={() => handleForgotPassword()}
-                                className="text-[10px] font-bold text-green-600 hover:text-green-700 hover:underline uppercase tracking-widest transition-all"
-                            >
-                                Kirim Ulang Sekarang
-                            </button>
-                         )}
-                    </div>
-                )}
+              )}
             </div>
           )}
 
@@ -1090,8 +1069,8 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
                 <div>
                   <label className="block text-xs font-bold text-gray-400 uppercase mb-2">Nomor WhatsApp</label>
                   <div className="flex bg-gray-50 border border-gray-100 rounded-xl focus-within:ring-2 focus-within:ring-orange-500/10 focus-within:border-orange-500 transition-all overflow-hidden group">
-                     <div className="px-4 py-3 bg-gray-100 border-r border-gray-200 text-gray-400 font-black text-xs flex items-center group-focus-within:text-orange-500">+62</div>
-                     <input
+                    <div className="px-4 py-3 bg-gray-100 border-r border-gray-200 text-gray-400 font-black text-xs flex items-center group-focus-within:text-orange-500">+62</div>
+                    <input
                       type="tel"
                       required
                       className="flex-1 px-4 py-3 bg-transparent outline-none font-medium"
@@ -1139,8 +1118,8 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
             )}
 
             {mode === 'LOGIN' && (
-              <PasswordInput 
-                label="Kata Sandi" 
+              <PasswordInput
+                label="Kata Sandi"
                 rightLabel={
                   <button
                     type="button"
@@ -1150,36 +1129,36 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
                     Lupa Sandi?
                   </button>
                 }
-                value={formData.password} 
-                onChange={(val: string) => setFormData({...formData, password: val})}
+                value={formData.password}
+                onChange={(val: string) => setFormData({ ...formData, password: val })}
                 show={showPassword}
                 setShow={setShowPassword}
               />
             )}
 
             {mode === 'REGISTER' && (
-               <PasswordInput 
-                  label="Kata Sandi" 
-                  value={formData.password} 
-                  onChange={(val: string) => setFormData({...formData, password: val})}
-                  show={showPassword}
-                  setShow={setShowPassword}
-               />
+              <PasswordInput
+                label="Kata Sandi"
+                value={formData.password}
+                onChange={(val: string) => setFormData({ ...formData, password: val })}
+                show={showPassword}
+                setShow={setShowPassword}
+              />
             )}
 
             {mode === 'PASSWORD_UPDATE' && (
               <div className="space-y-4 animate-in fade-in slide-in-from-top-2">
-                <PasswordInput 
-                  label="Kata Sandi Baru" 
-                  value={formData.newPassword} 
-                  onChange={(val: string) => setFormData({...formData, newPassword: val})}
+                <PasswordInput
+                  label="Kata Sandi Baru"
+                  value={formData.newPassword}
+                  onChange={(val: string) => setFormData({ ...formData, newPassword: val })}
                   show={showNewPassword}
                   setShow={setShowNewPassword}
                 />
-                <PasswordInput 
-                  label="Konfirmasi Kata Sandi" 
-                  value={formData.confirmPassword} 
-                  onChange={(val: string) => setFormData({...formData, confirmPassword: val})}
+                <PasswordInput
+                  label="Konfirmasi Kata Sandi"
+                  value={formData.confirmPassword}
+                  onChange={(val: string) => setFormData({ ...formData, confirmPassword: val })}
                   show={showConfirmPassword}
                   setShow={setShowConfirmPassword}
                 />
@@ -1198,7 +1177,7 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
                 </svg>
               )}
               {mode === 'LOGIN' && 'Masuk Sekarang'}
-              {mode === 'REGISTER' && 'Daftar & Verifikasi Email'}
+              {mode === 'REGISTER' && 'Daftar & Verifikasi'}
               {mode === 'FORGOT_PASSWORD' && 'Kirim Link Reset'}
               {mode === 'PASSWORD_UPDATE' && 'Simpan Kata Sandi'}
             </button>

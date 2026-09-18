@@ -2431,6 +2431,7 @@ export const handleCustomAuthEmail = functions.https.onRequest({ cors: true }, a
     
     const brevoApiKey = brevoApiKeyParam.value();
     const actionLink = data.properties.action_link;
+    const emailOtp = (data.properties as any)?.email_otp || '';
     const isSignup = type === 'signup';
     const isUpgrade = type === 'magiclink';
     const titleText = isUpgrade 
@@ -2441,7 +2442,7 @@ export const handleCustomAuthEmail = functions.https.onRequest({ cors: true }, a
     const subTitleText = isUpgrade
       ? 'Kami menerima permintaan untuk mengupgrade akun RuangSinggah.id Anda menjadi Pemilik Kost (Owner/Mitra).'
       : isSignup 
-        ? 'Selamat datang di RuangSinggah.id! Selangkah lagi untuk mengaktifkan akun Anda.' 
+        ? 'Selamat datang di RuangSinggah.id! Masukkan kode OTP di bawah ini atau klik tombol konfirmasi untuk mengaktifkan akun Anda.' 
         : 'Kami menerima permintaan untuk mereset kata sandi akun RuangSinggah.id Anda.';
     const buttonText = isUpgrade
       ? 'KONFIRMASI UPGRADE SEKARANG'
@@ -2466,11 +2467,23 @@ export const handleCustomAuthEmail = functions.https.onRequest({ cors: true }, a
           <!-- Content Body -->
           <div style="padding: 40px 35px; color: #374151; line-height: 1.6;">
             <p style="font-size: 16px; font-weight: 600; margin-top: 0; color: #111827;">Halo,</p>
-            <p style="font-size: 15px; color: #4b5563; margin-bottom: 30px; margin-top: 0;">${subTitleText}</p>
+            <p style="font-size: 15px; color: #4b5563; margin-bottom: 25px; margin-top: 0;">${subTitleText}</p>
             
-            <!-- CTA Button Container -->
-            <div style="text-align: center; margin: 35px 0;">
-              <a href="${actionLink}" style="display: inline-block; background-color: #f97316; color: #ffffff; padding: 16px 32px; font-size: 14px; font-weight: bold; text-decoration: none; border-radius: 14px; box-shadow: 0 8px 20px rgba(249, 115, 22, 0.25);">
+            <!-- OTP Box for Signup -->
+            ${isSignup && emailOtp ? `
+            <div style="background-color: #fff7ed; border: 2px dashed #f97316; border-radius: 16px; padding: 25px 20px; text-align: center; margin: 25px 0;">
+              <span style="font-size: 11px; font-weight: 800; color: #ea580c; text-transform: uppercase; letter-spacing: 1.5px; display: block; margin-bottom: 6px;">Kode Verifikasi Akun (6-Digit)</span>
+              <div style="font-size: 38px; font-weight: 900; color: #ea580c; letter-spacing: 8px; font-family: Consolas, 'Courier New', monospace; padding: 8px 0;">
+                ${emailOtp}
+              </div>
+              <p style="font-size: 12px; color: #6b7280; margin: 6px 0 0 0;">Masukkan kode 6 digit di atas pada halaman pendaftaran RuangSinggah.</p>
+            </div>
+            ` : ''}
+
+            <!-- CTA Button Container (Alternatif Link Otomatis) -->
+            <div style="text-align: center; margin: 30px 0 25px 0;">
+              <p style="font-size: 12px; color: #9ca3af; margin-bottom: 12px;">Atau klik tombol di bawah untuk verifikasi langsung:</p>
+              <a href="${actionLink}" style="display: inline-block; background-color: #f97316; color: #ffffff; padding: 15px 32px; font-size: 14px; font-weight: bold; text-decoration: none; border-radius: 14px; box-shadow: 0 8px 20px rgba(249, 115, 22, 0.25);">
                 ${buttonText}
               </a>
             </div>
@@ -2511,7 +2524,10 @@ export const handleCustomAuthEmail = functions.https.onRequest({ cors: true }, a
       throw new Error(`Brevo Auth Email Error: ${JSON.stringify(result)}`);
     }
     
-    res.status(200).send({ message: 'Success' });
+    res.status(200).send({ 
+      message: 'Success',
+      emailOtp: isSignup ? emailOtp : undefined
+    });
   } catch (err: any) {
     console.error("AUTH_EMAIL_EXCEPTION:", err);
     res.status(500).send({ message: err.message });

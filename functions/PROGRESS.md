@@ -2,7 +2,38 @@
 
 ## Fitur Selesai (Completed Features)
 
-### 413. Stabilisasi Sistem Fundamental: Pendaftaran Pemilik Kost Self-Listing, WhatsApp OTP Bebas CORS via Serverless Edge Function, dan Pembeda Role Payout Admin (`Login.tsx`, `whatsappService.ts`, `send-wa-message`, `WithdrawalManagement.tsx`, `MitraProfile.tsx`) (September 2026)
+### 414. Penerapan Arsitektur Opsi B: Pendaftaran Email OTP 6-Digit Tanpa Hambatan & Pemindahan Verifikasi WhatsApp ke Menu Verifikasi Identitas (KYC) Mitra (`Login.tsx`, `functions/src/index.ts`, `MitraProfile.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna menganalisis alur pendaftaran: sistem autentikasi RuangSinggah berakar pada Email & Password. Pemaksaan verifikasi OTP WhatsApp pada form registrasi awal menimbulkan *double friction* (calon mitra harus verifikasi OTP WhatsApp terlebih dahulu, namun setelahnya Supabase Auth tetap menuntut konfirmasi email), yang membingungkan calon mitra dan menurunkan tingkat konversi pendaftaran.
+  2. Pengguna menyepakati penerapan arsitektur **Opsi B**:
+     - Form pendaftaran awal cukup verifikasi kepemilikan akun via Email tanpa pemblokiran modal OTP WhatsApp di halaman depan. Nomor WhatsApp tetap dicatat di form sebagai data kontak profil awal.
+     - Verifikasi nomor WhatsApp dipindahkan secara utuh ke tahap **Verifikasi Identitas (KYC)** di Dashboard Mitra (`MitraProfile.tsx`) berdampingan dengan verifikasi KTP dan Rekening Bank sebelum akun di-ACC oleh Admin.
+  3. Pengguna meminta alur verifikasi email pendaftaran diubah dari yang sebelumnya mengandalkan klik tautan email (*action link*) menjadi **sistem input 6-digit kode OTP langsung di layar UI website**.
+- **Implementasi Solusi**:
+  1. **Backend Cloud Functions (`functions/src/index.ts`)**:
+     - Mengekstrak properti `email_otp` dari hasil pemanggilan `supabase.auth.admin.generateLink`.
+     - Memperbarui template HTML email Brevo untuk menampilkan kotak kode 6-digit OTP (*prominent OTP box*) dengan desain oranye kontras tinggi, elegan, dan font monospace, sembari mempertahankan tombol tautan konfirmasi langsung sebagai opsi alternatif/cadangan.
+     - Mengembalikan nilai `emailOtp` pada respons HTTP saat `type: 'signup'` untuk memfasilitasi mode pengujian cepat (*sandbox/developer mode*).
+  2. **Front-End Pendaftaran (`functions/public/pages/Login.tsx`)**:
+     - Menghapus interupsi modal WhatsApp OTP pada fungsi `handleRegister` sehingga pendaftaran calon mitra maupun pengguna berjalan mulus dan instan.
+     - Mengirimkan metadata awal akun dengan `whatsapp_verified: false` (yang nantinya akan divalidasi pada tahap KYC Dashboard Mitra).
+     - Mengubah layar setelah submit registrasi (`verificationSent`) menjadi antarmuka interaktif **Verifikasi Email Anda** dengan 6 kotak digit OTP bergaya modern, countdown timer kirim ulang (60 detik), dan tombol "Verifikasi & Masuk".
+     - Mengimplementasikan fungsi `handleVerifyEmailOtp` yang memanggil `supabase.auth.verifyOtp({ email, token, type: 'signup' })`. Begitu kode OTP cocok, sesi login aktif otomatis secara instan (*instant login*) dan pengguna langsung dialihkan ke dashboard tanpa perlu login ulang.
+     - Mengimplementasikan `handleResendEmailOtp` dengan timer mundur untuk pengiriman ulang kode jika diperlukan.
+  3. **Penyempurnaan Alur KYC di Dashboard Mitra (`MitraProfile.tsx`)**:
+     - Memastikan proses verifikasi WhatsApp OTP via Meta Cloud API tetap aktif pada tab Verifikasi Identitas (KYC) Dashboard Mitra sebagai syarat kelengkapan data sebelum diajukan ke Admin.
+- **File Tersentuh**:
+  - `functions/src/index.ts`
+  - `functions/public/pages/Login.tsx`
+  - `functions/PROGRESS.md`
+  - `IMPLEMENTATION_PLAN.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi backend `functions` dengan TypeScript sukses 100% (`npm.cmd run build` exit code 0).
+  - Kompilasi produksi front-end Vite di `functions/public` sukses 100% (2512 modul tertransformasi, `✓ built in 20.64s`, 0 error).
+  - Seluruh aset produksi berhasil disinkronkan ke folder `public/dist`.
+
+
 - **Permintaan & Masalah**:
   1. Sebelum mengembangkan sistem KostManager ke tahap lebih lanjut, pengguna meminta penguatan pada hal fundamental:
      a. Pendaftaran pemilik kost self-listing (verifikasi nomor WhatsApp sebelumnya belum 100% berfungsi akibat pemblokiran CORS oleh Meta Graph API dari browser).
