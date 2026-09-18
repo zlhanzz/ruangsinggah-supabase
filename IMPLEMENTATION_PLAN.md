@@ -1,102 +1,108 @@
-# Rencana Implementasi: Optimasi Langkah 1 Verifikasi Identitas Mitra (Penghapusan Tempat/Tanggal Lahir & Eliminasi Tombol Duplikat OTP)
+# Rencana Implementasi (Implementation Plan): Protokol Ketat Penguncian Nomor WhatsApp Terverifikasi & Alur Ganti Nomor Baru
 
-Dokumen ini memuat analisis masalah dan rencana modifikasi kode untuk mengoptimalkan alur Verifikasi Identitas Mitra pada `MitraProfile.tsx` (dan penyelarasan pada `AgentProfile.tsx`):
-1. Menghapus input **Tempat Lahir** dan **Tanggal Lahir** pada Langkah 1 (karena sudah tersedia dan terisi otomatis melalui OCR KTP pada Langkah 2).
-2. Menghilangkan tombol duplikat **Kirim Ulang** pada komponen verifikasi nomor WhatsApp.
+Dokumen ini disusun untuk merespons kebutuhan pengguna mengenai pengamanan nomor WhatsApp yang telah berhasil diverifikasi pada tahap verifikasi identitas (Step 1) agar tidak dapat diedit secara bebas hanya dengan mengeklik kolom input nomor telepon.
 
 ---
 
 ## 1. Analisis Masalah & Kebutuhan
 
-1. **Redundansi Tempat & Tanggal Lahir di Langkah 1**:
-   - Saat ini, pada Langkah 1 Verifikasi Identitas Mitra (`MitraProfile.tsx`), pengguna diminta mengisi formulir:
-     - Foto Profil, Nama Lengkap, No. WhatsApp, Email, **Tempat Lahir**, **Tanggal Lahir**, dan Alamat Domisili.
-   - Pada Langkah 2 (Verifikasi KTP), sistem memiliki pemindai OCR KTP otomatis (`handleKtpUpload`) yang mengekstrak data KTP, termasuk kolom **Tempat Lahir (Sesuai KTP)** dan **Tanggal Lahir (Sesuai KTP)**.
-   - Meminta mitra mengisi tempat dan tanggal lahir secara manual di Langkah 1 adalah tindakan mubazir (data redundan) dan memperlambat pendaftaran.
-   - Solusi: Hapus kedua kolom tersebut dari Langkah 1, serta sesuaikan validasi kelengkapan Langkah 1 (`isStep1Complete`) agar mitra dapat langsung melanjutkan ke Langkah 2 setelah memverifikasi WhatsApp, mengisi nama, dan alamat domisili.
+### A. Masalah Saat Ini
+1. **Nomor Tidak Terkunci Pasca Verifikasi OTP**:
+   Setelah pengguna memasukkan kode OTP 6-digit WhatsApp dengan benar, status `waOtpVerified` berubah menjadi `true` dan muncul badge hijau "Terverifikasi". Namun, elemen input `<input name="phone" value={formData.phone} onChange={handleInputChange} />` masih berupa input teks standar yang aktif, tanpa atribut `readOnly` atau `disabled`.
+2. **Rawan Perubahan Tidak Sengaja & Inkonsistensi Data**:
+   Pengguna dapat secara tidak sengaja mengeklik kolom nomor telepon, mengubah angka, atau menghapus nomor tanpa memicu pembatalan status verifikasi (`waOtpVerified` tetap `true` di state). Hal ini berisiko meloloskan nomor yang belum diverifikasi ke tahap selanjutnya.
+3. **Ketiadaan Protokol Resmi Ganti Nomor**:
+   Belum ada tombol eksplisit **"Ganti Nomor"** dengan konfirmasi resmi dan alur reset verifikasi yang mewajibkan nomor pengganti untuk diverifikasi ulang via OTP WhatsApp.
 
-2. **Tombol Duplikat "Kirim Ulang" OTP WhatsApp**:
-   - Di samping label `No. WhatsApp`, tombol awal berubah menjadi `Kirim Ulang` saat OTP telah dikirimkan, sehingga terdapat 2 tombol `KIRIM ULANG` yang muncul bersamaan dengan hitung mundur di dalam kartu OTP.
-   - Solusi:
-     - Di header label atas: Hanya tampilkan tombol **`Kirim Kode OTP`** jika belum kirim, atau badge status informatif **`Kode Terkirim`** jika OTP sudah aktif.
-     - Di dalam kotak kartu OTP: Menjadi satu-satunya pengendali hitung mundur (`Kirim ulang dalam {waResendTimer}s` $\rightarrow$ tombol `Kirim Ulang` saat timer habis).
-
----
-
-## 2. Dampak Perubahan File
-
-1. [functions/public/pages/MitraProfile.tsx](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/MitraProfile.tsx):
-   - **Hapus Input Tempat & Tanggal Lahir Langkah 1**: Menghapus blok elemen `<ProfileItemRead label="Tempat Lahir" ... />` dan `<ProfileItemRead label="Tanggal Lahir" ... />` pada Langkah 1 (baris 1064–1067).
-   - **Sesuaikan Validasi `isStep1Complete`**: Menghapus syarat `formData.birth_place.trim() !== ''` dan `formData.birth_date.trim() !== ''` dari validasi tombol *Lanjutkan* (baris 1226–1232).
-   - **Eliminasi Tombol Duplikat OTP**: Merapikan header `No. WhatsApp` agar hanya menampilkan badge `Kode Terkirim` saat OTP aktif dan memusatkan kontrol kirim ulang di dalam kartu OTP.
-2. [functions/public/pages/AgentProfile.tsx](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/AgentProfile.tsx):
-   - Menyelaraskan eliminasi tombol duplikat OTP pada formulir profil agen.
+### B. Kebutuhan Pengguna
+1. **Penguncian Otomatis (Locking)**:
+   Ketika nomor WhatsApp telah berstatus `waOtpVerified === true`, kolom input nomor telepon wajib otomatis terkunci (`readOnly={true}`), kursor tidak aktif untuk pengetikan bebas, dan menampilkan indikator visual yang jelas bahwa nomor telah terverifikasi dan diproteksi.
+2. **Protokol Ketat Ganti Nomor**:
+   Untuk mengganti nomor yang sudah diverifikasi, pengguna **wajib** mengeklik tombol **"Ganti Nomor"**.
+3. **Konfirmasi & Reset Verifikasi**:
+   Saat tombol "Ganti Nomor" diklik, sistem memberikan dialog konfirmasi peringatan bahwa nomor lama akan dilepas dan nomor baru wajib diverifikasi ulang. Jika disetujui:
+   - Status `waOtpVerified` di-reset menjadi `false`.
+   - Kode OTP lama dan isian digit OTP dibersihkan.
+   - Input nomor terbuka kembali (`readOnly={false}`) untuk diedit.
+   - Tombol "Kirim OTP" aktif kembali untuk mengirim kode ke nomor baru.
+   - Tombol **"LANJUTKAN"** pada Step 1 otomatis terkunci (`disabled`) hingga nomor baru tersebut tervalidasi sukses via OTP WhatsApp.
 
 ---
 
-## 3. Langkah-Langkah Eksekusi (Fase 2 Setelah ACC)
+## 2. Dampak Perubahan
 
-### Langkah 1: Modifikasi `MitraProfile.tsx`
-- **Hapus elemen JSX Tempat & Tanggal Lahir di Langkah 1**:
-  Hapus baris:
-  ```tsx
-  <div className="grid grid-cols-2 gap-4">
-      <ProfileItemRead icon={<MapPin size={18} />} label="Tempat Lahir" value={formData.birth_place} isEditing={true} name="birth_place" onChange={handleInputChange} placeholder="Tempat Lahir" />
-      <ProfileItemRead icon={<Calendar size={18} />} label="Tanggal Lahir" value={formData.birth_date} isEditing={true} name="birth_date" onChange={handleInputChange} type="date" />
-  </div>
-  ```
-- **Perbarui rumus `isStep1Complete`**:
-  ```tsx
-  const isStep1Complete =
-      formData.display_name.trim() !== '' &&
-      formData.phone.trim() !== '' &&
-      waOtpVerified &&
-      formData.address.trim() !== '';
-  ```
-- **Perbarui tombol di header label `No. WhatsApp`**:
-  ```tsx
-  {waOtpVerified ? (
-      <span className="flex items-center gap-1 text-[9px] font-black uppercase text-green-600 bg-green-50 px-2 py-1 rounded-md border border-green-100">
-          <BadgeCheck size={12} className="text-green-500" /> Terverifikasi
-      </span>
-  ) : !waOtpCode ? (
-      <button 
-          type="button" 
-          onClick={handleSendWaOtp} 
-          disabled={isSubmitting || !formData.phone}
-          className="text-[9px] font-black uppercase tracking-widest text-orange-500 hover:text-orange-600 bg-orange-50 hover:bg-orange-100 disabled:bg-gray-100 disabled:text-gray-400 px-2.5 py-1.5 rounded-lg transition-colors border border-orange-100"
-      >
-          {isSubmitting ? 'Mengirim...' : 'Kirim Kode OTP'}
-      </button>
-  ) : (
-      <span className="flex items-center gap-1 text-[9px] font-black uppercase text-amber-600 bg-amber-50 px-2.5 py-1 rounded-lg border border-amber-200/60">
-          <Clock size={12} className="text-amber-500" /> Kode Terkirim
-      </span>
-  )}
-  ```
+Perubahan akan diterapkan secara presisi dan konsisten pada dua halaman profil verifikasi:
+1. `functions/public/pages/MitraProfile.tsx` (Alur Verifikasi Identitas Mitra / Pemilik Kost)
+2. `functions/public/pages/AgentProfile.tsx` (Alur Verifikasi Identitas Agen Properti)
 
-### Langkah 2: Modifikasi `AgentProfile.tsx`
-- Terapkan pembaruan header `No. WhatsApp` yang sama pada `AgentProfile.tsx`.
+Tidak ada perubahan pada skema database atau backend Cloud Functions, karena data yang tersimpan tetap mengikuti alur data `users.phone` dan `users.whatsapp_verified`.
 
-### Langkah 3: Uji Kompilasi & Verifikasi Frontend
-- Jalankan `npm.cmd run build` di direktori `functions/public` untuk memastikan 0 error kompilasi TypeScript dan Vite bundler.
-- Pastikan form Langkah 1 bersih dari kolom tempat/tanggal lahir dan tombol "Lanjutkan" aktif saat nama, WA terverifikasi, dan domisili terisi.
+---
 
-### Langkah 4: Dokumentasi Progres & Walkthrough
-- Catat riwayat pekerjaan di `functions/PROGRESS.md` (#418).
-- Terbitkan `WALKTHROUGH.md`.
-- Commit dan push ke branch `bukan-productions`.
+## 3. Langkah-Langkah Eksekusi (Setelah Approval)
+
+### Langkah 1: Implementasi Handler Protokol Ganti Nomor
+Menambahkan fungsi `handleInitiateChangePhone` pada `MitraProfile.tsx` dan `AgentProfile.tsx`:
+```typescript
+const handleInitiateChangePhone = () => {
+    const confirmChange = window.confirm(
+        'Apakah Anda yakin ingin mengganti nomor WhatsApp? Nomor yang baru wajib diverifikasi ulang dengan kode OTP WhatsApp sebelum Anda dapat melanjutkan.'
+    );
+    if (!confirmChange) return;
+
+    setWaOtpVerified(false);
+    setWaOtpCode('');
+    setWaOtpInput('');
+    setOtpDigits(['', '', '', '', '', '']);
+    setIsVerifyingWaOtp(false);
+    setWaResendTimer(0);
+};
+```
+
+### Langkah 2: Penguncian Input & Tombol "Ganti Nomor" di UI
+Memperbarui baris render No. WhatsApp pada Step 1:
+1. **Header Label**:
+   - Ketika `waOtpVerified === true`, tampilkan badge `Terverifikasi` berdampingan dengan tombol **"Ganti Nomor"** yang berpenampilan sekunder/outline rapi:
+     ```tsx
+     <div className="flex items-center gap-2">
+         <span className="flex items-center gap-1 text-[9px] font-black uppercase text-green-600 bg-green-50 px-2 py-1 rounded-md border border-green-100">
+             <BadgeCheck size={12} className="text-green-500" /> Terverifikasi
+         </span>
+         <button
+             type="button"
+             onClick={handleInitiateChangePhone}
+             className="text-[9px] font-black uppercase tracking-widest text-orange-600 hover:text-orange-700 bg-orange-50 hover:bg-orange-100 px-2.5 py-1 rounded-md border border-orange-200 transition-all active:scale-95"
+         >
+             Ganti Nomor
+         </button>
+     </div>
+     ```
+2. **Input Telepon**:
+   - Tambahkan properti `readOnly={waOtpVerified}`.
+   - Tambahkan styling penguncian ketika `waOtpVerified`: `cursor-not-allowed bg-gray-100/70 border-green-300 text-gray-800 select-none`.
+   - Menghindari manipulasi nilai telepon saat sedang berstatus terverifikasi.
+
+### Langkah 3: Penyelarasan Penuh pada `AgentProfile.tsx`
+Menerapkan struktur handler dan UI penguncian yang sama persis pada `AgentProfile.tsx` agar standar keamanan nomor WhatsApp seragam di seluruh aplikasi.
+
+### Langkah 4: Kompilasi & Verifikasi Build
+1. Menjalankan `npm.cmd run build` di direktori `functions/public` untuk memastikan 0 error kompilasi TypeScript dan bundler Vite.
+2. Memverifikasi kelancaran alur kunci/buka dan reset tombol LANJUTKAN.
 
 ---
 
 ## 4. Rencana Verifikasi
-
-1. **Verifikasi UI Langkah 1**:
-   - Kolom "Tempat Lahir" dan "Tanggal Lahir" tidak lagi tampil di Langkah 1.
-   - Kolom "Tempat Lahir" dan "Tanggal Lahir" tetap tampil normal dan siap terisi otomatis melalui OCR KTP di Langkah 2.
-2. **Verifikasi Tombol Lanjutkan**:
-   - Tombol "LANJUTKAN" aktif dan dapat diklik begitu Nomor WhatsApp berstatus terverifikasi, Nama terisi, dan Domisili terisi.
-3. **Verifikasi Eliminasi Tombol Duplikat OTP**:
-   - Hanya ada 1 kontrol kirim ulang yang aktif di dalam kartu OTP. Tidak ada tombol kirim ulang liar di header atas saat timer countdown berjalan.
-4. **Uji Kompilasi**:
-   - `npm.cmd run build` lulus 100% dengan 0 error.
+1. **Uji Penguncian Kolom**:
+   - Masukkan nomor telepon dan lakukan verifikasi OTP.
+   - Setelah sukses, klik dan ketik pada kolom input nomor WhatsApp.
+   - Pastikan teks di dalam input **tidak dapat diubah**, dihapus, atau dimodifikasi secara langsung.
+2. **Uji Protokol Ganti Nomor**:
+   - Klik tombol **"Ganti Nomor"**.
+   - Sistem memunculkan jendela dialog konfirmasi keamanan.
+   - Jika pengguna membatalkan (Cancel), nomor tetap terkunci dan status tetap terverifikasi.
+   - Jika disetujui (OK):
+     - Kolom nomor terbuka kembali untuk diedit.
+     - Tombol "LANJUTKAN" otomatis menjadi abu-abu / tidak dapat diklik (`disabled`).
+     - Pengguna memasukkan nomor pengganti dan wajib menekan "Kirim OTP" serta menyelesaikan verifikasi OTP baru sebelum dapat melanjutkan ke Step 2.
+3. **Uji Build**:
+   - Memastikan `npm run build` berhasil tanpa error.

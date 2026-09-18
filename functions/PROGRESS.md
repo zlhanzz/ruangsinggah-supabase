@@ -2,6 +2,35 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 419. Protokol Ketat Penguncian Nomor WhatsApp Terverifikasi & Alur Ganti Nomor Baru via Verifikasi Ulang OTP (`MitraProfile.tsx`, `AgentProfile.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  1. Nomor WhatsApp yang sudah diverifikasi dengan OTP sebelumnya masih bisa diedit secara bebas hanya dengan mengeklik kolom input nomor telepon.
+  2. Dibutuhkan protokol keamanan yang ketat agar nomor yang sudah berstatus terverifikasi otomatis terkunci permanen di formulir, dan hanya dapat diganti melalui tombol resmi "Ganti Nomor" yang mewajibkan verifikasi OTP ulang pada nomor baru.
+- **Akar Masalah**:
+  1. Kolom input `<input name="phone" value={formData.phone} onChange={handleInputChange} />` pada Step 1 tidak memiliki atribut `readOnly={waOtpVerified}`, sehingga kursor dan ketikan pengguna tetap aktif dan bisa mengubah data nomor tanpa membatalkan status `waOtpVerified`.
+  2. Belum ada alur/tombol resmi "Ganti Nomor" yang memicu konfirmasi dialog dan mereset status verifikasi serta membersihkan kode OTP lama.
+- **Implementasi Solusi**:
+  1. **Penguncian Otomatis Input Telepon (`readOnly={waOtpVerified}`)**:
+     - Menetapkan atribut `readOnly={waOtpVerified}` pada elemen input nomor telepon di [MitraProfile.tsx](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/MitraProfile.tsx) dan [AgentProfile.tsx](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/AgentProfile.tsx).
+     - Memberikan styling penguncian visual: `cursor-not-allowed bg-green-50/20 border-green-200 text-gray-700 select-none` dengan ikon centang hijau terproteksi. Kolom tidak lagi dapat diklik untuk diedit secara langsung.
+  2. **Protokol Tombol "Ganti Nomor" dengan Dialog Konfirmasi**:
+     - Ketika nomor telah terverifikasi, sistem menampilkan tombol **"Ganti Nomor"** di samping badge status "Terverifikasi".
+     - Menekan tombol ini akan memunculkan dialog konfirmasi resmi (`window.confirm`): *"Apakah Anda yakin ingin mengganti nomor WhatsApp? Nomor yang baru wajib diverifikasi ulang dengan kode OTP WhatsApp sebelum Anda dapat melanjutkan."*
+  3. **Reset State & Enforce Re-Verification**:
+     - Jika pengguna menyetujui, fungsi `handleInitiateChangePhone` akan mereset `waOtpVerified = false`, `waOtpCode = ''`, `waOtpInput = ''`, dan `otpDigits = ['', '', '', '', '', '']`.
+     - Input nomor telepon terbuka kembali untuk diedit.
+     - Tombol "LANJUTKAN" pada Step 1 otomatis nonaktif (`disabled`) karena `waOtpVerified === false`.
+     - Pengguna diwajibkan mengirim kode OTP baru dan memverifikasinya kembali sebelum diperbolehkan melangkah ke Step 2.
+- **File Tersentuh**:
+  - `functions/public/pages/MitraProfile.tsx`
+  - `functions/public/pages/AgentProfile.tsx`
+  - `functions/PROGRESS.md`
+  - `IMPLEMENTATION_PLAN.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Uji kompilasi frontend Vite di `functions/public` sukses 100% tanpa error (`✓ built in 34.22s`, 0 error).
+  - Kolom nomor telepon terbukti terkunci saat status terverifikasi, tombol "Ganti Nomor" berfungsi memicu konfirmasi, dan nomor pengganti wajib diverifikasi ulang via OTP.
+
 ### 418. Optimalisasi Alur Verifikasi Identitas Mitra & Agen: Eliminasi Tombol Ganda OTP WhatsApp dan Penghapusan Input Redundan Tempat/Tanggal Lahir di Tahap 1 (`MitraProfile.tsx`, `AgentProfile.tsx`) (September 2026)
 - **Permintaan & Masalah**:
   1. Pada form verifikasi identitas (Step 1), terdapat dua tombol "Kirim Ulang" yang membingungkan dan tidak optimal: satu tombol berada di atas input No. WhatsApp (label header), dan tombol lainnya berada di dalam kartu input 6-digit OTP bersama timer hitung mundur.

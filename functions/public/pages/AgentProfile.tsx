@@ -234,6 +234,20 @@ const AgentProfile: React.FC<AgentProfileProps> = ({ uid, onEditModeChange }) =>
         }
     };
 
+    const handleInitiateChangePhone = () => {
+        const confirmChange = window.confirm(
+            'Apakah Anda yakin ingin mengganti nomor WhatsApp? Nomor yang baru wajib diverifikasi ulang dengan kode OTP WhatsApp sebelum Anda dapat melanjutkan.'
+        );
+        if (!confirmChange) return;
+
+        setWaOtpVerified(false);
+        setWaOtpCode('');
+        setWaOtpInput('');
+        setOtpDigits(['', '', '', '', '', '']);
+        setIsVerifyingWaOtp(false);
+        setWaResendTimer(0);
+    };
+
     const handleOtpDigitChange = (index: number, value: string) => {
         const cleanValue = value.replace(/\D/g, '');
         if (!cleanValue) {
@@ -907,9 +921,18 @@ const AgentProfile: React.FC<AgentProfileProps> = ({ uid, onEditModeChange }) =>
                                                             <p className="text-[10px] font-black uppercase tracking-widest leading-none text-gray-500">No. WhatsApp</p>
                                                         </div>
                                                         {waOtpVerified ? (
-                                                            <span className="flex items-center gap-1 text-[9px] font-black uppercase text-green-600 bg-green-50 px-2 py-1 rounded-md border border-green-100">
-                                                                <BadgeCheck size={12} className="text-green-500" /> Terverifikasi
-                                                            </span>
+                                                            <div className="flex items-center gap-2">
+                                                                <span className="flex items-center gap-1 text-[9px] font-black uppercase text-green-600 bg-green-50 px-2 py-1 rounded-md border border-green-100">
+                                                                    <BadgeCheck size={12} className="text-green-500" /> Terverifikasi
+                                                                </span>
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={handleInitiateChangePhone}
+                                                                    className="text-[9px] font-black uppercase tracking-widest text-orange-600 hover:text-orange-700 bg-orange-50 hover:bg-orange-100 px-2.5 py-1 rounded-md border border-orange-200 transition-all active:scale-95"
+                                                                >
+                                                                    Ganti Nomor
+                                                                </button>
+                                                            </div>
                                                         ) : waOtpCode ? (
                                                             <span className="flex items-center gap-1 text-[9px] font-black uppercase text-orange-600 bg-orange-50 px-2.5 py-1 rounded-md border border-orange-100">
                                                                 <Clock size={12} className="text-orange-500" /> Kode Terkirim
@@ -925,10 +948,12 @@ const AgentProfile: React.FC<AgentProfileProps> = ({ uid, onEditModeChange }) =>
                                                             name="phone"
                                                             value={formData.phone}
                                                             onChange={handleInputChange}
-                                                            className={`w-full bg-gray-50 border ${waOtpVerified ? 'border-green-200 focus:border-green-500 bg-green-50/10' : 'border-gray-200 focus:border-orange-500'} focus:bg-white p-4 pr-12 rounded-2xl outline-none font-bold text-sm text-gray-900 transition-colors`}
+                                                            readOnly={waOtpVerified}
+                                                            placeholder="Contoh: 081234567890"
+                                                            className={`w-full border ${waOtpVerified ? 'border-green-200 bg-green-50/20 text-gray-700 cursor-not-allowed select-none' : 'bg-gray-50 border-gray-200 focus:border-orange-500 focus:bg-white text-gray-900'} p-4 pr-12 rounded-2xl outline-none font-bold text-sm transition-colors`}
                                                         />
                                                         {waOtpVerified && (
-                                                            <div className="absolute right-4 top-1/2 -translate-y-1/2 text-green-500">
+                                                            <div className="absolute right-4 top-1/2 -translate-y-1/2 text-green-500 flex items-center gap-1.5 pointer-events-none">
                                                                 <BadgeCheck size={20} />
                                                             </div>
                                                         )}

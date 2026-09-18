@@ -1,62 +1,44 @@
-# Laporan Penyelesaian (Walkthrough): Optimalisasi Alur Verifikasi Identitas Mitra & Agen (Eliminasi Tombol Ganda OTP & Penghapusan Input Redundan Tempat/Tanggal Lahir)
+# Laporan Penyelesaian (Walkthrough): Protokol Ketat Penguncian Nomor WhatsApp Terverifikasi & Alur Ganti Nomor Baru
 
-Dokumen ini memuat ringkasan menyeluruh mengenai pekerjaan optimalisasi antarmuka dan alur verifikasi identitas mitra (dan agen) pada `MitraProfile.tsx` dan `AgentProfile.tsx`.
-
----
-
-## 1. Ringkasan Perubahan
-
-### A. Eliminasi Tombol Ganda OTP WhatsApp & Penyelarasan Status
-- **Sebelumnya**:
-  - Tombol di baris label atas "No. WhatsApp" awalnya bertuliskan `"Kirim OTP"`, lalu berubah menjadi `"Kirim Ulang"` setelah OTP terkirim.
-  - Di saat yang sama, kotak kartu 6-digit OTP di bawahnya juga menampilkan tombol `"Kirim Ulang"` yang terikat dengan timer countdown (`Kirim ulang dalam 60s`).
-  - Hal ini menyebabkan tampilan rancu dengan 2 tombol "Kirim Ulang" aktif di saat bersamaan.
-- **Sesudah**:
-  - Di label atas "No. WhatsApp": awalnya menampilkan tombol `"Kirim OTP"`. Begitu OTP terkirim (`waOtpCode !== ''`), tombol atas berganti menjadi badge informatif yang elegan:
-    ```tsx
-    <span className="flex items-center gap-1 text-[9px] font-black uppercase text-orange-600 bg-orange-50 px-2.5 py-1 rounded-md border border-orange-100">
-        <Clock size={12} className="text-orange-500" /> Kode Terkirim
-    </span>
-    ```
-  - Kotak kartu 6-digit OTP di bawahnya menjadi satu-satunya pengendali tombol `"Kirim Ulang"` yang terintegrasi secara presisi dengan hitung mundur detik (`waResendTimer`).
-  - Kartu input 6-digit OTP kini hanya dimunculkan saat kode OTP telah dikirim (`!waOtpVerified && (waOtpCode !== '' || isVerifyingWaOtp)`), sehingga saat awal form dibuka tidak ada tampilan 6 kotak kosong yang membingungkan.
-
-### B. Penghapusan Input Redundan Tempat & Tanggal Lahir di Step 1
-- **Sebelumnya**:
-  - Pada Step 1 (Data Profil), terdapat form input `Tempat Lahir` dan `Tanggal Lahir`.
-  - Hal ini sangat redundan karena pada Step 2 (Verifikasi KTP), kedua data tersebut sudah ada dan otomatis terisi saat foto KTP dipindai menggunakan OCR AI (`analyze-ktp`).
-  - Pengguna terpaksa mengetik manual tempat dan tanggal lahir sebelum bisa melangkah ke Step 2.
-- **Sesudah**:
-  - Input `Tempat Lahir` dan `Tanggal Lahir` pada Step 1 telah dihapus sepenuhnya di [MitraProfile.tsx](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/MitraProfile.tsx) dan [AgentProfile.tsx](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/AgentProfile.tsx).
-  - Tampilan Step 1 kini ringkas dan fokus pada: Nama Lengkap, No. WhatsApp (dengan verifikasi OTP), Alamat Email, Alamat Domisili, dan Kode Referral.
-  - Seluruh pengisian dan konfirmasi Tempat & Tanggal Lahir dipusatkan pada Step 2 di bawah Foto KTP, di mana AI OCR mengisi kedua kolom tersebut secara otomatis.
-
-### C. Pembaruan Validasi Tombol "LANJUTKAN" (`isStep1Complete`)
-- **Sebelumnya**:
-  ```typescript
-  const isStep1Complete =
-      formData.display_name.trim() !== '' &&
-      formData.phone.trim() !== '' &&
-      waOtpVerified &&
-      formData.birth_place.trim() !== '' &&
-      formData.birth_date.trim() !== '' &&
-      formData.address.trim() !== '';
-  ```
-- **Sesudah**:
-  ```typescript
-  const isStep1Complete =
-      formData.display_name.trim() !== '' &&
-      formData.phone.trim() !== '' &&
-      waOtpVerified &&
-      formData.address.trim() !== '';
-  ```
-  Pengguna dapat langsung melanjutkan ke Step 2 segera setelah nama, nomor WhatsApp terverifikasi via OTP, dan alamat domisili terisi tanpa hambatan validasi tempat/tanggal lahir yang kosong.
+Dokumen ini merangkum penyelesaian implementasi protokol keamanan nomor telepon WhatsApp pada formulir verifikasi identitas (Step 1) di `MitraProfile.tsx` dan `AgentProfile.tsx`.
 
 ---
 
-## 2. Hasil Pengujian & Verifikasi
+## 1. Ringkasan Pekerjaan Selesai
 
-### A. Uji Kompilasi Front-End Vite
+### A. Penguncian Otomatis Kolom Nomor WhatsApp (`readOnly={waOtpVerified}`)
+- **Sebelumnya**: Setelah nomor WhatsApp terverifikasi (`waOtpVerified === true`), input nomor telepon masih dapat diklik, kursor masih aktif, dan pengguna bisa mengedit atau menghapus nomor dengan mudah.
+- **Sesudah**: 
+  - Input nomor telepon sekarang memiliki atribut `readOnly={waOtpVerified}`.
+  - Tampilan visual terkunci secara aman dengan background lembut `bg-green-50/20`, border hijau `border-green-200`, teks abu-abu gelap `text-gray-700`, dan kursor `cursor-not-allowed select-none`.
+  - Ikon centang hijau verifikasi (`BadgeCheck`) disematkan di dalam input dengan `pointer-events-none`.
+  - Mengeklik kolom nomor tidak lagi memunculkan kursor atau mengizinkan pengubahan teks sama sekali.
+
+### B. Tombol Resmi "Ganti Nomor" dengan Dialog Konfirmasi
+- Ketika nomor sudah terverifikasi, label header di atas nomor WhatsApp menampilkan:
+  1. Badge hijau `<BadgeCheck size={12} /> Terverifikasi`
+  2. Tombol oranye kompak: **"Ganti Nomor"**
+- Menekan tombol **"Ganti Nomor"** akan memicu konfirmasi keamanan resmi:
+  > *"Apakah Anda yakin ingin mengganti nomor WhatsApp? Nomor yang baru wajib diverifikasi ulang dengan kode OTP WhatsApp sebelum Anda dapat melanjutkan."*
+- **Jika Batal (Cancel)**: Nomor tetap terkunci dan status terverifikasi tetap terjaga.
+- **Jika Setuju (OK)**:
+  - Status `waOtpVerified` di-reset ke `false`.
+  - Kode OTP lama dan isian digit dibersihkan.
+  - Input nomor telepon terbuka kembali (`readOnly={false}`) untuk diedit.
+  - Tombol pada header kembali menampilkan `"Kirim OTP"`.
+  - Tombol **"LANJUTKAN"** pada Step 1 otomatis nonaktif (`disabled`) karena `waOtpVerified === false`.
+  - Pengguna wajib menekan "Kirim OTP" ke nomor baru dan memasukkan 6-digit OTP sebelum dapat melanjutkan ke Step 2.
+
+### C. Penyelarasan Sistem
+- Diterapkan secara identik dan konsisten pada:
+  - [MitraProfile.tsx](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/MitraProfile.tsx)
+  - [AgentProfile.tsx](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/AgentProfile.tsx)
+
+---
+
+## 2. Hasil Pengujian & Kompilasi
+
+### Uji Kompilasi Vite Front-End
 - **Direktori**: `functions/public`
 - **Perintah**: `npm.cmd run build`
 - **Hasil**:
@@ -67,10 +49,10 @@ Dokumen ini memuat ringkasan menyeluruh mengenai pekerjaan optimalisasi antarmuk
   rendering chunks...
   computing gzip size...
   ...
-  ✓ built in 35.60s
+  ✓ built in 34.22s
   The command exited with code 0.
   ```
-- **Status**: **100% LULUS (0 Error, 0 Warning kompilasi)**.
+- **Status**: **100% LULUS (0 Error)**.
 
 ---
 
@@ -78,20 +60,19 @@ Dokumen ini memuat ringkasan menyeluruh mengenai pekerjaan optimalisasi antarmuk
 1. [functions/public/pages/MitraProfile.tsx](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/MitraProfile.tsx)
 2. [functions/public/pages/AgentProfile.tsx](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/AgentProfile.tsx)
 3. [functions/PROGRESS.md](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/PROGRESS.md)
-4. [WALKTHROUGH.md](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/WALKTHROUGH.md)
+4. [IMPLEMENTATION_PLAN.md](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/IMPLEMENTATION_PLAN.md)
+5. [WALKTHROUGH.md](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/WALKTHROUGH.md)
 
 ---
 
-## 4. Panduan Verifikasi Pengujian Pengguna
-1. Buka browser dan login sebagai Mitra atau Agen.
-2. Buka menu **Profil** lalu klik **Verifikasi Identitas / Edit Profil**.
-3. Periksa tampilan **Step 1**:
-   - Kolom "Tempat Lahir" dan "Tanggal Lahir" sudah tidak ada lagi di Step 1.
-   - Ketik nomor WhatsApp lalu klik **"Kirim OTP"**.
-   - Perhatikan tombol header berubah menjadi badge `<Clock /> Kode Terkirim`.
-   - Kotak kartu 6-digit OTP muncul di bawahnya, dengan timer hitung mundur dan satu tombol "Kirim Ulang" yang aktif saat timer 0s (tidak ada tombol ganda).
-   - Masukkan 6 digit kode OTP yang diterima di WhatsApp lalu klik **"Verifikasi WhatsApp"**.
-   - Setelah WhatsApp terverifikasi dan kolom Alamat Domisili terisi, tombol **"LANJUTKAN"** langsung aktif berwarna oranye.
-4. Klik **"LANJUTKAN"** menuju Step 2:
-   - Unggah foto KTP: OCR AI akan memindai data dan mengisi Tempat Lahir & Tanggal Lahir (serta NIK, Nama) secara otomatis.
-   - Periksa kecocokan data lalu simpan / ajukan verifikasi.
+## 4. Panduan Verifikasi di Antarmuka (UI)
+1. Buka halaman Profil Mitra atau Agen (`/dashboard-mitra` atau profil agen).
+2. Klik **Verifikasi Identitas / Edit Profil** (Step 1).
+3. Masukkan nomor WhatsApp dan lakukan verifikasi dengan kode OTP.
+4. Perhatikan bahwa setelah terverifikasi:
+   - Kolom nomor telepon berlatar hijau lembut dan **terkunci**. Coba klik dan ketik: nomor tidak akan bisa diedit.
+   - Muncul tombol **"Ganti Nomor"** di kanan atas label.
+5. Klik **"Ganti Nomor"**:
+   - Sistem akan memunculkan dialog konfirmasi.
+   - Klik **Batal**: Nomor tetap terkunci.
+   - Klik **OK**: Nomor terbuka kembali, status verifikasi di-reset, dan tombol "LANJUTKAN" otomatis terkunci sampai nomor pengganti diverifikasi dengan OTP baru.
