@@ -2,6 +2,40 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 440. Netralisasi Pilihan Default Formulir Properti & Kamar Mitra (`KostFormMitra.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  1. Pada pilihan apapun di formulir, secara default tidak boleh ada opsi yang langsung terpilih (*pre-selected*). Tampilan harus berstatus netral dan membiarkan pemilik kost yang menentukan sendiri pilihannya.
+  2. Contoh utama yang ditemukan pada tangkapan layar pengguna: pada form tipe kamar (Tahap 2 Kapasitas Kamar), pertanyaan *"Apakah ada biaya sewa tambahan jika kamar dihuni lebih dari 1 orang?"* langsung mengaktifkan tombol hitam *"Tidak, Biaya Tetap Sama"* secara otomatis.
+  3. Hal serupa terjadi pada pilihan biaya tambahan fasilitas bulanan properti (*"✕ Tidak Ada"* terpilih otomatis), ketentuan penagihan (*"month_1"* terpilih otomatis), kapasitas kamar (*"1 Orang Single"* terpilih otomatis), dan tipe kost properti (*"Campur"* terpilih otomatis).
+- **Implementasi Solusi**:
+  1. **Netralisasi Pilihan Biaya Sewa Tambahan Penghuni Ekstra (`hasExtraFee`)**:
+     - Mengubah state `hasExtraFee` menjadi `boolean | null` dengan nilai awal `null`.
+     - Tombol *"Tidak, Biaya Tetap Sama"* hanya aktif jika `hasExtraFee === false`.
+     - Tombol *"Ya, Ada Biaya Tambahan"* hanya aktif jika `hasExtraFee === true`.
+     - Jika `hasExtraFee === null`, kedua tombol tampil netral (*unselected*, latar putih, border abu-abu netral).
+     - Menambahkan validasi saat navigasi *"Lanjut ke Harga"* dan `saveDraftRoom`: jika kapasitas kamar > 1 orang dan `hasExtraFee === null`, sistem menampilkan notifikasi ramah agar pemilik kost menentukan pilihannya terlebih dahulu.
+  2. **Netralisasi Kapasitas Maksimal Kamar (`draftRoom.maxOccupants`)**:
+     - Mengubah nilai awal `draftRoom.maxOccupants` untuk penambahan kamar baru menjadi netral (`0`).
+     - Tombol kapasitas (1 Orang, 2 Orang, 3 Orang) hanya aktif jika `draftRoom.maxOccupants === item.cap`.
+     - Jika kapasitas belum dipilih, area bawah menyajikan panduan netral untuk memilih kapasitas terlebih dahulu.
+  3. **Netralisasi Biaya Tambahan Fasilitas Bulanan Properti (`isAdditionalFeeActive`)**:
+     - Mengubah state `isAdditionalFeeActive` menjadi `boolean | null` dengan nilai awal `null` untuk pendaftaran properti baru.
+     - Tombol *"✕ Tidak Ada"* hanya aktif jika `isAdditionalFeeActive === false`.
+     - Tombol *"✓ Ada Biaya Tambahan"* hanya aktif jika `isAdditionalFeeActive === true`.
+     - Menyajikan kartu panduan netral ketika opsi belum ditentukan.
+     - Menetralkan opsi ketentuan penagihan `additionalFeeStartsFrom` agar hanya aktif jika eksplisit dipilih (`month_1` atau `month_2`).
+  4. **Netralisasi Tipe Kost Properti (`form.type`)**:
+     - Mengubah default `initialForm.type` menjadi `undefined`.
+     - Tombol *Putra*, *Putri*, dan *Campur* tampil netral saat buka form baru dan diwajibkan dipilih sebelum lanjut ke langkah berikutnya via `validateStep(0)`.
+- **File Tersentuh**:
+  - `functions/public/components/KostFormMitra.tsx`
+  - `functions/PROGRESS.md`
+  - `IMPLEMENTATION_PLAN.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi Vite build (`cmd.exe /c npm run build`) sukses 100% (`✓ built in 37.49s`, exit code 0).
+  - Validasi flow dan styling netral teruji 100% konsisten.
+
 ### 439. Restrukturisasi Modal Ganti Kata Sandi Menjadi Clean 2-Step Flow & 6-Box OTP Input (`MitraProfile.tsx` & `Profile.tsx`) (September 2026)
 - **Permintaan & Masalah**:
   1. Pengguna meminta restrukturisasi antarmuka pengubahan kata sandi dari atas ke bawah: Kata Sandi Baru, Ulangi Kata Sandi Baru, Email Terdaftar, dan tombol verifikasi.

@@ -1,137 +1,107 @@
-# IMPLEMENTATION PLAN: Restrukturisasi Modal Ganti Kata Sandi Menjadi Clean 2-Step Flow
-
-**ID Rencana**: Plan #439  
-**Target Fitur**: Restrukturisasi Antarmuka & Alur Minimalis Modal Keamanan & Kata Sandi (`MitraProfile.tsx` & `Profile.tsx`)  
-**Status**: Menunggu Persetujuan User (*Pending Approval*)
-
----
+# Rencana Implementasi: Netralisasi Pilihan Default Formulir Properti & Kamar Mitra
 
 ## 1. Analisis Masalah & Kebutuhan
 
-### Masalah Saat Ini
-1. **Tampilan Modal Padat & "Semrawut"**:
-   - Seluruh elemen perubahan kata sandi ditumpuk dalam satu layar vertikal yang panjang: info email terdaftar, kartu verifikasi email dengan tombol kirim OTP, input 6 digit OTP, input kata sandi baru, input konfirmasi kata sandi, serta tombol submit.
-   - Hal ini menimbulkan kebingungan bagi pengguna (*cognitive overload*): pengguna tidak mengetahui apakah harus meminta kode OTP terlebih dahulu sebelum mengisi kata sandi, atau mengisi kata sandi terlebih dahulu.
-2. **Kebutuhan Pengguna**:
-   - Struktur dari atas ke bawah yang ringkas, simpel, dan elegan:
-     1. **Kata Sandi Baru** (Input + toggle lihat/sembunyikan sandi)
-     2. **Ulangi Kata Sandi Baru** (Input + toggle lihat/sembunyikan sandi)
-     3. **Email Terdaftar** (Info box email akun yang akan menerima kode verifikasi)
-     4. **Tombol "Verifikasi Perubahan Sandi"**
-   - **Alur 2-Tahap (2-Step Clean Flow)**:
-     - **Tahap 1 (Input Sandi Baru)**: Pengguna mengisi kata sandi baru dan konfirmasinya, lalu menekan tombol verifikasi. Sistem melakukan validasi (minimal 6 karakter & konfirmasi cocok) dan secara otomatis mengirimkan kode OTP ke email terdaftar, lalu langsung beralih ke Tahap 2.
-     - **Tahap 2 (Input & Verifikasi OTP Email)**: Menampilkan halaman ringkas yang fokus pada instruksi pengiriman email, input kode OTP 6-digit, timer kirim ulang, tombol *"Verifikasi & Simpan Kata Sandi"*, serta tombol kembali ke tahap 1 jika ingin mengubah input sandi.
-     - Begitu kode OTP diverifikasi benar, kata sandi akun resmi diperbarui via Supabase Auth dan modal ditutup dengan notifikasi sukses.
+### Konteks & Masalah
+Saat ini, pada formulir pendaftaran dan pengelolaan properti maupun tipe kamar mitra ([`KostFormMitra.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/components/KostFormMitra.tsx)), terdapat beberapa pilihan/opsi tombol (*radio-like buttons* atau *toggles*) yang secara otomatis langsung terpilih (*pre-selected*) sejak awal form/modal dibuka.
+
+Secara khusus, seperti yang disampaikan pengguna melalui tangkapan layar:
+- **Biaya Sewa Tambahan Penghuni Ekstra (Form Kamar Langkah 2)**:
+  Pertanyaan *"Apakah ada biaya sewa tambahan jika kamar dihuni lebih dari 1 orang?"* langsung mengaktifkan tombol hitam **"Tidak, Biaya Tetap Sama"** secara default karena state `hasExtraFee` diinisialisasi dengan nilai `false` dan pengecekan kelas CSS `!hasExtraFee && draftRoom.additionalCostPerPerson === 0` langsung bernilai `true`.
+- **Biaya Tambahan Fasilitas Bulanan Properti (Form Properti Langkah 3/4)**:
+  Pertanyaan *"Biaya Tambahan Fasilitas Bulanan (Opsional)"* langsung mengaktifkan tombol **"✕ Tidak Ada"** secara default karena `!isAdditionalFeeActive` bernilai `true`.
+- **Ketentuan Penagihan Biaya Tambahan Bulanan**:
+  Opsi ketentuan penagihan langsung otomatis memilih *"Mulai dari Bulan Awal Sewa Pertama"* (`month_1`) secara default karena kondisi `form.additionalFeeStartsFrom !== 'month_2'`.
+- **Tipe Kost Properti (Form Properti Langkah 0)**:
+  `initialForm.type` di-set ke `'Campur'`, sehingga tombol *"⚡ Campur"* langsung terpilih sejak awal pendaftaran baru.
+- **Kapasitas Maksimal Kamar (Form Kamar Langkah 2)**:
+  `draftRoom.maxOccupants` diinisialisasi 1, sehingga opsi *"1 Orang (Single)"* langsung aktif sebelum pemilik menentukan kapasitas kamarnya.
+
+### Kebutuhan Pengguna
+Sesuai arahan pengguna:
+> *"pada pilihan apapun itu, secara default jangan ada yang langsung terpilih buat menjadi netral dan biarkan pemilik kost yang menentukan . misalnya pada input apakah ada biaya tambahan atau tidak"*
+
+Sistem harus membuat seluruh opsi pilihan tersebut berstatus **NETRAL** (*unselected* / tidak ada yang ter-highlight) saat form baru dibuka. Pemilik kost wajib dan berhak menentukan pilihannya sendiri secara eksplisit tanpa asumsi sepihak dari sistem. Jika pemilik belum menentukan pilihan dan menekan tombol navigasi lanjutkan, sistem akan memberikan notifikasi panduan yang ramah dan tepat sasaran.
 
 ---
 
-## 2. Dampak Perubahan (Files Touched)
+## 2. Dampak Perubahan
 
-1. [`functions/public/pages/MitraProfile.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/MitraProfile.tsx):
-   - Menambahkan state navigasi step modal: `passwordStep: 'input_password' | 'verify_otp'`.
-   - Mengubah handler pemicu verifikasi Tahap 1 (`handleProceedToOtp`): memvalidasi password dan memicu `sendPasswordChangeOtp` otomatis sebelum transisi ke step 2.
-   - Merestrukturisasi JSX modal `isSettingsModalOpen` menjadi alur 2 tahap:
-     - **Step 1**: Kata Sandi Baru -> Ulangi Kata Sandi -> Box Email Terdaftar -> Tombol *"Verifikasi Perubahan Sandi"*.
-     - **Step 2**: Status Notifikasi Pengiriman Email -> Input 6 Digit OTP -> Tombol *"Verifikasi & Simpan Kata Sandi"* -> Opsi Kirim Ulang & Tombol Kembali.
-2. [`functions/public/pages/Profile.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/Profile.tsx):
-   - Menyelaraskan komponen modal `isPasswordModalOpen` pada profil penyewa/user biasa agar memiliki alur dan tampilan 2-tahap yang konsisten dan minimalis.
+File yang akan disentuh:
+- [`functions/public/components/KostFormMitra.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/components/KostFormMitra.tsx)
+  - Mengubah tipe state `hasExtraFee` dari `boolean` menjadi `boolean | null` (default: `null`).
+  - Mengubah tipe state `isAdditionalFeeActive` dari `boolean` menjadi `boolean | null` (default: `null` untuk pendaftaran baru).
+  - Mengubah default `initialForm.type` menjadi `undefined` (netral, tidak otomatis 'Campur').
+  - Mengubah default `initialForm.additionalFeeStartsFrom` menjadi `undefined` (netral).
+  - Mengubah default `draftRoom.maxOccupants` saat tambah kamar baru menjadi netral (`undefined` / `0`).
+  - Memperbarui styling tombol pilihan agar HANYA aktif jika nilai state secara ketat (*strict equality* `===`) sesuai pilihan (bukan *truthy/falsy fallback*).
+  - Menampilkan kontainer panduan netral pada bagian biaya tambahan dan kapasitas kamar sebelum opsi dipilih.
+  - Menambahkan validasi peringatan interaktif jika pemilik kost mencoba melangkah maju tanpa menentukan opsi pilihan wajib.
 
 ---
 
-## 3. Langkah-Langkah Eksekusi (Fase 2 Setelah ACC)
+## 3. Langkah-Langkah Eksekusi (Fase 2 - Setelah di-ACC)
 
-### Langkah 1: Penyesuaian State & Validasi di `MitraProfile.tsx`
-- Tambahkan state:
-  ```tsx
-  const [passwordStep, setPasswordStep] = useState<'input_password' | 'verify_otp'>('input_password');
-  ```
-- Buat fungsi transisi Tahap 1 ke Tahap 2:
-  ```tsx
-  const handleProceedToOtp = async (e: React.FormEvent) => {
-      e.preventDefault();
-      // 1. Validasi kata sandi
-      if (!newPassword || newPassword.length < 6) {
-          setPasswordMessage({ type: 'error', text: 'Kata sandi baru minimal 6 karakter.' });
-          return;
-      }
-      if (newPassword !== confirmPassword) {
-          setPasswordMessage({ type: 'error', text: 'Konfirmasi kata sandi tidak cocok.' });
-          return;
-      }
-      // 2. Kirim OTP otomatis ke email
-      const targetEmail = formData.email || initialUser?.email;
-      if (!targetEmail) {
-          setPasswordMessage({ type: 'error', text: 'Email akun mitra tidak ditemukan.' });
-          return;
-      }
-      setIsSendingOtp(true);
-      setPasswordMessage(null);
-      try {
-          const otp = Math.floor(100000 + Math.random() * 900000).toString();
-          const expires = Date.now() + 10 * 60 * 1000;
-          const sent = await sendPasswordChangeOtp(targetEmail, otp, formData.name || initialUser?.name);
-          if (sent) {
-              setGeneratedPasswordOtp(otp);
-              setOtpExpiresAt(expires);
-              setIsOtpSent(true);
-              setOtpCooldown(60);
-              setPasswordStep('verify_otp');
-          } else {
-              setPasswordMessage({ type: 'error', text: 'Gagal mengirim kode OTP ke email. Coba lagi.' });
-          }
-      } catch (err: any) {
-          setPasswordMessage({ type: 'error', text: err.message || 'Terjadi kesalahan sistem.' });
-      } finally {
-          setIsSendingOtp(false);
-      }
-  };
-  ```
+### Langkah 1: Netralisasi Pilihan Biaya Sewa Tambahan Penghuni Kamar (`hasExtraFee`)
+1. Di `KostFormMitra.tsx`:
+   - Deklarasi state: `const [hasExtraFee, setHasExtraFee] = useState<boolean | null>(null);`
+   - Pada fungsi `startAddRoom`: `setHasExtraFee(null);`
+   - Pada fungsi `startEditRoom`: jika `target.additionalCostPerPerson !== undefined`, set ke `(target.additionalCostPerPerson || 0) > 0 ? true : false`.
+2. Di UI Kamar (Tahap 2):
+   - Tombol **"Tidak, Biaya Tetap Sama"**: aktif **HANYA** jika `hasExtraFee === false`.
+   - Tombol **"Ya, Ada Biaya Tambahan"**: aktif **HANYA** jika `hasExtraFee === true`.
+   - Jika `hasExtraFee === null`: kedua tombol berpenampilan netral (border abu-abu lembut, background putih, teks abu-abu gelap).
+3. Validasi Navigasi ("Lanjut ke Harga" & `saveDraftRoom`):
+   - Jika `(draftRoom.maxOccupants || 0) > 1 && hasExtraFee === null`: berikan alert ramah agar pemilik kost menentukan pilihannya terlebih dahulu.
 
-### Langkah 2: Restrukturisasi Tampilan Modal di `MitraProfile.tsx`
-- **Tampilan Step 1 (`input_password`)**:
-  - Input Kata Sandi Baru + toggle Eye/EyeOff.
-  - Input Ulangi Kata Sandi Baru.
-  - Box Email Terdaftar (Label, alamat email, badge Aktif, keterangan info kode verifikasi).
-  - Tombol submit: `"Verifikasi Perubahan Sandi"` (dengan icon panah/loading).
-  - Tautan alternatif di bawah: `"Atau Kirim Link Reset ke Email"`.
-- **Tampilan Step 2 (`verify_otp`)**:
-  - Banner info: `"Kode verifikasi telah dikirim ke [email]. Masukkan 6 digit kode untuk mengonfirmasi perubahan sandi."`
-  - Input 6 digit OTP (center, tracking-widest, font tebal).
-  - Tombol Kirim Ulang OTP dengan countdown timer.
-  - Tombol utama: `"Verifikasi & Simpan Kata Sandi"`.
-  - Tombol kembali: `"← Ubah Kata Sandi"`.
+### Langkah 2: Netralisasi Kapasitas Maksimal Kamar (`draftRoom.maxOccupants`)
+1. Pada `startAddRoom`: set `maxOccupants: 0` (atau biarkan kosong).
+2. Pilihan tombol kapasitas (1 Orang, 2 Orang, 3 Orang):
+   - Hanya aktif jika `draftRoom.maxOccupants === item.cap`.
+   - Jika `!draftRoom.maxOccupants || draftRoom.maxOccupants < 1`: ketiga tombol tampil netral, dan area bawahnya menampilkan panduan ramah untuk memilih kapasitas kamar.
+3. Validasi Navigasi: jika kapasitas belum dipilih, ingatkan pemilik kost untuk memilih kapasitas kamar.
 
-### Langkah 3: Penyelarasan di `Profile.tsx`
-- Mengaplikasikan logika dan struktur 2-tahap yang sama ke modal `isPasswordModalOpen` di `Profile.tsx` agar konsisten untuk seluruh pengguna aplikasi.
+### Langkah 3: Netralisasi Biaya Tambahan Fasilitas Bulanan Properti (`isAdditionalFeeActive`)
+1. Deklarasi state:
+   ```tsx
+   const [isAdditionalFeeActive, setIsAdditionalFeeActive] = useState<boolean | null>(() => {
+       if ((form.additionalFeePrice || 0) > 0 || Boolean(form.additionalFeeName && form.additionalFeeName.trim().length > 0)) {
+           return true;
+       }
+       if (editingKost && form.additionalFeePrice === 0 && !form.additionalFeeName) {
+           return false;
+       }
+       return null; // Netral untuk kost baru
+   });
+   ```
+2. Tombol pilihan:
+   - **"✕ Tidak Ada"**: HANYA aktif jika `isAdditionalFeeActive === false`.
+   - **"✓ Ada Biaya Tambahan"**: HANYA aktif jika `isAdditionalFeeActive === true`.
+   - Jika `isAdditionalFeeActive === null`: kedua tombol tampil netral.
+3. Panel informasi:
+   - Jika `isAdditionalFeeActive === null`: tampilkan kartu panduan netral agar pemilik kost memilih ada atau tidaknya biaya tambahan bulanan.
 
-### Langkah 4: Uji Kompilasi & Build
-- Menjalankan `cmd.exe /c npm run build` di folder `functions/public`.
-- Memastikan 0 error kompilasi dan bundling Vite sukses.
-
-### Langkah 5: Dokumentasi & Git Push
-- Menambahkan catatan ke `functions/PROGRESS.md` (Entry #439).
-- Menerbitkan `WALKTHROUGH.md`.
-- Melakukan commit dan push ke remote branch `origin bukan-productions`.
+### Langkah 4: Netralisasi Ketentuan Penagihan & Tipe Kost
+1. `initialForm.additionalFeeStartsFrom`: diubah dari `'month_1'` menjadi `undefined`.
+   - Tombol *"Mulai dari Bulan Awal Sewa Pertama"* hanya aktif jika `form.additionalFeeStartsFrom === 'month_1'`.
+   - Tombol *"Promo Bebas Tagihan di Bulan Pertama"* hanya aktif jika `form.additionalFeeStartsFrom === 'month_2'`.
+2. `initialForm.type`: diubah dari `'Campur'` menjadi `undefined`.
+   - Tombol *"Putra"*, *"Putri"*, *"Campur"* berstatus netral hingga diklik salah satunya.
+   - Pengecekan `validateStep(0)` akan memastikan pemilik kost telah memilih salah satu tipe kost sebelum lanjut ke langkah lokasi.
 
 ---
 
 ## 4. Rencana Verifikasi
 
-1. **Uji Tampilan Visual Step 1**:
-   - Buka modal "Keamanan & Kata Sandi".
-   - Pastikan urutan persis dari atas ke bawah:
-     1. Kata Sandi Baru
-     2. Ulangi Kata Sandi Baru
-     3. Email Terdaftar
-     4. Tombol Verifikasi Perubahan Sandi
-   - Pastikan tidak ada kartu OTP yang muncul sebelum tombol verifikasi ditekan.
-2. **Uji Transisi ke Step 2**:
-   - Masukkan kata sandi yang valid dan cocok.
-   - Klik tombol "Verifikasi Perubahan Sandi".
-   - Pastikan sistem mengirim email OTP dan layar modal berganti dengan mulus ke form input 6 digit OTP.
-3. **Uji Verifikasi & Perubahan Kata Sandi**:
-   - Masukkan kode OTP yang benar -> klik tombol "Verifikasi & Simpan Kata Sandi".
-   - Pastikan pesan sukses muncul dan kata sandi di Supabase Auth berhasil diperbarui.
-   - Uji tombol kembali ke Step 1 untuk memastikan pengguna dapat mengedit sandi sebelum konfirmasi OTP.
-4. **Uji Kompilasi**:
-   - Build Vite berhasil 100% tanpa error (`npm run build`).
+1. **Uji Kompilasi & Tipe (Build Verification)**:
+   - Jalankan perintah kompilasi: `npm run build` di terminal powershell.
+   - Pastikan 0 TypeScript/TSX lint error, 0 bundle error, dan exit code 0.
+2. **Uji Logika & Visual Flow**:
+   - Memastikan saat pertama kali menambah tipe kamar baru, kapasitas kamar berstatus netral.
+   - Saat memilih kapasitas 2 atau 3 orang, kotak pertanyaan *"Biaya Sewa Tambahan Penghuni Ekstra"* muncul dengan kedua pilihan ("Tidak" dan "Ya") dalam keadaan NETRAL (tidak ada yang langsung berwarna hitam/oranye terpilih).
+   - Memastikan saat tombol "Lanjut ke Harga" diklik tanpa memilih opsi, muncul peringatan ramah.
+   - Memastikan saat opsi diklik, styling tombol berubah sesuai pilihan pengguna dan form dapat dilanjutkan tanpa hambatan.
+   - Memastikan pada data properti yang sudah ada (edit mode), opsi terisi sesuai data yang tersimpan sebelumnya.
+
+---
+> **Catatan Sesuai Protokol Kerja (Fase 1)**: Modifikasi kode baru akan dilakukan di Fase 2 setelah rencana implementasi ini disetujui / di-ACC oleh User.

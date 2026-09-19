@@ -102,13 +102,13 @@ interface NewPhotoItem {
 }
 
 const initialForm: Partial<Kost> = {
-    title: '', description: '', type: 'Campur', status: 'draft',
+    title: '', description: '', type: undefined as any, status: 'draft',
     province: '', city: '', area: '', address: '',
     location: { lat: -6.2088, lng: 106.8456 },
     imageUrls: [], videoUrls: [],
     instagramUrl: '', tiktokUrl: '',
     additionalFeePrice: 0, additionalFeeName: '',
-    additionalFeeStartsFrom: 'month_1',
+    additionalFeeStartsFrom: undefined,
     campuses: [], publicFacilities: [],
     omnichannelContactName: '', omnichannelContactPhone: '', omnichannelContactType: 'owner',
     contactSelection: 'profile', caretakerName: '', caretakerGender: 'Pria', caretakerPhone: '',
@@ -2368,9 +2368,10 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
     // State sub-wizard pengisian kamar bertahap (Langkah 3)
     const [editingRoomIndex, setEditingRoomIndex] = useState<number | null>(null);
     const [roomSubStep, setRoomSubStep] = useState<1 | 2 | 3>(1);
+    const [isCustomRoomName, setIsCustomRoomName] = useState<boolean>(false);
     const [draftRoom, setDraftRoom] = useState<RoomType>({
-        name: 'Standard',
-        size: '3x4 m',
+        name: '',
+        size: '',
         price: 0,
         pricing: [{ period: 'bulanan', price: 0 }],
         features: [],
@@ -2378,12 +2379,18 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
         bathroomFacilities: [],
         isAvailable: true,
         availableRoomCount: 1,
-        maxOccupants: 1,
+        maxOccupants: 0,
         additionalCostPerPerson: 0
     });
-    const [hasExtraFee, setHasExtraFee] = useState<boolean>(false);
-    const [isAdditionalFeeActive, setIsAdditionalFeeActive] = useState<boolean>(() => {
-        return (form.additionalFeePrice || 0) > 0 || Boolean(form.additionalFeeName && form.additionalFeeName.trim().length > 0);
+    const [hasExtraFee, setHasExtraFee] = useState<boolean | null>(null);
+    const [isAdditionalFeeActive, setIsAdditionalFeeActive] = useState<boolean | null>(() => {
+        if ((form.additionalFeePrice || 0) > 0 || Boolean(form.additionalFeeName && form.additionalFeeName.trim().length > 0)) {
+            return true;
+        }
+        if (editingKost && form.additionalFeePrice === 0 && !form.additionalFeeName) {
+            return false;
+        }
+        return null;
     });
     const [customCoveredFeeInput, setCustomCoveredFeeInput] = useState('');
 
@@ -2457,6 +2464,7 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
         setStep(0);
         setManagementOption('self');
         setRestoredDraftInfo(null);
+        setIsAdditionalFeeActive(null);
         setError('');
         if (user) {
             setForm({
@@ -3832,11 +3840,9 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
 
     // ── room types (Step-by-step Mini-wizard & Management) ──────────────────────
     const startAddRoom = () => {
-        const count = (form.roomTypes || []).length;
-        const defaultName = count === 0 ? 'Standard' : (count === 1 ? 'Deluxe' : (count === 2 ? 'VIP' : (count === 3 ? 'Premium' : 'Exclusive')));
         setDraftRoom({
-            name: defaultName,
-            size: '3x4 m',
+            name: '',
+            size: '',
             price: 0,
             pricing: [{ period: 'bulanan', price: 0 }],
             features: [],
@@ -3844,11 +3850,12 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
             bathroomFacilities: [],
             isAvailable: true,
             availableRoomCount: 1,
-            maxOccupants: 1,
+            maxOccupants: 0,
             additionalCostPerPerson: 0
         });
+        setIsCustomRoomName(false);
         setRoomSubStep(1);
-        setHasExtraFee(false);
+        setHasExtraFee(null);
         setEditingRoomIndex(-1); // -1 = Tambah Baru
     };
 
@@ -3858,11 +3865,17 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
         const pricing = target.pricing && target.pricing.length > 0
             ? [...target.pricing]
             : [{ period: 'bulanan' as PricingPeriod, price: target.price || 0 }];
+        const isCustom = Boolean(target.name && !ROOM_TYPE_PRESETS.includes(target.name));
+        setIsCustomRoomName(isCustom);
         setDraftRoom({
             ...target,
             pricing
         });
-        setHasExtraFee((target.additionalCostPerPerson || 0) > 0);
+        setHasExtraFee(
+            (target.maxOccupants || 1) > 1
+                ? ((target.additionalCostPerPerson || 0) > 0 ? true : false)
+                : null
+        );
         setRoomSubStep(1);
         setEditingRoomIndex(index);
     };
@@ -3947,7 +3960,12 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
             return;
         }
         if ((draftRoom.maxOccupants || 0) < 1) {
-            alert('Maksimal kapasitas penghuni kamar minimal 1 orang.');
+            alert('Silakan tentukan kapasitas maksimal penghuni kamar (1, 2, atau 3 Orang).');
+            setRoomSubStep(2);
+            return;
+        }
+        if ((draftRoom.maxOccupants || 0) > 1 && hasExtraFee === null) {
+            alert('Silakan tentukan apakah ada biaya sewa tambahan untuk penghuni ekstra (Pilih "Tidak, Biaya Tetap Sama" atau "Ya, Ada Biaya Tambahan").');
             setRoomSubStep(2);
             return;
         }
@@ -3956,7 +3974,7 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
             setRoomSubStep(2);
             return;
         }
-        if (hasExtraFee && (draftRoom.additionalCostPerPerson || 0) <= 0) {
+        if (hasExtraFee === true && (draftRoom.additionalCostPerPerson || 0) <= 0) {
             alert('Anda mengaktifkan opsi Biaya Sewa Tambahan Penghuni. Silakan isi nominal biaya tambahan per orang (harus lebih dari Rp 0).');
             setRoomSubStep(3);
             return;
@@ -4496,7 +4514,7 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                         <div className="flex gap-2">
                             {(['Putra', 'Putri', 'Campur'] as const).map(t => (
                                 <button key={t} type="button" onClick={() => upd('type', t)}
-                                    className={`flex-1 h-12 rounded-2xl text-sm font-bold border-2 transition-all ${form.type === t ? 'bg-orange-500 text-white border-orange-500' : 'bg-white text-gray-600 border-gray-200'}`}>
+                                    className={`flex-1 h-12 rounded-2xl text-sm font-bold border-2 transition-all cursor-pointer ${form.type === t ? 'bg-orange-500 text-white border-orange-500 shadow-xs' : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300'}`}>
                                     {t === 'Putra' ? '♂ Putra' : t === 'Putri' ? '♀ Putri' : '⚡ Campur'}
                                 </button>
                             ))}
@@ -4922,7 +4940,7 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                                                     { cap: 2, label: '2 Orang', sub: 'Berdua', icon: <Users size={13} /> },
                                                     { cap: 3, label: '3 Orang', sub: 'Bersama', icon: <Users size={13} /> },
                                                 ].map(item => {
-                                                    const isSelected = (draftRoom.maxOccupants || 1) === item.cap;
+                                                    const isSelected = draftRoom.maxOccupants === item.cap;
                                                     return (
                                                         <button
                                                             key={item.cap}
@@ -4982,7 +5000,7 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                                     </div>
 
                                     {/* Pertanyaan Eksplisit Biaya Tambahan Penghuni > 1 Orang */}
-                                    {(draftRoom.maxOccupants || 1) > 1 ? (
+                                    {(draftRoom.maxOccupants && draftRoom.maxOccupants > 1) ? (
                                         <div className="p-4 bg-amber-50/60 rounded-2xl border border-amber-200/80 space-y-2.5 animate-in fade-in-50 duration-200">
                                             <div>
                                                 <div className="flex items-center gap-1.5 text-amber-900 font-black text-xs">
@@ -5003,7 +5021,7 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                                                         updDraftRoom('additionalCostPerPerson', 0);
                                                     }}
                                                     className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                                                        !hasExtraFee && (draftRoom.additionalCostPerPerson || 0) === 0
+                                                        hasExtraFee === false
                                                             ? 'bg-gray-900 text-white shadow-xs'
                                                             : 'bg-white text-gray-700 border border-gray-200 hover:border-gray-300'
                                                     }`}
@@ -5014,7 +5032,7 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                                                     type="button"
                                                     onClick={() => setHasExtraFee(true)}
                                                     className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                                                        hasExtraFee || (draftRoom.additionalCostPerPerson || 0) > 0
+                                                        hasExtraFee === true
                                                             ? 'bg-orange-500 text-white shadow-xs'
                                                             : 'bg-white text-gray-700 border border-gray-200 hover:border-orange-300'
                                                     }`}
@@ -5024,16 +5042,21 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                                             </div>
 
                                             {/* Hint informatif bahwa nominal ditentukan di Tahap 3 */}
-                                            {(hasExtraFee || (draftRoom.additionalCostPerPerson || 0) > 0) && (
+                                            {hasExtraFee === true && (
                                                 <p className="text-[10px] text-amber-800 font-medium bg-amber-100/60 p-2.5 rounded-xl border border-amber-200/50 animate-in fade-in-50 duration-200">
                                                     💡 Besaran nominal biaya tambahan per orang akan Anda tentukan pada langkah berikutnya (Harga Sewa).
                                                 </p>
                                             )}
                                         </div>
-                                    ) : (
+                                    ) : draftRoom.maxOccupants === 1 ? (
                                         <div className="p-3.5 bg-gray-50 rounded-2xl border border-gray-200/70 text-[11px] text-gray-500 flex items-center gap-2">
                                             <Users size={15} className="text-gray-400 shrink-0" />
                                             <span>Kamar ini dikhususkan untuk 1 penghuni (Single). Pilih <strong>2 Orang</strong> atau <strong>3 Orang</strong> jika ingin mengizinkan penghuni tambahan &amp; mengatur biaya tambahannya.</span>
+                                        </div>
+                                    ) : (
+                                        <div className="p-3.5 bg-gray-50 rounded-2xl border border-dashed border-gray-200 text-[11px] text-gray-500 flex items-center gap-2">
+                                            <Users size={15} className="text-gray-400 shrink-0" />
+                                            <span>Silakan tentukan kapasitas maksimal penghuni kamar di atas (1, 2, atau 3 Orang) untuk mengatur ketentuan sewa dan penghuni tambahan.</span>
                                         </div>
                                     )}
 
@@ -5050,8 +5073,12 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                                         <button
                                             type="button"
                                             onClick={() => {
-                                                if ((draftRoom.maxOccupants || 0) < 1) {
-                                                    alert('Maksimal kapasitas penghuni kamar minimal 1 orang.');
+                                                if (!draftRoom.maxOccupants || draftRoom.maxOccupants < 1) {
+                                                    alert('Silakan tentukan kapasitas maksimal penghuni kamar (1, 2, atau 3 Orang).');
+                                                    return;
+                                                }
+                                                if (draftRoom.maxOccupants > 1 && hasExtraFee === null) {
+                                                    alert('Silakan tentukan apakah ada biaya sewa tambahan jika kamar dihuni lebih dari 1 orang (Pilih "Tidak, Biaya Tetap Sama" atau "Ya, Ada Biaya Tambahan").');
                                                     return;
                                                 }
                                                 if ((draftRoom.availableRoomCount || 0) < 1) {
@@ -5163,7 +5190,7 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                                     </div>
 
                                     {/* Input Nominal Biaya Tambahan Penghuni (Ditampilkan Terpadu di Tahap Harga) */}
-                                    {(hasExtraFee || (draftRoom.additionalCostPerPerson || 0) > 0) && (
+                                    {(hasExtraFee === true || (draftRoom.additionalCostPerPerson || 0) > 0) && (
                                         <div className="p-4 bg-amber-50/70 rounded-2xl border border-amber-200 space-y-2 animate-in fade-in-50 duration-200">
                                             <div className="flex items-center justify-between">
                                                 <div className="flex items-center gap-1.5 text-amber-900 font-black text-xs">
@@ -5473,7 +5500,7 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                                             upd('additionalFeeName', '');
                                         }}
                                         className={`px-3.5 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer ${
-                                            !isAdditionalFeeActive
+                                            isAdditionalFeeActive === false
                                                 ? 'bg-white text-gray-800 shadow-xs ring-1 ring-gray-200'
                                                 : 'text-gray-500 hover:text-gray-800'
                                         }`}
@@ -5489,7 +5516,7 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                                             }
                                         }}
                                         className={`px-3.5 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer flex items-center gap-1.5 ${
-                                            isAdditionalFeeActive
+                                            isAdditionalFeeActive === true
                                                 ? 'bg-orange-500 text-white shadow-xs shadow-orange-500/20'
                                                 : 'text-gray-500 hover:text-orange-600'
                                         }`}
@@ -5501,7 +5528,7 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                             </div>
 
                             {/* Panel Konten Detail (Ketika Aktif) */}
-                            {isAdditionalFeeActive ? (
+                            {isAdditionalFeeActive === true ? (
                                 <div className="space-y-4 animate-in fade-in-50 duration-200 pt-1">
                                     {/* 1. Input Nominal Harga Bulanan */}
                                     <div className="space-y-1.5">
@@ -5663,7 +5690,7 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                                                 type="button"
                                                 onClick={() => upd('additionalFeeStartsFrom', 'month_1')}
                                                 className={`h-10 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
-                                                    form.additionalFeeStartsFrom !== 'month_2'
+                                                    form.additionalFeeStartsFrom === 'month_1'
                                                         ? 'bg-orange-500 text-white shadow-xs shadow-orange-500/20'
                                                         : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'
                                                 }`}
@@ -5691,10 +5718,16 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                                         </p>
                                     </div>
                                 </div>
-                            ) : (
+                            ) : isAdditionalFeeActive === false ? (
                                 <div className="p-3 bg-gray-50 rounded-2xl border border-dashed border-gray-200 text-center">
                                     <p className="text-xs text-gray-500 font-medium">
                                         Biaya sewa kamar sudah bersih (<em>all-in</em>). Tidak ada biaya tambahan fasilitas yang ditagihkan terpisah kepada penghuni.
+                                    </p>
+                                </div>
+                            ) : (
+                                <div className="p-3.5 bg-gray-50 rounded-2xl border border-dashed border-gray-200 text-center">
+                                    <p className="text-xs text-gray-500 font-medium">
+                                        Silakan tentukan pilihan di atas apakah kost memiliki tagihan biaya tambahan fasilitas bulanan di luar sewa pokok (misal: listrik, air, wifi, sampah) atau tidak.
                                     </p>
                                 </div>
                             )}
