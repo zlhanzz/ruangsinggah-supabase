@@ -1,68 +1,91 @@
-# Rencana Implementasi: Penyederhanaan UI/UX Verifikasi WhatsApp pada Formulir Profil Mitra (Langkah 1)
+# IMPLEMENTATION PLAN - Penyesuaian Alert "Belum Terverifikasi" & Tombol "Verifikasi Sekarang!" pada No. WhatsApp Profil Mitra
 
-## 1. Analisis Masalah / Kebutuhan
-Berdasarkan feedback pengguna:
-- Tampilan verifikasi WhatsApp yang sebelumnya diimplementasikan terlalu besar, memakan *space layout* berlebihan, dan merusak keseragaman/pola desain form yang sudah ada di sekitarnya (seperti *Nama Lengkap*, *Alamat Email*, dan *Alamat Domisili*).
-- Terdapat elemen yang dirasa terlalu "bertele-tele" dan repetitif (seperti banner petunjuk besar di atas form, kartu di dalam kartu bertingkat, teks ganda, serta kotak checklist kelengkapan yang tebal di bawah).
-- **Kebutuhan Pengguna**:
-  - UI/UX kembali selaras (*seamless & coherent*) dengan pola desain form yang ada: menggunakan format baris & kotak input standar (`ProfileItemRead`).
-  - Fungsionalitas verifikasi nomor WhatsApp tetap bekerja secara efektif dan mudah dipahami:
-    1. Label input standar dengan ikon telepon & indikator status verifikasi yang ringkas.
-    2. Input nomor telepon dengan tombol aksi yang kompak (misal tombol *"Kirim OTP"* di dalam/samping input).
-    3. Jika kode OTP sudah dikirim, area input 6 digit OTP muncul secara ringkas tepat di bawah input nomor tanpa pembungkus kartu raksasa yang merusak ritme form.
-    4. Menghapus banner petunjuk berlebih di atas form dan kotak checklist tebal di bawah form, mengembalikan tombol navigasi bawah yang bersih (*Batal* & *Lanjutkan*).
+Dokumen ini disusun sebagai panduan teknis dan alur eksekusi perubahan antarmuka pada formulir profil mitra sesuai arahan pengguna.
 
 ---
 
-## 2. Dampak Perubahan
-File yang akan disentuh:
-- `functions/public/pages/MitraProfile.tsx`:
-  - Menghapus banner pembuka Langkah 1 yang memakan ruang layout.
-  - Merestrukturisasi blok input nomor WhatsApp agar menggunakan pola visual yang sama persis dengan `ProfileItemRead` (1 kolom pada grid 2 kolom, atau selaras dengan field form lainnya).
-  - Menyederhanakan area input OTP 6 digit menjadi baris kompak tepat di bawah kolom nomor WhatsApp.
-  - Menghapus kotak checklist pills di atas tombol aksi bawah.
-  - Mempertahankan proteksi tombol *"Lanjutkan"* (memberi notifikasi panduan ramah & mengarahkan fokus ke input OTP jika pengguna mencoba lanjut tanpa verifikasi WA).
+## 1. Analisis Masalah & Kebutuhan
+
+### Masalah Saat Ini:
+1. **Label Status Kurang Tegas**:
+   - Kolom No. WhatsApp saat ini menampilkan badge status berwarna kuning/amber bertuliskan `WAJIB OTP`.
+   - Mitra masih merasa ambigu dengan istilah tersebut karena tidak secara gamblang menyatakan status kondisi data nomor mereka (apakah sudah aktif/sah atau belum diverifikasi).
+2. **Tombol Aksi Kurang Direktif**:
+   - Tombol aksi saat ini bertuliskan `"Kirim OTP"`.
+   - Pengguna meminta agar tombol aksi ini diubah menjadi lebih tegas dan mengajak aksi langsung (*call to action*): **"Verifikasi Sekarang!"**.
+3. **Proporsi Input & Penyesuaian Padding**:
+   - Karena teks `"Verifikasi Sekarang!"` sedikit lebih panjang dibanding `"Kirim OTP"`, padding kanan pada elemen input (`pr-28`) perlu disesuaikan (menjadi `pr-44` atau `pr-48`) agar deretan nomor telepon pengguna tidak terpotong atau tertutup di belakang tombol aksi.
+
+### Tujuan Perubahan:
+1. Mengganti badge `WAJIB OTP` menjadi tanda alert merah mencolok:
+   - Ikon `<AlertCircle size={12} className="text-rose-500" />`
+   - Teks: **`Belum Terverifikasi`**
+   - Styling: Badge merah lembut dengan kontras teks jelas (`text-rose-600 bg-rose-50 border border-rose-200`).
+2. Mengubah label tombol aksi di dalam kolom input telepon dari `"Kirim OTP"` menjadi **`"Verifikasi Sekarang!"`**.
+3. Memastikan tata letak responsif tetap proporsional dan tidak merusak layout form profil Langkah 1.
+
+---
+
+## 2. Dampak Perubahan (Files Touched)
+
+File yang akan dimodifikasi:
+- [`functions/public/pages/MitraProfile.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/MitraProfile.tsx):
+  - **Baris ~1250**: Mengubah blok badge status saat `!waOtpVerified` dari badge `WAJIB OTP` menjadi badge alert merah `Belum Terverifikasi`.
+  - **Baris ~1287**: Menyesuaikan padding kanan input nomor telepon dari `pr-28` menjadi `pr-44` (atau `pr-48`) agar string nomor telepon tidak tertindih oleh tombol aksi.
+  - **Baris ~1314**: Mengubah teks tombol aksi dari `Kirim OTP` menjadi `Verifikasi Sekarang!`.
 
 ---
 
 ## 3. Langkah-Langkah Eksekusi (Fase 2 Setelah ACC)
 
-### Langkah 1: Menghapus Elemen Berlebih (De-clutter)
-- Hapus banner petunjuk berlebih di atas `Data Profil` pada Langkah 1.
-- Hapus kotak checklist kelengkapan di atas tombol bawah (*Batal* dan *Lanjutkan*).
+### Langkah 1: Modifikasi Badge Status No. WhatsApp
+- Mengubah elemen badge pada baris ~1250:
+  ```tsx
+  // Sebelum:
+  <span className="text-[9px] font-black uppercase text-amber-600 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-100">
+      Wajib OTP
+  </span>
 
-### Langkah 2: Merestrukturisasi Input No. WhatsApp Menjadi Kompak & Selaras
-- Gunakan grid standar `ProfileItemRead`:
-  - **Header Bar**: Ikon telepon dalam box 8x8 + label `NO. WHATSAPP` + badge status ringkas di sisi kanan (`✓ Terverifikasi` warna hijau atau `Belum Verifikasi` warna amber).
-  - **Input Box**: Menggunakan styling input form standar (`w-full bg-gray-50 border border-gray-200 rounded-2xl p-4 text-sm font-bold text-gray-900 focus:bg-white focus:border-orange-500`).
-  - **Aksi Kirim OTP**:
-    - Jika nomor belum terverifikasi: tombol *"Kirim OTP"* ringkas diletakkan di sisi kanan dalam input (posisi absolute/flex) sehingga tidak memakan baris baru secara boros.
-    - Jika nomor sudah terverifikasi: menampilkan ikon centang hijau `<BadgeCheck />` dan opsi teks kecil *"Ubah"*.
+  // Sesudah:
+  <span className="flex items-center gap-1 text-[9px] font-black uppercase text-rose-600 bg-rose-50 px-2 py-0.5 rounded-md border border-rose-200">
+      <AlertCircle size={12} className="text-rose-500" /> Belum Terverifikasi
+  </span>
+  ```
 
-### Langkah 3: Desain Kompak untuk Input 6 Digit OTP
-- Saat status sedang menunggu OTP (`waOtpCode` aktif / `isVerifyingWaOtp`):
-  - Tampilkan baris kompak tepat di bawah input nomor WhatsApp:
-    - 6 kotak digit angka berukuran proporsional (w-9 h-11 atau w-10 h-12).
-    - Tombol *"Verifikasi"* yang ringkas di samping/bawahnya.
-    - Info waktu kirim ulang (*"Kirim ulang dalam Xs"* / tombol teks *"Kirim Ulang"*).
-  - Tanpa nesting kartu berlapis-lapis dan tanpa teks pengantar yang panjang.
+### Langkah 2: Penyesuaian Tombol Aksi & Padding Input
+- Mengubah teks tombol aksi pada baris ~1314:
+  ```tsx
+  // Sebelum:
+  <span>Kirim OTP</span>
 
-### Langkah 4: Tombol Aksi Bawah yang Bersih
-- Tombol navigasi bawah tetap bersih dan proporsional:
-  - Tombol *"BATAL"*
-  - Tombol *"LANJUTKAN KE LANGKAH 2 (KTP)"* (tetap memiliki proteksi cerdas: jika diklik saat WA belum diverifikasi, memunculkan pesan ramah dan langsung memfokuskan kursor ke input OTP).
+  // Sesudah:
+  <span>Verifikasi Sekarang!</span>
+  ```
+- Menyesuaikan `className` padding kanan pada input nomor telepon (baris ~1287) agar teks input tidak bertubrukan dengan tombol:
+  ```tsx
+  waOtpCode || isVerifyingWaOtp ? 'pr-20 bg-gray-100/70 text-gray-600 cursor-not-allowed' : 'pr-44 bg-gray-50 focus:bg-white'
+  ```
+
+### Langkah 3: Pengujian Kompilasi
+- Menjalankan build frontend via terminal: `cmd.exe /c npm run build` di folder `functions/public`.
+- Memastikan tidak ada error TypeScript atau kendala kompilasi Vite (0 error).
+
+### Langkah 4: Dokumentasi & Git Push
+- Menambahkan catatan pekerjaan ke [functions/PROGRESS.md](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/PROGRESS.md) (Entry #438).
+- Membuat dokumen [WALKTHROUGH.md](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/WALKTHROUGH.md).
+- Melakukan commit dan push ke remote repository branch `origin bukan-productions`.
 
 ---
 
 ## 4. Rencana Verifikasi
-1. **Verifikasi Tampilan Visual**:
-   - Memastikan tidak ada layout shift atau kartu berbingkai raksasa yang merusak pola form.
-   - Memastikan nomor WhatsApp sejajar dan selaras dengan field lain (seperti Nama Lengkap dan Email).
+
+1. **Verifikasi Tampilan UI**:
+   - Buka `/dashboard-mitra/profile?edit=true&step=1`.
+   - Pastikan badge di samping label `No. WhatsApp` kini menampilkan tanda alert merah: `[⚠️] BELUM TERVERIFIKASI`.
+   - Pastikan tombol aksi berwarna oranye kini bertuliskan **"Verifikasi Sekarang!"**.
+   - Pastikan nomor telepon yang dimasukkan (misal: `+6281527080656`) tidak bertabrakan secara visual dengan tombol aksi di sisi kanan.
 2. **Verifikasi Fungsionalitas**:
-   - Uji klik *"Kirim OTP"* pada nomor WhatsApp.
-   - Uji input 6 digit angka OTP dan tombol *"Verifikasi"*.
-   - Uji klik tombol *"Lanjutkan"* sebelum vs setelah nomor WhatsApp terverifikasi.
+   - Memastikan tombol *"Verifikasi Sekarang!"* tetap memicu fungsi `handleSendWaOtp` dengan benar.
+   - Memastikan saat OTP terkirim, kotak 6 digit OTP tetap muncul dengan mulus.
 3. **Uji Kompilasi**:
-   - Menjalankan `npm run build` di folder `functions/public` untuk memastikan 0 error TypeScript/Vite.
-4. **Git Push**:
-   - Commit dan push ke branch `bukan-productions`.
+   - Build Vite berhasil 100% tanpa error (`npm run build`).

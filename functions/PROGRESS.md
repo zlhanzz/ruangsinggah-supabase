@@ -2,6 +2,27 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 438. Penegasan Status "Belum Terverifikasi" & Tombol Aksi "Verifikasi Sekarang!" pada No. WhatsApp Profil Mitra (`MitraProfile.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna meminta agar keterangan badge status `WAJIB OTP` yang ambigu di kolom No. WhatsApp diganti menjadi tanda alert merah yang tegas: `"Belum Terverifikasi"`.
+  2. Tombol aksi yang semula bertuliskan `"Kirim OTP"` diubah menjadi lebih direktif dan mengajak aksi langsung (*call to action*): `"Verifikasi Sekarang!"`.
+- **Akar Masalah**:
+  1. Istilah `WAJIB OTP` dengan badge warna amber sebelumnya kurang lugas dalam mengomunikasikan kondisi data nomor mitra (apakah nomor sudah sah atau belum tervalidasi).
+  2. Teks tombol `"Kirim OTP"` bersifat pasif/teknis, sehingga perlu ditingkatkan menjadi `"Verifikasi Sekarang!"`.
+- **Implementasi Solusi**:
+  1. **Badge Alert Merah "Belum Terverifikasi"**:
+     - Mengganti badge amber `WAJIB OTP` menjadi badge merah lembut dengan teks kontras: `<span className="flex items-center gap-1 text-[9px] font-black uppercase text-rose-600 bg-rose-50 px-2 py-0.5 rounded-md border border-rose-200"><AlertCircle size={12} className="text-rose-500" /> Belum Terverifikasi</span>`.
+  2. **Tombol "Verifikasi Sekarang!" & Proporsi Input**:
+     - Mengubah label tombol aksi di dalam kolom input telepon dari `"Kirim OTP"` menjadi `"Verifikasi Sekarang!"`.
+     - Menyesuaikan padding kanan elemen input dari `pr-28` menjadi `pr-44` agar nomor telepon panjang tidak tertutup oleh tombol aksi di sisi kanan.
+- **File Tersentuh**:
+  - `functions/public/pages/MitraProfile.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi Vite build (`cmd.exe /c npm run build`) sukses 100% (`✓ built in 1m 2s`, 0 error, exit code 0).
+  - Tampilan visual kolom nomor WhatsApp kini memiliki badge merah tegas `[⚠️] BELUM TERVERIFIKASI` dan tombol oranye `Verifikasi Sekarang!`.
+
 ### 437. Penyederhanaan UI/UX Form Profil Langkah 1 & Input Verifikasi WhatsApp Kompak (`MitraProfile.tsx`) (September 2026)
 - **Permintaan & Masalah**:
   1. Desain verifikasi WhatsApp pada formulir profil mitra Langkah 1 sebelumnya dirasa terlalu besar dan bertele-tele (memiliki banner petunjuk raksasa di atas, kartu bertingkat di dalam kartu, serta checklist tebal di bawah tombol).

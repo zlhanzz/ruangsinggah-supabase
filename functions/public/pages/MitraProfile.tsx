@@ -1247,8 +1247,8 @@ const MitraProfile: React.FC<MitraProfileProps> = ({
                                                                 <BadgeCheck size={12} className="text-green-500" /> Terverifikasi
                                                             </span>
                                                         ) : (
-                                                            <span className="text-[9px] font-black uppercase text-amber-600 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-100">
-                                                                Wajib OTP
+                                                            <span className="flex items-center gap-1 text-[9px] font-black uppercase text-rose-600 bg-rose-50 px-2 py-0.5 rounded-md border border-rose-200">
+                                                                <AlertCircle size={12} className="text-rose-500" /> Belum Terverifikasi
                                                             </span>
                                                         )}
                                                     </div>
@@ -1284,7 +1284,7 @@ const MitraProfile: React.FC<MitraProfileProps> = ({
                                                                     placeholder="081234567890"
                                                                     readOnly={Boolean(waOtpCode || isVerifyingWaOtp)}
                                                                     className={`w-full border p-4 rounded-2xl outline-none font-bold text-sm text-gray-900 transition-all ${
-                                                                        waOtpCode || isVerifyingWaOtp ? 'pr-20 bg-gray-100/70 text-gray-600 cursor-not-allowed' : 'pr-28 bg-gray-50 focus:bg-white'
+                                                                        waOtpCode || isVerifyingWaOtp ? 'pr-20 bg-gray-100/70 text-gray-600 cursor-not-allowed' : 'pr-44 bg-gray-50 focus:bg-white'
                                                                     } ${
                                                                         highlightWaCard
                                                                             ? 'border-orange-500 ring-2 ring-orange-500/30 bg-orange-50/50'
@@ -1311,7 +1311,7 @@ const MitraProfile: React.FC<MitraProfileProps> = ({
                                                                         ) : (
                                                                             <Phone size={13} />
                                                                         )}
-                                                                        <span>Kirim OTP</span>
+                                                                        <span>Verifikasi Sekarang!</span>
                                                                     </button>
                                                                 )}
                                                             </div>

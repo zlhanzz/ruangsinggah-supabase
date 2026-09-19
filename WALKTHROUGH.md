@@ -1,51 +1,57 @@
-# WALKTHROUGH - Penyederhanaan UI/UX Form Profil Langkah 1 & Input Verifikasi WhatsApp Kompak
+# WALKTHROUGH - Penegasan Status "Belum Terverifikasi" & Tombol Aksi "Verifikasi Sekarang!" pada No. WhatsApp Profil Mitra
 
-**ID Pekerjaan**: Entry #437  
+**ID Pekerjaan**: Entry #438  
 **Tanggal**: September 2026  
 **Status**: Selesai & Lulus Uji Kompilasi (`build 0 error`)
 
 ---
 
-## 1. Ringkasan Pekerjaan
-Telah dilakukan penyederhanaan antarmuka (UI/UX) pada formulir profil mitra **Langkah 1 (Data Profil & Verifikasi WhatsApp)** di [MitraProfile.tsx](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/MitraProfile.tsx).
+## 1. Ringkasan Perubahan
 
-### Perubahan Utama:
-1. **Pembersihan Layout Berlebih (De-cluttering)**:
-   - Menghapus banner petunjuk berukuran besar di bagian atas form profil Langkah 1, mengembalikan header ringkas "Lengkapi Profil & Verifikasi".
-   - Menghapus kotak checklist pills berlebih di atas tombol bawah (*Batal* dan *Lanjutkan*).
-2. **Restrukturisasi Input No. WhatsApp Selaras**:
-   - Menempatkan input nomor WhatsApp secara selaras di dalam grid form yang rapi (`ProfileItemRead`).
-   - Tombol aksi *"Kirim OTP"* ditempatkan secara terintegrasi dan kompak di sisi kanan dalam input nomor telepon tanpa memakan baris tambahan.
-   - Badge status ringkas di samping label: `Wajib OTP` (amber) saat belum diverifikasi, atau `Terverifikasi` (hijau) lengkap dengan ikon `BadgeCheck`.
-3. **Area Input 6 Digit OTP Kompak**:
-   - Kotak 6 digit OTP tampil dalam kontainer proporsional tepat di bawah baris input nomor WhatsApp saat kode OTP diminta.
-   - Dilengkapi hitung mundur pengiriman ulang dan tombol konfirmasi yang kompak tanpa nesting kartu tebal.
-4. **Tombol Navigasi Bawah Bersih & Proporsional**:
-   - Tombol *"BATAL"* dan *"LANJUTKAN KE LANGKAH 2 (KTP)"* kembali bersih dan elegan.
-   - Proteksi cerdas tetap aktif: jika mitra mencoba melanjutkan sebelum WhatsApp diverifikasi, sistem memberikan alert panduan ramah dan langsung mengarahkan fokus ke input OTP.
+Berdasarkan permintaan evaluasi pada formulir profil mitra **Langkah 1 (Data Profil)** di [MitraProfile.tsx](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/MitraProfile.tsx):
+1. **Penegasan Status Belum Terverifikasi**:
+   - Keterangan status `WAJIB OTP` dengan badge amber yang kurang lugas telah diubah menjadi badge alert merah tegas: **`Belum Terverifikasi`** lengkap dengan ikon `<AlertCircle />`.
+2. **Tombol Aksi Interaktif "Verifikasi Sekarang!"**:
+   - Teks tombol aksi yang semula bertuliskan `"Kirim OTP"` diubah menjadi lebih direktif (*Call-To-Action*): **`Verifikasi Sekarang!`**.
+3. **Penyesuaian Padding Input**:
+   - Padding sisi kanan input nomor telepon disesuaikan dari `pr-28` menjadi `pr-44` agar nomor telepon panjang tidak tertindih oleh tombol aksi di sisi kanan.
 
 ---
 
 ## 2. Rincian Perubahan Kode
 
 ### [functions/public/pages/MitraProfile.tsx](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/MitraProfile.tsx)
-1. **Penghapusan Banner Header Berlebih**:
-   - Menghilangkan kontainer banner panjang berwarna biru/amber di atas formulir Langkah 1.
-2. **Desain Kompak Input Nomor Telepon & OTP**:
-   - Label nomor WhatsApp dengan badge status `Wajib OTP` / `Terverifikasi`.
-   - Tombol aksi *"Kirim OTP"* terintegrasi langsung dalam input field (posisi absolut di sisi kanan).
-   - Baris input 6 digit OTP dengan dimensi ringkas (`w-9 h-11`), tombol *"Verifikasi"*, dan timer resend.
-3. **Pembersihan Tombol Bawah**:
-   - Menghilangkan checklist ganda di atas tombol aksi.
-   - Tombol *"BATAL"* dan *"LANJUTKAN KE LANGKAH 2 (KTP)"* memiliki padding dan tata letak yang proporsional dan elegan.
-4. **Perbaikan Hierarki Tag JSX**:
-   - Merapikan penutupan tag JSX dan kontainer form sehingga bebas dari unclosed tag error pada esbuild Vite.
+1. **Badge Status No. WhatsApp (Baris ~1250)**:
+   ```tsx
+   {/* Sebelum: */}
+   <span className="text-[9px] font-black uppercase text-amber-600 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-100">
+       Wajib OTP
+   </span>
+
+   {/* Sesudah: */}
+   <span className="flex items-center gap-1 text-[9px] font-black uppercase text-rose-600 bg-rose-50 px-2 py-0.5 rounded-md border border-rose-200">
+       <AlertCircle size={12} className="text-rose-500" /> Belum Terverifikasi
+   </span>
+   ```
+2. **Padding Input Nomor Telepon (Baris ~1287)**:
+   ```tsx
+   waOtpCode || isVerifyingWaOtp ? 'pr-20 bg-gray-100/70 text-gray-600 cursor-not-allowed' : 'pr-44 bg-gray-50 focus:bg-white'
+   ```
+3. **Tombol Aksi Call-To-Action (Baris ~1314)**:
+   ```tsx
+   {/* Sebelum: */}
+   <span>Kirim OTP</span>
+
+   {/* Sesudah: */}
+   <span>Verifikasi Sekarang!</span>
+   ```
 
 ---
 
 ## 3. Hasil Pengujian & Verifikasi
 
-### Hasil Kompilasi Frontend (`cmd.exe /c npm run build`)
+### A. Uji Kompilasi Frontend (`cmd.exe /c npm run build`)
+Kompilasi TypeScript dan Vite build berjalan sukses 100% tanpa error (`exit code 0`):
 ```bash
 > ruangsinggah.id@0.0.0 build
 > vite build && node -e "const fs=require('fs'); if (fs.existsSync('./dist')) fs.rmSync('./dist', {recursive: true, force: true}); fs.cpSync('../../public', './dist', {recursive: true, force: true});"
@@ -56,32 +62,17 @@ transforming...
 rendering chunks...
 computing gzip size...
 ../../public/index.html                                  7.92 kB │ gzip:   2.29 kB
-../../public/assets/index-oEEle-t7.css                 300.51 kB │ gzip:  36.04 kB
+../../public/assets/index-CnLlENow.css                 300.55 kB │ gzip:  36.04 kB
 ...
-../../public/assets/MitraDashboard-DU-0U2YG.js         430.06 kB │ gzip:  93.90 kB
-../../public/assets/index-C1UiMVOJ.js                  607.49 kB │ gzip: 174.82 kB
-../../public/assets/Dashboard-CQC8e4F6.js            1,416.51 kB │ gzip: 311.26 kB
-✓ built in 40.84s
+✓ built in 26.41s
 ```
-**Hasil**: 0 error TypeScript, 0 error bundling Vite, exit code 0.
 
----
-
-## 4. Panduan Pengujian User
-1. Buka halaman profil dashboard mitra pada rute `/dashboard-mitra/profile?edit=true&step=1`.
-2. Perhatikan bahwa formulir Langkah 1 kini tampil bersih tanpa banner raksasa di atas.
-3. Lihat kolom nomor WhatsApp yang sejajar dengan input Nama Lengkap dan Email.
-4. Coba klik *"Kirim OTP"*: baris 6 digit OTP muncul secara kompak di bawahnya tanpa merusak tata letak form.
-5. Verifikasi bahwa tombol *"BATAL"* dan *"LANJUTKAN KE LANGKAH 2 (KTP)"* di bagian bawah tampil proporsional dan bersih.
-
----
-
-## 5. Petunjuk Deploy
-Perubahan ini siap dideploy ke server staging/production:
-```bash
-git checkout bukan-productions
-git pull origin bukan-productions
-cd functions/public
-npm run build
-```
-*(Catatan: Sesuai protokol, push ke branch `main` atau deployment ke production hanya dilakukan secara manual oleh User).*
+### B. Panduan Pengujian Pengguna (User Testing Guide)
+1. Buka halaman profil mitra: `/dashboard-mitra/profile?edit=true&step=1`.
+2. Periksa kolom **No. WhatsApp**:
+   - Jika nomor belum terverifikasi, badge di samping label akan menampilkan tanda alert merah: `[⚠️] BELUM TERVERIFIKASI`.
+   - Tombol di sisi kanan dalam input nomor kini bertuliskan **"Verifikasi Sekarang!"** berwarna oranye menyala.
+   - Ketik atau lihat nomor telepon panjang, teks nomor tidak akan bertumpukan dengan tombol aksi.
+3. Klik tombol **"Verifikasi Sekarang!"**:
+   - Kode OTP akan dikirimkan dan kotak 6 digit OTP akan terbuka di bawah kolom input untuk verifikasi instan.
+4. Fitur Logout pada menu profil dashboard mitra tetap berfungsi sempurna dengan modal konfirmasi dan pembersihan sesi Supabase Auth.
