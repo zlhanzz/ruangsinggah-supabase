@@ -25,7 +25,7 @@ import {
   Phone, MessageSquare, MessageCircle, Check, X, Shield, Key, Camera, Trash2, 
   Mail, RefreshCw, AlertCircle, Eye, EyeOff, ChevronRight, CreditCard,
   Bell, HelpCircle, FileText, LogOut, ExternalLink, Receipt, Layers, RotateCcw, Zap,
-  Settings
+  Settings, Clock
 } from 'lucide-react';
 
 interface ProfileProps {
@@ -77,8 +77,9 @@ const Profile: React.FC<ProfileProps> = ({ user, onLogout, onSaveSuccess, forceE
   const [showDigitalReceiptModal, setShowDigitalReceiptModal] = useState<boolean>(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Modal Ganti Kata Sandi
+  // Modal Ganti Kata Sandi (2-Tahap dengan 6-Box OTP)
   const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
+  const [passwordStep, setPasswordStep] = useState<'input_password' | 'verify_otp'>('input_password');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -86,7 +87,8 @@ const Profile: React.FC<ProfileProps> = ({ user, onLogout, onSaveSuccess, forceE
   const [passwordMessage, setPasswordMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   // Email OTP verification states for Password Change
-  const [passwordOtpInput, setPasswordOtpInput] = useState('');
+  const [passwordOtpDigits, setPasswordOtpDigits] = useState<string[]>(['', '', '', '', '', '']);
+  const passwordOtpRefs = useRef<(HTMLInputElement | null)[]>([]);
   const [generatedPasswordOtp, setGeneratedPasswordOtp] = useState('');
   const [otpExpiresAt, setOtpExpiresAt] = useState<number | null>(null);
   const [otpCooldown, setOtpCooldown] = useState(0);
@@ -565,7 +567,54 @@ const Profile: React.FC<ProfileProps> = ({ user, onLogout, onSaveSuccess, forceE
     }
   };
 
-  const handleSendPasswordOtp = async () => {
+  const handlePasswordOtpDigitChange = (index: number, value: string) => {
+    const clean = value.replace(/\D/g, '');
+    if (!clean) {
+      const updated = [...passwordOtpDigits];
+      updated[index] = '';
+      setPasswordOtpDigits(updated);
+      return;
+    }
+    const lastChar = clean.slice(-1);
+    const updated = [...passwordOtpDigits];
+    updated[index] = lastChar;
+    setPasswordOtpDigits(updated);
+
+    if (index < 5) {
+      passwordOtpRefs.current[index + 1]?.focus();
+    }
+  };
+
+  const handlePasswordOtpKeyDown = (index: number, e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Backspace' && !passwordOtpDigits[index] && index > 0) {
+      passwordOtpRefs.current[index - 1]?.focus();
+    }
+  };
+
+  const handlePasswordOtpPaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
+    e.preventDefault();
+    const pasted = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 6);
+    if (!pasted) return;
+    const updated = ['', '', '', '', '', ''];
+    for (let i = 0; i < pasted.length; i++) {
+      updated[i] = pasted[i];
+    }
+    setPasswordOtpDigits(updated);
+    const focusIdx = Math.min(pasted.length, 5);
+    passwordOtpRefs.current[focusIdx]?.focus();
+  };
+
+  const handleProceedToOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (newPassword.length < 6) {
+      setPasswordMessage({ type: 'error', text: 'Kata sandi baru minimal 6 karakter.' });
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setPasswordMessage({ type: 'error', text: 'Konfirmasi kata sandi tidak cocok. Pastikan kedua kata sandi sama.' });
+      return;
+    }
+
     const targetEmail = user?.email || formData.email;
     if (!targetEmail) {
       setPasswordMessage({ type: 'error', text: 'Email akun pengguna tidak ditemukan.' });
@@ -576,7 +625,7 @@ const Profile: React.FC<ProfileProps> = ({ user, onLogout, onSaveSuccess, forceE
     setPasswordMessage(null);
 
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
-    const expires = Date.now() + 10 * 60 * 1000; // 10 minutes expiry
+    const expires = Date.now() + 10 * 60 * 1000;
 
     try {
       const sent = await sendPasswordChangeOtp(targetEmail, otp, formData.displayName || user?.name);
@@ -585,7 +634,12 @@ const Profile: React.FC<ProfileProps> = ({ user, onLogout, onSaveSuccess, forceE
         setOtpExpiresAt(expires);
         setIsOtpSent(true);
         setOtpCooldown(60);
+        setPasswordOtpDigits(['', '', '', '', '', '']);
+        setPasswordStep('verify_otp');
         setPasswordMessage({ type: 'success', text: `Kode verifikasi 6-digit telah dikirim ke ${targetEmail}. Periksa kotak masuk/spam email Anda.` });
+        setTimeout(() => {
+          passwordOtpRefs.current[0]?.focus();
+        }, 100);
       } else {
         setPasswordMessage({ type: 'error', text: 'Gagal mengirim kode verifikasi ke email. Silakan coba beberapa saat lagi.' });
       }
@@ -596,32 +650,62 @@ const Profile: React.FC<ProfileProps> = ({ user, onLogout, onSaveSuccess, forceE
     }
   };
 
-  const handlePasswordChange = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleResendPasswordOtp = async () => {
+    if (otpCooldown > 0 || isSendingOtp) return;
+    const targetEmail = user?.email || formData.email;
+    if (!targetEmail) return;
 
-    // 1. Validasi OTP Email
+    setIsSendingOtp(true);
+    setPasswordMessage(null);
+
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const expires = Date.now() + 10 * 60 * 1000;
+
+    try {
+      const sent = await sendPasswordChangeOtp(targetEmail, otp, formData.displayName || user?.name);
+      if (sent) {
+        setGeneratedPasswordOtp(otp);
+        setOtpExpiresAt(expires);
+        setOtpCooldown(60);
+        setPasswordOtpDigits(['', '', '', '', '', '']);
+        setPasswordMessage({ type: 'success', text: `Kode verifikasi baru telah dikirim ke ${targetEmail}.` });
+        passwordOtpRefs.current[0]?.focus();
+      } else {
+        setPasswordMessage({ type: 'error', text: 'Gagal mengirim ulang kode verifikasi.' });
+      }
+    } catch (err: any) {
+      setPasswordMessage({ type: 'error', text: err.message || 'Gagal mengirim ulang kode verifikasi.' });
+    } finally {
+      setIsSendingOtp(false);
+    }
+  };
+
+  const handleFinalPasswordChange = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const enteredOtp = passwordOtpDigits.join('');
+
     if (!isOtpSent || !generatedPasswordOtp) {
       setPasswordMessage({ type: 'error', text: 'Silakan minta dan masukkan kode verifikasi email terlebih dahulu.' });
       return;
     }
 
-    if (passwordOtpInput.trim() !== generatedPasswordOtp) {
-      setPasswordMessage({ type: 'error', text: 'Kode verifikasi email salah. Periksa kembali 6 digit kode yang dikirim ke email Anda.' });
+    if (enteredOtp.length !== 6) {
+      setPasswordMessage({ type: 'error', text: 'Masukkan seluruh 6-digit kode verifikasi yang dikirim ke email Anda.' });
+      return;
+    }
+
+    if (enteredOtp !== generatedPasswordOtp) {
+      setPasswordMessage({ type: 'error', text: 'Kode verifikasi email salah. Periksa kembali 6 digit kode pada kotak masuk atau spam email Anda.' });
       return;
     }
 
     if (otpExpiresAt && Date.now() > otpExpiresAt) {
-      setPasswordMessage({ type: 'error', text: 'Kode verifikasi email telah kedaluwarsa. Silakan kirim ulang kode baru.' });
+      setPasswordMessage({ type: 'error', text: 'Kode verifikasi email telah kedaluwarsa. Silakan klik "Kirim Ulang".' });
       return;
     }
 
-    // 2. Validasi Kata Sandi
     if (newPassword.length < 6) {
       setPasswordMessage({ type: 'error', text: 'Kata sandi baru minimal 6 karakter.' });
-      return;
-    }
-    if (newPassword !== confirmPassword) {
-      setPasswordMessage({ type: 'error', text: 'Konfirmasi kata sandi tidak cocok.' });
       return;
     }
 
@@ -637,9 +721,10 @@ const Profile: React.FC<ProfileProps> = ({ user, onLogout, onSaveSuccess, forceE
         setIsPasswordModalOpen(false);
         setNewPassword('');
         setConfirmPassword('');
-        setPasswordOtpInput('');
+        setPasswordOtpDigits(['', '', '', '', '', '']);
         setGeneratedPasswordOtp('');
         setIsOtpSent(false);
+        setPasswordStep('input_password');
         setPasswordMessage(null);
       }, 1800);
     } catch (err: any) {
@@ -2200,14 +2285,46 @@ const Profile: React.FC<ProfileProps> = ({ user, onLogout, onSaveSuccess, forceE
                   setPasswordMessage(null);
                   setNewPassword('');
                   setConfirmPassword('');
-                  setPasswordOtpInput('');
+                  setPasswordOtpDigits(['', '', '', '', '', '']);
                   setGeneratedPasswordOtp('');
                   setIsOtpSent(false);
+                  setPasswordStep('input_password');
                 }}
                 className="p-2 text-gray-400 hover:text-gray-600 rounded-xl hover:bg-gray-100 transition-colors cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
+            </div>
+
+            {/* Stepper Indicator */}
+            <div className="flex items-center justify-between gap-2 mb-5 px-1">
+              <div className="flex items-center gap-2 flex-1">
+                <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-black shrink-0 transition-colors ${
+                  passwordStep === 'input_password' ? 'bg-[#ff7a00] text-white' : 'bg-emerald-500 text-white'
+                }`}>
+                  {passwordStep === 'verify_otp' ? <Check className="w-3.5 h-3.5" /> : '1'}
+                </div>
+                <div className="min-w-0">
+                  <div className="text-[11px] font-black text-gray-800 leading-tight">Kata Sandi Baru</div>
+                  <div className="text-[9px] text-gray-400">Atur password</div>
+                </div>
+              </div>
+
+              <div className={`h-0.5 flex-1 max-w-[36px] rounded-full transition-colors ${
+                passwordStep === 'verify_otp' ? 'bg-emerald-500' : 'bg-gray-200'
+              }`} />
+
+              <div className="flex items-center gap-2 flex-1 justify-end">
+                <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-black shrink-0 transition-colors ${
+                  passwordStep === 'verify_otp' ? 'bg-[#ff7a00] text-white' : 'bg-gray-100 text-gray-400'
+                }`}>
+                  2
+                </div>
+                <div className="min-w-0 text-right">
+                  <div className="text-[11px] font-black text-gray-800 leading-tight">Verifikasi OTP</div>
+                  <div className="text-[9px] text-gray-400">Konfirmasi email</div>
+                </div>
+              </div>
             </div>
 
             {/* Connected Email Info */}
@@ -2232,125 +2349,186 @@ const Profile: React.FC<ProfileProps> = ({ user, onLogout, onSaveSuccess, forceE
               </div>
             )}
 
-            <form onSubmit={handlePasswordChange} className="space-y-4">
-              {/* Step 1: Request OTP Code */}
-              <div className="p-3.5 rounded-2xl bg-orange-50/60 border border-orange-200/80">
-                <div className="flex items-center justify-between gap-2 mb-2">
-                  <span className="text-[10px] font-black uppercase tracking-wider text-orange-800 flex items-center gap-1.5">
-                    <ShieldCheck className="w-3.5 h-3.5 text-orange-600" />
-                    Verifikasi Email Pemilik
-                  </span>
-                  {isOtpSent && (
-                    <span className="text-[10px] font-bold text-emerald-600 flex items-center gap-1">
-                      <Check className="w-3 h-3" /> Terkirim
-                    </span>
-                  )}
+            {passwordStep === 'input_password' ? (
+              /* TAHAP 1: INPUT KATA SANDI BARU */
+              <form onSubmit={handleProceedToOtp} className="space-y-4">
+                {/* New Password Input */}
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block">
+                    KATA SANDI BARU
+                  </label>
+                  <div className="relative">
+                    <input
+                      type={showPassword ? 'text' : 'password'}
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 pr-10 text-sm font-bold text-gray-900 focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none"
+                      placeholder="Minimal 6 karakter"
+                      required
+                      autoFocus
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 cursor-pointer"
+                    >
+                      {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
                 </div>
-                <p className="text-[11px] text-gray-500 font-medium mb-3">
-                  Demi keamanan akun, masukkan kode 6-digit yang dikirim ke email terdaftar Anda.
-                </p>
-                <button
-                  type="button"
-                  onClick={handleSendPasswordOtp}
-                  disabled={isSendingOtp || otpCooldown > 0}
-                  className="w-full py-2 px-3 bg-white hover:bg-orange-50 text-orange-600 border border-orange-300 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed shadow-2xs"
-                >
-                  {isSendingOtp ? (
-                    <>
-                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                      Mengirim Kode...
-                    </>
-                  ) : otpCooldown > 0 ? (
-                    <>
-                      <Clock className="w-3.5 h-3.5" />
-                      Kirim Ulang ({otpCooldown}s)
-                    </>
-                  ) : (
-                    <>
-                      <Mail className="w-3.5 h-3.5" />
-                      {isOtpSent ? 'Kirim Ulang Kode OTP' : 'Kirim Kode Verifikasi ke Email'}
-                    </>
-                  )}
-                </button>
-              </div>
 
-              {/* OTP Code Input */}
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block">
-                  KODE VERIFIKASI EMAIL (6 DIGIT)
-                </label>
-                <input
-                  type="text"
-                  maxLength={6}
-                  value={passwordOtpInput}
-                  onChange={(e) => setPasswordOtpInput(e.target.value.replace(/\D/g, ''))}
-                  className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-base font-black tracking-widest text-gray-900 focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none text-center"
-                  placeholder="Contoh: 123456"
-                  required
-                />
-              </div>
-
-              {/* New Password Input */}
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block">
-                  KATA SANDI BARU
-                </label>
-                <div className="relative">
+                {/* Confirm New Password Input */}
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block">
+                    KONFIRMASI KATA SANDI BARU
+                  </label>
                   <input
                     type={showPassword ? 'text' : 'password'}
-                    value={newPassword}
-                    onChange={(e) => setNewPassword(e.target.value)}
-                    className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 pr-10 text-sm font-bold text-gray-900 focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none"
-                    placeholder="Minimal 6 karakter"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm font-bold text-gray-900 focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none"
+                    placeholder="Ulangi kata sandi baru"
                     required
                   />
+                  {confirmPassword && newPassword !== confirmPassword && (
+                    <p className="text-[10px] font-bold text-red-500 mt-1">Konfirmasi kata sandi belum sama</p>
+                  )}
+                </div>
+
+                {/* Action Buttons Step 1 */}
+                <div className="pt-2 flex flex-col gap-2.5">
+                  <button
+                    type="submit"
+                    disabled={isSendingOtp || !newPassword || !confirmPassword || newPassword !== confirmPassword || newPassword.length < 6}
+                    className="w-full py-3.5 bg-[#ff7a00] hover:bg-orange-600 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-md shadow-orange-500/20 active:scale-95 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {isSendingOtp ? (
+                      <>
+                        <RefreshCw className="w-4 h-4 animate-spin" />
+                        Mengirim Kode OTP...
+                      </>
+                    ) : (
+                      <>
+                        Lanjut ke Verifikasi Email
+                        <ChevronRight className="w-4 h-4" />
+                      </>
+                    )}
+                  </button>
+
                   <button
                     type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 cursor-pointer"
+                    onClick={handleSendResetEmail}
+                    disabled={passwordLoading}
+                    className="w-full py-2.5 bg-gray-50 hover:bg-gray-100 text-gray-600 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer"
                   >
-                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    <Mail className="w-3.5 h-3.5 text-gray-400" />
+                    Atau Kirim Link Reset ke Email ({user?.email})
                   </button>
                 </div>
-              </div>
+              </form>
+            ) : (
+              /* TAHAP 2: VERIFIKASI OTP 6 DIGIT TERPISAH */
+              <form onSubmit={handleFinalPasswordChange} className="space-y-4">
+                <div className="p-3.5 rounded-2xl bg-orange-50/70 border border-orange-200/80">
+                  <div className="flex items-center gap-2 mb-1.5">
+                    <ShieldCheck className="w-4 h-4 text-[#ff7a00] shrink-0" />
+                    <span className="text-xs font-black text-orange-900">Verifikasi Kepemilikan Akun</span>
+                  </div>
+                  <p className="text-[11px] text-orange-800/90 leading-relaxed">
+                    Kode 6 digit telah dikirim ke <span className="font-bold underline">{user?.email || formData.email}</span>. Masukkan kode di bawah untuk mengonfirmasi perubahan sandi.
+                  </p>
+                </div>
 
-              {/* Confirm New Password Input */}
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block">
-                  KONFIRMASI KATA SANDI BARU
-                </label>
-                <input
-                  type={showPassword ? 'text' : 'password'}
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm font-bold text-gray-900 focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none"
-                  placeholder="Ulangi kata sandi baru"
-                  required
-                />
-              </div>
+                {/* 6-Digit OTP Boxes */}
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block text-center">
+                    MASUKKAN KODE VERIFIKASI 6 DIGIT
+                  </label>
+                  <div className="flex items-center justify-between gap-1.5 sm:gap-2 max-w-[340px] mx-auto">
+                    {passwordOtpDigits.map((digit, idx) => (
+                      <input
+                        key={idx}
+                        ref={(el) => { passwordOtpRefs.current[idx] = el; }}
+                        type="text"
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                        maxLength={1}
+                        value={digit}
+                        onChange={(e) => handlePasswordOtpDigitChange(idx, e.target.value)}
+                        onKeyDown={(e) => handlePasswordOtpKeyDown(idx, e)}
+                        onPaste={handlePasswordOtpPaste}
+                        className={`w-11 h-12 sm:w-12 sm:h-13 text-center text-lg sm:text-xl font-black rounded-xl border transition-all outline-none ${
+                          digit
+                            ? 'border-[#ff7a00] bg-orange-50/40 text-gray-900 ring-2 ring-orange-500/20 shadow-xs'
+                            : 'border-gray-200 bg-gray-50 text-gray-800 focus:border-[#ff7a00] focus:bg-white focus:ring-2 focus:ring-orange-500/20'
+                        }`}
+                      />
+                    ))}
+                  </div>
+                </div>
 
-              {/* Action Buttons */}
-              <div className="pt-2 flex flex-col gap-2.5">
-                <button
-                  type="submit"
-                  disabled={passwordLoading || !passwordOtpInput || passwordOtpInput.length < 6}
-                  className="w-full py-3.5 bg-[#ff7a00] hover:bg-orange-600 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-md shadow-orange-500/20 active:scale-95 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {passwordLoading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-                  Verifikasi & Simpan Kata Sandi
-                </button>
+                {/* Resend Timer / Button */}
+                <div className="text-center pt-1">
+                  <button
+                    type="button"
+                    onClick={handleResendPasswordOtp}
+                    disabled={isSendingOtp || otpCooldown > 0}
+                    className="text-xs font-bold text-orange-600 hover:text-orange-700 disabled:text-gray-400 cursor-pointer disabled:cursor-not-allowed inline-flex items-center gap-1.5"
+                  >
+                    {isSendingOtp ? (
+                      <>
+                        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                        Mengirim ulang...
+                      </>
+                    ) : otpCooldown > 0 ? (
+                      <>
+                        <Clock className="w-3.5 h-3.5" />
+                        Kirim ulang kode dalam {otpCooldown} detik
+                      </>
+                    ) : (
+                      <>
+                        <RotateCcw className="w-3.5 h-3.5" />
+                        Kirim Ulang Kode Verifikasi
+                      </>
+                    )}
+                  </button>
+                </div>
 
-                <button
-                  type="button"
-                  onClick={handleSendResetEmail}
-                  disabled={passwordLoading}
-                  className="w-full py-2.5 bg-gray-50 hover:bg-gray-100 text-gray-600 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer"
-                >
-                  <Mail className="w-3.5 h-3.5 text-gray-400" />
-                  Atau Kirim Link Reset ke Email ({user?.email})
-                </button>
-              </div>
-            </form>
+                {/* Action Buttons Step 2 */}
+                <div className="pt-2 flex flex-col gap-2.5">
+                  <button
+                    type="submit"
+                    disabled={passwordLoading || passwordOtpDigits.some(d => !d)}
+                    className="w-full py-3.5 bg-[#ff7a00] hover:bg-orange-600 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-md shadow-orange-500/20 active:scale-95 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {passwordLoading ? (
+                      <>
+                        <RefreshCw className="w-4 h-4 animate-spin" />
+                        Menyimpan Kata Sandi...
+                      </>
+                    ) : (
+                      <>
+                        <Check className="w-4 h-4" />
+                        Konfirmasi & Perbarui Kata Sandi
+                      </>
+                    )}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPasswordStep('input_password');
+                      setPasswordMessage(null);
+                    }}
+                    disabled={passwordLoading}
+                    className="w-full py-2.5 bg-gray-50 hover:bg-gray-100 text-gray-600 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer"
+                  >
+                    <ArrowLeft className="w-3.5 h-3.5" />
+                    Kembali ke Input Kata Sandi
+                  </button>
+                </div>
+              </form>
+            )}
           </div>
         </div>
       )}

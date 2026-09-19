@@ -95,14 +95,16 @@ const MitraProfile: React.FC<MitraProfileProps> = ({
 
     // Settings (Pengaturan) modal states
     const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
+    const [passwordStep, setPasswordStep] = useState<'input_password' | 'verify_otp'>('input_password');
     const [newPassword, setNewPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
     const [showPassword, setShowPassword] = useState(false);
     const [passwordLoading, setPasswordLoading] = useState(false);
     const [passwordMessage, setPasswordMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
-    // Email OTP verification states for Password Change
-    const [passwordOtpInput, setPasswordOtpInput] = useState('');
+    // Email OTP verification states for Password Change (6-Box OTP Input)
+    const [passwordOtpDigits, setPasswordOtpDigits] = useState(['', '', '', '', '', '']);
+    const passwordOtpRefs = React.useRef<Array<HTMLInputElement | null>>([]);
     const [generatedPasswordOtp, setGeneratedPasswordOtp] = useState('');
     const [otpExpiresAt, setOtpExpiresAt] = useState<number | null>(null);
     const [otpCooldown, setOtpCooldown] = useState(0);
@@ -128,7 +130,68 @@ const MitraProfile: React.FC<MitraProfileProps> = ({
         return () => clearInterval(timer);
     }, [otpCooldown]);
 
-    const handleSendPasswordOtp = async () => {
+    const handlePasswordOtpDigitChange = (index: number, value: string) => {
+        const cleanValue = value.replace(/\D/g, '');
+        if (!cleanValue) {
+            const newDigits = [...passwordOtpDigits];
+            newDigits[index] = '';
+            setPasswordOtpDigits(newDigits);
+            return;
+        }
+
+        const lastChar = cleanValue[cleanValue.length - 1];
+        const newDigits = [...passwordOtpDigits];
+        newDigits[index] = lastChar;
+        setPasswordOtpDigits(newDigits);
+
+        if (index < 5 && lastChar) {
+            passwordOtpRefs.current[index + 1]?.focus();
+        }
+    };
+
+    const handlePasswordOtpKeyDown = (index: number, e: React.KeyboardEvent<HTMLInputElement>) => {
+        if (e.key === 'Backspace') {
+            const newDigits = [...passwordOtpDigits];
+            if (passwordOtpDigits[index] === '') {
+                if (index > 0) {
+                    newDigits[index - 1] = '';
+                    setPasswordOtpDigits(newDigits);
+                    passwordOtpRefs.current[index - 1]?.focus();
+                }
+            } else {
+                newDigits[index] = '';
+                setPasswordOtpDigits(newDigits);
+            }
+        }
+    };
+
+    const handlePasswordOtpPaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
+        e.preventDefault();
+        const pastedData = e.clipboardData.getData('text').replace(/\D/g, '').substring(0, 6);
+        const newDigits = [...passwordOtpDigits];
+        for (let i = 0; i < 6; i++) {
+            newDigits[i] = pastedData[i] || '';
+        }
+        setPasswordOtpDigits(newDigits);
+        const focusIndex = Math.min(pastedData.length, 5);
+        passwordOtpRefs.current[focusIndex]?.focus();
+    };
+
+    const handleProceedToOtp = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setPasswordMessage(null);
+
+        // 1. Validasi kata sandi baru
+        if (!newPassword || newPassword.length < 6) {
+            setPasswordMessage({ type: 'error', text: 'Kata sandi baru minimal 6 karakter.' });
+            return;
+        }
+        if (newPassword !== confirmPassword) {
+            setPasswordMessage({ type: 'error', text: 'Ulangi kata sandi baru tidak cocok dengan kata sandi baru.' });
+            return;
+        }
+
+        // 2. Kirim OTP otomatis ke email
         const targetEmail = formData.email || initialUser?.email;
         if (!targetEmail) {
             setPasswordMessage({ type: 'error', text: 'Email akun mitra tidak ditemukan. Harap lengkapi email terlebih dahulu.' });
@@ -136,11 +199,8 @@ const MitraProfile: React.FC<MitraProfileProps> = ({
         }
 
         setIsSendingOtp(true);
-        setPasswordMessage(null);
-
-        // Generate 6-digit random OTP
         const otp = Math.floor(100000 + Math.random() * 900000).toString();
-        const expires = Date.now() + 10 * 60 * 1000; // 10 minutes expiry
+        const expires = Date.now() + 10 * 60 * 1000;
 
         try {
             const sent = await sendPasswordChangeOtp(targetEmail, otp, formData.name || initialUser?.name);
@@ -149,9 +209,13 @@ const MitraProfile: React.FC<MitraProfileProps> = ({
                 setOtpExpiresAt(expires);
                 setIsOtpSent(true);
                 setOtpCooldown(60);
-                setPasswordMessage({ type: 'success', text: `Kode verifikasi 6-digit telah dikirim ke ${targetEmail}. Periksa kotak masuk/spam email Anda.` });
+                setPasswordOtpDigits(['', '', '', '', '', '']);
+                setPasswordStep('verify_otp');
+                setTimeout(() => {
+                    passwordOtpRefs.current[0]?.focus();
+                }, 100);
             } else {
-                setPasswordMessage({ type: 'error', text: 'Gagal mengirim kode verifikasi ke email. Silakan coba beberapa saat lagi.' });
+                setPasswordMessage({ type: 'error', text: 'Gagal mengirim kode verifikasi ke email. Silakan coba lagi.' });
             }
         } catch (err: any) {
             setPasswordMessage({ type: 'error', text: err.message || 'Terjadi kesalahan saat mengirim kode verifikasi.' });
@@ -160,38 +224,58 @@ const MitraProfile: React.FC<MitraProfileProps> = ({
         }
     };
 
-    const handlePasswordChange = async (e: React.FormEvent) => {
-        e.preventDefault();
+    const handleResendPasswordOtp = async () => {
+        if (otpCooldown > 0 || isSendingOtp) return;
+        const targetEmail = formData.email || initialUser?.email;
+        if (!targetEmail) return;
 
-        // 1. Verifikasi Kode OTP Email
-        if (!isOtpSent || !generatedPasswordOtp) {
-            setPasswordMessage({ type: 'error', text: 'Silakan minta dan masukkan kode verifikasi email terlebih dahulu.' });
-            return;
+        setIsSendingOtp(true);
+        setPasswordMessage(null);
+        const otp = Math.floor(100000 + Math.random() * 900000).toString();
+        const expires = Date.now() + 10 * 60 * 1000;
+
+        try {
+            const sent = await sendPasswordChangeOtp(targetEmail, otp, formData.name || initialUser?.name);
+            if (sent) {
+                setGeneratedPasswordOtp(otp);
+                setOtpExpiresAt(expires);
+                setOtpCooldown(60);
+                setPasswordOtpDigits(['', '', '', '', '', '']);
+                setPasswordMessage({ type: 'success', text: 'Kode verifikasi baru telah dikirimkan ke email Anda.' });
+                setTimeout(() => {
+                    passwordOtpRefs.current[0]?.focus();
+                }, 100);
+            } else {
+                setPasswordMessage({ type: 'error', text: 'Gagal mengirim ulang kode verifikasi ke email.' });
+            }
+        } catch (err: any) {
+            setPasswordMessage({ type: 'error', text: err.message || 'Terjadi kesalahan saat mengirim ulang kode.' });
+        } finally {
+            setIsSendingOtp(false);
         }
+    };
 
-        if (passwordOtpInput.trim() !== generatedPasswordOtp) {
-            setPasswordMessage({ type: 'error', text: 'Kode verifikasi email salah. Periksa kembali 6 digit kode yang dikirim ke email Anda.' });
+    const handleFinalPasswordChange = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setPasswordMessage(null);
+
+        const enteredOtp = passwordOtpDigits.join('');
+        if (enteredOtp.length !== 6) {
+            setPasswordMessage({ type: 'error', text: 'Harap masukkan 6 digit kode verifikasi email.' });
             return;
         }
 
         if (otpExpiresAt && Date.now() > otpExpiresAt) {
-            setPasswordMessage({ type: 'error', text: 'Kode verifikasi email telah kedaluwarsa. Silakan kirim ulang kode baru.' });
+            setPasswordMessage({ type: 'error', text: 'Kode verifikasi email telah kedaluwarsa. Silakan klik Kirim Ulang.' });
             return;
         }
 
-        // 2. Validasi Kata Sandi
-        if (newPassword.length < 6) {
-            setPasswordMessage({ type: 'error', text: 'Kata sandi baru minimal 6 karakter.' });
-            return;
-        }
-        if (newPassword !== confirmPassword) {
-            setPasswordMessage({ type: 'error', text: 'Konfirmasi kata sandi tidak cocok.' });
+        if (enteredOtp !== generatedPasswordOtp) {
+            setPasswordMessage({ type: 'error', text: 'Kode verifikasi email salah. Periksa kembali 6 digit kode di email Anda.' });
             return;
         }
 
         setPasswordLoading(true);
-        setPasswordMessage(null);
-
         try {
             const { error } = await supabase.auth.updateUser({ password: newPassword });
             if (error) throw error;
@@ -201,9 +285,10 @@ const MitraProfile: React.FC<MitraProfileProps> = ({
                 setIsSettingsModalOpen(false);
                 setNewPassword('');
                 setConfirmPassword('');
-                setPasswordOtpInput('');
+                setPasswordOtpDigits(['', '', '', '', '', '']);
                 setGeneratedPasswordOtp('');
                 setIsOtpSent(false);
+                setPasswordStep('input_password');
                 setPasswordMessage(null);
             }, 1800);
         } catch (err: any) {
@@ -2148,7 +2233,9 @@ const MitraProfile: React.FC<MitraProfileProps> = ({
                                 </div>
                                 <div>
                                     <h3 className="text-base font-black text-gray-900 tracking-tight">Keamanan & Kata Sandi</h3>
-                                    <p className="text-xs text-gray-400 font-medium mt-0.5">Perbarui kata sandi dengan verifikasi OTP</p>
+                                    <p className="text-xs text-gray-400 font-medium mt-0.5">
+                                        {passwordStep === 'input_password' ? 'Perbarui kata sandi akun Anda' : 'Verifikasi OTP Email'}
+                                    </p>
                                 </div>
                             </div>
                             <button
@@ -2158,24 +2245,15 @@ const MitraProfile: React.FC<MitraProfileProps> = ({
                                     setPasswordMessage(null);
                                     setNewPassword('');
                                     setConfirmPassword('');
+                                    setPasswordOtpDigits(['', '', '', '', '', '']);
+                                    setGeneratedPasswordOtp('');
+                                    setIsOtpSent(false);
+                                    setPasswordStep('input_password');
                                 }}
                                 className="p-2 text-gray-400 hover:text-gray-600 rounded-xl hover:bg-gray-100 transition-colors cursor-pointer"
                             >
                                 <X className="w-5 h-5" />
                             </button>
-                        </div>
-
-                        {/* Connected Email Info */}
-                        <div className="mb-5 p-3.5 rounded-2xl bg-gray-50 border border-gray-100 flex items-center justify-between gap-3">
-                            <div className="min-w-0">
-                                <span className="text-[10px] font-black uppercase tracking-wider text-gray-400 block">Email Terdaftar</span>
-                                <span className="text-xs font-bold text-gray-800 truncate block mt-0.5">
-                                    {formData.email || initialUser?.email || 'Email tidak tersedia'}
-                                </span>
-                            </div>
-                            <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-[10px] font-black border border-emerald-200 shrink-0">
-                                Aktif
-                            </span>
                         </div>
 
                         {/* Status Message */}
@@ -2194,126 +2272,186 @@ const MitraProfile: React.FC<MitraProfileProps> = ({
                             </div>
                         )}
 
-                        {/* Password Change Form with Email OTP Verification */}
-                        <form onSubmit={handlePasswordChange} className="space-y-4">
-                            {/* Step 1: Request OTP Code */}
-                            <div className="p-3.5 rounded-2xl bg-orange-50/60 border border-orange-200/80">
-                                <div className="flex items-center justify-between gap-2 mb-2">
-                                    <span className="text-[10px] font-black uppercase tracking-wider text-orange-800 flex items-center gap-1.5">
-                                        <ShieldCheck className="w-3.5 h-3.5 text-orange-600" />
-                                        Verifikasi Email Pemilik
-                                    </span>
-                                    {isOtpSent && (
-                                        <span className="text-[10px] font-bold text-emerald-600 flex items-center gap-1">
-                                            <Check className="w-3 h-3" /> Terkirim
-                                        </span>
-                                    )}
+                        {passwordStep === 'input_password' ? (
+                            /* ── TAHAP 1: FORM INPUT KATA SANDI BARU & EMAIL TERDAFTAR ── */
+                            <form onSubmit={handleProceedToOtp} className="space-y-4">
+                                {/* 1. Kata Sandi Baru */}
+                                <div className="space-y-1.5">
+                                    <label className="text-[10px] font-black text-gray-500 uppercase tracking-wider block">
+                                        KATA SANDI BARU
+                                    </label>
+                                    <div className="relative">
+                                        <input
+                                            type={showPassword ? 'text' : 'password'}
+                                            value={newPassword}
+                                            onChange={(e) => setNewPassword(e.target.value)}
+                                            className="w-full bg-gray-50 border border-gray-200 rounded-2xl px-4 py-3.5 pr-10 text-sm font-bold text-gray-900 focus:bg-white focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none transition-all"
+                                            placeholder="Minimal 6 karakter"
+                                            required
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowPassword(!showPassword)}
+                                            className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 cursor-pointer"
+                                        >
+                                            {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                                        </button>
+                                    </div>
                                 </div>
-                                <p className="text-[11px] text-gray-500 font-medium mb-3">
-                                    Demi keamanan akun, masukkan kode 6-digit yang dikirim ke email terdaftar Anda.
-                                </p>
-                                <button
-                                    type="button"
-                                    onClick={handleSendPasswordOtp}
-                                    disabled={isSendingOtp || otpCooldown > 0}
-                                    className="w-full py-2 px-3 bg-white hover:bg-orange-50 text-orange-600 border border-orange-300 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed shadow-2xs"
-                                >
-                                    {isSendingOtp ? (
-                                        <>
-                                            <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                                            Mengirim Kode...
-                                        </>
-                                    ) : otpCooldown > 0 ? (
-                                        <>
-                                            <Clock className="w-3.5 h-3.5" />
-                                            Kirim Ulang ({otpCooldown}s)
-                                        </>
-                                    ) : (
-                                        <>
-                                            <Mail className="w-3.5 h-3.5" />
-                                            {isOtpSent ? 'Kirim Ulang Kode OTP' : 'Kirim Kode Verifikasi ke Email'}
-                                        </>
-                                    )}
-                                </button>
-                            </div>
 
-                            {/* OTP Code Input */}
-                            <div className="space-y-1.5">
-                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block">
-                                    KODE VERIFIKASI EMAIL (6 DIGIT)
-                                </label>
-                                <input
-                                    type="text"
-                                    maxLength={6}
-                                    value={passwordOtpInput}
-                                    onChange={(e) => setPasswordOtpInput(e.target.value.replace(/\D/g, ''))}
-                                    className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-base font-black tracking-widest text-gray-900 focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none text-center"
-                                    placeholder="Contoh: 123456"
-                                    required
-                                />
-                            </div>
+                                {/* 2. Ulangi Kata Sandi Baru */}
+                                <div className="space-y-1.5">
+                                    <label className="text-[10px] font-black text-gray-500 uppercase tracking-wider block">
+                                        ULANGI KATA SANDI BARU
+                                    </label>
+                                    <div className="relative">
+                                        <input
+                                            type={showPassword ? 'text' : 'password'}
+                                            value={confirmPassword}
+                                            onChange={(e) => setConfirmPassword(e.target.value)}
+                                            className="w-full bg-gray-50 border border-gray-200 rounded-2xl px-4 py-3.5 pr-10 text-sm font-bold text-gray-900 focus:bg-white focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none transition-all"
+                                            placeholder="Ulangi kata sandi baru"
+                                            required
+                                        />
+                                    </div>
+                                </div>
 
-                            {/* New Password Input */}
-                            <div className="space-y-1.5">
-                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block">
-                                    KATA SANDI BARU
-                                </label>
-                                <div className="relative">
-                                    <input
-                                        type={showPassword ? 'text' : 'password'}
-                                        value={newPassword}
-                                        onChange={(e) => setNewPassword(e.target.value)}
-                                        className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 pr-10 text-sm font-bold text-gray-900 focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none"
-                                        placeholder="Minimal 6 karakter"
-                                        required
-                                    />
+                                {/* 3. Email Terdaftar */}
+                                <div className="p-3.5 rounded-2xl bg-gray-50 border border-gray-100 flex items-center justify-between gap-3">
+                                    <div className="min-w-0">
+                                        <span className="text-[10px] font-black uppercase tracking-wider text-gray-400 block">Email Terdaftar</span>
+                                        <span className="text-xs font-bold text-gray-800 truncate block mt-0.5">
+                                            {formData.email || initialUser?.email || 'Email tidak tersedia'}
+                                        </span>
+                                    </div>
+                                    <span className="px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 text-[10px] font-black border border-emerald-200 shrink-0">
+                                        Aktif
+                                    </span>
+                                </div>
+
+                                {/* 4. Tombol Verifikasi Perubahan Sandi */}
+                                <div className="pt-2 flex flex-col gap-2.5">
+                                    <button
+                                        type="submit"
+                                        disabled={isSendingOtp || !newPassword || !confirmPassword}
+                                        className="w-full py-3.5 bg-[#ff7a00] hover:bg-orange-600 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-md shadow-orange-500/20 active:scale-[0.99] flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                                    >
+                                        {isSendingOtp ? (
+                                            <>
+                                                <RefreshCw className="w-4 h-4 animate-spin" />
+                                                Mengirim Kode Verifikasi...
+                                            </>
+                                        ) : (
+                                            <>
+                                                <ShieldCheck className="w-4 h-4" />
+                                                Verifikasi Perubahan Sandi
+                                            </>
+                                        )}
+                                    </button>
+
                                     <button
                                         type="button"
-                                        onClick={() => setShowPassword(!showPassword)}
-                                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 cursor-pointer"
+                                        onClick={handleSendResetEmail}
+                                        disabled={isSendingOtp}
+                                        className="w-full py-2.5 bg-gray-50 hover:bg-gray-100 text-gray-600 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer"
                                     >
-                                        {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                                        <Mail className="w-3.5 h-3.5 text-gray-400" />
+                                        Atau Kirim Link Reset ke Email
                                     </button>
                                 </div>
-                            </div>
+                            </form>
+                        ) : (
+                            /* ── TAHAP 2: HALAMAN REQUEST & INPUT 6-BOX OTP EMAIL ── */
+                            <form onSubmit={handleFinalPasswordChange} className="space-y-5">
+                                <div className="p-4 rounded-2xl bg-orange-50/60 border border-orange-200/80 text-center space-y-1.5">
+                                    <div className="w-10 h-10 rounded-2xl bg-orange-100 text-orange-600 flex items-center justify-center mx-auto mb-1 shadow-2xs">
+                                        <Mail className="w-5 h-5" />
+                                    </div>
+                                    <h4 className="text-xs font-black uppercase tracking-wider text-orange-950">
+                                        Kode OTP Telah Dikirim
+                                    </h4>
+                                    <p className="text-xs font-medium text-gray-600 leading-relaxed max-w-xs mx-auto">
+                                        Masukkan 6 digit kode verifikasi yang dikirim ke <span className="font-bold text-gray-900">{formData.email || initialUser?.email}</span>
+                                    </p>
+                                </div>
 
-                            {/* Confirm New Password Input */}
-                            <div className="space-y-1.5">
-                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block">
-                                    KONFIRMASI KATA SANDI BARU
-                                </label>
-                                <input
-                                    type={showPassword ? 'text' : 'password'}
-                                    value={confirmPassword}
-                                    onChange={(e) => setConfirmPassword(e.target.value)}
-                                    className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm font-bold text-gray-900 focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none"
-                                    placeholder="Ulangi kata sandi baru"
-                                    required
-                                />
-                            </div>
+                                {/* 6-Box OTP Input */}
+                                <div className="space-y-2">
+                                    <div className="flex items-center justify-between px-1">
+                                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block">
+                                            KODE VERIFIKASI (6 DIGIT)
+                                        </label>
+                                        <div>
+                                            {otpCooldown > 0 ? (
+                                                <span className="text-gray-400 font-bold text-[11px] flex items-center gap-1">
+                                                    <Clock className="w-3 h-3" /> Kirim ulang ({otpCooldown}s)
+                                                </span>
+                                            ) : (
+                                                <button
+                                                    type="button"
+                                                    onClick={handleResendPasswordOtp}
+                                                    disabled={isSendingOtp}
+                                                    className="font-bold text-orange-600 hover:underline uppercase text-[11px] cursor-pointer"
+                                                >
+                                                    Kirim Ulang
+                                                </button>
+                                            )}
+                                        </div>
+                                    </div>
 
-                            {/* Action Buttons */}
-                            <div className="pt-2 flex flex-col gap-2.5">
-                                <button
-                                    type="submit"
-                                    disabled={passwordLoading || !passwordOtpInput || passwordOtpInput.length < 6}
-                                    className="w-full py-3.5 bg-[#ff7a00] hover:bg-orange-600 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-md shadow-orange-500/20 active:scale-95 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                                >
-                                    {passwordLoading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-                                    Verifikasi & Simpan Kata Sandi
-                                </button>
+                                    <div className="flex items-center justify-center gap-2 sm:gap-2.5 py-1">
+                                        {passwordOtpDigits.map((digit, idx) => (
+                                            <input
+                                                key={idx}
+                                                ref={el => { passwordOtpRefs.current[idx] = el; }}
+                                                type="text"
+                                                inputMode="numeric"
+                                                maxLength={1}
+                                                value={digit}
+                                                onChange={e => handlePasswordOtpDigitChange(idx, e.target.value)}
+                                                onKeyDown={e => handlePasswordOtpKeyDown(idx, e)}
+                                                onPaste={handlePasswordOtpPaste}
+                                                className="w-11 h-13 sm:w-12 sm:h-14 text-center font-mono font-black text-xl bg-gray-50 border border-gray-200 rounded-2xl focus:bg-white focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 outline-none transition-all shadow-2xs"
+                                            />
+                                        ))}
+                                    </div>
+                                </div>
 
-                                <button
-                                    type="button"
-                                    onClick={handleSendResetEmail}
-                                    disabled={passwordLoading}
-                                    className="w-full py-2.5 bg-gray-50 hover:bg-gray-100 text-gray-600 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer"
-                                >
-                                    <Mail className="w-3.5 h-3.5 text-gray-400" />
-                                    Atau Kirim Link Reset ke Email
-                                </button>
-                            </div>
-                        </form>
+                                {/* Tombol Aksi Tahap 2 */}
+                                <div className="pt-2 flex flex-col gap-2.5">
+                                    <button
+                                        type="submit"
+                                        disabled={passwordLoading || passwordOtpDigits.join('').length !== 6}
+                                        className="w-full py-3.5 bg-[#ff7a00] hover:bg-orange-600 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-md shadow-orange-500/20 active:scale-[0.99] flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                                    >
+                                        {passwordLoading ? (
+                                            <>
+                                                <RefreshCw className="w-4 h-4 animate-spin" />
+                                                Memverifikasi & Menyimpan...
+                                            </>
+                                        ) : (
+                                            <>
+                                                <Check className="w-4 h-4" />
+                                                Verifikasi & Simpan Kata Sandi
+                                            </>
+                                        )}
+                                    </button>
+
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setPasswordStep('input_password');
+                                            setPasswordMessage(null);
+                                        }}
+                                        disabled={passwordLoading}
+                                        className="w-full py-2.5 bg-gray-50 hover:bg-gray-100 text-gray-600 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                                    >
+                                        <ArrowLeft className="w-3.5 h-3.5" />
+                                        Ubah Input Kata Sandi
+                                    </button>
+                                </div>
+                            </form>
+                        )}
                     </div>
                 </div>
             )}

@@ -2,6 +2,33 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 439. Restrukturisasi Modal Ganti Kata Sandi Menjadi Clean 2-Step Flow & 6-Box OTP Input (`MitraProfile.tsx` & `Profile.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna meminta restrukturisasi antarmuka pengubahan kata sandi dari atas ke bawah: Kata Sandi Baru, Ulangi Kata Sandi Baru, Email Terdaftar, dan tombol verifikasi.
+  2. Saat tombol diklik, beralih ke halaman input kode verifikasi OTP yang dikirim ke email terdaftar, dan setelah verifikasi berhasil, kata sandi resmi diperbarui.
+  3. Menggantikan tampilan lama yang padat/semrawut menjadi alur 2-tahap yang terstruktur, minimalis, bersih, dan lebih efektif.
+  4. Pengguna secara eksplisit menginstruksikan penggunaan **6 box section OTP** individual (bukan 1 section input kolom teks tunggal).
+  5. Menyelaraskan implementasi ini baik pada Dashboard Mitra (`MitraProfile.tsx`) maupun Profil Pengguna Umum (`Profile.tsx`).
+- **Implementasi Solusi**:
+  1. **Alur 2-Tahap Terpandu (2-Step Clean Flow)**:
+     - **Tahap 1 (`input_password`)**: Pengguna menginput kata sandi baru dan konfirmasi kata sandi (dengan visibilitas toggle mata), melihat kartu ringkas email akun yang akan dikirimi kode, lalu menekan tombol *"Verifikasi Perubahan Sandi"*. Validasi dilakukan (panjang minimal 6 karakter dan kecocokan konfirmasi), lalu sistem otomatis mengirimkan kode OTP 6 digit ke email dan berpindah ke Tahap 2.
+     - **Tahap 2 (`verify_otp`)**: Menampilkan instruksi pengiriman email terdaftar, input 6 kotak digit OTP (`6-Box Section OTP`), hitung mundur kirim ulang kode (*resend cooldown* 60 detik), tombol *"Verifikasi & Simpan Kata Sandi"*, serta tombol kembali ke Tahap 1 untuk revisi sandi jika diperlukan.
+  2. **Komponen 6-Box Section OTP Berfitur Lengkap**:
+     - State `passwordOtpDigits` (array 6 elemen) dan `passwordOtpRefs` untuk lompat kursor otomatis ke kotak berikutnya saat diketik.
+     - Penanganan tombol `Backspace` untuk navigasi kembali ke kotak sebelumnya saat digit kosong.
+     - Penanganan event `Paste` (salin-tempel) untuk mendistribusikan 6 digit kode secara otomatis ke masing-masing kotak.
+  3. **Eksekusi Aman & Feedback Visual**:
+     - Memverifikasi kecocokan OTP sebelum memperbarui kredensial akun via `supabase.auth.updateUser({ password })`.
+     - Memberikan feedback status berhasil / error yang jelas dan menutup modal secara otomatis setelah sukses.
+- **File Tersentuh**:
+  - `functions/public/pages/MitraProfile.tsx`
+  - `functions/public/pages/Profile.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi Vite build (`cmd.exe /c npm run build`) sukses 100% (0 error, exit code 0).
+  - Validasi alur 2 tahap dan komponen 6 kotak OTP teruji rapi dan responsif di desktop maupun mobile.
+
 ### 438. Penegasan Status "Belum Terverifikasi" & Tombol Aksi "Verifikasi Sekarang!" pada No. WhatsApp Profil Mitra (`MitraProfile.tsx`) (September 2026)
 - **Permintaan & Masalah**:
   1. Pengguna meminta agar keterangan badge status `WAJIB OTP` yang ambigu di kolom No. WhatsApp diganti menjadi tanda alert merah yang tegas: `"Belum Terverifikasi"`.

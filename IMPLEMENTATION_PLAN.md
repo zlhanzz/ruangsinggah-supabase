@@ -1,91 +1,137 @@
-# IMPLEMENTATION PLAN - Penyesuaian Alert "Belum Terverifikasi" & Tombol "Verifikasi Sekarang!" pada No. WhatsApp Profil Mitra
+# IMPLEMENTATION PLAN: Restrukturisasi Modal Ganti Kata Sandi Menjadi Clean 2-Step Flow
 
-Dokumen ini disusun sebagai panduan teknis dan alur eksekusi perubahan antarmuka pada formulir profil mitra sesuai arahan pengguna.
+**ID Rencana**: Plan #439  
+**Target Fitur**: Restrukturisasi Antarmuka & Alur Minimalis Modal Keamanan & Kata Sandi (`MitraProfile.tsx` & `Profile.tsx`)  
+**Status**: Menunggu Persetujuan User (*Pending Approval*)
 
 ---
 
 ## 1. Analisis Masalah & Kebutuhan
 
-### Masalah Saat Ini:
-1. **Label Status Kurang Tegas**:
-   - Kolom No. WhatsApp saat ini menampilkan badge status berwarna kuning/amber bertuliskan `WAJIB OTP`.
-   - Mitra masih merasa ambigu dengan istilah tersebut karena tidak secara gamblang menyatakan status kondisi data nomor mereka (apakah sudah aktif/sah atau belum diverifikasi).
-2. **Tombol Aksi Kurang Direktif**:
-   - Tombol aksi saat ini bertuliskan `"Kirim OTP"`.
-   - Pengguna meminta agar tombol aksi ini diubah menjadi lebih tegas dan mengajak aksi langsung (*call to action*): **"Verifikasi Sekarang!"**.
-3. **Proporsi Input & Penyesuaian Padding**:
-   - Karena teks `"Verifikasi Sekarang!"` sedikit lebih panjang dibanding `"Kirim OTP"`, padding kanan pada elemen input (`pr-28`) perlu disesuaikan (menjadi `pr-44` atau `pr-48`) agar deretan nomor telepon pengguna tidak terpotong atau tertutup di belakang tombol aksi.
-
-### Tujuan Perubahan:
-1. Mengganti badge `WAJIB OTP` menjadi tanda alert merah mencolok:
-   - Ikon `<AlertCircle size={12} className="text-rose-500" />`
-   - Teks: **`Belum Terverifikasi`**
-   - Styling: Badge merah lembut dengan kontras teks jelas (`text-rose-600 bg-rose-50 border border-rose-200`).
-2. Mengubah label tombol aksi di dalam kolom input telepon dari `"Kirim OTP"` menjadi **`"Verifikasi Sekarang!"`**.
-3. Memastikan tata letak responsif tetap proporsional dan tidak merusak layout form profil Langkah 1.
+### Masalah Saat Ini
+1. **Tampilan Modal Padat & "Semrawut"**:
+   - Seluruh elemen perubahan kata sandi ditumpuk dalam satu layar vertikal yang panjang: info email terdaftar, kartu verifikasi email dengan tombol kirim OTP, input 6 digit OTP, input kata sandi baru, input konfirmasi kata sandi, serta tombol submit.
+   - Hal ini menimbulkan kebingungan bagi pengguna (*cognitive overload*): pengguna tidak mengetahui apakah harus meminta kode OTP terlebih dahulu sebelum mengisi kata sandi, atau mengisi kata sandi terlebih dahulu.
+2. **Kebutuhan Pengguna**:
+   - Struktur dari atas ke bawah yang ringkas, simpel, dan elegan:
+     1. **Kata Sandi Baru** (Input + toggle lihat/sembunyikan sandi)
+     2. **Ulangi Kata Sandi Baru** (Input + toggle lihat/sembunyikan sandi)
+     3. **Email Terdaftar** (Info box email akun yang akan menerima kode verifikasi)
+     4. **Tombol "Verifikasi Perubahan Sandi"**
+   - **Alur 2-Tahap (2-Step Clean Flow)**:
+     - **Tahap 1 (Input Sandi Baru)**: Pengguna mengisi kata sandi baru dan konfirmasinya, lalu menekan tombol verifikasi. Sistem melakukan validasi (minimal 6 karakter & konfirmasi cocok) dan secara otomatis mengirimkan kode OTP ke email terdaftar, lalu langsung beralih ke Tahap 2.
+     - **Tahap 2 (Input & Verifikasi OTP Email)**: Menampilkan halaman ringkas yang fokus pada instruksi pengiriman email, input kode OTP 6-digit, timer kirim ulang, tombol *"Verifikasi & Simpan Kata Sandi"*, serta tombol kembali ke tahap 1 jika ingin mengubah input sandi.
+     - Begitu kode OTP diverifikasi benar, kata sandi akun resmi diperbarui via Supabase Auth dan modal ditutup dengan notifikasi sukses.
 
 ---
 
 ## 2. Dampak Perubahan (Files Touched)
 
-File yang akan dimodifikasi:
-- [`functions/public/pages/MitraProfile.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/MitraProfile.tsx):
-  - **Baris ~1250**: Mengubah blok badge status saat `!waOtpVerified` dari badge `WAJIB OTP` menjadi badge alert merah `Belum Terverifikasi`.
-  - **Baris ~1287**: Menyesuaikan padding kanan input nomor telepon dari `pr-28` menjadi `pr-44` (atau `pr-48`) agar string nomor telepon tidak tertindih oleh tombol aksi.
-  - **Baris ~1314**: Mengubah teks tombol aksi dari `Kirim OTP` menjadi `Verifikasi Sekarang!`.
+1. [`functions/public/pages/MitraProfile.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/MitraProfile.tsx):
+   - Menambahkan state navigasi step modal: `passwordStep: 'input_password' | 'verify_otp'`.
+   - Mengubah handler pemicu verifikasi Tahap 1 (`handleProceedToOtp`): memvalidasi password dan memicu `sendPasswordChangeOtp` otomatis sebelum transisi ke step 2.
+   - Merestrukturisasi JSX modal `isSettingsModalOpen` menjadi alur 2 tahap:
+     - **Step 1**: Kata Sandi Baru -> Ulangi Kata Sandi -> Box Email Terdaftar -> Tombol *"Verifikasi Perubahan Sandi"*.
+     - **Step 2**: Status Notifikasi Pengiriman Email -> Input 6 Digit OTP -> Tombol *"Verifikasi & Simpan Kata Sandi"* -> Opsi Kirim Ulang & Tombol Kembali.
+2. [`functions/public/pages/Profile.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/Profile.tsx):
+   - Menyelaraskan komponen modal `isPasswordModalOpen` pada profil penyewa/user biasa agar memiliki alur dan tampilan 2-tahap yang konsisten dan minimalis.
 
 ---
 
 ## 3. Langkah-Langkah Eksekusi (Fase 2 Setelah ACC)
 
-### Langkah 1: Modifikasi Badge Status No. WhatsApp
-- Mengubah elemen badge pada baris ~1250:
+### Langkah 1: Penyesuaian State & Validasi di `MitraProfile.tsx`
+- Tambahkan state:
   ```tsx
-  // Sebelum:
-  <span className="text-[9px] font-black uppercase text-amber-600 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-100">
-      Wajib OTP
-  </span>
-
-  // Sesudah:
-  <span className="flex items-center gap-1 text-[9px] font-black uppercase text-rose-600 bg-rose-50 px-2 py-0.5 rounded-md border border-rose-200">
-      <AlertCircle size={12} className="text-rose-500" /> Belum Terverifikasi
-  </span>
+  const [passwordStep, setPasswordStep] = useState<'input_password' | 'verify_otp'>('input_password');
+  ```
+- Buat fungsi transisi Tahap 1 ke Tahap 2:
+  ```tsx
+  const handleProceedToOtp = async (e: React.FormEvent) => {
+      e.preventDefault();
+      // 1. Validasi kata sandi
+      if (!newPassword || newPassword.length < 6) {
+          setPasswordMessage({ type: 'error', text: 'Kata sandi baru minimal 6 karakter.' });
+          return;
+      }
+      if (newPassword !== confirmPassword) {
+          setPasswordMessage({ type: 'error', text: 'Konfirmasi kata sandi tidak cocok.' });
+          return;
+      }
+      // 2. Kirim OTP otomatis ke email
+      const targetEmail = formData.email || initialUser?.email;
+      if (!targetEmail) {
+          setPasswordMessage({ type: 'error', text: 'Email akun mitra tidak ditemukan.' });
+          return;
+      }
+      setIsSendingOtp(true);
+      setPasswordMessage(null);
+      try {
+          const otp = Math.floor(100000 + Math.random() * 900000).toString();
+          const expires = Date.now() + 10 * 60 * 1000;
+          const sent = await sendPasswordChangeOtp(targetEmail, otp, formData.name || initialUser?.name);
+          if (sent) {
+              setGeneratedPasswordOtp(otp);
+              setOtpExpiresAt(expires);
+              setIsOtpSent(true);
+              setOtpCooldown(60);
+              setPasswordStep('verify_otp');
+          } else {
+              setPasswordMessage({ type: 'error', text: 'Gagal mengirim kode OTP ke email. Coba lagi.' });
+          }
+      } catch (err: any) {
+          setPasswordMessage({ type: 'error', text: err.message || 'Terjadi kesalahan sistem.' });
+      } finally {
+          setIsSendingOtp(false);
+      }
+  };
   ```
 
-### Langkah 2: Penyesuaian Tombol Aksi & Padding Input
-- Mengubah teks tombol aksi pada baris ~1314:
-  ```tsx
-  // Sebelum:
-  <span>Kirim OTP</span>
+### Langkah 2: Restrukturisasi Tampilan Modal di `MitraProfile.tsx`
+- **Tampilan Step 1 (`input_password`)**:
+  - Input Kata Sandi Baru + toggle Eye/EyeOff.
+  - Input Ulangi Kata Sandi Baru.
+  - Box Email Terdaftar (Label, alamat email, badge Aktif, keterangan info kode verifikasi).
+  - Tombol submit: `"Verifikasi Perubahan Sandi"` (dengan icon panah/loading).
+  - Tautan alternatif di bawah: `"Atau Kirim Link Reset ke Email"`.
+- **Tampilan Step 2 (`verify_otp`)**:
+  - Banner info: `"Kode verifikasi telah dikirim ke [email]. Masukkan 6 digit kode untuk mengonfirmasi perubahan sandi."`
+  - Input 6 digit OTP (center, tracking-widest, font tebal).
+  - Tombol Kirim Ulang OTP dengan countdown timer.
+  - Tombol utama: `"Verifikasi & Simpan Kata Sandi"`.
+  - Tombol kembali: `"← Ubah Kata Sandi"`.
 
-  // Sesudah:
-  <span>Verifikasi Sekarang!</span>
-  ```
-- Menyesuaikan `className` padding kanan pada input nomor telepon (baris ~1287) agar teks input tidak bertubrukan dengan tombol:
-  ```tsx
-  waOtpCode || isVerifyingWaOtp ? 'pr-20 bg-gray-100/70 text-gray-600 cursor-not-allowed' : 'pr-44 bg-gray-50 focus:bg-white'
-  ```
+### Langkah 3: Penyelarasan di `Profile.tsx`
+- Mengaplikasikan logika dan struktur 2-tahap yang sama ke modal `isPasswordModalOpen` di `Profile.tsx` agar konsisten untuk seluruh pengguna aplikasi.
 
-### Langkah 3: Pengujian Kompilasi
-- Menjalankan build frontend via terminal: `cmd.exe /c npm run build` di folder `functions/public`.
-- Memastikan tidak ada error TypeScript atau kendala kompilasi Vite (0 error).
+### Langkah 4: Uji Kompilasi & Build
+- Menjalankan `cmd.exe /c npm run build` di folder `functions/public`.
+- Memastikan 0 error kompilasi dan bundling Vite sukses.
 
-### Langkah 4: Dokumentasi & Git Push
-- Menambahkan catatan pekerjaan ke [functions/PROGRESS.md](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/PROGRESS.md) (Entry #438).
-- Membuat dokumen [WALKTHROUGH.md](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/WALKTHROUGH.md).
-- Melakukan commit dan push ke remote repository branch `origin bukan-productions`.
+### Langkah 5: Dokumentasi & Git Push
+- Menambahkan catatan ke `functions/PROGRESS.md` (Entry #439).
+- Menerbitkan `WALKTHROUGH.md`.
+- Melakukan commit dan push ke remote branch `origin bukan-productions`.
 
 ---
 
 ## 4. Rencana Verifikasi
 
-1. **Verifikasi Tampilan UI**:
-   - Buka `/dashboard-mitra/profile?edit=true&step=1`.
-   - Pastikan badge di samping label `No. WhatsApp` kini menampilkan tanda alert merah: `[⚠️] BELUM TERVERIFIKASI`.
-   - Pastikan tombol aksi berwarna oranye kini bertuliskan **"Verifikasi Sekarang!"**.
-   - Pastikan nomor telepon yang dimasukkan (misal: `+6281527080656`) tidak bertabrakan secara visual dengan tombol aksi di sisi kanan.
-2. **Verifikasi Fungsionalitas**:
-   - Memastikan tombol *"Verifikasi Sekarang!"* tetap memicu fungsi `handleSendWaOtp` dengan benar.
-   - Memastikan saat OTP terkirim, kotak 6 digit OTP tetap muncul dengan mulus.
-3. **Uji Kompilasi**:
+1. **Uji Tampilan Visual Step 1**:
+   - Buka modal "Keamanan & Kata Sandi".
+   - Pastikan urutan persis dari atas ke bawah:
+     1. Kata Sandi Baru
+     2. Ulangi Kata Sandi Baru
+     3. Email Terdaftar
+     4. Tombol Verifikasi Perubahan Sandi
+   - Pastikan tidak ada kartu OTP yang muncul sebelum tombol verifikasi ditekan.
+2. **Uji Transisi ke Step 2**:
+   - Masukkan kata sandi yang valid dan cocok.
+   - Klik tombol "Verifikasi Perubahan Sandi".
+   - Pastikan sistem mengirim email OTP dan layar modal berganti dengan mulus ke form input 6 digit OTP.
+3. **Uji Verifikasi & Perubahan Kata Sandi**:
+   - Masukkan kode OTP yang benar -> klik tombol "Verifikasi & Simpan Kata Sandi".
+   - Pastikan pesan sukses muncul dan kata sandi di Supabase Auth berhasil diperbarui.
+   - Uji tombol kembali ke Step 1 untuk memastikan pengguna dapat mengedit sandi sebelum konfirmasi OTP.
+4. **Uji Kompilasi**:
    - Build Vite berhasil 100% tanpa error (`npm run build`).
