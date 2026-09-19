@@ -8,7 +8,7 @@ import {
     Plus, Trash2, Check, AlertCircle, Loader2, Upload, Image as ImageIcon,
     Phone, BookOpen, DollarSign, Search, Navigation, ShieldCheck, User, Users, Maximize2,
     Crosshair, CheckCircle2, Sparkles, LocateFixed, FileText, RotateCcw, Save, Droplets, Bed, Edit3, ShieldAlert,
-    Pencil, Layers, Info
+    Pencil, Layers, Info, Zap
 } from 'lucide-react';
 
 interface KostFormMitraProps {
@@ -64,6 +64,13 @@ const periodWeights: Record<string, number> = {
 const periodLabels: Record<string, string> = {
     'harian': 'Harian', 'mingguan': 'Mingguan', 'bulanan': 'Bulanan', '3bulanan': '3 Bulan', '6bulanan': '6 Bulan', 'tahunan': 'Tahunan'
 };
+
+const MONTH_BASED_CONFIG: { key: PricingPeriod; label: string; months: number }[] = [
+    { key: 'bulanan',  label: 'Bulanan',  months: 1 },
+    { key: '3bulanan', label: '3 Bulan',  months: 3 },
+    { key: '6bulanan', label: '6 Bulan',  months: 6 },
+    { key: 'tahunan',  label: 'Tahunan',  months: 12 },
+];
 
 interface PublicPhotoCategoryDef {
     id: string;
@@ -2373,7 +2380,7 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
         name: '',
         size: '',
         price: 0,
-        pricing: [{ period: 'bulanan', price: 0 }],
+        pricing: [],
         features: [],
         roomFacilities: [],
         bathroomFacilities: [],
@@ -3844,7 +3851,7 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
             name: '',
             size: '',
             price: 0,
-            pricing: [{ period: 'bulanan', price: 0 }],
+            pricing: [],
             features: [],
             roomFacilities: [],
             bathroomFacilities: [],
@@ -3864,7 +3871,7 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
         if (!target) return;
         const pricing = target.pricing && target.pricing.length > 0
             ? [...target.pricing]
-            : [{ period: 'bulanan' as PricingPeriod, price: target.price || 0 }];
+            : (target.price ? [{ period: 'bulanan' as PricingPeriod, price: target.price }] : []);
         const isCustom = Boolean(target.name && !ROOM_TYPE_PRESETS.includes(target.name));
         setIsCustomRoomName(isCustom);
         setDraftRoom({
@@ -3911,7 +3918,6 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
             const exists = currentPricing.some(p => p.period === period);
             let nextPricing: { period: PricingPeriod; price: number }[];
             if (exists) {
-                if (currentPricing.length <= 1) return prev; // Minimal 1 periode
                 nextPricing = currentPricing.filter(p => p.period !== period);
             } else {
                 nextPricing = [...currentPricing, { period, price: 0 }];
@@ -3939,12 +3945,63 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
             if (idx >= 0) pricing[idx] = { period, price };
             else pricing.push({ period, price });
             
-            const monthlyPrice = pricing.find(p => p.period === 'bulanan')?.price || price;
+            const monthlyPrice = pricing.find(p => p.period === 'bulanan')?.price || (pricing.find(p => p.price > 0)?.price || price);
             return {
                 ...prev,
                 pricing,
                 price: monthlyPrice
             };
+        });
+    };
+
+    // Helper & Handler Kalkulasi Kelipatan Otomatis Masa Sewa Bulanan ke Atas
+    const getMultiplierInfo = (targetPeriod: PricingPeriod) => {
+        const activeMonthPeriods = MONTH_BASED_CONFIG.filter(m => (draftRoom.pricing || []).some(p => p.period === m.key));
+        if (activeMonthPeriods.length < 2) return null;
+        const base = activeMonthPeriods[0];
+        const target = activeMonthPeriods.find(m => m.key === targetPeriod);
+        if (!target || target.key === base.key) return null;
+        const multiplier = target.months / base.months;
+        const basePrice = draftRoom.pricing?.find(p => p.period === base.key)?.price || 0;
+        return {
+            basePeriod: base,
+            targetPeriod: target,
+            multiplier,
+            basePrice
+        };
+    };
+
+    const applyMultiplierPrice = (targetPeriod: PricingPeriod) => {
+        const info = getMultiplierInfo(targetPeriod);
+        if (!info) return;
+        if (info.basePrice <= 0) {
+            alert(`Harap isi harga ${info.basePeriod.label} terlebih dahulu dari opsi yang telah Anda pilih agar bisa menggunakan tombol kalkulasi kelipatan otomatis pada ${info.targetPeriod.label}.`);
+            return;
+        }
+        const calculatedPrice = info.basePrice * info.multiplier;
+        updDraftRoomPrice(targetPeriod, calculatedPrice);
+    };
+
+    const applyAllMultipliers = () => {
+        const activeMonthPeriods = MONTH_BASED_CONFIG.filter(m => (draftRoom.pricing || []).some(p => p.period === m.key));
+        if (activeMonthPeriods.length < 2) return;
+        const base = activeMonthPeriods[0];
+        const basePrice = draftRoom.pricing?.find(p => p.period === base.key)?.price || 0;
+        if (basePrice <= 0) {
+            alert(`Harap isi harga ${base.label} terlebih dahulu dari opsi yang telah Anda pilih agar bisa menggunakan tombol kalkulasi kelipatan otomatis.`);
+            return;
+        }
+        setDraftRoom(prev => {
+            const pricing = [...(prev.pricing || [])];
+            activeMonthPeriods.slice(1).forEach(target => {
+                const multiplier = target.months / base.months;
+                const calc = basePrice * multiplier;
+                const idx = pricing.findIndex(p => p.period === target.key);
+                if (idx >= 0) pricing[idx] = { period: target.key, price: calc };
+                else pricing.push({ period: target.key, price: calc });
+            });
+            const monthlyPrice = pricing.find(p => p.period === 'bulanan')?.price || (pricing.find(p => p.price > 0)?.price || 0);
+            return { ...prev, pricing, price: monthlyPrice };
         });
     };
 
@@ -3979,14 +4036,20 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
             setRoomSubStep(3);
             return;
         }
-        const hasValidPricing = (draftRoom.pricing || []).some(p => p.price > 0) || (draftRoom.price || 0) > 0;
-        if (!hasValidPricing) {
-            alert('Silakan tentukan minimal satu periode sewa dan isi nominal harga sewanya (harus lebih dari Rp 0).');
+        if (!draftRoom.pricing || draftRoom.pricing.length === 0) {
+            alert('Silakan pilih minimal satu skema periode sewa yang ditawarkan untuk tipe kamar ini.');
+            setRoomSubStep(3);
+            return;
+        }
+        const invalidPricing = draftRoom.pricing.filter(p => (p.price || 0) <= 0);
+        if (invalidPricing.length > 0) {
+            const periodNames = invalidPricing.map(p => periodLabels[p.period] || p.period).join(', ');
+            alert(`Silakan isi nominal harga sewa untuk periode ${periodNames} (harus lebih dari Rp 0).`);
             setRoomSubStep(3);
             return;
         }
 
-        const monthlyPrice = draftRoom.pricing?.find(p => p.period === 'bulanan')?.price || draftRoom.price || 0;
+        const monthlyPrice = draftRoom.pricing.find(p => p.period === 'bulanan')?.price || draftRoom.pricing[0]?.price || draftRoom.price || 0;
         const finalizedRoom: RoomType = {
             ...draftRoom,
             price: monthlyPrice
@@ -4257,8 +4320,15 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
         if ((form.roomTypes || []).length > 0) {
             const monthlyPrices = (form.roomTypes || [])
                 .map(r => r.pricing?.find(p => p.period === 'bulanan')?.price || r.price)
-                .filter(p => p > 0);
-            if (monthlyPrices.length > 0) finalPrice = Math.min(...monthlyPrices);
+                .filter((p): p is number => typeof p === 'number' && p > 0);
+            if (monthlyPrices.length > 0) {
+                finalPrice = Math.min(...monthlyPrices);
+            } else {
+                const anyPrices = (form.roomTypes || [])
+                    .flatMap(r => (r.pricing || []).map(p => p.price))
+                    .filter((p): p is number => typeof p === 'number' && p > 0);
+                if (anyPrices.length > 0) finalPrice = Math.min(...anyPrices);
+            }
         }
 
         setSubmitting(true);
@@ -5107,49 +5177,83 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                                             <span className="text-[10px] text-gray-400 font-bold">Pilih minimal 1 periode</span>
                                         </div>
                                         <p className="text-[10px] text-gray-500 mb-2.5">
-                                            Aktifkan periode sewa yang tersedia untuk tipe kamar ini (Bulanan aktif otomatis sebagai tarif utama).
+                                            Aktifkan periode sewa yang tersedia untuk tipe kamar ini (bebas tentukan skema sewa apa pun: harian, mingguan, bulanan, dll).
                                         </p>
 
                                         {/* Chips Pilihan Periode */}
                                         <div className="flex flex-wrap gap-1.5">
                                             {PRICING_PERIODS.map(({ key, label }) => {
                                                 const isActive = (draftRoom.pricing || []).some(p => p.period === key);
-                                                const isMonthly = key === 'bulanan';
 
                                                 return (
                                                     <button
                                                         key={key}
                                                         type="button"
-                                                        onClick={() => {
-                                                            if (isMonthly) return; // Bulanan selalu wajib
-                                                            toggleDraftRoomPricingPeriod(key);
-                                                        }}
+                                                        onClick={() => toggleDraftRoomPricingPeriod(key)}
                                                         className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-                                                            isMonthly
-                                                                ? 'bg-orange-500 text-white shadow-xs cursor-default'
-                                                                : isActive
-                                                                    ? 'bg-orange-500 text-white shadow-xs'
-                                                                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200 border border-transparent'
+                                                            isActive
+                                                                ? 'bg-orange-500 text-white shadow-xs'
+                                                                : 'bg-gray-100 text-gray-600 hover:bg-gray-200 border border-transparent'
                                                         }`}
                                                     >
                                                         <span>{isActive ? '✓' : '+'}</span>
                                                         <span>{label}</span>
-                                                        {isMonthly && (
-                                                            <span className="text-[9px] bg-orange-600/60 px-1 py-0.2 rounded font-black uppercase">
-                                                                Wajib
-                                                            </span>
-                                                        )}
                                                     </button>
                                                 );
                                             })}
                                         </div>
                                     </div>
 
+                                    {/* Banner Kalkulasi Kelipatan Otomatis (Jika Ada >= 2 Pilihan Bulanan ke Atas) */}
+                                    {(() => {
+                                        const activeMonthPeriods = MONTH_BASED_CONFIG.filter(m => (draftRoom.pricing || []).some(p => p.period === m.key));
+                                        if (activeMonthPeriods.length < 2) return null;
+                                        const base = activeMonthPeriods[0];
+                                        return (
+                                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 p-3.5 bg-amber-50/80 border border-amber-200 rounded-2xl animate-in fade-in-50 duration-200">
+                                                <div className="flex items-center gap-2.5">
+                                                    <div className="w-8 h-8 rounded-xl bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-xs">
+                                                        <Zap size={15} className="fill-white" />
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-xs font-black text-amber-950">
+                                                            Kalkulasi Otomatis Berbasis Kelipatan {base.label}
+                                                        </p>
+                                                        <p className="text-[10px] text-amber-800">
+                                                            Isi harga <strong>{base.label}</strong>, lalu klik tombol kelipatan untuk mengisi otomatis masa sewa di atasnya.
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                                <button
+                                                    type="button"
+                                                    onClick={applyAllMultipliers}
+                                                    className="px-3.5 py-2 bg-amber-500 hover:bg-amber-600 active:scale-95 text-white text-[11px] font-black uppercase tracking-wider rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5 shadow-xs shrink-0"
+                                                >
+                                                    <Zap size={13} className="fill-white" />
+                                                    <span>Hitung Semua Kelipatan</span>
+                                                </button>
+                                            </div>
+                                        );
+                                    })()}
+
+                                    {/* Pesan Jika Belum Ada Periode yang Dipilih */}
+                                    {(!draftRoom.pricing || draftRoom.pricing.length === 0) && (
+                                        <div className="p-4 bg-orange-50/60 rounded-2xl border border-dashed border-orange-200 text-center space-y-1">
+                                            <p className="text-xs font-black text-orange-950">Belum ada periode sewa yang dipilih</p>
+                                            <p className="text-[10px] text-orange-800">
+                                                Silakan tentukan minimal 1 periode sewa di atas untuk mengisi harga.
+                                            </p>
+                                        </div>
+                                    )}
+
                                     {/* Input Kolom Harga Hanya untuk Periode yang Aktif */}
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
                                         {PRICING_PERIODS.filter(({ key }) => (draftRoom.pricing || []).some(p => p.period === key)).map(({ key, label }) => {
                                             const val = draftRoom.pricing?.find(p => p.period === key)?.price || '';
                                             const isMonthly = key === 'bulanan';
+                                            const multInfo = getMultiplierInfo(key);
+                                            const activeMonthPeriods = MONTH_BASED_CONFIG.filter(m => (draftRoom.pricing || []).some(p => p.period === m.key));
+                                            const isBaseMonthPeriod = activeMonthPeriods.length >= 2 && activeMonthPeriods[0].key === key;
 
                                             return (
                                                 <div 
@@ -5157,19 +5261,39 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                                                     className={`p-3.5 rounded-2xl border transition-all ${
                                                         isMonthly 
                                                             ? 'bg-orange-50/40 border-orange-200 ring-1 ring-orange-200' 
-                                                            : 'bg-gray-50 border-gray-200'
+                                                            : isBaseMonthPeriod
+                                                                ? 'bg-emerald-50/40 border-emerald-200 ring-1 ring-emerald-200'
+                                                                : 'bg-gray-50 border-gray-200'
                                                     }`}
                                                 >
-                                                    <div className="flex items-center justify-between mb-1.5">
-                                                        <span className="text-[11px] font-black text-gray-800 flex items-center gap-1.5">
-                                                            <DollarSign size={13} className={isMonthly ? 'text-orange-600' : 'text-gray-400'} />
+                                                    <div className="flex items-center justify-between gap-1.5 mb-2">
+                                                        <span className="text-[11px] font-black text-gray-800 flex items-center gap-1.5 flex-wrap">
+                                                            <DollarSign size={13} className={isMonthly ? 'text-orange-600' : isBaseMonthPeriod ? 'text-emerald-600' : 'text-gray-400'} />
                                                             <span>Harga Sewa {label}</span>
                                                             {isMonthly && (
-                                                                <span className="px-1.5 py-0.5 bg-orange-200 text-orange-800 text-[8px] font-black uppercase rounded-md">
-                                                                    Tarif Pokok
+                                                                <span className="px-1.5 py-0.5 bg-orange-100 text-orange-800 text-[8px] font-black uppercase rounded-md">
+                                                                    Bulanan
+                                                                </span>
+                                                            )}
+                                                            {isBaseMonthPeriod && (
+                                                                <span className="px-1.5 py-0.5 bg-emerald-100 text-emerald-800 text-[8px] font-black uppercase rounded-md" title="Masa sewa bulanan terendah yang menjadi dasar perhitungan kelipatan">
+                                                                    Acuan Dasar
                                                                 </span>
                                                             )}
                                                         </span>
+
+                                                        {/* Tombol Kalkulasi Kelipatan Otomatis (Hanya untuk Bulanan ke Atas yang Lebih Tinggi dari Acuan) */}
+                                                        {multInfo && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => applyMultiplierPrice(key)}
+                                                                className="px-2 py-1 bg-amber-100 hover:bg-amber-200 active:scale-95 text-amber-900 border border-amber-300 rounded-lg text-[10px] font-black flex items-center gap-1 transition-all cursor-pointer shadow-2xs shrink-0"
+                                                                title={`Hitung kelipatan ${multInfo.multiplier}x dari harga ${multInfo.basePeriod.label}`}
+                                                            >
+                                                                <Zap size={11} className="text-amber-600 fill-amber-500 shrink-0" />
+                                                                <span>Hitung {multInfo.multiplier}x {multInfo.basePeriod.label}</span>
+                                                            </button>
+                                                        )}
                                                     </div>
                                                     <div className="relative">
                                                         <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-gray-400">
@@ -5415,27 +5539,40 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
 
                                         {/* Bagian Harga Ringkas */}
                                         <div className="pt-2.5 border-t border-gray-100 flex flex-wrap items-center justify-between gap-2">
-                                            <div>
-                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">
-                                                    Tarif Sewa Pokok
-                                                </span>
-                                                <span className="text-sm sm:text-base font-black text-orange-600">
-                                                    {monthlyPrice > 0 
-                                                        ? `Rp ${monthlyPrice.toLocaleString('id-ID')} / Bulan`
-                                                        : 'Belum menetapkan tarif bulanan'}
-                                                </span>
-                                            </div>
+                                            {(() => {
+                                                const primaryPeriod = monthlyPrice > 0 
+                                                    ? { period: 'bulanan', price: monthlyPrice, label: 'Bulan' }
+                                                    : (activePricing[0] ? { ...activePricing[0], label: periodLabels[activePricing[0].period] || activePricing[0].period } : null);
+                                                const secondaryPeriods = monthlyPrice > 0
+                                                    ? activePricing.filter(p => p.period !== 'bulanan')
+                                                    : activePricing.slice(1);
 
-                                            {/* Periode Tambahan Lainnya yang Aktif */}
-                                            {activePricing.length > 0 && (
-                                                <div className="flex flex-wrap gap-1">
-                                                    {activePricing.filter(p => p.period !== 'bulanan').map(p => (
-                                                        <span key={p.period} className="px-2 py-0.5 bg-gray-50 border border-gray-200 text-gray-600 text-[10px] font-bold rounded-lg">
-                                                            {periodLabels[p.period]}: Rp {p.price.toLocaleString('id-ID')}
-                                                        </span>
-                                                    ))}
-                                                </div>
-                                            )}
+                                                return (
+                                                    <>
+                                                        <div>
+                                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">
+                                                                Tarif Sewa Pokok {primaryPeriod && primaryPeriod.period !== 'bulanan' ? `(${primaryPeriod.label})` : ''}
+                                                            </span>
+                                                            <span className="text-sm sm:text-base font-black text-orange-600">
+                                                                {primaryPeriod && primaryPeriod.price > 0 
+                                                                    ? `Rp ${primaryPeriod.price.toLocaleString('id-ID')} / ${primaryPeriod.label}`
+                                                                    : 'Belum menetapkan tarif sewa'}
+                                                            </span>
+                                                        </div>
+
+                                                        {/* Periode Tambahan Lainnya yang Aktif */}
+                                                        {secondaryPeriods.length > 0 && (
+                                                            <div className="flex flex-wrap gap-1">
+                                                                {secondaryPeriods.map(p => (
+                                                                    <span key={p.period} className="px-2 py-0.5 bg-gray-50 border border-gray-200 text-gray-600 text-[10px] font-bold rounded-lg">
+                                                                        {periodLabels[p.period] || p.period}: Rp {p.price.toLocaleString('id-ID')}
+                                                                    </span>
+                                                                ))}
+                                                            </div>
+                                                        )}
+                                                    </>
+                                                );
+                                            })()}
                                         </div>
                                     </div>
                                 );

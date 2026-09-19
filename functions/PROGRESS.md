@@ -2,6 +2,40 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 441. Fleksibilitas Skema Sewa Kamar & Tombol Kalkulasi Kelipatan Otomatis (`KostFormMitra.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  1. Opsi sewa "Bulanan" tidak boleh diwajibkan secara kaku, pemilik kost harus bebas memilih skema harga sewa mana pun yang diinginkan (minimal memilih 1 periode sewa).
+  2. Jika pemilik kost memilih beberapa opsi bulanan ke atas (`bulanan`: 1 bln, `3bulanan`: 3 bln, `6bulanan`: 6 bln, `tahunan`: 12 bln), sediakan tombol otomatis agar pemilik kost tinggal klik dan langsung muncul nominal kelipatan dari harga sewa bulanan terendah yang dipilih (contoh: 1 bln = Rp 1 jt -> tombol 6 bln menghasilkan Rp 6 jt, 1 thn menghasilkan Rp 12 jt; jika hanya memilih 3 bln dan tahunan, dasar = 3 bln dan tahunan = 4x).
+  3. Skema kelipatan ini HANYA berlaku untuk opsi bulanan ke atas. Opsi sewa harian dan mingguan TIDAK termasuk dan tetap diinput secara manual.
+  4. Jika tombol kelipatan diklik pada pilihan masa sewa yang lebih tinggi sementara harga periode bulanan terendah yang dipilih belum diisi, tampilkan peringatan alert bahwa pemilik kost harus mengisi harga periode bulanan paling bawah terlebih dahulu dari yang telah dipilih.
+- **Implementasi Solusi**:
+  1. **Pembebasan Opsi Sewa Bulanan**:
+     - Menghapus kunci wajib `if (isMonthly) return;` dan badge `Wajib` pada chip periode sewa di sub-wizard kamar (Tahap 3).
+     - Mengubah nilai default `draftRoom.pricing` menjadi netral (`[]`) saat menambah kamar baru (`startAddRoom`).
+     - Mengizinkan toggle on/off bebas untuk seluruh pilihan periode sewa pada `toggleDraftRoomPricingPeriod`.
+     - Memperbarui validasi `saveDraftRoom`: pemilik kost wajib memilih minimal 1 skema sewa dan seluruh skema yang dipilih wajib memiliki nominal `price > 0`.
+  2. **Konfigurasi Durasi Bulanan (`MONTH_BASED_CONFIG`)**:
+     - Mendefinisikan konstanta pemetaan durasi bulan: `bulanan` (1), `3bulanan` (3), `6bulanan` (6), `tahunan` (12).
+     - Durasi harian dan mingguan dieksklusikan dari skema kelipatan otomatis.
+  3. **Logika Multiplier Dinamis & Validasi Alert**:
+     - Mengidentifikasi periode dasar (`basePeriod`): periode dengan durasi bulan terendah dari daftar periode bulanan ke atas yang dicentang oleh pemilik kost.
+     - Menghitung rasio pengali otomatis: `multiplier = targetPeriod.months / basePeriod.months`.
+     - Menyediakan validasi alert: jika harga `basePeriod` masih kosong atau Rp 0, sistem memunculkan dialog peringatan: *"Harap isi harga [basePeriod.label] terlebih dahulu dari opsi yang telah Anda pilih agar bisa menggunakan tombol kalkulasi kelipatan otomatis pada [targetPeriod.label]."*
+     - Menghitung dan mengisi otomatis `updDraftRoomPrice(targetKey, basePrice * multiplier)` ketika tombol kelipatan ditekan.
+  4. **Antarmuka Pengguna yang Terpadu**:
+     - Menyediakan tombol individual *"Hitung [N]x [Base Label]"* dengan ikon vector SVG pure `Zap` dari `lucide-react` pada masing-masing kartu periode bulanan yang lebih tinggi.
+     - Menyediakan banner pintas *"Hitung Semua Kelipatan"* di atas grid harga jika ada 2 atau lebih periode bulanan ke atas yang aktif.
+     - Menampilkan penanda visual *"Acuan Dasar"* pada kartu periode sewa terendah yang menjadi basis perhitungan.
+     - Menyesuaikan tampilan ikhtisar kartu kamar dan penentuan `finalPrice` properti saat submit agar tetap valid dan proporsional jika skema bulanan tidak dipilih.
+- **File Tersentuh**:
+  - `functions/public/components/KostFormMitra.tsx`
+  - `functions/PROGRESS.md`
+  - `IMPLEMENTATION_PLAN.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi Vite build (`cmd.exe /c npm run build`) sukses 100% (`✓ built in 39.94s`, exit code 0).
+  - Pure SVG vector `zap-B6hHoPjB.js` ter-bundle secara lokal, menjamin 0ms delay dan bebas FOUT.
+
 ### 440. Netralisasi Pilihan Default Formulir Properti & Kamar Mitra (`KostFormMitra.tsx`) (September 2026)
 - **Permintaan & Masalah**:
   1. Pada pilihan apapun di formulir, secara default tidak boleh ada opsi yang langsung terpilih (*pre-selected*). Tampilan harus berstatus netral dan membiarkan pemilik kost yang menentukan sendiri pilihannya.

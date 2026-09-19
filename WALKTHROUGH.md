@@ -1,79 +1,77 @@
-# Walkthrough: Netralisasi Pilihan Default Formulir Properti & Kamar Mitra
+# Walkthrough: Fleksibilitas Skema Sewa Kamar & Tombol Kalkulasi Kelipatan Otomatis
 
-## 1. Ringkasan Perubahan
-
-Sesuai permintaan pengguna, seluruh opsi tombol pada formulir pendaftaran dan pengelolaan properti serta kamar mitra ([`KostFormMitra.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/components/KostFormMitra.tsx)) yang sebelumnya memiliki nilai default yang otomatis terpilih (*pre-selected*) kini telah diubah menjadi **100% NETRAL** (*unselected*). Pemilik kost kini memegang kendali penuh untuk menentukan setiap pilihan secara sadar dan eksplisit tanpa ada opsi yang terpilih diam-diam oleh sistem.
+Dokumen ini mendokumentasikan hasil implementasi pembebasan opsi sewa bulanan dan penambahan fitur tombol kalkulasi kelipatan otomatis pada formulir tipe kamar Mitra (`KostFormMitra.tsx`).
 
 ---
 
-## 2. Rincian Perubahan Kode
+## 1. Ringkasan Pekerjaan
+1. **Pembebasan Opsi Sewa Bulanan**:
+   - Skema sewa "Bulanan" tidak lagi dikunci atau diwajibkan secara sepihak.
+   - Pemilik kost bebas memilih atau tidak memilih periode bulanan, maupun mengombinasikannya dengan periode lain (Harian, Mingguan, Bulanan, 3 Bulan, 6 Bulan, Tahunan; minimal 1 opsi).
+   - Nilai default periode sewa saat menambah kamar baru adalah netral (`pricing: []`), sehingga pemilik kost leluasa menentukan skema mana yang sesuai dengan model bisnis kostnya.
+2. **Tombol Kalkulasi Kelipatan Otomatis (Bulanan ke Atas)**:
+   - Berlaku untuk skema berbasis bulan: `bulanan` (1 bulan), `3bulanan` (3 bulan), `6bulanan` (6 bulan), dan `tahunan` (12 bulan).
+   - Skema Harian dan Mingguan dieksklusikan (tetap diinput manual).
+   - Periode bulanan ke atas terendah yang dipilih pemilik kost secara otomatis menjadi **Acuan Dasar** (`basePeriod`).
+   - Pada kartu masa sewa yang lebih tinggi, tersedia tombol kalkulasi kelipatan otomatis (misal: `⚡ Hitung 6x Bulanan`, `⚡ Hitung 12x Bulanan`, atau `⚡ Hitung 4x 3 Bulan`).
+   - Tersedia pula tombol pintas banner `⚡ Hitung Semua Kelipatan` jika ada 2 atau lebih periode bulanan ke atas yang dipilih.
+3. **Peringatan / Alert Validasi**:
+   - Jika pemilik kost langsung menekan tombol kalkulasi kelipatan pada masa sewa yang lebih tinggi sementara harga periode sewa terendah yang dipilih masih kosong / Rp 0, sistem menampilkan dialog peringatan:
+     > *"Harap isi harga [basePeriod] terlebih dahulu dari opsi yang telah Anda pilih agar bisa menggunakan tombol kalkulasi kelipatan otomatis pada [targetPeriod]."*
+4. **Kepatuhan Standar UI/UX**:
+   - Menggunakan ikon vector SVG murni `Zap` dari package `lucide-react` (0ms delay, 100% bebas kedipan FOUT).
 
-### A. Form Tipe Kamar - Tahap 2: Aturan & Kapasitas Kamar
-1. **Biaya Sewa Tambahan Penghuni Ekstra (`hasExtraFee`)**:
-   - Tipe state `hasExtraFee` diubah menjadi `boolean | null` dengan nilai awal `null` saat menambah kamar baru (`startAddRoom`).
-   - Tombol **"Tidak, Biaya Tetap Sama"**: aktif **HANYA** jika `hasExtraFee === false`.
-   - Tombol **"Ya, Ada Biaya Tambahan"**: aktif **HANYA** jika `hasExtraFee === true`.
-   - Ketika `hasExtraFee === null`: kedua tombol tampil netral (border abu-abu, background putih, teks abu-abu).
-   - Validasi navigasi *"Lanjut ke Harga"* & `saveDraftRoom`: jika kapasitas kamar > 1 orang dan pemilik kost belum menentukan opsi ini (`hasExtraFee === null`), sistem menampilkan pesan konfirmasi ramah:
-     > *"Silakan tentukan apakah ada biaya sewa tambahan jika kamar dihuni lebih dari 1 orang (Pilih 'Tidak, Biaya Tetap Sama' atau 'Ya, Ada Biaya Tambahan')."*
-   - Pada Tahap 3 (Harga Sewa), form input nominal biaya tambahan per orang HANYA muncul jika `hasExtraFee === true`.
+---
 
-2. **Kapasitas Maksimal Kamar (`draftRoom.maxOccupants`)**:
-   - Nilai awal `maxOccupants` untuk kamar baru diinisialisasi `0` (netral).
-   - Tombol kapasitas (1 Orang, 2 Orang, 3 Orang) kini hanya aktif jika dipilih secara eksplisit (`draftRoom.maxOccupants === item.cap`).
-   - Sebelum pemilik memilih kapasitas, area di bawahnya menyajikan panduan netral:
-     > *"Silakan tentukan kapasitas maksimal penghuni kamar di atas (1, 2, atau 3 Orang) untuk mengatur ketentuan sewa dan penghuni tambahan."*
-   - Validasi navigasi memastikan pemilik telah menentukan kapasitas kamar sebelum melangkah ke harga.
+## 2. Detail Perubahan Berkas
 
-### B. Form Properti - Step 3: Fasilitas & Biaya Tambahan Bulanan
-1. **Biaya Tambahan Fasilitas Bulanan Properti (`isAdditionalFeeActive`)**:
-   - Tipe state diubah menjadi `boolean | null` (default: `null` untuk pendaftaran properti baru).
-   - Tombol **"✕ Tidak Ada"**: aktif **HANYA** jika `isAdditionalFeeActive === false`.
-   - Tombol **"✓ Ada Biaya Tambahan"**: aktif **HANYA** jika `isAdditionalFeeActive === true`.
-   - Sebelum dipilih (`isAdditionalFeeActive === null`): kedua tombol tampil netral, dan area bawah menampilkan panduan netral untuk memilih opsi.
-   - Pilihan Ketentuan Penagihan (`additionalFeeStartsFrom`):
-     - Tombol *"Mulai dari Bulan Awal Sewa Pertama"* hanya aktif jika `form.additionalFeeStartsFrom === 'month_1'`.
-     - Tombol *"Promo Bebas Tagihan di Bulan Pertama"* hanya aktif jika `form.additionalFeeStartsFrom === 'month_2'`.
-     - Nilai default diinisialisasi `undefined` sehingga tidak ada yang otomatis aktif.
-
-### C. Form Properti - Step 0: Informasi Dasar
-1. **Tipe Kost (`form.type`)**:
-   - Nilai awal `type` pada `initialForm` diubah dari hardcoded `'Campur'` menjadi `undefined`.
-   - Tombol pilihan **"♂ Putra"**, **"♀ Putri"**, dan **"⚡ Campur"** tampil netral saat form dibuka pertama kali.
-   - Validator `validateCurrentStep(0)` tetap menjaga integritas data dengan mewajibkan pemilik memilih salah satu tipe sebelum lanjut ke langkah lokasi.
+### `functions/public/components/KostFormMitra.tsx`
+- **Import Vector SVG**: Menambahkan komponen pure SVG `Zap` dari `lucide-react`.
+- **Konstanta `MONTH_BASED_CONFIG`**:
+  ```ts
+  const MONTH_BASED_CONFIG: { key: PricingPeriod; label: string; months: number }[] = [
+      { key: 'bulanan',  label: 'Bulanan',  months: 1 },
+      { key: '3bulanan', label: '3 Bulan',  months: 3 },
+      { key: '6bulanan', label: '6 Bulan',  months: 6 },
+      { key: 'tahunan',  label: 'Tahunan',  months: 12 },
+  ];
+  ```
+- **State `draftRoom` & `startAddRoom`**: Menetralkan `pricing: []` agar tidak ada periode yang otomatis terpilih saat pertama kali menambah kamar baru.
+- **`toggleDraftRoomPricingPeriod`**: Membuka kunci `bulanan` agar bisa di-toggle on/off bebas.
+- **Helper `getMultiplierInfo`, `applyMultiplierPrice`, dan `applyAllMultipliers`**: Menghitung rasio pengali otomatis dan menampilkan peringatan jika harga periode dasar belum diisi.
+- **Validasi `saveDraftRoom`**: Memvalidasi minimal 1 periode sewa dipilih dan semua periode terpilih memiliki nominal `price > 0`.
+- **Antarmuka Sub-Wizard Tahap 3**:
+  - Menghapus badge "Wajib" dan atribut `cursor-default` pada tombol chip "Bulanan".
+  - Menambahkan banner ringkas *"Kalkulasi Otomatis Berbasis Kelipatan [Base Label]"* dengan tombol *"Hitung Semua Kelipatan"*.
+  - Menambahkan badge *"Acuan Dasar"* pada kartu periode sewa terendah.
+  - Menambahkan tombol individual *"Hitung [N]x [Base Label]"* dengan ikon `Zap` pada kartu masa sewa yang lebih tinggi.
+- **Ikhtisar Kartu Kamar & Submit**: Menyesuaikan penentuan tarif sewa pokok pada kartu ringkasan dan `finalPrice` properti jika pemilik kost tidak mengaktifkan skema bulanan.
 
 ---
 
 ## 3. Hasil Pengujian & Kompilasi
 
-Kompilasi build produksi front-end dijalankan menggunakan Vite:
+Perintah build dijalankan di root workspace:
 ```bash
 cmd.exe /c npm run build
 ```
-**Hasil:**
-- ✓ `2512 modules transformed.`
-- ✓ `✓ built in 37.49s`
-- Exit Code: **0** (0 TypeScript / TSX error, 0 bundle error).
+**Hasil**:
+- Exit code: `0` (Kompilasi Sukses 100%).
+- Modul `zap-B6hHoPjB.js` ter-bundle secara lokal.
+- 0 error TypeScript, 0 warning kritis.
 
 ---
 
-## 4. Panduan Verifikasi Pengguna (User Testing)
+## 4. Panduan Verifikasi Pengguna di Antarmuka Mitra
 
-1. **Buka Dashboard Mitra**:
-   - Klik menu **"Tambah Kost Baru"**.
-2. **Cek Step 0 (Informasi Dasar)**:
-   - Perhatikan bagian **Tipe Kost**: ketiga tombol (*Putra*, *Putri*, *Campur*) berstatus netral (belum ada yang berwarna oranye).
-3. **Cek Modal Tipe Kamar (Langkah 3 Form Properti)**:
-   - Klik **"+ Tambah Tipe Kamar"**.
-   - Isi Nama Kamar dan Ukuran Kamar di Langkah 1, lalu klik **"Lanjut ke Kapasitas"**.
-   - Di Langkah 2, perhatikan tombol **Kapasitas Penghuni**: ketiga tombol (*1 Orang*, *2 Orang*, *3 Orang*) berstatus netral.
-   - Klik opsi **"2 Orang"** atau **"3 Orang"**.
-   - Perhatikan kotak **"Biaya Sewa Tambahan Penghuni Ekstra"**:
-     - Tombol **"Tidak, Biaya Tetap Sama"** dan **"Ya, Ada Biaya Tambahan"** kini berstatus **NETRAL** (keduanya berlatar putih dengan border abu-abu, tidak ada tombol hitam yang langsung terpilih otomatis).
-   - Klik tombol **"Lanjut ke Harga"** tanpa memilih opsi:
-     - Sistem akan menampilkan pesan panduan ramah agar menentukan pilihan terlebih dahulu.
-   - Klik **"Tidak, Biaya Tetap Sama"**: tombol berubah menjadi hitam aktif.
-   - Klik **"Ya, Ada Biaya Tambahan"**: tombol berubah menjadi oranye aktif dan pesan panduan nominal muncul.
-4. **Cek Step Fasilitas & Biaya Tambahan Bulanan (Langkah 4 Form Properti)**:
-   - Perhatikan kartu **"Biaya Tambahan Fasilitas Bulanan (Opsional)"**:
-     - Tombol *"✕ Tidak Ada"* dan *"✓ Ada Biaya Tambahan"* berada dalam status netral.
+1. Buka formulir Tambah Kost atau Edit Kost di Mitra Dashboard.
+2. Navigasi ke **Langkah 3 (Kamar)** -> klik **Tambah Tipe Kamar Baru** (atau Edit Kamar).
+3. Isi Langkah 1 (Nama & Ukuran) dan Langkah 2 (Kapasitas).
+4. Di **Langkah 3 (Periode Sewa & Harga)**:
+   - Perhatikan bahwa opsi **Bulanan** kini bebas dipilih atau tidak dipilih (tidak lagi bertuliskan "Wajib").
+   - Coba centang misalnya **Bulanan**, **6 Bulan**, dan **Tahunan**.
+   - Perhatikan munculnya badge *"Acuan Dasar"* pada kartu Bulanan dan tombol *"Hitung 6x Bulanan"* pada kartu 6 Bulan serta *"Hitung 12x Bulanan"* pada kartu Tahunan.
+   - Tanpa mengisi harga Bulanan, klik tombol *"Hitung 6x Bulanan"*: dialog peringatan akan muncul meminta Anda mengisi harga Bulanan terlebih dahulu.
+   - Masukkan nominal pada Bulanan (contoh: `1.000.000`), lalu klik *"Hitung 6x Bulanan"* -> kolom 6 Bulan otomatis terisi `6.000.000`.
+   - Klik tombol banner *"Hitung Semua Kelipatan"* -> kolom Tahunan juga langsung terisi `12.000.000`.
+   - Coba skema tanpa Bulanan (misal: uncheck Bulanan, centang **3 Bulan** dan **Tahunan**): sistem secara cerdas menjadikan 3 Bulan sebagai acuan dasar dan menyediakan tombol kelipatan 4x pada Tahunan.
