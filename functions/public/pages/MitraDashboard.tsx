@@ -181,12 +181,16 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
     const [isStartingFresh, setIsStartingFresh] = useState(false);
     const [quickRoomModalKost, setQuickRoomModalKost] = useState<Kost | null>(null);
     const [updatingRoomKostId, setUpdatingRoomKostId] = useState<string | null>(null);
-    const draftStorageKey = useMemo(() => uid ? `kost_form_draft_${uid}` : 'kost_form_draft_guest', [uid]);
+    const draftStorageKey = useMemo(() => {
+        const effectiveUid = uid || user?.id;
+        return effectiveUid ? `kost_form_draft_${effectiveUid}` : 'kost_form_draft_guest';
+    }, [uid, user?.id]);
     const [activeDraft, setActiveDraft] = useState<{
         form: Partial<Kost>;
         step: number;
         managementOption?: string;
         lastSaved?: string;
+        draftPhotos?: any[];
     } | null>(null);
 
     const isVerified = user?.verification_status === 'verified';
@@ -1651,6 +1655,36 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                                     </button>
                                 </div>
                             )}
+
+                            {/* Unfinished Draft Shortcut Banner */}
+                            {activeDraft && (
+                                <div className="bg-amber-50/90 border border-amber-200 rounded-3xl p-5 flex items-center justify-between shadow-xs">
+                                    <div className="flex items-center gap-4 min-w-0">
+                                        <div className="w-12 h-12 rounded-2xl bg-amber-500 flex items-center justify-center text-white shadow-md shadow-amber-200 shrink-0">
+                                            <Clock size={22} />
+                                        </div>
+                                        <div className="min-w-0">
+                                            <div className="flex items-center gap-2">
+                                                <p className="font-black text-gray-900 text-sm truncate">
+                                                    Draft: {activeDraft.form?.title || 'Pendaftaran Kost Belum Selesai'}
+                                                </p>
+                                                <span className="px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-amber-200/80 text-amber-800 shrink-0">
+                                                    Langkah {(activeDraft.step || 0) + 1} dari 6
+                                                </span>
+                                            </div>
+                                            <p className="text-xs text-amber-800/80 font-medium mt-0.5 truncate">
+                                                Data pengisian tersimpan otomatis. Klik untuk melanjutkan pengisian kost Anda.
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <button
+                                        onClick={handleResumeDraft}
+                                        className="h-10 px-4 sm:px-5 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white rounded-2xl font-black text-xs uppercase tracking-wider shadow-md shadow-orange-500/20 flex items-center gap-2 shrink-0 cursor-pointer active:scale-95 transition-all ml-3"
+                                    >
+                                        <span>Lanjutkan</span> <ChevronRight size={14} />
+                                    </button>
+                                </div>
+                            )}
                         </div>
                     )}
 
@@ -1695,7 +1729,7 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                                             onClick={() => {
                                                 if (checkVerification()) {
                                                     setEditingKost(null);
-                                                    setIsStartingFresh(true);
+                                                    setIsStartingFresh(false);
                                                     setShowKostForm(true);
                                                 }
                                             }}
@@ -1714,6 +1748,8 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                                         <div className="relative h-52 bg-gradient-to-br from-amber-100 via-orange-50 to-amber-100/60 flex items-center justify-center overflow-hidden border-b border-amber-100">
                                             {activeDraft.form?.imageUrls && activeDraft.form.imageUrls.length > 0 ? (
                                                 <img src={activeDraft.form.imageUrls[0] as string} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700 opacity-90" alt="" />
+                                            ) : activeDraft.draftPhotos && activeDraft.draftPhotos.length > 0 ? (
+                                                <img src={activeDraft.draftPhotos[0].preview} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700 opacity-90" alt="" />
                                             ) : (
                                                 <div className="flex flex-col items-center gap-2 text-amber-700/80 p-6 text-center">
                                                     <div className="w-14 h-14 rounded-2xl bg-white shadow-sm flex items-center justify-center border border-amber-200 text-amber-500">
@@ -1738,8 +1774,9 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                                             </div>
 
                                             <div className="absolute bottom-3 left-4 right-4 flex items-center justify-between text-white">
-                                                <span className="text-[10px] font-bold bg-black/50 backdrop-blur-xs px-2.5 py-0.5 rounded-lg border border-white/10 text-amber-100">
-                                                    Tersimpan Otomatis
+                                                <span className="text-[10px] font-bold bg-black/50 backdrop-blur-xs px-2.5 py-0.5 rounded-lg border border-white/10 text-amber-100 flex items-center gap-1">
+                                                    <CheckCircle2 size={10} className="text-emerald-400" />
+                                                    {activeDraft.lastSaved ? `Tersimpan ${new Date(activeDraft.lastSaved).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}` : 'Tersimpan Otomatis'}
                                                 </span>
                                             </div>
                                         </div>
@@ -2097,7 +2134,7 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                                             onClick={() => {
                                                 if (checkVerification()) {
                                                     setEditingKost(null);
-                                                    setIsStartingFresh(true);
+                                                    setIsStartingFresh(false);
                                                     setShowKostForm(true);
                                                 }
                                             }}

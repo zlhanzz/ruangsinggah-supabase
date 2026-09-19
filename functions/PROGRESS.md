@@ -2,6 +2,41 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 442. Perbaikan Sistem Auto-Save & Integrasi Kartu Draft Listing Kost Mitra (`KostFormMitra.tsx` & `MitraDashboard.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  1. Fungsi draft pendaftaran listing kost di dashboard mitra tidak bekerja dengan baik: ketika formulir tidak sengaja tertutup (tombol `X`, pembatalan, refresh halaman, atau penutupan tab), seluruh data yang telah diisi langsung hilang begitu saja dan harus diinput ulang dari awal.
+  2. Pengguna meminta implementasi kartu draft di daftar kost saya pada menu Kelola Kost agar mitra dapat langsung melanjutkan progres pengisian sebelumnya tanpa harus mengulang dari awal.
+- **Akar Masalah**:
+  1. Di `KostFormMitra.tsx`, fungsi `saveDraftDirect` dan auto-save `useEffect` dipasangi pengecekan `if (freshStart) return;`.
+  2. Tombol "+ Tambah" dan "Daftarkan Kost Pertama" di `MitraDashboard.tsx` selalu memanggil `setIsStartingFresh(true)`. Akibatnya, selama form terbuka, `freshStart` bernilai `true` selamanya sehingga penyimpanan draft terblokir total (0 byte tertulis ke `localStorage`) meskipun lencana bertuliskan "Auto-Save Aktif".
+  3. Kartu draft di `MitraDashboard.tsx` tidak pernah muncul karena `localStorage` selalu kosong akibat blokir tersebut.
+  4. Tidak adanya event listener `beforeunload`/`pagehide` menyebabkan perubahan saat me-refresh browser tidak sempat tersimpan jika jeda debounce belum selesai.
+- **Implementasi Solusi**:
+  1. **Penghapusan Blokir `freshStart` di `KostFormMitra.tsx`**:
+     - Menghapus pembatasan `if (freshStart) return;` pada `saveDraftDirect` dan auto-save `useEffect`. Prop `freshStart` kini hanya mengatur inisialisasi state awal (mount), bukan mematikan penyimpanan data baru.
+     - Memperluas deteksi `hasData` pada `saveDraftDirect` agar mendeteksi seluruh masukan awal mitra (judul/nama kost, tipe kost `Putra/Putri/Campur`, deskripsi, alamat, kota, tipe kamar, fasilitas, dan foto).
+     - Menambahkan referensi state terkini (`formRef`, `stepRef`, `mgmtRef`, `photosRef`, `isAdditionalFeeActiveRef`) untuk eksekusi penyimpanan instan.
+  2. **Penyimpanan Instan saat Browser Keluar (`beforeunload` & `pagehide`)**:
+     - Menambahkan event listener `beforeunload` dan `pagehide` di `KostFormMitra.tsx` untuk memastikan data formulir langsung ditulis ke `localStorage` saat tab ditutup atau halaman di-reload.
+     - Menjamin tombol silang (`X`) dan tombol navigasi langkah (seperti `handleCloseWithSave`, `handleNextStep`, `handlePrevStep`, dan klik stepper) mengeksekusi penyimpanan data draft terkini secara langsung.
+  3. **Preservasi Status Biaya Tambahan Fasilitas (`isAdditionalFeeActive`)**:
+     - Menyimpan pilihan biaya tambahan ke payload draft (`payload.isAdditionalFeeActive`) dan memulihkannya kembali saat modal dibuka.
+  4. **Penyempurnaan Kartu Draft di Menu Kelola Kost (`MitraDashboard.tsx`)**:
+     - Mengubah tombol "+ Tambah" dan "Daftarkan Kost Pertama" agar tidak memaksakan `isStartingFresh(true)`.
+     - Menyempurnakan kartu draft di tab "Kelola Kost" (Kost Saya): menampilkan thumbnail dari foto draft (`draftPhotos[0].preview`), waktu penyimpanan otomatis, nama kost, lokasi, dan tombol "Lanjutkan Edit" serta "Hapus Draft".
+     - Menambahkan banner shortcut draft di tab Beranda (Overview) agar mitra langsung melihat pengingat pendaftaran kost yang belum selesai.
+  5. **Penyelarasan Kunci Storage (`storageKey`)**:
+     - Menyelaraskan fallback kunci penyimpanan `kost_form_draft_${effectiveUid}` antara `MitraDashboard.tsx` dan `KostFormMitra.tsx` (`uid || user?.id`).
+- **File Tersentuh**:
+  - `functions/public/components/KostFormMitra.tsx`
+  - `functions/public/pages/MitraDashboard.tsx`
+  - `functions/PROGRESS.md`
+  - `IMPLEMENTATION_PLAN.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Vite build `npm run build` sukses 100% tanpa error (`✓ built in 37.72s`, exit code 0).
+  - Ikon murni bundled vector SVG `lucide-react` (`CheckCircle2`, `Clock`, `Sparkles`, `Trash2`, `ArrowRight`, `ChevronRight`).
+
 ### 441. Fleksibilitas Skema Sewa Kamar & Tombol Kalkulasi Kelipatan Otomatis (`KostFormMitra.tsx`) (September 2026)
 - **Permintaan & Masalah**:
   1. Opsi sewa "Bulanan" tidak boleh diwajibkan secara kaku, pemilik kost harus bebas memilih skema harga sewa mana pun yang diinginkan (minimal memilih 1 periode sewa).

@@ -2258,8 +2258,9 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
     const isEditing = Boolean(editingKost);
     const storageKey = useMemo(() => {
         const prefix = isEditing && editingKost?.id ? `kost_edit_draft_${editingKost.id}` : 'kost_form_draft';
-        return user?.id ? `${prefix}_${user.id}` : `${prefix}_guest`;
-    }, [isEditing, editingKost?.id, user?.id]);
+        const effectiveUid = user?.id || (user as any)?.uid;
+        return effectiveUid ? `${prefix}_${effectiveUid}` : `${prefix}_guest`;
+    }, [isEditing, editingKost?.id, user?.id, (user as any)?.uid]);
 
     const [step, setStep] = useState(() => {
         if (freshStart) return 0;
@@ -2391,6 +2392,17 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
     });
     const [hasExtraFee, setHasExtraFee] = useState<boolean | null>(null);
     const [isAdditionalFeeActive, setIsAdditionalFeeActive] = useState<boolean | null>(() => {
+        if (!freshStart) {
+            try {
+                const savedDraft = localStorage.getItem(storageKey);
+                if (savedDraft) {
+                    const parsed = JSON.parse(savedDraft);
+                    if (typeof parsed.isAdditionalFeeActive === 'boolean') {
+                        return parsed.isAdditionalFeeActive;
+                    }
+                }
+            } catch {}
+        }
         if ((form.additionalFeePrice || 0) > 0 || Boolean(form.additionalFeeName && form.additionalFeeName.trim().length > 0)) {
             return true;
         }
@@ -2409,18 +2421,46 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
     }, [form.additionalFeePrice, form.additionalFeeName]);
 
     const isInitialMount = useRef(true);
+    const formRef = useRef(form);
+    const stepRef = useRef(step);
+    const mgmtRef = useRef(managementOption);
+    const photosRef = useRef(newPhotoItems);
+    const isAdditionalFeeActiveRef = useRef(isAdditionalFeeActive);
 
-    // Instant save helper to guarantee reliable persistence
-    const saveDraftDirect = useCallback((currentForm: Partial<Kost>, currentStep: number, currentMgmt: 'none' | 'self' | 'kostmanager', photos: NewPhotoItem[]) => {
-        if (freshStart) return;
+    useEffect(() => { formRef.current = form; }, [form]);
+    useEffect(() => { stepRef.current = step; }, [step]);
+    useEffect(() => { mgmtRef.current = managementOption; }, [managementOption]);
+    useEffect(() => { photosRef.current = newPhotoItems; }, [newPhotoItems]);
+    useEffect(() => { isAdditionalFeeActiveRef.current = isAdditionalFeeActive; }, [isAdditionalFeeActive]);
+
+    // Instant save helper to guarantee reliable persistence without freshStart blocking
+    const saveDraftDirect = useCallback((
+        currentForm: Partial<Kost>, 
+        currentStep: number, 
+        currentMgmt: 'none' | 'self' | 'kostmanager', 
+        photos: NewPhotoItem[],
+        additionalFeeActiveState?: boolean | null
+    ) => {
         try {
-            const hasData = isEditing || currentForm.title || currentForm.address || currentForm.description || currentForm.city || currentStep > 0 || (currentForm.roomTypes && currentForm.roomTypes.length > 0) || (currentForm.facilities && currentForm.facilities.length > 0) || photos.length > 0;
+            const hasData = isEditing || 
+                Boolean(currentForm.title && currentForm.title.trim()) || 
+                Boolean(currentForm.address && currentForm.address.trim()) || 
+                Boolean(currentForm.description && currentForm.description.trim()) || 
+                Boolean(currentForm.city && currentForm.city.trim()) || 
+                Boolean(currentForm.type) ||
+                Boolean(currentForm.kostCategory) ||
+                currentStep > 0 || 
+                (currentForm.roomTypes && currentForm.roomTypes.length > 0) || 
+                (currentForm.facilities && currentForm.facilities.length > 0) || 
+                photos.length > 0;
+
             if (hasData) {
                 const payload = {
                     form: currentForm,
                     step: currentStep,
                     managementOption: currentMgmt,
                     isEdit: isEditing,
+                    isAdditionalFeeActive: additionalFeeActiveState !== undefined ? additionalFeeActiveState : isAdditionalFeeActiveRef.current,
                     draftPhotos: photos.map(p => ({
                         id: p.id,
                         preview: p.preview,
@@ -2437,12 +2477,10 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
         } catch (err) {
             console.warn('Gagal menyimpan draft kost ke localStorage:', err);
         }
-    }, [freshStart, isEditing, storageKey]);
+    }, [isEditing, storageKey]);
 
     // Auto-save draft to localStorage whenever form, step, managementOption, or newPhotoItems change
     useEffect(() => {
-        if (freshStart) return;
-
         // Skip saving on initial mount to avoid overwriting with defaults prematurely
         if (isInitialMount.current) {
             isInitialMount.current = false;
@@ -2450,11 +2488,24 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
         }
 
         const timeoutId = setTimeout(() => {
-            saveDraftDirect(form, step, managementOption, newPhotoItems);
+            saveDraftDirect(form, step, managementOption, newPhotoItems, isAdditionalFeeActive);
         }, 400);
 
         return () => clearTimeout(timeoutId);
-    }, [form, step, managementOption, newPhotoItems, freshStart, saveDraftDirect]);
+    }, [form, step, managementOption, newPhotoItems, isAdditionalFeeActive, saveDraftDirect]);
+
+    // Save draft instantly if user leaves, reloads (F5), or closes tab
+    useEffect(() => {
+        const handleUnload = () => {
+            saveDraftDirect(formRef.current, stepRef.current, mgmtRef.current, photosRef.current, isAdditionalFeeActiveRef.current);
+        };
+        window.addEventListener('beforeunload', handleUnload);
+        window.addEventListener('pagehide', handleUnload);
+        return () => {
+            window.removeEventListener('beforeunload', handleUnload);
+            window.removeEventListener('pagehide', handleUnload);
+        };
+    }, [saveDraftDirect]);
 
     // Handle clear draft and start fresh for new listing
     const handleClearDraft = () => {
@@ -2502,14 +2553,14 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
     };
 
     const handleCloseWithSave = () => {
-        saveDraftDirect(form, step, managementOption, newPhotoItems);
+        saveDraftDirect(form, step, managementOption, newPhotoItems, isAdditionalFeeActive);
         onClose();
     };
 
     const handlePrevStep = () => {
         if (step > 0) {
             const prevStep = step - 1;
-            saveDraftDirect(form, prevStep, managementOption, newPhotoItems);
+            saveDraftDirect(form, prevStep, managementOption, newPhotoItems, isAdditionalFeeActive);
             setStep(prevStep);
         }
     };
@@ -4300,7 +4351,7 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
         }
         setError('');
         const nextStep = step + 1;
-        saveDraftDirect(form, nextStep, managementOption, newPhotoItems);
+        saveDraftDirect(form, nextStep, managementOption, newPhotoItems, isAdditionalFeeActive);
         setStep(nextStep);
     };
 
@@ -6641,7 +6692,7 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                                 onClick={() => {
                                     if (i < step) {
                                         setError('');
-                                        saveDraftDirect(form, i, managementOption, newPhotoItems);
+                                        saveDraftDirect(form, i, managementOption, newPhotoItems, isAdditionalFeeActive);
                                         setStep(i);
                                     }
                                 }}
