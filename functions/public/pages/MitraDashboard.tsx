@@ -1273,7 +1273,19 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                         </span>
                         <span className="text-[8px] font-black text-orange-500 uppercase tracking-widest mt-0.5">Mitra Dashboard</span>
                     </div>
-                    <div className="w-10 h-10" aria-hidden="true" />
+                    <button
+                        onClick={() => handleMenuChange('chat')}
+                        className={`relative w-10 h-10 rounded-xl flex items-center justify-center transition-all cursor-pointer active:scale-95 ${activeMenu === 'chat' ? 'bg-orange-50 text-orange-600' : 'text-gray-700 hover:bg-gray-100/80'}`}
+                        title="Pesan / Chat Masuk"
+                        aria-label="Pesan / Chat Masuk"
+                    >
+                        <MessageSquare size={20} strokeWidth={2.2} />
+                        {chatUnreadCount > 0 && (
+                            <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 bg-rose-500 text-white text-[9px] font-black rounded-full flex items-center justify-center border-2 border-white shadow-xs animate-pulse">
+                                {chatUnreadCount > 9 ? '9+' : chatUnreadCount}
+                            </span>
+                        )}
+                    </button>
                 </header>
 
                 {/* ── PAGE CONTENT ─────────────────────────────────────────── */}
@@ -1742,81 +1754,82 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                             })()}
 
                             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
-                                {/* ── KARTU DRAFT KHUSUS (DAPAT DILANJUTKAN KAPAN SAJA) ── */}
+                                {/* ── KARTU DRAFT KHUSUS (COMPACT MODERN STANDARD) ── */}
                                 {activeDraft && (
-                                    <div className="bg-white rounded-3xl border-2 border-dashed border-amber-300 overflow-hidden shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 group flex flex-col justify-between relative bg-gradient-to-b from-amber-50/40 via-white to-white">
-                                        <div className="relative h-52 bg-gradient-to-br from-amber-100 via-orange-50 to-amber-100/60 flex items-center justify-center overflow-hidden border-b border-amber-100">
-                                            {activeDraft.form?.imageUrls && activeDraft.form.imageUrls.length > 0 ? (
-                                                <img src={activeDraft.form.imageUrls[0] as string} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700 opacity-90" alt="" />
-                                            ) : activeDraft.draftPhotos && activeDraft.draftPhotos.length > 0 ? (
-                                                <img src={activeDraft.draftPhotos[0].preview} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700 opacity-90" alt="" />
-                                            ) : (
-                                                <div className="flex flex-col items-center gap-2 text-amber-700/80 p-6 text-center">
-                                                    <div className="w-14 h-14 rounded-2xl bg-white shadow-sm flex items-center justify-center border border-amber-200 text-amber-500">
-                                                        <FileText size={28} />
-                                                    </div>
-                                                    <span className="text-[11px] font-black uppercase tracking-widest text-amber-800">Draft Belum Selesai</span>
-                                                </div>
-                                            )}
-
-                                            {/* Top Left: Step Info */}
-                                            <div className="absolute top-4 left-4">
-                                                <span className="px-3 py-1 bg-black/65 backdrop-blur-md text-white rounded-full text-[9px] font-black uppercase tracking-widest border border-white/20 flex items-center gap-1.5">
-                                                    <Sparkles size={11} className="text-amber-400" /> Langkah {(activeDraft.step || 0) + 1} dari 6
+                                    <div className="bg-gradient-to-br from-amber-50/70 via-white to-orange-50/30 rounded-3xl border-2 border-dashed border-amber-300 p-4 sm:p-5 shadow-sm hover:shadow-lg hover:-translate-y-0.5 transition-all duration-300 group flex flex-col justify-between relative">
+                                        {/* Top Header Row: Badges & Delete Button */}
+                                        <div className="flex items-center justify-between gap-2 mb-3">
+                                            <div className="flex items-center gap-2 flex-wrap">
+                                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-500 text-white shadow-xs animate-pulse">
+                                                    <Clock size={11} /> Draft
+                                                </span>
+                                                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-100/90 text-amber-800 border border-amber-200/80">
+                                                    <Sparkles size={11} className="text-amber-600" /> Langkah {(activeDraft.step || 0) + 1} dari 6
                                                 </span>
                                             </div>
-
-                                            {/* Top Right: Status Badge */}
-                                            <div className="absolute top-4 right-4">
-                                                <span className="px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest bg-amber-500 text-white shadow-md border border-amber-400 flex items-center gap-1.5 animate-pulse">
-                                                    <Clock size={12} /> Draft
-                                                </span>
-                                            </div>
-
-                                            <div className="absolute bottom-3 left-4 right-4 flex items-center justify-between text-white">
-                                                <span className="text-[10px] font-bold bg-black/50 backdrop-blur-xs px-2.5 py-0.5 rounded-lg border border-white/10 text-amber-100 flex items-center gap-1">
-                                                    <CheckCircle2 size={10} className="text-emerald-400" />
-                                                    {activeDraft.lastSaved ? `Tersimpan ${new Date(activeDraft.lastSaved).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}` : 'Tersimpan Otomatis'}
-                                                </span>
-                                            </div>
+                                            <button
+                                                onClick={handleDeleteDraft}
+                                                className="w-8 h-8 rounded-xl bg-white/80 border border-amber-200 text-gray-400 hover:text-rose-600 hover:bg-rose-50 hover:border-rose-200 flex items-center justify-center transition-all cursor-pointer shadow-2xs"
+                                                title="Hapus Draft Pendaftaran"
+                                                aria-label="Hapus Draft Pendaftaran"
+                                            >
+                                                <Trash2 size={15} />
+                                            </button>
                                         </div>
 
-                                        <div className="p-5 flex-1 flex flex-col justify-between">
-                                            <div>
-                                                <div className="flex items-center gap-1.5 text-[10px] font-black text-amber-600 uppercase tracking-widest mb-1.5">
-                                                    ● Form Dalam Pengisian
+                                        {/* Content Row: Thumbnail & Info */}
+                                        <div className="flex items-start gap-3.5 sm:gap-4">
+                                            {/* Thumbnail */}
+                                            <div className="w-18 h-18 sm:w-20 sm:h-20 rounded-2xl bg-amber-100/70 border border-amber-200/80 overflow-hidden shrink-0 flex items-center justify-center relative shadow-xs">
+                                                {activeDraft.form?.imageUrls && activeDraft.form.imageUrls.length > 0 ? (
+                                                    <img src={activeDraft.form.imageUrls[0] as string} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" alt="" />
+                                                ) : activeDraft.draftPhotos && activeDraft.draftPhotos.length > 0 ? (
+                                                    <img src={activeDraft.draftPhotos[0].preview} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" alt="" />
+                                                ) : (
+                                                    <div className="w-9 h-9 rounded-xl bg-white flex items-center justify-center text-amber-500 shadow-2xs border border-amber-200/60">
+                                                        <FileText size={18} />
+                                                    </div>
+                                                )}
+                                            </div>
+
+                                            {/* Info */}
+                                            <div className="flex-1 min-w-0">
+                                                <div className="flex items-center gap-1.5 text-[9px] font-black text-amber-600 uppercase tracking-widest">
+                                                    <span>● Form Dalam Pengisian</span>
                                                 </div>
-                                                <h4 className="font-black text-gray-900 uppercase tracking-tight truncate group-hover:text-orange-500 transition-colors text-base">
+                                                <h4 className="font-black text-gray-900 uppercase tracking-tight text-sm sm:text-base truncate group-hover:text-orange-500 transition-colors mt-0.5">
                                                     {activeDraft.form?.title || '(Draft Kost Tanpa Judul)'}
                                                 </h4>
-                                                <p className="text-xs font-bold text-gray-400 mt-1 flex items-center gap-1 uppercase tracking-widest truncate">
+                                                <p className="text-xs font-semibold text-gray-400 flex items-center gap-1 truncate mt-0.5">
                                                     <MapPin size={12} className="text-amber-500 shrink-0" />
                                                     {activeDraft.form?.address || activeDraft.form?.city || 'Lokasi belum ditentukan'}
                                                 </p>
-                                                <div className="mt-4 p-3 bg-amber-50/80 rounded-2xl border border-amber-200/60 text-xs">
-                                                    <p className="text-[11px] text-amber-900 font-semibold leading-relaxed">
-                                                        Pengisian kost ini belum selesai. Klik <strong>Lanjutkan Edit</strong> untuk melengkapi data dan menayangkan kost Anda ke publik.
-                                                    </p>
+
+                                                {/* Progress Bar & Saved Time */}
+                                                <div className="mt-2.5">
+                                                    <div className="flex items-center justify-between text-[10px] font-bold text-gray-400 mb-1">
+                                                        <span className="flex items-center gap-1 text-emerald-600 font-bold">
+                                                            <CheckCircle2 size={11} /> {activeDraft.lastSaved ? `Tersimpan ${new Date(activeDraft.lastSaved).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}` : 'Tersimpan otomatis'}
+                                                        </span>
+                                                        <span className="text-amber-800 font-black">{Math.round(((activeDraft.step || 0) + 1) / 6 * 100)}%</span>
+                                                    </div>
+                                                    <div className="h-1.5 w-full bg-amber-100 rounded-full overflow-hidden">
+                                                        <div
+                                                            className="h-full bg-gradient-to-r from-amber-500 to-orange-500 rounded-full transition-all duration-500"
+                                                            style={{ width: `${Math.round(((activeDraft.step || 0) + 1) / 6 * 100)}%` }}
+                                                        />
+                                                    </div>
                                                 </div>
                                             </div>
-
-                                            {/* Action Buttons */}
-                                            <div className="flex gap-2 mt-5 pt-3 border-t border-amber-100">
-                                                <button
-                                                    onClick={handleResumeDraft}
-                                                    className="flex-1 h-11 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white font-black text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-2 shadow-md shadow-orange-500/20 active:scale-95 cursor-pointer"
-                                                >
-                                                    <ArrowRight size={15} /> Lanjutkan Edit
-                                                </button>
-                                                <button
-                                                    onClick={handleDeleteDraft}
-                                                    className="w-11 h-11 rounded-xl bg-rose-50 border border-rose-100 text-rose-600 flex items-center justify-center hover:bg-rose-500 hover:text-white transition-colors shadow-sm cursor-pointer"
-                                                    title="Hapus Draft"
-                                                >
-                                                    <Trash2 size={16} />
-                                                </button>
-                                            </div>
                                         </div>
+
+                                        {/* Action Button */}
+                                        <button
+                                            onClick={handleResumeDraft}
+                                            className="w-full mt-3.5 h-10 sm:h-11 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white font-black text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-2 shadow-md shadow-orange-500/20 active:scale-95 cursor-pointer"
+                                        >
+                                            <ArrowRight size={15} /> Lanjutkan Edit
+                                        </button>
                                     </div>
                                 )}
 
@@ -2716,23 +2729,6 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                         />
                     ))}
                 </nav>
-
-                {/* ── MOBILE FLOATING CHAT BUTTON (FAB) ────────────────────── */}
-                {activeMenu !== 'chat' && (
-                    <button
-                        onClick={() => handleMenuChange('chat')}
-                        className="lg:hidden fixed bottom-[calc(6.75rem+env(safe-area-inset-bottom,0px))] sm:bottom-32 right-5 z-[60] w-14 h-14 rounded-full bg-gradient-to-tr from-orange-500 via-orange-500 to-amber-500 text-white shadow-[0_8px_25px_rgba(249,115,22,0.45)] flex items-center justify-center hover:scale-105 active:scale-95 transition-all cursor-pointer border-2 border-white/90"
-                        aria-label="Buka Chat / Pesan Masuk"
-                        title="Pesan Masuk"
-                    >
-                        <MessageSquare size={24} strokeWidth={2.3} />
-                        {chatUnreadCount > 0 && (
-                            <span className="absolute -top-1 -right-1 min-w-[20px] h-5 px-1 bg-rose-500 text-white text-[10px] font-black rounded-full flex items-center justify-center border-2 border-white shadow-sm animate-pulse">
-                                {chatUnreadCount > 9 ? '9+' : chatUnreadCount}
-                            </span>
-                        )}
-                    </button>
-                )}
             </div>
         </div>
     );

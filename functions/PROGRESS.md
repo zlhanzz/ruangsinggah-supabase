@@ -2,6 +2,31 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 443. Optimalisasi Space Layar Mobile & Redesain Kartu Draft Compact (`MitraDashboard.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  1. Tombol melayang pesan (Floating Action Button / FAB) di pojok kanan bawah menutupi tombol aksi web/app, khususnya menutupi tombol hapus draft kost (ikon tempat sampah) di kartu draft.
+  2. Tampilan kartu draft lama berukuran terlalu tinggi (~480px, memakan lebih dari 60% layar mobile) dengan kontainer gambar kosong `h-52` yang boros ruang.
+  3. Diperlukan optimalisasi space layar yang responsif, efektif, efisien, dan fungsional.
+- **Implementasi Solusi**:
+  1. **Relokasi Tombol Chat ke Navbar Atas (Top Header Mobile)**:
+     - Menggantikan spacer kosong `w-10 h-10` di sudut kanan atas header mobile dengan tombol ikon `MessageSquare` interaktif dan badge angka pesan belum terbaca (`chatUnreadCount > 0`).
+     - Menghapus Floating Action Button (FAB) oranye di kanan bawah, sehingga 100% layar mobile bebas dari elemen melayang yang menutupi konten/tombol aksi.
+  2. **Redesain Kartu Draft Compact Modern (~140px, Hemat Ruang Layar 70%)**:
+     - Menghapus kontainer kosong tinggi 208px (`h-52`), menyusutkan tinggi kartu dari ~480px menjadi hanya ~140px.
+     - Menampilkan mini thumbnail (80x80px rounded-2xl) untuk foto draft atau ikon dokumen amber.
+     - Menampilkan badge status `● Draft`, keterangan `Langkah X dari 6`, jam tersimpan otomatis, nama kost tebal, dan lokasi kost.
+     - Menyematkan mini progress bar dinamis yang menunjukkan persentase kelengkapan langkah pengisian kost.
+     - Memindahkan tombol Hapus Draft (ikon `Trash2`) ke sudut kanan atas kartu, terpisah aman dari tombol utama.
+     - Tombol utama *"Lanjutkan Edit"* selebar kartu di bagian bawah, sangat ergonomis dan mudah ditap di mobile/desktop.
+- **File Tersentuh**:
+  - `functions/public/pages/MitraDashboard.tsx`
+  - `functions/PROGRESS.md`
+  - `IMPLEMENTATION_PLAN.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Vite build `npm run build` sukses 100% tanpa error (`✓ built in 28.31s`, exit code 0).
+  - Ikon murni vector SVG `lucide-react` (`MessageSquare`, `Clock`, `Sparkles`, `Trash2`, `MapPin`, `CheckCircle2`, `ArrowRight`).
+
 ### 442. Perbaikan Sistem Auto-Save & Integrasi Kartu Draft Listing Kost Mitra (`KostFormMitra.tsx` & `MitraDashboard.tsx`) (September 2026)
 - **Permintaan & Masalah**:
   1. Fungsi draft pendaftaran listing kost di dashboard mitra tidak bekerja dengan baik: ketika formulir tidak sengaja tertutup (tombol `X`, pembatalan, refresh halaman, atau penutupan tab), seluruh data yang telah diisi langsung hilang begitu saja dan harus diinput ulang dari awal.
