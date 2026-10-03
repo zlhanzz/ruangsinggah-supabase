@@ -116,6 +116,222 @@ export async function compressImageToWebP(file: File, quality = 0.85, maxWidth =
     });
 }
 
+// ── Cache Singleton Logo RuangSinggah untuk Akselerasi 0ms ─────────────────────
+let cachedLogoImg: HTMLImageElement | null = null;
+let logoLoadPromise: Promise<HTMLImageElement | null> | null = null;
+
+export function getRuangSinggahLogoImage(): Promise<HTMLImageElement | null> {
+    if (cachedLogoImg && cachedLogoImg.complete && cachedLogoImg.naturalWidth > 0) {
+        return Promise.resolve(cachedLogoImg);
+    }
+    if (logoLoadPromise) {
+        return logoLoadPromise;
+    }
+    logoLoadPromise = new Promise((resolve) => {
+        if (typeof window === 'undefined') return resolve(null);
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.onload = () => {
+            cachedLogoImg = img;
+            resolve(img);
+        };
+        img.onerror = () => {
+            console.warn('[WATERMARK] Gagal memuat /logo.png, beralih ke rendering vektor & teks fallback.');
+            resolve(null);
+        };
+        img.src = '/logo.png';
+        // Timeout 2.5s jika offline
+        setTimeout(() => {
+            if (cachedLogoImg && cachedLogoImg.complete && cachedLogoImg.naturalWidth > 0) {
+                resolve(cachedLogoImg);
+            } else {
+                resolve(null);
+            }
+        }, 2500);
+    });
+    return logoLoadPromise;
+}
+
+/**
+ * Merender pola watermark diagonal berulang 'ruangsinggah.id' di atas canvas
+ * Mengadaptasi secara proporsional terhadap resolusi foto (desktop/mobile/berbagai rasio).
+ */
+export async function drawRuangSinggahWatermarkPattern(
+    ctx: CanvasRenderingContext2D,
+    width: number,
+    height: number
+): Promise<void> {
+    const logoImg = await getRuangSinggahLogoImage();
+
+    ctx.save();
+
+    // Skala dinamis proporsional berbasis resolusi terkecil (agar seimbang di lanskap 16:9, standar 4:3, maupun potret vertikal HP)
+    const minDim = Math.min(width, height);
+    const scale = Math.max(0.65, Math.min(1.45, minDim / 900));
+
+    const logoSize = Math.round(28 * scale);
+    const fontSize = Math.round(18 * scale);
+    const itemGap = Math.round(8 * scale);
+
+    // Font setting
+    ctx.font = `bold ${fontSize}px "Plus Jakarta Sans", "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`;
+
+    const textPart1 = "RuangSinggah";
+    const textPart2 = ".id";
+    const w1 = ctx.measureText(textPart1).width;
+    const w2 = ctx.measureText(textPart2).width;
+    const totalUnitWidth = logoSize + itemGap + w1 + w2;
+
+    // Jarak horizontal antar item dalam 1 baris & jarak vertikal antar baris diagonal
+    const itemStepX = Math.round(totalUnitWidth + (190 * scale));
+    const rowStepY = Math.round(135 * scale);
+
+    // Rotasi diagonal -28 derajat di titik pusat kanvas
+    ctx.translate(width / 2, height / 2);
+    ctx.rotate(-28 * (Math.PI / 180));
+
+    // Opacity elegan: cukup tegas sebagai pelindung anti-maling, namun transparan & estetika foto tetap terjaga
+    ctx.globalAlpha = 0.26;
+
+    // Bayangan halus kontras agar terbaca jelas di latar foto gelap maupun terang
+    ctx.shadowColor = 'rgba(255, 255, 255, 0.45)';
+    ctx.shadowBlur = Math.round(2 * scale);
+
+    // Bounding radius diagonal untuk menutup seluruh kanvas hingga sudut terjauh
+    const diag = Math.sqrt(width * width + height * height);
+    const startX = -diag;
+    const endX = diag;
+    const startY = -diag;
+    const endY = diag;
+
+    let rowIndex = 0;
+    for (let y = startY; y <= endY; y += rowStepY) {
+        // Baris bergantian selang-seling (staggered / brick lattice pattern)
+        const offsetX = (rowIndex % 2 === 0) ? 0 : (itemStepX / 2);
+
+        for (let x = startX - itemStepX; x <= endX + itemStepX; x += itemStepX) {
+            ctx.save();
+            ctx.translate(x + offsetX, y);
+
+            const unitStartX = -totalUnitWidth / 2;
+            const logoY = -logoSize / 2;
+
+            // 1. Gambar Logo RuangSinggah
+            if (logoImg && logoImg.complete && logoImg.naturalWidth > 0) {
+                ctx.drawImage(logoImg, unitStartX, logoY, logoSize, logoSize);
+            } else {
+                // Vektor fallback rumah + pin lokasi
+                ctx.save();
+                ctx.strokeStyle = '#1E293B';
+                ctx.lineWidth = Math.max(1.5, 2 * scale);
+                ctx.beginPath();
+                ctx.moveTo(unitStartX, logoY + logoSize * 0.45);
+                ctx.lineTo(unitStartX + logoSize * 0.5, logoY);
+                ctx.lineTo(unitStartX + logoSize, logoY + logoSize * 0.45);
+                ctx.lineTo(unitStartX + logoSize * 0.85, logoY + logoSize * 0.45);
+                ctx.lineTo(unitStartX + logoSize * 0.85, logoY + logoSize);
+                ctx.lineTo(unitStartX + logoSize * 0.15, logoY + logoSize);
+                ctx.lineTo(unitStartX + logoSize * 0.15, logoY + logoSize * 0.45);
+                ctx.closePath();
+                ctx.stroke();
+
+                ctx.beginPath();
+                ctx.arc(unitStartX + logoSize * 0.5, logoY + logoSize * 0.42, logoSize * 0.2, 0, Math.PI * 2);
+                ctx.fillStyle = '#EA580C';
+                ctx.fill();
+                ctx.restore();
+            }
+
+            // 2. Gambar Teks 'RuangSinggah' (Oranye Resmi)
+            const textY = logoY + (logoSize / 2) + (fontSize * 0.35);
+            const textStartX = unitStartX + logoSize + itemGap;
+
+            ctx.textAlign = 'left';
+            ctx.textBaseline = 'alphabetic';
+
+            ctx.fillStyle = '#EA580C';
+            ctx.fillText(textPart1, textStartX, textY);
+
+            // 3. Gambar Teks '.id' (Charcoal / Gelap)
+            ctx.fillStyle = '#1E293B';
+            ctx.fillText(textPart2, textStartX + w1, textY);
+
+            ctx.restore();
+        }
+        rowIndex++;
+    }
+
+    ctx.restore();
+}
+
+/**
+ * Kompresi foto properti/kamar kost ke WebP sekaligus menyematkan watermark RuangSinggah.id (Client-Side)
+ */
+export async function compressKostPhotoWithWatermark(
+    file: File, 
+    quality = 0.82, 
+    maxWidth = 1920
+): Promise<File> {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.readAsDataURL(file);
+        reader.onload = (event) => {
+            const img = new Image();
+            img.src = event.target?.result as string;
+            img.onload = async () => {
+                try {
+                    const canvas = document.createElement('canvas');
+                    let width = img.width;
+                    let height = img.height;
+
+                    if (width > maxWidth) {
+                        height = Math.round((height * maxWidth) / width);
+                        width = maxWidth;
+                    }
+
+                    canvas.width = width;
+                    canvas.height = height;
+                    const ctx = canvas.getContext('2d');
+                    if (!ctx) {
+                        resolve(file);
+                        return;
+                    }
+
+                    // 1. Gambar foto asli
+                    ctx.drawImage(img, 0, 0, width, height);
+
+                    // 2. Sematkan pola watermark resmi RuangSinggah.id
+                    await drawRuangSinggahWatermarkPattern(ctx, width, height);
+
+                    // 3. Ekspor ke format WebP murni
+                    canvas.toBlob(
+                        (blob) => {
+                            if (!blob) {
+                                resolve(file);
+                                return;
+                            }
+                            const baseName = file.name.replace(/\.[^/.]+$/, "");
+                            const webpFile = new File(
+                                [blob],
+                                `${baseName}.webp`,
+                                { type: "image/webp", lastModified: Date.now() }
+                            );
+                            resolve(webpFile);
+                        },
+                        "image/webp",
+                        quality
+                    );
+                } catch (err) {
+                    console.error('[WATERMARK] Gagal menyematkan watermark:', err);
+                    resolve(file);
+                }
+            };
+            img.onerror = (err) => reject(err);
+        };
+        reader.onerror = (err) => reject(err);
+    });
+}
+
 /**
  * Membuat data Base64 beresolusi ringan untuk dikirim ke AI Vision
  */
@@ -570,6 +786,9 @@ export async function processPhotoWithAutoSensor(
                             }
                         }
                     }
+
+                    // 3.5. Sematkan pola watermark resmi RuangSinggah.id anti pencurian konten
+                    await drawRuangSinggahWatermarkPattern(ctx, width, height);
 
                     // 4. Kompresi WebP
                     canvas.toBlob(

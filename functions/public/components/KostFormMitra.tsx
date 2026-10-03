@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { Kost, RoomType, PricingPeriod } from '../types';
 import { addPropertyWithMedia, updatePropertyWithMedia, detectPhotoContactBanner, uploadDraftPhotoToStorage, deleteDraftPhotosFromStorage, sendMitraPublishedEmailBrevo } from '../adminService';
+import { drawRuangSinggahWatermarkPattern } from '../autoSensorService';
 import { notifyAdminPropertyReview } from '../emailService';
 import { findNearbyCuratedLandmarks } from '../constants/curatedLandmarks';
 import {
@@ -3385,7 +3386,7 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
             const reader = new FileReader();
             reader.onload = (e) => {
                 const img = new Image();
-                img.onload = () => {
+                img.onload = async () => {
                     const canvas = document.createElement('canvas');
                     
                     // Target standar industri: 1200 x 900 (Rasio Lanskap 4:3 Seragam)
@@ -3418,6 +3419,9 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
 
                     // Render foto di canvas dengan crop tengah simetris
                     ctx.drawImage(img, sx, sy, sWidth, sHeight, 0, 0, TARGET_WIDTH, TARGET_HEIGHT);
+
+                    // Sematkan pola watermark resmi RuangSinggah.id anti pencurian konten
+                    await drawRuangSinggahWatermarkPattern(ctx, TARGET_WIDTH, TARGET_HEIGHT);
 
                     canvas.toBlob((blob) => {
                         if (!blob) return resolve(file);

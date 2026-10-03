@@ -4,6 +4,7 @@ import { notifyAdminStatusUpdate, sendMitraPublishedEmailBrevoDirect, sendAgentK
 import { ensureAbsoluteUrl, getDisplayImageUrl, getDisplayImageObject, sortPropertyImagesWithRoomCover, invalidatePropertiesCache } from './userService';
 export { sortPropertyImagesWithRoomCover };
 import { getCurrentDate } from './utils/timeUtils';
+import { drawRuangSinggahWatermarkPattern } from './autoSensorService';
 
 // ---- TYPE DEF ----
 export interface BasicPropertyInfo extends Partial<Kost> {
@@ -206,7 +207,7 @@ export async function deleteSurveyPhoto(fileUrl: string): Promise<void> {
 }
 
 // Helper: Convert Image to WebP client-side
-export async function convertToWebP(file: File, quality: number = 0.8): Promise<File> {
+export async function convertToWebP(file: File, quality: number = 0.8, withWatermark: boolean = false): Promise<File> {
   return new Promise((resolve) => {
     // Only process jpeg, png and webp images
     if (!file.type.match(/image\/(jpeg|jpg|png|webp)/i)) {
@@ -216,7 +217,7 @@ export async function convertToWebP(file: File, quality: number = 0.8): Promise<
     const img = new Image();
     const objectUrl = URL.createObjectURL(file);
 
-    img.onload = () => {
+    img.onload = async () => {
       URL.revokeObjectURL(objectUrl);
       const canvas = document.createElement('canvas');
       
@@ -244,6 +245,10 @@ export async function convertToWebP(file: File, quality: number = 0.8): Promise<
       }
 
       ctx.drawImage(img, sx, sy, sWidth, sHeight, 0, 0, TARGET_WIDTH, TARGET_HEIGHT);
+
+      if (withWatermark) {
+        await drawRuangSinggahWatermarkPattern(ctx, TARGET_WIDTH, TARGET_HEIGHT);
+      }
 
       canvas.toBlob((blob) => {
         if (!blob) return resolve(file);
@@ -2047,7 +2052,7 @@ export async function addPropertyWithMedia(
     const label = (item && 'label' in item) ? (item.label || (item as any).category) : undefined;
     const category = (item && 'category' in item) ? (item as any).category : label;
     const caption = (item && 'caption' in item) ? (item as any).caption : (label || category);
-    const webpFile = await convertToWebP(rawFile);
+    const webpFile = await convertToWebP(rawFile, 0.82, true);
     const url = await uploadFileToStorage(webpFile, 'properties', `${user.id}/${tempId}/images/original`);
     newImageObjects.push({ 
       original: url, 
@@ -2303,7 +2308,7 @@ export async function updatePropertyWithMedia(
     const label = (item && 'label' in item) ? (item.label || (item as any).category) : undefined;
     const category = (item && 'category' in item) ? (item as any).category : label;
     const caption = (item && 'caption' in item) ? (item as any).caption : (label || category);
-    const webpFile = await convertToWebP(rawFile);
+    const webpFile = await convertToWebP(rawFile, 0.82, true);
     const url = await uploadFileToStorage(webpFile, 'properties', `${user.id}/${propertyId}/images/original`);
     newImageObjects.push({ 
       original: url, 

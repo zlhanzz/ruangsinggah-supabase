@@ -2,6 +2,46 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 444. Sistem Anti-Pencurian Konten Watermark RuangSinggah.id Berpola Diagonal & Preservasi WebP Responsif (`autoSensorService.ts`, `KostFormMitra.tsx`, `KostManagerPropertyFormModal.tsx`, `AgentDashboard.tsx`, `adminService.ts`) (Oktober 2026)
+- **Permintaan & Masalah**:
+  1. Pada sistem terdapat dua jalur upload listing properti kost: Jalur Dashboard Pemilik Kost (self listing) dan Jalur Dashboard Agen Survey (KostManager).
+  2. Dibutuhkan proteksi anti-pencurian konten di situs/platform agar setiap foto kost yang diunggah dan dilisting dilengkapi watermark `ruangsinggah.id` bermotif pola diagonal berulang (*staggered diagonal lattice pattern*) lengkap dengan logo RuangSinggah sesuai acuan desain.
+  3. Watermark dipastikan tidak membuat website atau loading konten menjadi berat, dengan tetap menjaga sistem kompresi WebP client-side yang sudah ada dan terpasang pada upload foto listing.
+  4. Watermark foto listing kost harus beradaptasi responsif antara tampilan desktop maupun mobile tanpa kerusakan, kekacauan, atau layout shift.
+  5. Seluruh fungsi pendukung (AI banner contact sensor, auto-save draft, kategori foto, submit flow) wajib dijaga keutuhannya dengan hati-hati.
+- **Implementasi Solusi**:
+  1. **Engine Pola Watermark Diagonal Client-Side (`autoSensorService.ts`)**:
+     - Mengembangkan fungsi `drawRuangSinggahWatermarkPattern(ctx, width, height)`:
+       - Memuat dan meng-cache logo resmi RuangSinggah (`/logo.png`) secara in-memory untuk rendering 0ms, lengkap dengan fallback vektor mandiri.
+       - Menerapkan rotasi diagonal -28° di titik pusat canvas dengan iterasi staggered brick lattice pattern yang menyelimuti seluruh sudut kanvas foto.
+       - Merender unit watermark: Icon Logo RuangSinggah + Teks `RuangSinggah` (oranye `#EA580C`) + `.id` (charcoal `#1E293B`).
+       - Menghitung skala elemen (logo, font, padding, gap) secara dinamis proporsional berdasarkan resolusi canvas foto (`minDim / 900`).
+       - Mengatur opacity seimbang (`globalAlpha = 0.26`) dengan bayangan halus (`shadowBlur`) sehingga kontras terbaca jelas di latar foto terang maupun gelap tanpa merusak keindahan visual kamar.
+     - Menyediakan fungsi `compressKostPhotoWithWatermark(file, quality = 0.82, maxWidth = 1920)` untuk kompresi WebP langsung ber-watermark.
+     - Mengintegrasikan `drawRuangSinggahWatermarkPattern` ke dalam `processPhotoWithAutoSensor` agar seluruh foto area umum/eksterior yang dipindai AI sensor kontak juga terlindungi watermark permanen.
+  2. **Integrasi Jalur 1 - Dashboard Pemilik Kost (`KostFormMitra.tsx`)**:
+     - Mengintegrasikan `drawRuangSinggahWatermarkPattern` ke dalam `compressImageToWebP` beresolusi standar 4:3 (1200x900) pada formulir listing mitra.
+     - Seluruh foto bangunan, fasilitas umum, dan unit kamar pada `handleCategoryFilesUpload` dan `handleReScanBanner` otomatis ter-watermark dan terkonversi ke WebP ringan sebelum disimpan ke draft storage.
+  3. **Integrasi Jalur 2 - Dashboard Agen Survey (`KostManagerPropertyFormModal.tsx` & `AgentDashboard.tsx`)**:
+     - Di `KostManagerPropertyFormModal.tsx`: mengalihkan `compressImageToWebP` ke `compressKostPhotoWithWatermark` untuk upload foto kamar tidur & unit kamar, dan mengandalkan `processPhotoWithAutoSensor` ber-watermark untuk area umum.
+     - Di `AgentDashboard.tsx`: menyematkan `compressKostPhotoWithWatermark` pada `handleUploadRoomPhoto` dan upload foto kamar kost manager.
+  4. **Penguatan Pipeline Simpan Properti (`adminService.ts`)**:
+     - Menambahkan parameter `withWatermark` pada `convertToWebP`.
+     - Mengaktifkan watermark pada `addPropertyWithMedia` dan `updatePropertyWithMedia` untuk memproses sisa file mentah properti baru ke format WebP ter-watermark.
+     - Dokumen non-properti (KTP mitra, banner promosi, bukti pembayaran) diproteksi tetap menggunakan konversi WebP murni tanpa watermark diagonal.
+- **File Tersentuh**:
+  - `functions/public/autoSensorService.ts`
+  - `functions/public/components/KostFormMitra.tsx`
+  - `functions/public/components/admin/KostManagerPropertyFormModal.tsx`
+  - `functions/public/pages/AgentDashboard.tsx`
+  - `functions/public/adminService.ts`
+  - `functions/PROGRESS.md`
+  - `IMPLEMENTATION_PLAN.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi Vite build (`npm run build`) sukses 100% tanpa error (`✓ built in 48.12s`, exit code 0).
+  - Watermark dicetak (*baked-in*) langsung ke WebP saat upload, menjamin 0 overhead CPU saat dibaca visitor dan 100% responsif di desktop maupun mobile.
+
 ### 443. Optimalisasi Space Layar Mobile & Redesain Kartu Draft Compact (`MitraDashboard.tsx`) (September 2026)
 - **Permintaan & Masalah**:
   1. Tombol melayang pesan (Floating Action Button / FAB) di pojok kanan bawah menutupi tombol aksi web/app, khususnya menutupi tombol hapus draft kost (ikon tempat sampah) di kartu draft.

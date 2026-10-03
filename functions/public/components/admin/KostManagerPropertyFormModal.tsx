@@ -7,7 +7,8 @@ import {
 import {
     processPhotoWithAutoSensor,
     processImageUrlWithAutoSensor,
-    isBannerProneCategory
+    isBannerProneCategory,
+    compressKostPhotoWithWatermark
 } from '../../autoSensorService';
 import { PhotoSensorModal } from '../common/PhotoSensorModal';
 import { 
@@ -72,43 +73,9 @@ const normalizePhotoUrl = (photo: any): string => {
     return photo.url || photo.original || photo.original_url || photo.photo_url || photo.file_url || photo.src || '';
 };
 
-// Client-Side WebP Compression
+// Client-Side WebP Compression dengan Watermark Anti-Pencurian Konten
 const compressImageToWebP = async (file: File, quality = 0.82, maxDimension = 1920): Promise<File> => {
-    return new Promise((resolve) => {
-        if (!file.type.startsWith('image/')) return resolve(file);
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            const img = new Image();
-            img.onload = () => {
-                let { width, height } = img;
-                if (width > maxDimension || height > maxDimension) {
-                    if (width > height) {
-                        height = Math.round((height * maxDimension) / width);
-                        width = maxDimension;
-                    } else {
-                        width = Math.round((width * maxDimension) / height);
-                        height = maxDimension;
-                    }
-                }
-                const canvas = document.createElement('canvas');
-                canvas.width = width;
-                canvas.height = height;
-                const ctx = canvas.getContext('2d');
-                if (!ctx) return resolve(file);
-                ctx.drawImage(img, 0, 0, width, height);
-                canvas.toBlob((blob) => {
-                    if (!blob) return resolve(file);
-                    const newFileName = file.name.replace(/\.[^/.]+$/, "") + ".webp";
-                    const webpFile = new File([blob], newFileName, { type: "image/webp" });
-                    resolve(webpFile);
-                }, "image/webp", quality);
-            };
-            img.onerror = () => resolve(file);
-            img.src = e.target?.result as string;
-        };
-        reader.onerror = () => resolve(file);
-        reader.readAsDataURL(file);
-    });
+    return compressKostPhotoWithWatermark(file, quality, maxDimension);
 };
 
 const detectProvinceFromAddress = (addr?: string | null): string => {

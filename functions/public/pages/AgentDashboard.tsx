@@ -32,7 +32,8 @@ import {
 import {
     isBannerProneCategory,
     processPhotoWithAutoSensor,
-    processImageUrlWithAutoSensor
+    processImageUrlWithAutoSensor,
+    compressKostPhotoWithWatermark
 } from '../autoSensorService';
 import { PhotoSensorModal } from '../components/common/PhotoSensorModal';
 import { 
@@ -3830,7 +3831,8 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
         setUploadingRooms(prev => ({ ...prev, [typeIdx]: true }));
         try {
             const folder = `kostmanager/drafts/${isEditingKostManager?.id || 'temp'}/rooms/${Date.now()}`;
-            const publicUrl = await uploadFileAndGetURL(file, folder);
+            const processedFile = await compressKostPhotoWithWatermark(file);
+            const publicUrl = await uploadFileAndGetURL(processedFile, folder);
             
             const updatedRoomTypes = [...(kmListingForm.roomTypes || [])];
             const rt = updatedRoomTypes[typeIdx];
@@ -5811,7 +5813,8 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                                                                                                                         const newUrls = [];
                                                                                                                         for (let f = 0; f < files.length; f++) {
                                                                                                                             const folder = `kostmanager/drafts/${isEditingKostManager?.id || 'temp'}/rooms/${Date.now()}_${f}`;
-                                                                                                                            const publicUrl = await uploadFileAndGetURL(files[f], folder);
+                                                                                                                            const processedFile = await compressKostPhotoWithWatermark(files[f]);
+                                                                                                                            const publicUrl = await uploadFileAndGetURL(processedFile, folder);
                                                                                                                             newUrls.push(publicUrl);
                                                                                                                         }
                                                                                                                         const updatedCategorized = { ...currentCategorized };
@@ -10488,7 +10491,8 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                                                                                                                     const newUrls = [];
                                                                                                                     for (let f = 0; f < files.length; f++) {
                                                                                                                         const folder = `kostmanager/drafts/${isEditingKostManager?.id || 'temp'}/rooms/${Date.now()}_${f}`;
-                                                                                                                        const publicUrl = await uploadFileAndGetURL(files[f], folder);
+                                                                                                                        const processedFile = await compressKostPhotoWithWatermark(files[f]);
+                                                                                                                        const publicUrl = await uploadFileAndGetURL(processedFile, folder);
                                                                                                                         newUrls.push(publicUrl);
                                                                                                                     }
                                                                                                                     const updatedCategorized = { ...currentCategorized };
