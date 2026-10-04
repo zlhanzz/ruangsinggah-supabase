@@ -33,7 +33,8 @@ import {
     isBannerProneCategory,
     processPhotoWithAutoSensor,
     processImageUrlWithAutoSensor,
-    compressKostPhotoWithWatermark
+    compressKostPhotoWithWatermark,
+    warmUpBannerDetectionEngine
 } from '../autoSensorService';
 import { PhotoSensorModal } from '../components/common/PhotoSensorModal';
 import { 
@@ -500,6 +501,9 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
         }).catch((err) => {
             console.error('Gagal load riwayat log katalog survey:', err);
         });
+
+        // Background Pre-Warming Engine AI Banner Detection saat Agen membuka dashboard
+        warmUpBannerDetectionEngine();
     }, []);
     
     // Modal State

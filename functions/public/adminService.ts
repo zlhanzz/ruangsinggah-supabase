@@ -4,7 +4,11 @@ import { notifyAdminStatusUpdate, sendMitraPublishedEmailBrevoDirect, sendAgentK
 import { ensureAbsoluteUrl, getDisplayImageUrl, getDisplayImageObject, sortPropertyImagesWithRoomCover, invalidatePropertiesCache } from './userService';
 export { sortPropertyImagesWithRoomCover };
 import { getCurrentDate } from './utils/timeUtils';
-import { drawRuangSinggahWatermarkPattern } from './autoSensorService';
+import { 
+  drawRuangSinggahWatermarkPattern,
+  detectPhotoContactBanner as detectBannerCore,
+  processPhotoWithAutoSensor as processPhotoCore
+} from './autoSensorService';
 
 // ---- TYPE DEF ----
 export interface BasicPropertyInfo extends Partial<Kost> {
@@ -6474,81 +6478,7 @@ export interface ContactBannerDetectionResult {
   error?: string;
 }
 
-export const detectPhotoContactBanner = async (
-  base64Image: string, 
-  mimeType = 'image/jpeg'
-): Promise<ContactBannerDetectionResult> => {
-  const invokeWithTimeout = async (attempt: number) => {
-    const timeoutPromise = new Promise((_, reject) =>
-      setTimeout(() => reject(new Error(`Deteksi banner kontak timeout (18s) - Percobaan ${attempt}`)), 18000)
-    );
-    const invokePromise = supabase.functions.invoke('detect-contact-banner', {
-      body: { 
-        base64Image,
-        image: base64Image,
-        mimeType 
-      }
-    });
-    return (await Promise.race([invokePromise, timeoutPromise])) as any;
-  };
-
-  try {
-    console.log('[AI_BANNER] Memanggil Edge Function detect-contact-banner...');
-    let res: any;
-    try {
-      res = await invokeWithTimeout(1);
-    } catch (firstErr: any) {
-      console.warn('[AI_BANNER] Percobaan 1 gagal, mencoba retry dalam 800ms...', firstErr?.message || firstErr);
-      await new Promise(r => setTimeout(r, 800));
-      res = await invokeWithTimeout(2);
-    }
-
-    const { data, error } = res || {};
-
-    if (error) {
-      console.error('[AI_BANNER] Error invoke Edge Function:', error);
-      return {
-        hasContact: false,
-        detectedTexts: [],
-        boxes: [],
-        error: error.message || 'Gagal memanggil fungsi AI'
-      };
-    }
-
-    if (data) {
-      const rawData = data.data || data;
-      const hasContact = Boolean(rawData.has_contact ?? rawData.hasContact ?? false);
-      const boxes = Array.isArray(rawData.boxes) ? rawData.boxes : [];
-      const detectedTexts = Array.isArray(rawData.detected_texts) 
-        ? rawData.detected_texts 
-        : Array.isArray(rawData.detectedTexts) 
-          ? rawData.detectedTexts 
-          : [];
-
-      console.log('[AI_BANNER] Hasil deteksi:', { hasContact, detectedCount: boxes.length, detectedTexts });
-
-      return {
-        hasContact,
-        detectedTexts,
-        boxes
-      };
-    }
-
-    return {
-      hasContact: false,
-      detectedTexts: [],
-      boxes: []
-    };
-  } catch (err: any) {
-    console.warn('[AI_BANNER] Pemeriksaan banner kontak dilewati (fallback aman):', err);
-    return {
-      hasContact: false,
-      boxes: [],
-      detectedTexts: [],
-      error: err?.message || 'Gangguan jaringan saat memindai spanduk kontak'
-    };
-  }
-};
+export const detectPhotoContactBanner = detectBannerCore;
 
 // ── SHARED AUTO-SENSOR & IMAGE PROCESSING UTILITIES ───────────────────────────
 
@@ -6984,33 +6914,21 @@ export const processPhotoWithAutoSensor = async (
   category: string
 ): Promise<ProcessedPhotoResult> => {
   try {
-    let fileToProcess = file;
     let isBlurred = false;
     let detectedTexts: string[] = [];
-    let scanError: string | undefined = undefined;
 
-    const needAiScan = isBannerProneCategory(category);
-    if (needAiScan) {
-      const lowResBase64 = await createLowResBase64ForAi(file, 1024, 0.65);
-      if (lowResBase64) {
-        const detection = await detectPhotoContactBanner(lowResBase64, 'image/jpeg');
-        if (detection.hasContact && detection.boxes && detection.boxes.length > 0) {
-          fileToProcess = await applyBlurToBoundingBoxes(file, detection.boxes);
-          isBlurred = true;
-          detectedTexts = detection.detectedTexts || [];
-        } else if (detection.error) {
-          scanError = detection.error;
-          console.warn('[AI_BANNER] Deteksi kontak terhambat:', detection.error);
-        }
+    const webpFile = await processPhotoCore(file, category, (info) => {
+      if (info && info.detectedCount > 0) {
+        isBlurred = true;
+        detectedTexts = info.detectedTexts || [];
       }
-    }
+    });
 
-    const webpFile = await compressImageToWebP(fileToProcess);
     return {
       processedFile: webpFile,
       isBlurred,
       detectedTexts,
-      error: scanError
+      error: undefined
     };
   } catch (err: any) {
     console.error('[AI_BANNER] Error memproses foto dengan auto sensor:', err);

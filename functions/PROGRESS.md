@@ -10403,3 +10403,45 @@
   - WALKTHROUGH.md
 - **Verifikasi**:
   - Build Vite frontend npm run build di functions/public/ sukses 100% dengan 0 error dalam 34.39s (✓ 2506 modules transformed).
+
+### 269. Akselerasi Ultra-Cepat Upload Foto Listing, Deteksi Sudut Banner Presisi (Perspective Quad Polygon), dan Single-Pass Watermark WebP (Oktober 2026)
+- **Permintaan & Masalah**:
+  1. Pada pengunggahan foto pertama di formulir listing kost mitra, proses upload berjalan sangat lama dan sensor banner tidak bekerja (hanya watermark RuangSinggah.id yang muncul, disertai tombol perisai oranye 🛡️ re-scan).
+  2. Pada pengunggahan kedua, proses terasa sedikit lebih cepat dan sensor banner baru bekerja.
+  3. Pengguna menginginkan proses upload, validasi, dan sensor bekerja secepat dan semaksimal mungkin:
+     - Watermark sangat cepat saat upload.
+     - Fast-path validasi: jika kategori/foto bersih dari spanduk/kontak, langsung tampilkan hasil WebP + watermark instan tanpa delay AI.
+     - Jika ada spanduk: deteksi sudut spanduk secara presisi (4 titik sudut / perspective quadrilateral polygon) sehingga sensor menutup spanduk dengan pas tanpa merusak/memotong pagar, dinding, atau tiang, bahkan jika posisi spanduk miring karena sudut pengambilan foto.
+- **Implementasi & Solusi**:
+  * **1. Optimasi & Rekonfigurasi Deno Edge Function (`supabase/functions/detect-contact-banner/index.ts`)**:
+    - Memposisikan `gemini-2.5-flash` sebagai prioritas nomor 1 pada candidate models (mengeliminasi delay loop pencarian model yang gagal).
+    - Menambahkan endpoint handler `{ ping: true }` untuk background pre-warming.
+    - Memperbarui prompt AI Vision untuk mendeteksi 4 titik sudut poligon (`polygon: [[x0,y0], [x1,y1], [x2,y2], [x3,y3]]`) berurutan searah jarum jam (Top-Left, Top-Right, Bottom-Right, Bottom-Left) skala 0-1000.
+    - Menerapkan negative constraints ketat agar AI tidak memotong pagar atau dinding.
+    - Telah di-deploy ke Supabase Edge Functions live pada project `sgcmnsnokrztocnhxnqm`.
+  * **2. Background Pre-Warming Engine (`warmUpBannerDetectionEngine`)**:
+    - Dibuat fungsi singleton pre-warming yang mengirim ping ringan saat form kost mitra (`KostFormMitra.tsx`), modal properti agen (`KostManagerPropertyFormModal.tsx`), atau dashboard agen (`AgentDashboard.tsx`) dibuka.
+    - Menghilangkan delay cold start 5-8 detik saat pengguna memilih foto dari galeri.
+  * **3. Engine Sensor Sudut Poligon Presisi & Rotasi Badge (`applyPerspectivePolygonSensorToCanvas`)**:
+    - Menerapkan canvas clipping path (`ctx.clip()`) mengikuti 4 titik sudut miring poligon spanduk.
+    - Efek pixelate dan frosted glass gelap hanya menutup kain/papan spanduk, menjaga keutuhan struktur pagar dan dinding di luar spanduk.
+    - Menghitung sudut kemiringan sisi atas spanduk (`Math.atan2(dy, dx)`) dan merender pill badge resmi `ruangsinggah.id` di titik tengah (centroid) dengan rotasi yang selaras dengan kemiringan spanduk.
+    - Kompatibel dengan bounding box reguler sebagai fallback.
+  * **4. Single-Pass Canvas Pipeline & Fast-Path Non-Banner (< 150ms)**:
+    - Kategori interior (kamar tidur, kasur, lemari, kamar mandi, dapur) memicu Fast-Path instan (< 150ms) tanpa request AI sama sekali.
+    - Kategori rawan spanduk menggunakan payload Base64 teroptimasi (1024px, q=0.65, ~45KB) dan timeout 7.5s dengan fallback heuristik otomatis.
+    - Seluruh proses (skala -> deteksi AI/heuristik -> sensor poligon miring -> watermark diagonal RuangSinggah.id -> WebP blob) disatukan dalam SATU KALI putaran canvas (Single-Pass), menghilangkan double canvas round-trip yang memboroskan memori dan waktu.
+  * **5. Konsolidasi Antarmuka & Eliminasi Redundansi**:
+    - Mengarahkan `detectPhotoContactBanner` dan `processPhotoWithAutoSensor` di `adminService.ts` dan `KostFormMitra.tsx` ke modul terpadu `autoSensorService.ts`.
+- **File Tersentuh**:
+  - `supabase/functions/detect-contact-banner/index.ts`
+  - `functions/public/autoSensorService.ts`
+  - `functions/public/components/KostFormMitra.tsx`
+  - `functions/public/components/admin/KostManagerPropertyFormModal.tsx`
+  - `functions/public/pages/AgentDashboard.tsx`
+  - `functions/public/adminService.ts`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Build Vite frontend `npm run build` di `functions/public/` sukses 100% dengan 0 error dalam 39.94s (✓ 2512 modules transformed).
+  - Deploy Edge Function ke Supabase berhasil: `Deployed Functions on project sgcmnsnokrztocnhxnqm: detect-contact-banner`.

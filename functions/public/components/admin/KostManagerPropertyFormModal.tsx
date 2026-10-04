@@ -8,7 +8,8 @@ import {
     processPhotoWithAutoSensor,
     processImageUrlWithAutoSensor,
     isBannerProneCategory,
-    compressKostPhotoWithWatermark
+    compressKostPhotoWithWatermark,
+    warmUpBannerDetectionEngine
 } from '../../autoSensorService';
 import { PhotoSensorModal } from '../common/PhotoSensorModal';
 import { 
@@ -645,6 +646,11 @@ export const KostManagerPropertyFormModal: React.FC<KostManagerPropertyFormModal
 
     // Selected Owner info
     const selectedOwner = ownersList.find(o => o.id === kmListingForm.owner_uid) || ownersList[0];
+
+    // Background Pre-Warming AI Engine saat modal dibuka
+    useEffect(() => {
+        warmUpBannerDetectionEngine();
+    }, []);
 
     // Synchronize when newPropForm or editingPropertyId changes
     useEffect(() => {

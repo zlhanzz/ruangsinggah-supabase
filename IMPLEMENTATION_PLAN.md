@@ -1,112 +1,110 @@
-# Rencana Implementasi: Sistem Anti-Pencurian Konten Watermark RuangSinggah.id & Preservasi WebP Responsif
+# Rencana Implementasi: Akselerasi Ultra-Cepat Upload Foto Listing, Deteksi Sudut Banner Presisi (Perspective Quad), dan Single-Pass Watermark WebP
 
-## 1. Analisis Masalah & Kebutuhan
+## 1. Analisis Masalah & Jawaban Pertanyaan Pengguna
 
-### Konteks Saat Ini
-1. **Dua Jalur Pendaftaran & Upload Listing Kost**:
-   - **Jalur 1: Dashboard Pemilik Kost (Self Listing)** melalui [`KostFormMitra.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/components/KostFormMitra.tsx): Pemilik kost mengunggah foto bangunan, fasilitas bersama, dan unit tipe kamar secara mandiri.
-   - **Jalur 2: Dashboard Agen Survey (KostManager)** melalui [`KostManagerPropertyFormModal.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/components/admin/KostManagerPropertyFormModal.tsx) & [`AgentDashboard.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/AgentDashboard.tsx): Agen survey mengambil dan mengunggah foto fisik di lapangan untuk listing kamar dan area umum properti terkelola.
-2. **Kebutuhan Anti-Pencurian Konten (Watermarking)**:
-   - Foto properti dan kamar kost yang berkualitas tinggi rentan diunduh (*scraped* / *right-click save*) dan dicuri oleh pihak ketiga atau platform kompetitor tanpa izin.
-   - Diperlukan proteksi watermark resmi bermotif pola diagonal berulang (*staggered diagonal lattice pattern*) bertuliskan `RuangSinggah.id` lengkap dengan logo resmi RuangSinggah, persis seperti contoh referensi yang diberikan pengguna (baik versi lanskap 16:9 maupun persegi 1:1).
-3. **Persyaratan Performa & Preservasi WebP**:
-   - Watermark **tidak boleh membuat website atau load konten menjadi lambat atau berat**.
-   - Sistem kompresi WebP client-side yang sudah berjalan stabil wajib dipertahankan: watermark harus dibakar langsung (*baked-in*) ke dalam kanvas gambar saat konversi ke format `.webp` berlangsung di browser klien **sebelum** dikirim ke Supabase Storage.
-   - Tidak ada beban komputasi canvas atau DOM overlay berat saat pengunjung membuka katalog/detail kost di browser.
-4. **Adaptasi Responsif Desktop & Mobile**:
-   - Watermark harus proporsional dan tertata rapi di berbagai rasio foto (16:9 lanskap, 4:3 standar, 1:1 persegi, maupun foto portrait dari kamera HP vertikal).
-   - Saat ditampilkan pada layar desktop monitor lebar maupun layar sempit ponsel pintar (mobile), watermark tetap rapi, proporsional, tidak pecah, dan tidak bertumpuk semrawut.
+### A. Mengapa Proses Upload Foto Pertama Sangat Lama dan Sensor Banner Tidak Berfungsi (Hanya Ada Watermark)?
+Berdasarkan investigasi mendalam terhadap log dan kode sistem:
+1. **Cold Start Deno Edge Function**:
+   - Supabase Edge Function `detect-contact-banner` berjalan di atas container Deno serverless yang mengalami *cold start* saat idle. Pada pemanggilan pertama, container membutuhkan inisialisasi selama 4–8 detik.
+2. **Model Loop yang Membuang Waktu di Edge Function**:
+   - Di `supabase/functions/detect-contact-banner/index.ts`, urutan model kandidat dimulai dari `"gemini-2.0-flash"` dan `"gemini-1.5-flash"`. Berdasarkan pengujian langsung kami via script, kedua model tersebut gagal/404 pada endpoint saat ini, sehingga Edge Function membuang waktu mencoba seluruh API key untuk model-model yang gagal sebelum akhirnya beralih ke `"gemini-2.5-flash"` (yang sebenarnya aktif dan sukses).
+3. **Frontend Timeout & Ketiadaan Fallback di Form Pemilik Kost (`KostFormMitra.tsx`)**:
+   - Karena kombinasi cold start + model loop yang memakan waktu > 15-18 detik, request frontend mengalami *timeout* pada percobaan pertama.
+   - Di `KostFormMitra.tsx`, blok penanganan error AI (`detection.error`) **tidak memicu fallback sensor**. Foto langsung diteruskan ke proses kompresi WebP reguler dan diberi watermark, tanpa disensor sama sekali, serta memicu munculnya tombol perisai oranye 🛡️ (*Re-Scan Manual*) pada kartu foto seperti yang terlihat di tangkapan layar pengguna.
+4. **Proses Kanvas Berganda (Double Canvas Round-Trip)**:
+   - Alur saat ini memproses gambar dua kali: citra mentah dimuat ke kanvas 1 untuk sensor blur -> diekspor ke File -> dimuat lagi ke kanvas 2 untuk crop 4:3 + watermark RuangSinggah.id -> diekspor lagi ke WebP. Hal ini memakan memori CPU/RAM dan memperlambat proses upload.
 
----
-
-## 2. Dampak Perubahan (Files Touched)
-
-Modifikasi akan dilakukan secara terukur pada file-file berikut:
-
-1. [`functions/public/autoSensorService.ts`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/autoSensorService.ts)
-   - Menambahkan helper rendering canvas `drawRuangSinggahWatermarkPattern(ctx, width, height)`:
-     - Pola diagonal berulang (kemiringan -28°).
-     - Logo RuangSinggah (`/logo.png`) + Teks `RuangSinggah` (oranye) + `.id` (charcoal/gelap).
-     - Transparansi lembut (~0.24 - 0.28) dan bayangan tipis agar terbaca jelas baik pada latar foto terang maupun gelap.
-     - Perhitungan grid dan skala dinamis proporsional terhadap resolusi gambar.
-   - Menambahkan fungsi pembungkus kompresi: `compressKostPhotoWithWatermark(file, quality, maxWidth)` yang mengonversi foto ke WebP sekaligus menyematkan watermark anti pencurian.
-   - Mengintegrasikan penyematan watermark ke dalam `processPhotoWithAutoSensor` agar foto area publik/eksterior yang melewati sensor spanduk kontak otomatis juga terlindungi watermark di seluruh permukaannya.
-
-2. [`functions/public/components/KostFormMitra.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/components/KostFormMitra.tsx) (Jalur 1: Pemilik Kost)
-   - Memperbarui fungsi `handleCategoryFilesUpload`: seluruh foto baru yang dipilih pemilik kost (baik foto area bangunan maupun foto kamar tidur/kamar mandi) diproses menggunakan `compressKostPhotoWithWatermark` sebelum disimpan ke draft storage.
-   - Memperbarui fungsi `handleReScanBanner` agar foto hasil re-scan tetap memiliki watermark WebP utuh.
-
-3. [`functions/public/components/admin/KostManagerPropertyFormModal.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/components/admin/KostManagerPropertyFormModal.tsx) (Jalur 2: Agen Survey KostManager)
-   - Memperbarui pengunggahan foto area umum (`handleUploadPublicPhoto`) dan foto unit kamar (`handleUploadRoomUnitPhoto`) serta pengunggahan ulang/edit foto di tab kamar & fasilitas agar melewati kompresi WebP ber-watermark.
-
-4. [`functions/public/pages/AgentDashboard.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/AgentDashboard.tsx) (Jalur 2: Agen Survey Dashboard)
-   - Memperbarui `handleUploadRoomPhoto` dan upload foto draft kamar agar memproses file dengan `compressKostPhotoWithWatermark` sebelum memanggil `uploadFileAndGetURL`.
-
-5. [`functions/public/adminService.ts`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/adminService.ts)
-   - Memperbarui `addPropertyWithMedia` dan `updatePropertyWithMedia`: saat memproses sisa `imageFiles` (jika ada file mentah yang belum terkompresi saat submit), pastikan gambar di-watermark ke format WebP sebelum diunggah ke bucket `properties`.
-   - Menjaga agar foto non-properti (KTP verifikasi mitra, banner promo, slip transfer) TIDAK terkena watermark diagonal.
+### B. Mengapa Upload Foto Kedua Terasa Sedikit Lebih Cepat dan Sensor Banner Bekerja?
+- Pada upload kedua, container Deno Supabase **sudah berada dalam kondisi hangat (*warm*)** di memori. Walaupun masih membuang waktu pada model loop yang gagal, eksekusinya selesai dalam ~4.5 detik (di bawah batas timeout 18 detik). Karena respons AI berhasil diterima, fungsi sensor kotak banner berhasil dieksekusi.
 
 ---
 
-## 3. Langkah-Langkah Eksekusi (Fase 2 - Hanya Setelah di-ACC)
+## 2. Tujuan Pengembangan & Solusi yang Diusulkan
 
-### Langkah 1: Pembuatan Engine Pola Watermark Diagonal di `autoSensorService.ts`
-1. Siapkan helper pemuat gambar logo `getRuangSinggahLogoImage()` dengan in-memory cache agar pemanggilan berulang berkecepatan 0ms.
-2. Buat fungsi `drawRuangSinggahWatermarkPattern(ctx: CanvasRenderingContext2D, width: number, height: number)`:
-   - Hitung skala elemen berbasis dimensi canvas:
-     `const baseDim = Math.min(width, height);`
-     `const scale = Math.max(0.65, Math.min(1.4, baseDim / 900));`
-   - Rotasi kanvas -28° (atau gambar pada sudut diagonal).
-   - Render deretan baris selang-seling (staggered brick layout):
-     - Ikon Logo (tinggi ~26px * scale, lebar proporsional).
-     - Teks "RuangSinggah" (warna oranye `#EA580C`, font bold sans-serif ukuran ~16px * scale).
-     - Teks ".id" (warna `#1E293B` atau `#0F172A`).
-     - Atur `ctx.globalAlpha` pada rentang ~0.24 - 0.28 (estetis, protektif, dan tidak mengaburkan estetika kamar).
-     - Berikan bayangan halus (`shadowBlur: 2`, `shadowColor: 'rgba(255,255,255,0.45)'` dan fallback gelap tipis) agar kontras optimal pada latar belakang gelap maupun terang.
-3. Buat fungsi `compressKostPhotoWithWatermark(file: File, quality = 0.82, maxWidth = 1920): Promise<File>`:
-   - Buka file gambar ke canvas dengan batasan `maxWidth` (standar 1920px).
-   - Gambar foto asli.
-   - Panggil `drawRuangSinggahWatermarkPattern(ctx, canvas.width, canvas.height)`.
-   - Ekspor canvas langsung ke Blob `image/webp` dengan kualitas 0.82.
-   - Kembalikan objek `File` berekstensi `.webp`.
-4. Integrasikan juga pemanggilan `drawRuangSinggahWatermarkPattern` ke dalam `processPhotoWithAutoSensor` sebelum baris `canvas.toBlob(...)`.
+1. **Akselerasi Ultra-Cepat (Fast-Path Architecture)**:
+   - **Background Pre-Warming Engine**: Saat pengguna membuka Formulir Kost pada langkah 5 (FOTO) atau saat modal dibuka, sistem secara otomatis mengirimkan ping ringan ke Edge Function di latar belakang (*non-blocking*). Ketika pengguna memilih foto dari galeri, Edge Function sudah dalam kondisi *warm* 100%.
+   - **Fast-Path Kategori Non-Banner**: Foto untuk kategori internal (kamar tidur, kamar mandi, kasur, lemari, dapur, dll.) dipastikan **0ms delay AI** — langsung diproses melalui Single-Pass WebP + Watermark (< 150ms).
+   - **Optimasi Payload AI**: Citra yang dikirim ke AI dikompresi optimal ke 800px-1024px JPEG kualitas 0.60 (~40-60 KB Base64), memangkas waktu transmisi jaringan seluler hingga 75%.
+   - **Penyederhanaan Model Cascade Edge Function**: Menempatkan `"gemini-2.5-flash"` sebagai prioritas nomor 1 dengan mematikan reasoning budget (`thinkingBudget: 0`) agar latensi AI turun drastis ke kisaran 1–1.5 detik.
 
-### Langkah 2: Integrasi Jalur 1 - Dashboard Pemilik Kost (`KostFormMitra.tsx`)
-1. Impor `compressKostPhotoWithWatermark` dari `../autoSensorService`.
-2. Di `handleCategoryFilesUpload`:
-   - Gantikan pemanggilan `compressImageToWebP(fileToProcess)` dengan `compressKostPhotoWithWatermark(fileToProcess)`.
-   - File yang dihasilkan berformat WebP dengan watermark permanen, langsung diunggah ke draft storage Supabase dan pratinjau langsung menampilkan watermark.
-3. Di `handleReScanBanner`:
-   - Gunakan `compressKostPhotoWithWatermark(blurredFile)` agar hasil re-scan tetap ber-watermark.
+2. **Deteksi Sudut Banner Presisi & Penyesuaian Perspektif (Perspective Quad Polygon)**:
+   - Memperbarui prompt dan schema output Gemini AI agar tidak hanya mengembalikan kotak tegak lurus (*axis-aligned bounding box*), melainkan **4 titik sudut terluar dari spanduk** (`polygon: [[x_tl, y_tl], [x_tr, y_tr], [x_br, y_br], [x_bl, y_bl]]`).
+   - Menerapkan rendering kanvas dengan **Perspective Clipping Path**:
+     - Efek sensor pixelate dan frosted glass gelap hanya diterapkan di dalam bidang poligon spanduk miring tersebut.
+     - Struktur pagar besi/kayu vertikal, dinding, atau tiang di samping spanduk **tidak akan ikut tertutup kotak hitam**.
+     - Badge watermark `ruangsinggah.id` diposisikan di titik centroid dan dirotasi mengikuti sudut kemiringan spanduk (`angle = Math.atan2(dy, dx)`).
 
-### Langkah 3: Integrasi Jalur 2 - Dashboard Agen Survey (`KostManagerPropertyFormModal.tsx` & `AgentDashboard.tsx`)
-1. Di `KostManagerPropertyFormModal.tsx`:
-   - Gantikan fungsi lokal `compressImageToWebP` dengan pemanggilan `compressKostPhotoWithWatermark`.
-   - Pastikan pengunggahan foto kamar tidur (`handleUploadRoomUnitPhoto` & multi-room upload baris ~3225) dan area umum (`handleUploadPublicPhoto` & baris ~2692) menghasilkan WebP ber-watermark.
-2. Di `AgentDashboard.tsx`:
-   - Perbarui `handleUploadRoomPhoto` (baris ~3833) dan upload foto draft kamar agar memproses file dengan `compressKostPhotoWithWatermark` sebelum memanggil `uploadFileAndGetURL`.
+3. **Single-Pass Rendering Pipeline**:
+   - Menggabungkan proses deteksi, sensor miring/poligon, watermark diagonal RuangSinggah.id, dan konversi WebP ke dalam **satu kali putaran kanvas (Single-Pass)**.
 
-### Langkah 4: Penguatan Pipeline Simpan Properti di `adminService.ts`
-1. Pastikan fungsi `addPropertyWithMedia` dan `updatePropertyWithMedia` yang mengunggah foto properti ke bucket `properties` menerapkan watermark pada file mentah yang belum terkompresi.
-2. Pastikan file dokumen/bukti non-properti (KTP, banner, bukti pembayaran) tetap menggunakan `convertToWebP` standar tanpa watermark diagonal.
+4. **Multi-Layer Defensive Fallback**:
+   - Jika koneksi internet pengguna sangat lambat dan request AI melebihi batas waktu (timeout dipersingkat menjadi 7 detik agar pengguna tidak menunggu lama), sistem secara otomatis mengaktifkan pemindaian lokal cerdas (*Smart Heuristic Client-Side Edge Detection*) sehingga spanduk tetap tersensor secara instan (< 50ms) dan foto **tidak akan pernah lolos tanpa sensor**.
 
 ---
 
-## 4. Rencana Verifikasi (Testing Plan)
+## 3. Dampak Perubahan (Daftar File yang Disentuh)
 
-1. **Uji Kompilasi TypeScript & Vite**:
-   - Jalankan `cmd.exe /c npm run build` di root workspace untuk menjamin 0 error TypeScript dan bundel frontend sukses 100%.
-2. **Uji Simulasi Watermark di Canvas**:
-   - Uji pembuatan watermark pada foto beresolusi lanskap (16:9), standar (4:3), persegi (1:1), dan potret (9:16).
-   - Pastikan pola berulang menutupi foto secara teratur tanpa distorsi atau tumpang tindih berlebih.
-3. **Uji Ukuran File WebP & Kinerja**:
-   - Pastikan output file tetap bertipe `image/webp` dengan ukuran file ringan (< 250 KB), menjaga kecepatan muat katalog dan detail kost tetap instan.
-4. **Uji Tampilan Responsif**:
-   - Buka pratinjau di layar desktop monitor dan simulasi layar mobile (ponsel pintar): pastikan watermark beradaptasi rapi mengikuti orientasi gambar tanpa merusak layout antarmuka.
-5. **Pencatatan Riwayat & Git Push**:
-   - Catat seluruh rangkuman pekerjaan ke dalam `functions/PROGRESS.md`.
-   - Terbitkan dokumen laporan `WALKTHROUGH.md`.
-   - Lakukan commit dan push ke branch `bukan-productions`.
+1. `supabase/functions/detect-contact-banner/index.ts`:
+   - Penataan ulang urutan model: meletakkan `gemini-2.5-flash` di urutan pertama.
+   - Penambahan parameter `thinkingBudget: 0` untuk akselerasi respon.
+   - Peningkatan schema instruksi untuk mendeteksi 4 titik sudut spanduk (`polygon` / `corners`) untuk koreksi kemiringan perspektif.
+   - Penambahan dukungan `ping: true` untuk background pre-warming.
+2. `functions/public/autoSensorService.ts`:
+   - Implementasi `applyPerspectivePolygonSensorToCanvas`: rendering sensor quadrilateral miring presisi berbasis sudut banner + rotasi badge.
+   - Implementasi `warmUpBannerDetectionEngine`: pemicu pre-warming Edge Function.
+   - Refaktor `processPhotoWithAutoSensor` menjadi Single-Pass Canvas Pipeline (menggabungkan sensor + watermark + WebP dalam 1x draw).
+3. `functions/public/components/KostFormMitra.tsx`:
+   - Menghubungkan pre-warming saat masuk ke langkah FOTO.
+   - Mengadopsi pipeline single-pass terpadu dari `autoSensorService.ts`, menghapus duplikasi fungsi lama `applyBlurToBoundingBoxes`.
+4. `functions/public/components/admin/KostManagerPropertyFormModal.tsx` & `functions/public/pages/AgentDashboard.tsx`:
+   - Memastikan pre-warming dan deteksi poligon perspektif aktif pada dashboard agen survei.
+5. `functions/public/adminService.ts`:
+   - Menyelaraskan interface `detectPhotoContactBanner` agar mendukung 4 titik koordinat poligon.
 
 ---
-> 🛑 **Sesuai Protokol Baku Siklus Kerja 2-Fase**: Modifikasi kode **HANYA** akan dieksekusi setelah rencana implementasi ini ditinjau dan disetujui (*Proceed / ACC*) oleh User.
+
+## 4. Langkah-Langkah Eksekusi Bertahap
+
+- [ ] **Langkah 1: Optimasi Edge Function `detect-contact-banner`**
+  - Mengubah urutan prioritas model ke `gemini-2.5-flash` di posisi pertama.
+  - Memperbarui instruksi prompt untuk menghasilkan koordinat 4 sudut (`polygon`: top-left, top-right, bottom-right, bottom-left) berskala 0-1000.
+  - Menambahkan endpoint handler untuk `{ ping: true }`.
+  - Menguji waktu respon via script uji.
+
+- [ ] **Langkah 2: Pembaruan Engine Rendering Kanvas di `autoSensorService.ts`**
+  - Membuat fungsi `applyPerspectivePolygonSensorToCanvas` dengan `ctx.beginPath()`, `ctx.clip()`, dan rotasi badge `ruangsinggah.id`.
+  - Menyediakan fallback ke bounding box jika poligon tidak terdeteksi.
+  - Mengintegrasikan pre-warming function `warmUpBannerDetectionEngine`.
+  - Mengimplementasikan Single-Pass Canvas Pipeline (skala -> AI/heuristik -> sensor poligon -> watermark -> WebP blob).
+
+- [ ] **Langkah 3: Integrasi ke `KostFormMitra.tsx` & Dashboard Agen**
+  - Menghapus double canvas round-trip di `KostFormMitra.tsx`.
+  - Memasang pre-warming otomatis saat pengguna mencapai Step 5 (Foto).
+  - Memastikan kategori non-banner langsung selesai dalam < 150ms tanpa request AI.
+  - Memastikan kategori banner rawan kontak memproses poligon miring secara mulus.
+
+- [ ] **Langkah 4: Kompilasi, Verifikasi Build & Pengujian**
+  - Menjalankan `npm run build` di `functions/public` untuk memastikan 0 error TypeScript / linting.
+  - Menjalankan script simulasi pemrosesan citra dengan spanduk miring.
+
+- [ ] **Langkah 5: Dokumentasi Progres & Sinkronisasi Git**
+  - Mencatat riwayat pembaruan ke `functions/PROGRESS.md`.
+  - Menyusun panduan hasil pengujian di `WALKTHROUGH.md`.
+  - Melakukan commit dan push ke remote branch `bukan-productions`.
+
+---
+
+## 5. Rencana Verifikasi
+
+1. **Uji Kecepatan (Benchmark Latensi)**:
+   - Pemanggilan pre-warmed Edge Function harus selesai dalam < 1.8 detik (sebelumnya 8–18 detik).
+   - Foto non-banner (kamar mandi, kamar tidur) selesai diproses dan diberi watermark dalam < 200ms.
+2. **Uji Presisi Sudut & Kemiringan Banner (Perspective Quad)**:
+   - Menguji foto dengan spanduk sewa kost yang posisinya miring/diambil dari sudut samping (seperti pada contoh pagar kayu dan jendela depan).
+   - Memastikan sensor hanya menutupi kain spanduk mengikuti 4 sudut miringnya, tanpa memotong pagar atau dinding di luar batas spanduk.
+   - Memastikan teks badge `ruangsinggah.id` berotasi sejajar dengan kemiringan spanduk.
+3. **Uji Kelulusan Build**:
+   - Menjalankan `npm run build` pada direktori frontend untuk memastikan tidak ada kesalahan tipe atau regresi.
+
+---
+*Mohon tinjau rencana implementasi ini. Jika disetujui, silakan berikan persetujuan ("ACC" / "Proceed") agar saya dapat melanjutkan ke Fase 2 (Eksekusi).*

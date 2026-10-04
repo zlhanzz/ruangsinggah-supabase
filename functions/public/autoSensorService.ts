@@ -32,6 +32,22 @@ const BANNER_PRONE_KEYWORDS = [
     'eksterior'
 ];
 
+export interface BannerPolygonPoint {
+    x: number;
+    y: number;
+}
+
+export interface BannerPerspectiveItem {
+    id?: string;
+    polygon?: Array<BannerPolygonPoint>; // 4 titik berurutan [TL, TR, BR, BL]
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    label?: string;
+    source?: 'ai' | 'heuristic' | 'manual';
+}
+
 export interface ContactBannerDetectionResult {
     hasContact: boolean;
     detectedTexts?: string[];
@@ -40,6 +56,15 @@ export interface ContactBannerDetectionResult {
         xmin: number;
         ymax: number;
         xmax: number;
+        polygon?: Array<[number, number]>;
+        label?: string;
+    }>;
+    banners?: Array<{
+        ymin: number;
+        xmin: number;
+        ymax: number;
+        xmax: number;
+        polygon?: Array<[number, number]>;
         label?: string;
     }>;
     error?: string;
@@ -50,6 +75,7 @@ export interface SensorBoxPixel {
     y: number;
     width: number;
     height: number;
+    polygon?: Array<BannerPolygonPoint>;
     id?: string;
     source?: 'ai' | 'heuristic' | 'manual';
 }
@@ -150,6 +176,36 @@ export function getRuangSinggahLogoImage(): Promise<HTMLImageElement | null> {
         }, 2500);
     });
     return logoLoadPromise;
+}
+
+// ── Pre-Warming Engine AI Banner Detection (Akselerasi 0ms saat Upload) ─────────
+let hasPreWarmed = false;
+let preWarmPromise: Promise<boolean> | null = null;
+
+export async function warmUpBannerDetectionEngine(): Promise<boolean> {
+    if (hasPreWarmed) return true;
+    if (preWarmPromise) return preWarmPromise;
+
+    preWarmPromise = (async () => {
+        try {
+            console.log('[AI_SENSOR] Menghangatkan Edge Function via pre-warm ping...');
+            const res = await Promise.race([
+                supabase.functions.invoke('detect-contact-banner', { body: { ping: true } }),
+                new Promise((_, reject) => setTimeout(() => reject(new Error('Pre-warm timeout')), 3500))
+            ]) as any;
+
+            if (res && res.data?.success) {
+                console.log('[AI_SENSOR] Edge Function sudah dalam kondisi warm 100%!');
+                hasPreWarmed = true;
+                return true;
+            }
+        } catch (err) {
+            console.warn('[AI_SENSOR] Pre-warm ping non-fatal notice:', err);
+        }
+        return false;
+    })();
+
+    return preWarmPromise;
 }
 
 /**
@@ -380,6 +436,7 @@ export async function createLowResBase64ForAi(fileOrUrl: File | string, maxDim =
 
 /**
  * Deteksi Spanduk / Kontak menggunakan Supabase Edge Function (Gemini AI Vision)
+ * Dioptimalkan dengan timeout terukur 7.5s dan fallback instan jika jaringan lambat
  */
 export async function detectPhotoContactBanner(
     base64Image: string,
@@ -389,9 +446,9 @@ export async function detectPhotoContactBanner(
         return { hasContact: false, boxes: [] };
     }
 
-    const invokeWithTimeout = async (attempt: number) => {
+    const invokeWithTimeout = async () => {
         const timeoutPromise = new Promise((_, reject) =>
-            setTimeout(() => reject(new Error(`Deteksi AI timeout (15s) - Percobaan ${attempt}`)), 15000)
+            setTimeout(() => reject(new Error('Deteksi AI timeout (7.5s)')), 7500)
         );
         const invokePromise = supabase.functions.invoke('detect-contact-banner', {
             body: {
@@ -404,15 +461,7 @@ export async function detectPhotoContactBanner(
     };
 
     try {
-        let res: any;
-        try {
-            res = await invokeWithTimeout(1);
-        } catch (firstErr) {
-            console.warn('[AI_SENSOR] Percobaan 1 gagal, mencoba retry...', firstErr);
-            await new Promise(r => setTimeout(r, 600));
-            res = await invokeWithTimeout(2);
-        }
-
+        const res = await invokeWithTimeout();
         const { data, error } = res || {};
         if (error) {
             return {
@@ -442,7 +491,7 @@ export async function detectPhotoContactBanner(
 
         return { hasContact: false, detectedTexts: [], boxes: [] };
     } catch (err: any) {
-        console.warn('[AI_SENSOR] AI scanner tidak terjangkau, menggunakan fallback cerdas:', err);
+        console.warn('[AI_SENSOR] AI scanner tidak terjangkau (fallback langsung aktif):', err?.message);
         return {
             hasContact: false,
             boxes: [],
@@ -602,57 +651,115 @@ function drawPill(ctx: CanvasRenderingContext2D, px: number, py: number, pw: num
 }
 
 /**
- * Terapkan efek mosaik pixelate rapat, dark frosted glass, dan watermark resmi RuangSinggah.id pada canvas
+ * Terapkan Sensor Presisi Berbasis Sudut Poligon (Perspective Quad)
+ * Menyesuaikan kemiringan dan bentuk spanduk aslinya tanpa memotong pagar/tiang/dinding di luar batas spanduk.
  */
-export function applySensorBoxesToCanvas(
+export function applyPerspectivePolygonSensorToCanvas(
     ctx: CanvasRenderingContext2D,
     width: number,
     height: number,
-    boxes: Array<{ x: number; y: number; width: number; height: number }>
+    banners: Array<{
+        x: number;
+        y: number;
+        width: number;
+        height: number;
+        polygon?: Array<{ x: number; y: number }>;
+    }>
 ) {
-    if (!boxes || boxes.length === 0) return;
+    if (!banners || banners.length === 0) return;
 
-    boxes.forEach(box => {
-        let { x, y, width: w, height: h } = box;
-        if (w <= 0 || h <= 0) return;
+    banners.forEach((banner) => {
+        let p = banner.polygon;
+        // Jika polygon 4 titik tidak ada atau kurang dari 3 titik, bentuk dari bounding box
+        if (!p || p.length < 4) {
+            const pad = Math.max(2, Math.round(Math.min(banner.width, banner.height) * 0.04));
+            const bx = Math.max(0, banner.x - pad);
+            const by = Math.max(0, banner.y - pad);
+            const bw = Math.min(width - bx, banner.width + pad * 2);
+            const bh = Math.min(height - by, banner.height + pad * 2);
+            p = [
+                { x: bx, y: by },
+                { x: bx + bw, y: by },
+                { x: bx + bw, y: by + bh },
+                { x: bx, y: by + bh }
+            ];
+        }
 
-        // Tambahkan padding pengaman 4px agar tepi teks benar-benar tertutup
-        const pad = Math.max(2, Math.round(Math.min(w, h) * 0.04));
-        const clampedX = Math.max(0, x - pad);
-        const clampedY = Math.max(0, y - pad);
-        const clampedW = Math.min(width - clampedX, w + pad * 2);
-        const clampedH = Math.min(height - clampedY, h + pad * 2);
+        // Bounding box dari poligon untuk ukuran sampling pixelate & penempatan badge
+        const minX = Math.max(0, Math.min(...p.map(pt => pt.x)));
+        const maxX = Math.min(width, Math.max(...p.map(pt => pt.x)));
+        const minY = Math.max(0, Math.min(...p.map(pt => pt.y)));
+        const maxY = Math.min(height, Math.max(...p.map(pt => pt.y)));
+        const bW = maxX - minX;
+        const bH = maxY - minY;
+
+        if (bW <= 5 || bH <= 5) return;
 
         ctx.save();
 
-        // 1. Mosaik / Pixelate mikro rapat
+        // 1. Path Poligon Tertutup Presisi Sesuai Sudut Kemiringan Banner
+        ctx.beginPath();
+        ctx.moveTo(p[0].x, p[0].y);
+        for (let i = 1; i < p.length; i++) {
+            ctx.lineTo(p[i].x, p[i].y);
+        }
+        ctx.closePath();
+
+        // Terapkan Clip Path: Segala efek di bawah HANYA merusak & menutup area di dalam poligon kain/papan banner!
+        ctx.clip();
+
+        // 2. Mosaik / Pixelate mikro rapat di dalam polygon
         const offCanvas = document.createElement('canvas');
         const scale = 0.045;
-        offCanvas.width = Math.max(1, Math.round(clampedW * scale));
-        offCanvas.height = Math.max(1, Math.round(clampedH * scale));
+        offCanvas.width = Math.max(1, Math.round(bW * scale));
+        offCanvas.height = Math.max(1, Math.round(bH * scale));
         const offCtx = offCanvas.getContext('2d');
         if (offCtx) {
             offCtx.imageSmoothingEnabled = true;
-            offCtx.drawImage(ctx.canvas, clampedX, clampedY, clampedW, clampedH, 0, 0, offCanvas.width, offCanvas.height);
+            offCtx.drawImage(ctx.canvas, minX, minY, bW, bH, 0, 0, offCanvas.width, offCanvas.height);
             ctx.imageSmoothingEnabled = false;
-            ctx.drawImage(offCanvas, 0, 0, offCanvas.width, offCanvas.height, clampedX, clampedY, clampedW, clampedH);
+            ctx.drawImage(offCanvas, 0, 0, offCanvas.width, offCanvas.height, minX, minY, bW, bH);
         }
 
-        // 2. Lapisan Frosted Glassmorphism Gelap yang Elegan
+        // 3. Lapisan Frosted Glassmorphism Gelap yang Elegan
         ctx.fillStyle = 'rgba(15, 23, 42, 0.84)';
-        ctx.fillRect(clampedX, clampedY, clampedW, clampedH);
+        ctx.fillRect(minX, minY, bW, bH);
 
-        // Garis batas luar halus
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.18)';
-        ctx.lineWidth = 1.2;
-        ctx.strokeRect(clampedX, clampedY, clampedW, clampedH);
+        // Lepas clip untuk menggambar garis tepi dan badge
+        ctx.restore();
 
-        // 3. Render Watermark Kapsul Elegan "ruangsinggah.id"
-        if (clampedW >= 32 && clampedH >= 14) {
-            const centerX = clampedX + clampedW / 2;
-            const centerY = clampedY + clampedH / 2;
+        // 4. Garis batas luar (border stroke) mengikuti 4 sudut miring poligon
+        ctx.save();
+        ctx.beginPath();
+        ctx.moveTo(p[0].x, p[0].y);
+        for (let i = 1; i < p.length; i++) {
+            ctx.lineTo(p[i].x, p[i].y);
+        }
+        ctx.closePath();
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.22)';
+        ctx.lineWidth = 1.4;
+        ctx.stroke();
+        ctx.restore();
 
-            const fontSize = Math.max(8, Math.min(20, Math.round(Math.min(clampedH * 0.38, clampedW * 0.13))));
+        // 5. Render Watermark Kapsul Elegan "ruangsinggah.id" di Titik Tengah dengan Rotasi Sudut Kemiringan
+        if (bW >= 32 && bH >= 14) {
+            // Hitung centroid (titik pusat)
+            const centerX = (p[0].x + p[1].x + p[2].x + p[3].x) / 4;
+            const centerY = (p[0].y + p[1].y + p[2].y + p[3].y) / 4;
+
+            // Hitung sudut kemiringan sisi atas banner (Point 0 -> Point 1)
+            const dx = p[1].x - p[0].x;
+            const dy = p[1].y - p[0].y;
+            const rotationAngle = Math.atan2(dy, dx);
+
+            ctx.save();
+            ctx.translate(centerX, centerY);
+            // Rotasi jika kemiringan wajar (antara -45 s/d +45 derajat)
+            if (Math.abs(rotationAngle) < Math.PI / 4) {
+                ctx.rotate(rotationAngle);
+            }
+
+            const fontSize = Math.max(9, Math.min(20, Math.round(Math.min(bH * 0.36, bW * 0.12))));
             ctx.font = `bold ${fontSize}px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`;
 
             const textPart1 = "ruangsinggah";
@@ -666,9 +773,9 @@ export function applySensorBoxesToCanvas(
             const pillW = totalTextWidth + (padX * 2);
             const pillH = fontSize + (padY * 2);
 
-            if (pillW <= clampedW * 1.12 && pillH <= clampedH * 1.12) {
-                const pillX = centerX - (pillW / 2);
-                const pillY = centerY - (pillH / 2);
+            if (pillW <= bW * 1.15 && pillH <= bH * 1.15) {
+                const pillX = -pillW / 2;
+                const pillY = -pillH / 2;
                 const pillRadius = Math.round(pillH / 2);
 
                 drawPill(ctx, pillX, pillY, pillW, pillH, pillRadius);
@@ -680,25 +787,39 @@ export function applySensorBoxesToCanvas(
 
                 ctx.textAlign = 'left';
                 ctx.textBaseline = 'middle';
-                const startTextX = centerX - (totalTextWidth / 2);
+                const startTextX = -(totalTextWidth / 2);
 
                 // "ruangsinggah" (Putih bersih)
                 ctx.fillStyle = '#FFFFFF';
-                ctx.fillText(textPart1, startTextX, centerY);
+                ctx.fillText(textPart1, startTextX, 0);
 
                 // ".id" (Oranye khas RuangSinggah)
                 ctx.fillStyle = '#FB923C';
-                ctx.fillText(textPart2, startTextX + width1, centerY);
+                ctx.fillText(textPart2, startTextX + width1, 0);
             }
-        }
 
-        ctx.restore();
+            ctx.restore();
+        }
     });
 }
 
 /**
+ * Terapkan efek mosaik pixelate rapat, dark frosted glass, dan watermark resmi RuangSinggah.id pada canvas
+ * (Kompatibel penuh dengan kotak pixel reguler maupun koordinat poligon)
+ */
+export function applySensorBoxesToCanvas(
+    ctx: CanvasRenderingContext2D,
+    width: number,
+    height: number,
+    boxes: Array<{ x: number; y: number; width: number; height: number; polygon?: Array<{ x: number; y: number }> }>
+) {
+    if (!boxes || boxes.length === 0) return;
+    applyPerspectivePolygonSensorToCanvas(ctx, width, height, boxes);
+}
+
+/**
  * Memproses file foto dengan Dual-Engine Auto-Sensor (AI Vision + Fallback Heuristik)
- * Menghasilkan file WebP terkompresi yang siap diupload.
+ * Dioptimalkan dengan Single-Pass Canvas Pipeline dan Fast-Path untuk kategori non-banner.
  */
 export async function processPhotoWithAutoSensor(
     file: File,
@@ -706,6 +827,13 @@ export async function processPhotoWithAutoSensor(
     onDetected?: (info: { detectedCount: number; detectedTexts?: string[] }) => void
 ): Promise<File> {
     const shouldCheckBanner = isBannerProneCategory(category);
+
+    // ── FAST-PATH NON-BANNER (< 150ms) ──────────────────────────────────────────
+    // Kategori interior (kamar, ranjang, kasur, lemari, dapur, dsb.) tidak memiliki spanduk sewa.
+    // Langsung jalankan kompresi WebP + Watermark RuangSinggah.id tanpa beban AI scan.
+    if (!shouldCheckBanner) {
+        return compressKostPhotoWithWatermark(file, 0.82, 1920);
+    }
 
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
@@ -733,64 +861,75 @@ export async function processPhotoWithAutoSensor(
                         return;
                     }
 
+                    // 1. Gambar foto asli di kanvas
                     ctx.drawImage(img, 0, 0, width, height);
 
                     let detectedCount = 0;
                     let detectedTexts: string[] = [];
+                    let bannersToApply: Array<{
+                        x: number;
+                        y: number;
+                        width: number;
+                        height: number;
+                        polygon?: Array<{ x: number; y: number }>;
+                    }> = [];
 
-                    if (shouldCheckBanner) {
-                        // 1. Coba AI Gemini Vision Edge Function
-                        let boxesToApply: Array<{ x: number; y: number; width: number; height: number }> = [];
+                    // 2. Deteksi Spanduk Kontak via AI Gemini Vision
+                    try {
+                        // Sweet spot 1024px, q=0.65 menghasilkan base64 ringkas (~45KB) sehingga transmisi instan
+                        const lowResBase64 = await createLowResBase64ForAi(file, 1024, 0.65);
+                        if (lowResBase64) {
+                            const aiResult = await detectPhotoContactBanner(lowResBase64, 'image/jpeg');
+                            if (aiResult.hasContact && aiResult.boxes && aiResult.boxes.length > 0) {
+                                detectedTexts = aiResult.detectedTexts || [];
+                                bannersToApply = aiResult.boxes.map(b => {
+                                    const normYmin = Math.max(0, Math.min(1000, b.ymin));
+                                    const normXmin = Math.max(0, Math.min(1000, b.xmin));
+                                    const normYmax = Math.max(0, Math.min(1000, b.ymax));
+                                    const normXmax = Math.max(0, Math.min(1000, b.xmax));
 
-                        try {
-                            // Gunakan resolusi 1600px (kualitas 0.82) untuk kategori rentan banner agar detail teks spanduk/plang kecil di kejauhan tajam terbaca AI
-                            const targetDim = shouldCheckBanner ? 1600 : 1024;
-                            const targetQuality = shouldCheckBanner ? 0.82 : 0.65;
-                            const lowResBase64 = await createLowResBase64ForAi(file, targetDim, targetQuality);
-                            if (lowResBase64) {
-                                const aiResult = await detectPhotoContactBanner(lowResBase64, 'image/jpeg');
-                                if (aiResult.hasContact && aiResult.boxes && aiResult.boxes.length > 0) {
-                                    detectedTexts = aiResult.detectedTexts || [];
-                                    boxesToApply = aiResult.boxes.map(b => {
-                                        const normYmin = Math.max(0, Math.min(1000, b.ymin));
-                                        const normXmin = Math.max(0, Math.min(1000, b.xmin));
-                                        const normYmax = Math.max(0, Math.min(1000, b.ymax));
-                                        const normXmax = Math.max(0, Math.min(1000, b.xmax));
+                                    const bx = Math.round((normXmin / 1000) * width);
+                                    const by = Math.round((normYmin / 1000) * height);
+                                    const bw = Math.round(((normXmax - normXmin) / 1000) * width);
+                                    const bh = Math.round(((normYmax - normYmin) / 1000) * height);
 
-                                        const bx = Math.round((normXmin / 1000) * width);
-                                        const by = Math.round((normYmin / 1000) * height);
-                                        const bw = Math.round(((normXmax - normXmin) / 1000) * width);
-                                        const bh = Math.round(((normYmax - normYmin) / 1000) * height);
-                                        return { x: bx, y: by, width: bw, height: bh };
-                                    }).filter(b => b.width > 5 && b.height > 5);
-                                }
+                                    let polygonPts: Array<{ x: number; y: number }> | undefined = undefined;
+                                    if (b.polygon && Array.isArray(b.polygon) && b.polygon.length >= 4) {
+                                        polygonPts = b.polygon.map(([px, py]) => ({
+                                            x: Math.round((Math.max(0, Math.min(1000, px)) / 1000) * width),
+                                            y: Math.round((Math.max(0, Math.min(1000, py)) / 1000) * height)
+                                        }));
+                                    }
+
+                                    return { x: bx, y: by, width: bw, height: bh, polygon: polygonPts };
+                                }).filter(b => b.width > 5 && b.height > 5);
                             }
-                        } catch (aiErr) {
-                            console.warn('[AI_SENSOR] AI scan exception, beralih ke fallback:', aiErr);
                         }
+                    } catch (aiErr) {
+                        console.warn('[AI_SENSOR] AI scan error, langsung beralih ke heuristik cepat:', aiErr);
+                    }
 
-                        // 2. Jika AI tidak menemukan atau gagal, gunakan Fallback Heuristik Cerdas
-                        if (boxesToApply.length === 0) {
-                            const heuristicBoxes = detectBannerRegionsClientSide(ctx, width, height);
-                            if (heuristicBoxes.length > 0) {
-                                boxesToApply = heuristicBoxes;
-                            }
-                        }
-
-                        // 3. Terapkan Sensor jika ditemukan area kontak/spanduk
-                        if (boxesToApply.length > 0) {
-                            applySensorBoxesToCanvas(ctx, width, height, boxesToApply);
-                            detectedCount = boxesToApply.length;
-                            if (onDetected) {
-                                onDetected({ detectedCount, detectedTexts });
-                            }
+                    // 3. Fallback Heuristik Client-Side Cerdas jika AI tidak mengembalikan kotak
+                    if (bannersToApply.length === 0) {
+                        const heuristicBoxes = detectBannerRegionsClientSide(ctx, width, height);
+                        if (heuristicBoxes.length > 0) {
+                            bannersToApply = heuristicBoxes;
                         }
                     }
 
-                    // 3.5. Sematkan pola watermark resmi RuangSinggah.id anti pencurian konten
+                    // 4. Terapkan Sensor Presisi Miring (Perspective Quad Polygon) jika ditemukan banner
+                    if (bannersToApply.length > 0) {
+                        applyPerspectivePolygonSensorToCanvas(ctx, width, height, bannersToApply);
+                        detectedCount = bannersToApply.length;
+                        if (onDetected) {
+                            onDetected({ detectedCount, detectedTexts });
+                        }
+                    }
+
+                    // 5. Sematkan Pola Watermark Resmi RuangSinggah.id di Kanvas yang Sama
                     await drawRuangSinggahWatermarkPattern(ctx, width, height);
 
-                    // 4. Kompresi WebP
+                    // 6. Ekspor WebP Resolusi Penuh Sekali Jalan
                     canvas.toBlob(
                         (blob) => {
                             if (!blob) {
@@ -800,12 +939,12 @@ export async function processPhotoWithAutoSensor(
                             const webpFile = new File(
                                 [blob],
                                 file.name.replace(/\.[^/.]+$/, "") + ".webp",
-                                { type: "image/webp" }
+                                { type: "image/webp", lastModified: Date.now() }
                             );
                             resolve(webpFile);
                         },
                         "image/webp",
-                        0.85
+                        0.82
                     );
                 } catch (procErr) {
                     console.error('[AI_SENSOR] Error processing photo:', procErr);

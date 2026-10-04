@@ -1,7 +1,12 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { Kost, RoomType, PricingPeriod } from '../types';
-import { addPropertyWithMedia, updatePropertyWithMedia, detectPhotoContactBanner, uploadDraftPhotoToStorage, deleteDraftPhotosFromStorage, sendMitraPublishedEmailBrevo } from '../adminService';
-import { drawRuangSinggahWatermarkPattern } from '../autoSensorService';
+import { addPropertyWithMedia, updatePropertyWithMedia, uploadDraftPhotoToStorage, deleteDraftPhotosFromStorage, sendMitraPublishedEmailBrevo } from '../adminService';
+import { 
+    drawRuangSinggahWatermarkPattern, 
+    processPhotoWithAutoSensor, 
+    warmUpBannerDetectionEngine, 
+    isBannerProneCategory 
+} from '../autoSensorService';
 import { notifyAdminPropertyReview } from '../emailService';
 import { findNearbyCuratedLandmarks } from '../constants/curatedLandmarks';
 import {
@@ -2277,6 +2282,17 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
         return 0;
     });
 
+    // ── Background Pre-Warming Engine AI Banner Detection ──────────────────────
+    useEffect(() => {
+        warmUpBannerDetectionEngine();
+    }, []);
+
+    useEffect(() => {
+        if (step === 4) { // Langkah 5: Foto
+            warmUpBannerDetectionEngine();
+        }
+    }, [step]);
+
     const [managementOption, setManagementOption] = useState<'none' | 'self' | 'kostmanager'>(() => {
         if (freshStart) return editingKost?.managed_by || 'self';
         try {
@@ -3441,278 +3457,29 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
         });
     };
 
-    // ── Helper identifikasi kategori rawan spanduk / kontak luar ──────────────
-    const isBannerProneCategory = (category: string): boolean => {
-        const lower = (category || '').toLowerCase();
-        return (
-            lower.includes('depan') || 
-            lower.includes('fasad') || 
-            lower.includes('lingkungan') || 
-            lower.includes('parkir') ||
-            lower.includes('luar') ||
-            lower.includes('gerbang') ||
-            lower.includes('spanduk') ||
-            lower.includes('banner') ||
-            lower.includes('jalan')
-        );
-    };
-
-    // ── Helper konversi citra ke Base64 Low-Res untuk AI Vision (~45KB, Sweet Spot 1024px) ───
-    const createLowResBase64ForAi = async (file: File, maxDim = 1024, quality = 0.65): Promise<string> => {
-        return new Promise((resolve) => {
-            if (!isImageFile(file)) return resolve('');
-            const reader = new FileReader();
-            reader.onload = (e) => {
-                const img = new Image();
-                img.onload = () => {
-                    let { width, height } = img;
-                    if (width > maxDim || height > maxDim) {
-                        if (width > height) {
-                            height = Math.round((height * maxDim) / width);
-                            width = maxDim;
-                        } else {
-                            width = Math.round((width * maxDim) / height);
-                            height = maxDim;
-                        }
-                    }
-                    const canvas = document.createElement('canvas');
-                    canvas.width = width;
-                    canvas.height = height;
-                    const ctx = canvas.getContext('2d');
-                    if (!ctx) return resolve('');
-                    ctx.drawImage(img, 0, 0, width, height);
-                    const dataUrl = canvas.toDataURL('image/jpeg', quality);
-                    const base64 = dataUrl.split(',')[1] || '';
-                    resolve(base64);
-                };
-                img.onerror = () => resolve('');
-                img.src = e.target?.result as string;
-            };
-            reader.onerror = () => resolve('');
-            reader.readAsDataURL(file);
-        });
-    };
-
-    // ── Helper penyamaran kotak kontak dengan Branding Watermark ruangsinggah.id ──
-    const applyBlurToBoundingBoxes = async (
-        file: File, 
-        boxes: Array<{ ymin: number; xmin: number; ymax: number; xmax: number }>
-    ): Promise<File> => {
-        if (!boxes || boxes.length === 0) return file;
-        return new Promise((resolve) => {
-            const reader = new FileReader();
-            reader.onload = (e) => {
-                const img = new Image();
-                img.onload = () => {
-                    const canvas = document.createElement('canvas');
-                    canvas.width = img.width;
-                    canvas.height = img.height;
-                    const ctx = canvas.getContext('2d');
-                    if (!ctx) return resolve(file);
-
-                    // Gambar citra asli
-                    ctx.drawImage(img, 0, 0);
-
-                    // 1. Konversi boxes (skala 0-1000) ke pixel absolut
-                    const rawBoxesPx = boxes.map(box => {
-                        const normYmin = Math.max(0, Math.min(1000, box.ymin));
-                        const normXmin = Math.max(0, Math.min(1000, box.xmin));
-                        const normYmax = Math.max(0, Math.min(1000, box.ymax));
-                        const normXmax = Math.max(0, Math.min(1000, box.xmax));
-
-                        const x = Math.round((normXmin / 1000) * img.width);
-                        const y = Math.round((normYmin / 1000) * img.height);
-                        const w = Math.round(((normXmax - normXmin) / 1000) * img.width);
-                        const h = Math.round(((normYmax - normYmin) / 1000) * img.height);
-                        return { x, y, w, h, r: x + w, b: y + h };
-                    }).filter(b => b.w > 0 && b.h > 0);
-
-                    if (rawBoxesPx.length === 0) return resolve(file);
-
-                    // 2. Gabungkan kotak-kotak yang beririsan atau berdekatan (clustering spanduk)
-                    // Toleransi gap 3.5% dari dimensi gambar agar baris spanduk yang sama melebur menjadi 1 area utuh
-                    const gapX = Math.round(img.width * 0.035);
-                    const gapY = Math.round(img.height * 0.035);
-
-                    const mergedBoxes: Array<{ x: number; y: number; w: number; h: number; r: number; b: number }> = [];
-                    const used = new Array(rawBoxesPx.length).fill(false);
-
-                    for (let i = 0; i < rawBoxesPx.length; i++) {
-                        if (used[i]) continue;
-                        let cluster = { ...rawBoxesPx[i] };
-                        used[i] = true;
-
-                        let expanded = true;
-                        while (expanded) {
-                            expanded = false;
-                            for (let j = 0; j < rawBoxesPx.length; j++) {
-                                if (used[j]) continue;
-                                const b = rawBoxesPx[j];
-                                const isClose = !(
-                                    b.x > cluster.r + gapX ||
-                                    b.r < cluster.x - gapX ||
-                                    b.y > cluster.b + gapY ||
-                                    b.b < cluster.y - gapY
-                                );
-                                if (isClose) {
-                                    cluster.x = Math.min(cluster.x, b.x);
-                                    cluster.y = Math.min(cluster.y, b.y);
-                                    cluster.r = Math.max(cluster.r, b.r);
-                                    cluster.b = Math.max(cluster.b, b.b);
-                                    cluster.w = cluster.r - cluster.x;
-                                    cluster.h = cluster.b - cluster.y;
-                                    used[j] = true;
-                                    expanded = true;
-                                }
-                            }
-                        }
-                        mergedBoxes.push(cluster);
-                    }
-
-                    // Helper gambar rounded rectangle kapsul yang kompatibel di semua browser
-                    const drawPill = (c: CanvasRenderingContext2D, px: number, py: number, pw: number, ph: number, pr: number) => {
-                        c.beginPath();
-                        c.moveTo(px + pr, py);
-                        c.lineTo(px + pw - pr, py);
-                        c.quadraticCurveTo(px + pw, py, px + pw, py + pr);
-                        c.lineTo(px + pw, py + ph - pr);
-                        c.quadraticCurveTo(px + pw, py + ph, px + pw - pr, py + ph);
-                        c.lineTo(px + pr, py + ph);
-                        c.quadraticCurveTo(px, py + ph, px, py + ph - pr);
-                        c.lineTo(px, py + pr);
-                        c.quadraticCurveTo(px, py, px + pr, py);
-                        c.closePath();
-                    };
-
-                    // 3. Terapkan efek mosaik & watermark elegan pada setiap area gabungan
-                    mergedBoxes.forEach(box => {
-                        const { x, y, w, h } = box;
-                        if (w <= 0 || h <= 0) return;
-
-                        ctx.save();
-
-                        // A. Mosaik / Pixelate di canvas (hancurkan angka kontak secara fisik)
-                        const offCanvas = document.createElement('canvas');
-                        const scale = 0.06;
-                        offCanvas.width = Math.max(1, Math.round(w * scale));
-                        offCanvas.height = Math.max(1, Math.round(h * scale));
-                        const offCtx = offCanvas.getContext('2d');
-                        if (offCtx) {
-                            offCtx.imageSmoothingEnabled = true;
-                            offCtx.drawImage(canvas, x, y, w, h, 0, 0, offCanvas.width, offCanvas.height);
-                            ctx.imageSmoothingEnabled = false;
-                            ctx.drawImage(offCanvas, 0, 0, offCanvas.width, offCanvas.height, x, y, w, h);
-                        }
-
-                        // B. Lapisan Frosted Glassmorphism Gelap yang Bersih
-                        ctx.fillStyle = 'rgba(15, 23, 42, 0.78)';
-                        ctx.fillRect(x, y, w, h);
-
-                        // Garis batas luar halus tipis
-                        ctx.strokeStyle = 'rgba(255, 255, 255, 0.12)';
-                        ctx.lineWidth = 1;
-                        ctx.strokeRect(x, y, w, h);
-
-                        // C. Render Watermark Kapsul Elegan "ruangsinggah.id"
-                        if (w >= 45 && h >= 16) {
-                            const centerX = x + w / 2;
-                            const centerY = y + h / 2;
-
-                            // Ukuran font adaptif proporsional terhadap luas kotak spanduk
-                            const fontSize = Math.max(11, Math.min(24, Math.round(Math.min(h * 0.38, w * 0.13))));
-                            ctx.font = `bold ${fontSize}px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`;
-
-                            const textPart1 = "ruangsinggah";
-                            const textPart2 = ".id";
-                            const width1 = ctx.measureText(textPart1).width;
-                            const width2 = ctx.measureText(textPart2).width;
-                            const totalTextWidth = width1 + width2;
-
-                            // Dimensi pill kapsul badge
-                            const padX = Math.round(fontSize * 0.85);
-                            const padY = Math.round(fontSize * 0.42);
-                            const pillW = totalTextWidth + (padX * 2);
-                            const pillH = fontSize + (padY * 2);
-                            const pillX = centerX - (pillW / 2);
-                            const pillY = centerY - (pillH / 2);
-                            const pillRadius = Math.round(pillH / 2);
-
-                            // Gambar background rounded capsule pill
-                            drawPill(ctx, pillX, pillY, pillW, pillH, pillRadius);
-                            ctx.fillStyle = 'rgba(2, 6, 23, 0.88)';
-                            ctx.fill();
-                            ctx.strokeStyle = 'rgba(249, 115, 22, 0.65)';
-                            ctx.lineWidth = 1.5;
-                            ctx.stroke();
-
-                            // Gambar teks brand resmi dua warna
-                            ctx.textAlign = 'left';
-                            ctx.textBaseline = 'middle';
-                            const startTextX = centerX - (totalTextWidth / 2);
-
-                            // "ruangsinggah" (Putih bersih)
-                            ctx.fillStyle = '#FFFFFF';
-                            ctx.fillText(textPart1, startTextX, centerY);
-
-                            // ".id" (Oranye khas RuangSinggah)
-                            ctx.fillStyle = '#FB923C';
-                            ctx.fillText(textPart2, startTextX + width1, centerY);
-                        }
-
-                        ctx.restore();
-                    });
-
-                    canvas.toBlob((blob) => {
-                        if (!blob) return resolve(file);
-                        const blurredFile = new File([blob], file.name, { type: file.type || 'image/jpeg' });
-                        resolve(blurredFile);
-                    }, file.type || 'image/jpeg', 0.95);
-                };
-                img.onerror = () => resolve(file);
-                img.src = e.target?.result as string;
-            };
-            reader.onerror = () => resolve(file);
-            reader.readAsDataURL(file);
-        });
-    };
-
     const handleCategoryFilesUpload = async (category: string, files: FileList | File[] | null) => {
         if (!files) return;
         const fileArr = Array.from(files);
         if (fileArr.length === 0) return;
 
         setUploadingCategory(category);
-        const needAiScan = isBannerProneCategory(category);
 
         try {
             let anyContactDetected = false;
-            let lastScanError: string | null = null;
 
-            // Proses seluruh file secara paralel (Promise.all) untuk akselerasi instan
+            // Proses seluruh file secara paralel dengan Single-Pass Auto-Sensor + Watermark + WebP
             const processedItems = await Promise.all(
                 fileArr.map(async (file) => {
                     try {
-                        let fileToProcess = file;
                         let isBlurred = false;
 
-                        // Pindai AI hanya jika kategori rawan spanduk/kontak (eksterior/fasad/lingkungan)
-                        if (needAiScan) {
-                            const lowResBase64 = await createLowResBase64ForAi(file, 1024, 0.65);
-                            if (lowResBase64) {
-                                const detection = await detectPhotoContactBanner(lowResBase64, 'image/jpeg');
-                                if (detection.hasContact && detection.boxes && detection.boxes.length > 0) {
-                                    fileToProcess = await applyBlurToBoundingBoxes(file, detection.boxes);
-                                    isBlurred = true;
-                                    anyContactDetected = true;
-                                } else if (detection.error) {
-                                    lastScanError = detection.error;
-                                    console.warn('[AI_BANNER] Deteksi kontak terhambat:', detection.error);
-                                }
+                        // Single-Pass Auto-Sensor Pipeline (Fast-path non-banner <150ms, AI polygon sensor jika ada banner, watermark, WebP)
+                        const webpFile = await processPhotoWithAutoSensor(file, category, (detectedInfo) => {
+                            if (detectedInfo.detectedCount > 0) {
+                                isBlurred = true;
+                                anyContactDetected = true;
                             }
-                        }
-
-                        // Kompresi ke WebP Resolusi Tinggi (Client-Side)
-                        const webpFile = await compressImageToWebP(fileToProcess);
+                        });
 
                         // Upload Instan ke Cloud Supabase Storage di folder 'drafts/{userId}/'
                         let previewUrl = '';
@@ -3751,9 +3518,7 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
             );
 
             if (anyContactDetected) {
-                setBannerNotice('Foto Anda terdeteksi memuat informasi spanduk/kontak dan telah disematkan watermark resmi ruangsinggah.id secara otomatis demi keamanan transaksi.');
-            } else if (lastScanError && needAiScan) {
-                setBannerNotice(`Koneksi internet terganggu saat pemindaian otomatis (${lastScanError}). Anda dapat menekan tombol 🛡️ pada kartu foto untuk memindai ulang kapan saja.`);
+                setBannerNotice('Foto Anda terdeteksi memuat informasi spanduk/kontak dan telah disematkan sensor watermark resmi ruangsinggah.id secara otomatis demi keamanan transaksi.');
             }
 
             setNewPhotoItems(prev => [...prev, ...processedItems]);
@@ -3783,46 +3548,41 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                 return;
             }
 
-            const lowResBase64 = await createLowResBase64ForAi(sourceFile, 1024, 0.65);
-            if (!lowResBase64) {
-                alert('Format gambar tidak dapat diproses oleh AI. Pastikan file berupa gambar yang valid.');
-                return;
+            let isBlurred = false;
+            const webpFile = await processPhotoWithAutoSensor(sourceFile, item.category || 'Bangunan Depan', (detectedInfo) => {
+                if (detectedInfo.detectedCount > 0) {
+                    isBlurred = true;
+                }
+            });
+
+            let previewUrl = '';
+            let storagePath: string | undefined = undefined;
+            try {
+                if (item.storagePath) {
+                    deleteDraftPhotosFromStorage([item.storagePath]);
+                }
+                const uploadRes = await uploadDraftPhotoToStorage(webpFile, user?.id);
+                previewUrl = uploadRes.publicUrl;
+                storagePath = uploadRes.storagePath;
+            } catch {
+                previewUrl = URL.createObjectURL(webpFile);
             }
 
-            const detection = await detectPhotoContactBanner(lowResBase64, 'image/jpeg');
-            if (detection.hasContact && detection.boxes && detection.boxes.length > 0) {
-                const blurredFile = await applyBlurToBoundingBoxes(sourceFile, detection.boxes);
-                const webpFile = await compressImageToWebP(blurredFile);
-
-                let previewUrl = '';
-                let storagePath: string | undefined = undefined;
-                try {
-                    if (item.storagePath) {
-                        deleteDraftPhotosFromStorage([item.storagePath]);
-                    }
-                    const uploadRes = await uploadDraftPhotoToStorage(webpFile, user?.id);
-                    previewUrl = uploadRes.publicUrl;
-                    storagePath = uploadRes.storagePath;
-                } catch {
-                    previewUrl = URL.createObjectURL(webpFile);
+            setNewPhotoItems(prev => prev.map(p => {
+                if (p.id === item.id) {
+                    return {
+                        ...p,
+                        file: webpFile,
+                        preview: previewUrl,
+                        isBlurred,
+                        storagePath
+                    };
                 }
+                return p;
+            }));
 
-                setNewPhotoItems(prev => prev.map(p => {
-                    if (p.id === item.id) {
-                        return {
-                            ...p,
-                            file: webpFile,
-                            preview: previewUrl,
-                            isBlurred: true,
-                            storagePath
-                        };
-                    }
-                    return p;
-                }));
-
+            if (isBlurred) {
                 setBannerNotice('Spanduk kontak pada foto berhasil dideteksi dan disematkan watermark resmi ruangsinggah.id!');
-            } else if (detection.error) {
-                alert(`Pemindaian AI terhambat: ${detection.error}. Silakan periksa koneksi internet Anda dan coba lagi.`);
             } else {
                 alert('AI telah memindai foto ini dan tidak menemukan spanduk nomor kontak/telepon.');
             }

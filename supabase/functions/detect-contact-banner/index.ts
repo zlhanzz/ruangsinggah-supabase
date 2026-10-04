@@ -6,12 +6,11 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-// Model priority cascade: Gunakan model aktif Gemini Flash teruji dengan fallback otomatis
-// Model priority cascade: Gunakan model aktif Gemini Flash teruji dengan fallback otomatis
+// Model priority cascade: gemini-2.5-flash diposisikan nomor 1 untuk respon instan teruji
 const CANDIDATE_MODELS = [
+  "gemini-2.5-flash",
   "gemini-2.0-flash",
   "gemini-1.5-flash",
-  "gemini-2.5-flash",
   "gemini-1.5-pro",
   "gemini-3.7-flash"
 ];
@@ -23,6 +22,15 @@ serve(async (req) => {
 
   try {
     const rawBody = await req.json().catch(() => ({}));
+
+    // ── Endpoint Handler Ping Cepat untuk Background Pre-Warming ───────────
+    if (rawBody.ping) {
+      return new Response(
+        JSON.stringify({ success: true, ping: "pong", warm: true, timestamp: Date.now() }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     const { imageUrl, mimeType } = rawBody;
     const base64Image = rawBody.base64Image || rawBody.image;
     console.log("[EDGE_BANNER] Request diterima, panjang base64:", base64Image ? base64Image.length : 0);
@@ -38,7 +46,7 @@ serve(async (req) => {
 
     const prompt = `
 Anda adalah AI vision inspeksi foto properti sewa kamar khusus untuk platform RuangSinggah.id.
-Tugas utama Anda adalah mendeteksi secara SANGAT AKURAT dan PRESISI (ULTRA-TIGHT BOUNDING BOX) objek:
+Tugas utama Anda adalah mendeteksi secara SANGAT AKURAT dan PRESISI objek:
 1. SPANDUK / BANNER / PAPAN NAMA / PLANG / LEMBARAN KAIN / KERTAS / STIKER yang memuat penawaran sewa kamar atau informasi kontak, seperti:
    - Tulisan "TERIMA KOST", "TERIMA KOS", "DISEWAKAN", "MENERIMA KOST", "KOST PUTRA", "KOST PUTRI", "KOST KARYAWAN", "KOST CAMPUR", "ADA KAMAR KOSONG", "KAMAR DISEWAKAN".
    - Tulisan instruksi kontak seperti "Hubungi:", "Hub:", "Telp:", "WA:", "CP:", "Informasi:".
@@ -47,20 +55,23 @@ Tugas utama Anda adalah mendeteksi secara SANGAT AKURAT dan PRESISI (ULTRA-TIGHT
 
 2. TEKS NOMOR TELEPON atau kontak WhatsApp langsung yang sengaja dipajang untuk transaksi di luar platform.
 
-ATURAN KETAT PRESISI BOUNDING BOX (ULTRA-TIGHT FIT):
-1. FOKUS HANYA PADA LEMBARAN SPANDUK / PAPAN PLANG ITU SENDIRI:
-   - Koordinat bounding box (skala 0 sampai 1000: ymin, xmin, ymax, xmax) HARUS MENEMPEL PAS DI 4 SUDUT TEPI KAIN/PAPAN/LEMBARAN SPANDUK ITU SENDIRI.
-   - ymin: Garis batas tepi paling atas dari spanduk/plang.
-   - ymax: Garis batas tepi paling bawah dari spanduk/plang.
-   - xmin: Garis batas tepi paling kiri dari spanduk/plang.
-   - xmax: Garis batas tepi paling kanan dari spanduk/plang.
+ATURAN DETEKSI SUDUT BANNER PRESISI & KOREKSI PERSPEKTIF (QUADRILATERAL POLYGON):
+1. FOKUS HANYA PADA LEMBARAN SPANDUK / PAPAN ITU SENDIRI:
+   - Tentukan 4 titik sudut terluar dari lembaran spanduk/papan tersebut secara berurutan searah jarum jam:
+     * Point 0 (Top-Left): [x, y] sudut kiri atas lembaran spanduk
+     * Point 1 (Top-Right): [x, y] sudut kanan atas lembaran spanduk
+     * Point 2 (Bottom-Right): [x, y] sudut kanan bawah lembaran spanduk
+     * Point 3 (Bottom-Left): [x, y] sudut kiri bawah lembaran spanduk
+   - Koordinat titik sudut x dan y berskala 0 sampai 1000 (normalisasi terhadap lebar dan tinggi foto).
+   - JIKA FOTO DIAMBIL DARI SUDUT MENYAMPING / MIRING (PERSPEKTIF), 4 titik sudut polygon HARUS MENGIKUTI KEMIRINGAN PERSPEKTIF LEMBARAN SPANDUK TERSEBUT.
+   - Sediakan juga bounding box konvensional (ymin, xmin, ymax, xmax skala 0-1000) sebagai batas terluar.
 
 2. NEGATIVE CONSTRAINTS (HINDARI OVER-BLUR):
    - DILARANG menyertakan seluruh struktur pintu gerbang, jeruji pagar besi/kayu vertikal, dinding rumah besar, lantai/aspal, tanaman/pot, kanopi atap, atau langit-langit.
-   - Jika spanduk berukuran kecil terpasang pada pagar/gerbang kayu/besi (seperti plang kecil di pagar atau dinding pilar), KOTAK HANYA BOLEH MENUTUPI SPANDUK KECIL TERSEBUT! DILARANG menandai seluruh pagar atau pintu gerbang.
+   - Jika spanduk berukuran kecil terpasang pada pagar/gerbang kayu/besi (seperti plang kecil di pagar atau dinding pilar), TITIK SUDUT HANYA BOLEH MENUTUPI SPANDUK KECIL TERSEBUT! DILARANG menandai seluruh pagar atau pintu gerbang.
    - JANGAN tandai plang nama instansi/kantor atau nomor alamat rumah permanen yang TIDAK MEMUAT penawaran sewa/nomor kontak.
 
-3. Jika foto bersih dari spanduk penawaran kost atau nomor kontak, kembalikan "has_contact": false dan "boxes": [].
+3. Jika foto bersih dari spanduk penawaran kost atau nomor kontak, kembalikan "has_contact": false, "boxes": [], "banners": [].
 
 FORMAT OUTPUT (JSON MURNI SAJA, TANPA BACKTICKS/MARKDOWN):
 {
@@ -72,6 +83,12 @@ FORMAT OUTPUT (JSON MURNI SAJA, TANPA BACKTICKS/MARKDOWN):
       "xmin": 0-1000,
       "ymax": 0-1000,
       "xmax": 0-1000,
+      "polygon": [
+        [x0, y0],
+        [x1, y1],
+        [x2, y2],
+        [x3, y3]
+      ],
       "label": "contact_banner" / "phone_number"
     }
   ]
@@ -83,7 +100,7 @@ FORMAT OUTPUT (JSON MURNI SAJA, TANPA BACKTICKS/MARKDOWN):
     if (base64Image) {
       contentsParts.push({
         inlineData: {
-          mimeType: mimeType || "image/webp",
+          mimeType: mimeType || "image/jpeg",
           data: base64Image
         }
       });
@@ -145,11 +162,23 @@ FORMAT OUTPUT (JSON MURNI SAJA, TANPA BACKTICKS/MARKDOWN):
           const rawText = json.candidates?.[0]?.content?.parts?.[0]?.text || "{}";
           const cleanedText = rawText.replace(/```json/g, "").replace(/```/g, "").trim();
           
-          let resultData = { has_contact: false, boxes: [], detected_texts: [] };
+          let resultData: any = { has_contact: false, boxes: [], detected_texts: [] };
           try {
             resultData = JSON.parse(cleanedText);
           } catch (e) {
             console.error("Failed to parse JSON from Gemini:", cleanedText);
+          }
+
+          // Sinkronisasi data struktur boxes dan banners
+          if (Array.isArray(resultData.banners) && (!Array.isArray(resultData.boxes) || resultData.boxes.length === 0)) {
+            resultData.boxes = resultData.banners.map((b: any) => ({
+              ymin: b.ymin,
+              xmin: b.xmin,
+              ymax: b.ymax,
+              xmax: b.xmax,
+              polygon: b.polygon,
+              label: b.label || 'contact_banner'
+            }));
           }
 
           successfulResult = {
