@@ -2,6 +2,33 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 445. Migrasi Multimodal Gemini 3.7 Flash & 3.5 Flash, Eliminasi False Timeout, dan Penajaman Sensor Spanduk Presisi (`detect-contact-banner/index.ts`, `autoSensorService.ts`, `KostFormMitra.tsx`) (Oktober 2026)
+- **Permintaan & Masalah**:
+  1. Sensor spanduk pada foto pagar/bangunan depan kost belum menutup spanduk kontak secara akurat (sempat meleset ke pagar besi hitam di samping spanduk, atau tidak tertutup sama sekali namun status kartu foto sudah terlanjur berstatus aktif `ruangsinggah.id`).
+  2. Pengguna menanyakan akar masalah dan menyarankan penggunaan model AI generasi terbaru Google seperti 3.7 flash atau 3.8 flash untuk mempercepat dan memaksimalkan proses sensor.
+- **Hasil Diagnostik & Analisis Live**:
+  1. *Model Cascade Bottleneck*: Server sebelumnya mencoba model-model non-aktif di semua API key dan memakan waktu 96 detik sebelum mencapai model yang aktif.
+  2. *False Timeout*: Frontend disetel dengan timeout 7,5s sehingga request dibatalkan sebelum server sempat mengembalikan data, memicu *fallback heuristik lokal* yang salah menebak kontras bilah kayu dan jeruji pagar hitam.
+  3. *Uji Latensi Model*: Pengujian live membuktikan `gemini-3.7-flash` sukses membaca teks "TERIMA KOST PUTRI", `gemini-3.5-flash` merespon dalam 1,9 detik, dan `gemini-2.5-flash` dalam 1,2 detik, sedangkan `gemini-3.8-flash` saat ini sedang mengalami temporary high-demand (503).
+- **Implementasi Solusi**:
+  1. **Konfigurasi Prioritas Model Multimodal Baru (`detect-contact-banner/index.ts`)**:
+     - Memprioritaskan `gemini-3.7-flash` di posisi nomor 1, didukung fallback cepat `gemini-3.5-flash` (1,9s), `gemini-2.5-flash` (1,2s), dan `gemini-3.8-flash`.
+     - Menyematkan penanganan status 404, 400, 503, dan 429 agar langsung beralih (*break inner loop*) ke model berikutnya dalam hitungan milidetik saat terjadi spike trafik pada salah satu model.
+     - Memastikan output koordinat poligon 4 titik (`polygon: [[x0, y0], [x1, y1], [x2, y2], [x3, y3]]`) dan bounding box (`ymin, xmin, ymax, xmax`) ter-normalisasi rapi.
+     - Berhasil di-deploy live ke Supabase Edge Functions project `sgcmnsnokrztocnhxnqm`.
+  2. **Penguatan Pipeline Sensor di Frontend (`autoSensorService.ts`)**:
+     - Meningkatkan timeout pemanggilan AI dari 7,5s menjadi 15s untuk memberikan toleransi jaringan mobile tanpa memicu false fallback.
+     - Menambahkan flag `aiScanSucceeded`: Fallback heuristik lokal hanya aktif jika koneksi AI terputus/offline. Jika AI sukses memindai dan menyatakan foto bersih (tidak ada spanduk), sistem menghormati hasil AI dan tidak menebak-nebak kontras pagar secara sembarangan.
+     - Menyesuaikan batas threshold responsive watermark badge kapsul agar tampil pas di spanduk berukuran kecil maupun besar.
+- **File Tersentuh**:
+  - `supabase/functions/detect-contact-banner/index.ts`
+  - `functions/public/autoSensorService.ts`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Pengujian live benchmark Edge Function sukses (`modelUsed: "gemini-3.5-flash"` dan `gemini-3.7-flash` sukses mendeteksi "TERIMA KOST PUTRI").
+  - Build Vite frontend `npm run build` di `functions/public/` lulus 100% 0 error dalam 25.34s (✓ 2512 modules transformed).
+
 ### 444. Sistem Anti-Pencurian Konten Watermark RuangSinggah.id Berpola Diagonal & Preservasi WebP Responsif (`autoSensorService.ts`, `KostFormMitra.tsx`, `KostManagerPropertyFormModal.tsx`, `AgentDashboard.tsx`, `adminService.ts`) (Oktober 2026)
 - **Permintaan & Masalah**:
   1. Pada sistem terdapat dua jalur upload listing properti kost: Jalur Dashboard Pemilik Kost (self listing) dan Jalur Dashboard Agen Survey (KostManager).

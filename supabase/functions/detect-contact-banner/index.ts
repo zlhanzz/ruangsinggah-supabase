@@ -6,13 +6,12 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-// Model priority cascade: gemini-2.5-flash diposisikan nomor 1 untuk respon instan teruji
+// Model priority cascade: gemini-3.7-flash nomor 1, diikuti gemini-3.5-flash (1.9s), gemini-2.5-flash (1.2s), dan gemini-3.8-flash
 const CANDIDATE_MODELS = [
+  "gemini-3.7-flash",
+  "gemini-3.5-flash",
   "gemini-2.5-flash",
-  "gemini-2.0-flash",
-  "gemini-1.5-flash",
-  "gemini-1.5-pro",
-  "gemini-3.7-flash"
+  "gemini-3.8-flash"
 ];
 
 serve(async (req) => {
@@ -31,12 +30,12 @@ serve(async (req) => {
       );
     }
 
+    const GEMINI_KEYS_RAW = Deno.env.get('GEMINI_API_KEY') || "";
+    const GEMINI_KEYS = GEMINI_KEYS_RAW.split(',').map(k => k.trim()).filter(k => k);
+
     const { imageUrl, mimeType } = rawBody;
     const base64Image = rawBody.base64Image || rawBody.image;
     console.log("[EDGE_BANNER] Request diterima, panjang base64:", base64Image ? base64Image.length : 0);
-
-    const GEMINI_KEYS_RAW = Deno.env.get('GEMINI_API_KEY') || "";
-    const GEMINI_KEYS = GEMINI_KEYS_RAW.split(',').map(k => k.trim()).filter(k => k);
 
     if (GEMINI_KEYS.length === 0) {
       throw new Error("Gemini API key is not configured");
@@ -125,6 +124,7 @@ FORMAT OUTPUT (JSON MURNI SAJA, TANPA BACKTICKS/MARKDOWN):
 
     let lastError: any = null;
     let successfulResult: any = null;
+    const triedErrors: any[] = [];
 
     // Model and Key cascade loop
     outerLoop:
@@ -151,8 +151,9 @@ FORMAT OUTPUT (JSON MURNI SAJA, TANPA BACKTICKS/MARKDOWN):
             const errorText = await response.text();
             console.warn(`Model ${model} with Key #${kIdx + 1} returned status ${response.status}: ${errorText}`);
             lastError = `Gemini API error ${response.status}: ${errorText}`;
-            if (response.status === 404) {
-              // Jika model tidak tersedia di endpoint tersebut, langsung beralih ke model berikutnya
+            triedErrors.push({ model, keyIdx: kIdx + 1, status: response.status, error: errorText });
+            if (response.status === 404 || response.status === 400 || response.status === 503 || response.status === 429) {
+              // Jika model tidak tersedia, quota habis, atau 503 demand spike, langsung switch ke model berikutnya
               break;
             }
             continue;
@@ -171,14 +172,29 @@ FORMAT OUTPUT (JSON MURNI SAJA, TANPA BACKTICKS/MARKDOWN):
 
           // Sinkronisasi data struktur boxes dan banners
           if (Array.isArray(resultData.banners) && (!Array.isArray(resultData.boxes) || resultData.boxes.length === 0)) {
-            resultData.boxes = resultData.banners.map((b: any) => ({
-              ymin: b.ymin,
-              xmin: b.xmin,
-              ymax: b.ymax,
-              xmax: b.xmax,
-              polygon: b.polygon,
-              label: b.label || 'contact_banner'
-            }));
+            resultData.boxes = resultData.banners;
+          }
+
+          if (Array.isArray(resultData.boxes)) {
+            resultData.boxes = resultData.boxes.map((b: any) => {
+              let poly = b.polygon;
+              if (!Array.isArray(poly) || poly.length < 4) {
+                poly = [
+                  [b.xmin, b.ymin],
+                  [b.xmax, b.ymin],
+                  [b.xmax, b.ymax],
+                  [b.xmin, b.ymax]
+                ];
+              }
+              return {
+                ymin: b.ymin,
+                xmin: b.xmin,
+                ymax: b.ymax,
+                xmax: b.xmax,
+                polygon: poly,
+                label: b.label || 'contact_banner'
+              };
+            });
           }
 
           successfulResult = {
@@ -187,15 +203,16 @@ FORMAT OUTPUT (JSON MURNI SAJA, TANPA BACKTICKS/MARKDOWN):
             data: resultData
           };
           break outerLoop;
-        } catch (callErr) {
+        } catch (callErr: any) {
           console.warn(`Fetch error with model ${model} key #${kIdx + 1}:`, callErr);
-          lastError = callErr;
+          lastError = callErr?.message || String(callErr);
+          triedErrors.push({ model, keyIdx: kIdx + 1, error: lastError });
         }
       }
     }
 
     if (!successfulResult) {
-      throw new Error(lastError || "All Gemini models and API keys failed");
+      throw new Error(`Semua model Gemini gagal: ${JSON.stringify(triedErrors)}`);
     }
 
     return new Response(

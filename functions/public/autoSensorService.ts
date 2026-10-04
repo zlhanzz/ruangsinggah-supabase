@@ -448,7 +448,7 @@ export async function detectPhotoContactBanner(
 
     const invokeWithTimeout = async () => {
         const timeoutPromise = new Promise((_, reject) =>
-            setTimeout(() => reject(new Error('Deteksi AI timeout (7.5s)')), 7500)
+            setTimeout(() => reject(new Error('Deteksi AI timeout (15s)')), 15000)
         );
         const invokePromise = supabase.functions.invoke('detect-contact-banner', {
             body: {
@@ -874,43 +874,48 @@ export async function processPhotoWithAutoSensor(
                         polygon?: Array<{ x: number; y: number }>;
                     }> = [];
 
+                    let aiScanSucceeded = false;
+
                     // 2. Deteksi Spanduk Kontak via AI Gemini Vision
                     try {
                         // Sweet spot 1024px, q=0.65 menghasilkan base64 ringkas (~45KB) sehingga transmisi instan
                         const lowResBase64 = await createLowResBase64ForAi(file, 1024, 0.65);
                         if (lowResBase64) {
                             const aiResult = await detectPhotoContactBanner(lowResBase64, 'image/jpeg');
-                            if (aiResult.hasContact && aiResult.boxes && aiResult.boxes.length > 0) {
-                                detectedTexts = aiResult.detectedTexts || [];
-                                bannersToApply = aiResult.boxes.map(b => {
-                                    const normYmin = Math.max(0, Math.min(1000, b.ymin));
-                                    const normXmin = Math.max(0, Math.min(1000, b.xmin));
-                                    const normYmax = Math.max(0, Math.min(1000, b.ymax));
-                                    const normXmax = Math.max(0, Math.min(1000, b.xmax));
+                            if (!aiResult.error) {
+                                aiScanSucceeded = true;
+                                if (aiResult.hasContact && aiResult.boxes && aiResult.boxes.length > 0) {
+                                    detectedTexts = aiResult.detectedTexts || [];
+                                    bannersToApply = aiResult.boxes.map(b => {
+                                        const normYmin = Math.max(0, Math.min(1000, b.ymin));
+                                        const normXmin = Math.max(0, Math.min(1000, b.xmin));
+                                        const normYmax = Math.max(0, Math.min(1000, b.ymax));
+                                        const normXmax = Math.max(0, Math.min(1000, b.xmax));
 
-                                    const bx = Math.round((normXmin / 1000) * width);
-                                    const by = Math.round((normYmin / 1000) * height);
-                                    const bw = Math.round(((normXmax - normXmin) / 1000) * width);
-                                    const bh = Math.round(((normYmax - normYmin) / 1000) * height);
+                                        const bx = Math.round((normXmin / 1000) * width);
+                                        const by = Math.round((normYmin / 1000) * height);
+                                        const bw = Math.round(((normXmax - normXmin) / 1000) * width);
+                                        const bh = Math.round(((normYmax - normYmin) / 1000) * height);
 
-                                    let polygonPts: Array<{ x: number; y: number }> | undefined = undefined;
-                                    if (b.polygon && Array.isArray(b.polygon) && b.polygon.length >= 4) {
-                                        polygonPts = b.polygon.map(([px, py]) => ({
-                                            x: Math.round((Math.max(0, Math.min(1000, px)) / 1000) * width),
-                                            y: Math.round((Math.max(0, Math.min(1000, py)) / 1000) * height)
-                                        }));
-                                    }
+                                        let polygonPts: Array<{ x: number; y: number }> | undefined = undefined;
+                                        if (b.polygon && Array.isArray(b.polygon) && b.polygon.length >= 4) {
+                                            polygonPts = b.polygon.map(([px, py]) => ({
+                                                x: Math.round((Math.max(0, Math.min(1000, px)) / 1000) * width),
+                                                y: Math.round((Math.max(0, Math.min(1000, py)) / 1000) * height)
+                                            }));
+                                        }
 
-                                    return { x: bx, y: by, width: bw, height: bh, polygon: polygonPts };
-                                }).filter(b => b.width > 5 && b.height > 5);
+                                        return { x: bx, y: by, width: bw, height: bh, polygon: polygonPts };
+                                    }).filter(b => b.width > 5 && b.height > 5);
+                                }
                             }
                         }
                     } catch (aiErr) {
                         console.warn('[AI_SENSOR] AI scan error, langsung beralih ke heuristik cepat:', aiErr);
                     }
 
-                    // 3. Fallback Heuristik Client-Side Cerdas jika AI tidak mengembalikan kotak
-                    if (bannersToApply.length === 0) {
+                    // 3. Fallback Heuristik Client-Side Cerdas HANYA jika AI gagal terhubung/offline (bukan jika AI menyatakan bersih)
+                    if (!aiScanSucceeded && bannersToApply.length === 0) {
                         const heuristicBoxes = detectBannerRegionsClientSide(ctx, width, height);
                         if (heuristicBoxes.length > 0) {
                             bannersToApply = heuristicBoxes;

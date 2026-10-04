@@ -1,110 +1,91 @@
-# Rencana Implementasi: Akselerasi Ultra-Cepat Upload Foto Listing, Deteksi Sudut Banner Presisi (Perspective Quad), dan Single-Pass Watermark WebP
+# Rencana Implementasi: Migrasi Langsung ke Gemini 3.7 Flash & Penajaman Deteksi Sensor Spanduk Presisi
 
-## 1. Analisis Masalah & Jawaban Pertanyaan Pengguna
+## 1. Analisis Masalah & Temuan Diagnostik
 
-### A. Mengapa Proses Upload Foto Pertama Sangat Lama dan Sensor Banner Tidak Berfungsi (Hanya Ada Watermark)?
-Berdasarkan investigasi mendalam terhadap log dan kode sistem:
-1. **Cold Start Deno Edge Function**:
-   - Supabase Edge Function `detect-contact-banner` berjalan di atas container Deno serverless yang mengalami *cold start* saat idle. Pada pemanggilan pertama, container membutuhkan inisialisasi selama 4–8 detik.
-2. **Model Loop yang Membuang Waktu di Edge Function**:
-   - Di `supabase/functions/detect-contact-banner/index.ts`, urutan model kandidat dimulai dari `"gemini-2.0-flash"` dan `"gemini-1.5-flash"`. Berdasarkan pengujian langsung kami via script, kedua model tersebut gagal/404 pada endpoint saat ini, sehingga Edge Function membuang waktu mencoba seluruh API key untuk model-model yang gagal sebelum akhirnya beralih ke `"gemini-2.5-flash"` (yang sebenarnya aktif dan sukses).
-3. **Frontend Timeout & Ketiadaan Fallback di Form Pemilik Kost (`KostFormMitra.tsx`)**:
-   - Karena kombinasi cold start + model loop yang memakan waktu > 15-18 detik, request frontend mengalami *timeout* pada percobaan pertama.
-   - Di `KostFormMitra.tsx`, blok penanganan error AI (`detection.error`) **tidak memicu fallback sensor**. Foto langsung diteruskan ke proses kompresi WebP reguler dan diberi watermark, tanpa disensor sama sekali, serta memicu munculnya tombol perisai oranye 🛡️ (*Re-Scan Manual*) pada kartu foto seperti yang terlihat di tangkapan layar pengguna.
-4. **Proses Kanvas Berganda (Double Canvas Round-Trip)**:
-   - Alur saat ini memproses gambar dua kali: citra mentah dimuat ke kanvas 1 untuk sensor blur -> diekspor ke File -> dimuat lagi ke kanvas 2 untuk crop 4:3 + watermark RuangSinggah.id -> diekspor lagi ke WebP. Hal ini memakan memori CPU/RAM dan memperlambat proses upload.
+Berdasarkan investigasi langsung terhadap Edge Function live dan foto terbaru yang Anda unggah (`media_1791128615210.png`):
 
-### B. Mengapa Upload Foto Kedua Terasa Sedikit Lebih Cepat dan Sensor Banner Bekerja?
-- Pada upload kedua, container Deno Supabase **sudah berada dalam kondisi hangat (*warm*)** di memori. Walaupun masih membuang waktu pada model loop yang gagal, eksekusinya selesai dalam ~4.5 detik (di bawah batas timeout 18 detik). Karena respons AI berhasil diterima, fungsi sensor kotak banner berhasil dieksekusi.
+1. **Akar Masalah Keterlambatan Respon (96 Detik) & Timeout**:
+   - Di Edge Function `detect-contact-banner`, model `gemini-3.7-flash` berada di urutan terbawah (`index 4`).
+   - Server mencoba model-model di atasnya (`gemini-2.5-flash`, `gemini-2.0-flash`, `gemini-1.5-flash`, `gemini-1.5-pro`) yang berulang kali gagal di semua API key.
+   - Akibatnya, pemanggilan Edge Function memakan waktu **96,35 detik** sebelum akhirnya berhasil mencapai `gemini-3.7-flash`.
+   - Sementara itu, di front-end (`autoSensorService.ts`), timeout disetel **7,5 detik**. Karena server belum merespon pada detik ke-7,5, front-end membatalkan request AI dan mengira koneksi AI gagal.
 
----
+2. **Akar Masalah Mengapa Sensor Meleset atau Tidak Menutup Spanduk**:
+   - Karena request AI timeout di front-end, sistem beralih ke *Fallback Heuristik Client-Side* (`detectBannerRegionsClientSide`).
+   - Heuristik lokal bekerja berdasarkan algoritma kontras piksel sederhana (bukan AI vision). Pada foto sebelumnya, algoritma salah mendeteksi kontras antara jeruji pagar besi hitam dan bilah kayu, sehingga kotak sensor diletakkan di pagar sebelah kanan spanduk (meleset).
+   - Pada foto terbaru Anda, heuristik tidak menemukan kontras yang cukup, sehingga tidak ada sensor yang digambar, meski badge status sudah terlanjur berstatus aktif.
 
-## 2. Tujuan Pengembangan & Solusi yang Diusulkan
-
-1. **Akselerasi Ultra-Cepat (Fast-Path Architecture)**:
-   - **Background Pre-Warming Engine**: Saat pengguna membuka Formulir Kost pada langkah 5 (FOTO) atau saat modal dibuka, sistem secara otomatis mengirimkan ping ringan ke Edge Function di latar belakang (*non-blocking*). Ketika pengguna memilih foto dari galeri, Edge Function sudah dalam kondisi *warm* 100%.
-   - **Fast-Path Kategori Non-Banner**: Foto untuk kategori internal (kamar tidur, kamar mandi, kasur, lemari, dapur, dll.) dipastikan **0ms delay AI** — langsung diproses melalui Single-Pass WebP + Watermark (< 150ms).
-   - **Optimasi Payload AI**: Citra yang dikirim ke AI dikompresi optimal ke 800px-1024px JPEG kualitas 0.60 (~40-60 KB Base64), memangkas waktu transmisi jaringan seluler hingga 75%.
-   - **Penyederhanaan Model Cascade Edge Function**: Menempatkan `"gemini-2.5-flash"` sebagai prioritas nomor 1 dengan mematikan reasoning budget (`thinkingBudget: 0`) agar latensi AI turun drastis ke kisaran 1–1.5 detik.
-
-2. **Deteksi Sudut Banner Presisi & Penyesuaian Perspektif (Perspective Quad Polygon)**:
-   - Memperbarui prompt dan schema output Gemini AI agar tidak hanya mengembalikan kotak tegak lurus (*axis-aligned bounding box*), melainkan **4 titik sudut terluar dari spanduk** (`polygon: [[x_tl, y_tl], [x_tr, y_tr], [x_br, y_br], [x_bl, y_bl]]`).
-   - Menerapkan rendering kanvas dengan **Perspective Clipping Path**:
-     - Efek sensor pixelate dan frosted glass gelap hanya diterapkan di dalam bidang poligon spanduk miring tersebut.
-     - Struktur pagar besi/kayu vertikal, dinding, atau tiang di samping spanduk **tidak akan ikut tertutup kotak hitam**.
-     - Badge watermark `ruangsinggah.id` diposisikan di titik centroid dan dirotasi mengikuti sudut kemiringan spanduk (`angle = Math.atan2(dy, dx)`).
-
-3. **Single-Pass Rendering Pipeline**:
-   - Menggabungkan proses deteksi, sensor miring/poligon, watermark diagonal RuangSinggah.id, dan konversi WebP ke dalam **satu kali putaran kanvas (Single-Pass)**.
-
-4. **Multi-Layer Defensive Fallback**:
-   - Jika koneksi internet pengguna sangat lambat dan request AI melebihi batas waktu (timeout dipersingkat menjadi 7 detik agar pengguna tidak menunggu lama), sistem secara otomatis mengaktifkan pemindaian lokal cerdas (*Smart Heuristic Client-Side Edge Detection*) sehingga spanduk tetap tersensor secara instan (< 50ms) dan foto **tidak akan pernah lolos tanpa sensor**.
+3. **Validasi Model Gemini 3.7 Flash**:
+   - Berdasarkan pengujian langsung tadi, **`gemini-3.7-flash` terbukti 100% aktif, didukung oleh API key Anda, dan berhasil membaca teks secara tepat**:
+     ```json
+     {
+       "success": true,
+       "modelUsed": "gemini-3.7-flash",
+       "data": {
+         "has_contact": true,
+         "detected_texts": ["TERIMA KOST PUTRI"],
+         "boxes": [ ... ]
+       }
+     }
+     ```
+   - Dengan memangkas model usang dan **langsung menjadikan `gemini-3.7-flash` sebagai prioritas #1**, waktu eksekusi akan terpangkas drastis dari **96 detik menjadi ~1,5 – 3 detik**, berada jauh di bawah batas timeout front-end sehingga sensor AI akan 100% aktif dan tepat sasaran.
 
 ---
 
-## 3. Dampak Perubahan (Daftar File yang Disentuh)
+## 2. Dampak Perubahan (Affected Files)
 
-1. `supabase/functions/detect-contact-banner/index.ts`:
-   - Penataan ulang urutan model: meletakkan `gemini-2.5-flash` di urutan pertama.
-   - Penambahan parameter `thinkingBudget: 0` untuk akselerasi respon.
-   - Peningkatan schema instruksi untuk mendeteksi 4 titik sudut spanduk (`polygon` / `corners`) untuk koreksi kemiringan perspektif.
-   - Penambahan dukungan `ping: true` untuk background pre-warming.
-2. `functions/public/autoSensorService.ts`:
-   - Implementasi `applyPerspectivePolygonSensorToCanvas`: rendering sensor quadrilateral miring presisi berbasis sudut banner + rotasi badge.
-   - Implementasi `warmUpBannerDetectionEngine`: pemicu pre-warming Edge Function.
-   - Refaktor `processPhotoWithAutoSensor` menjadi Single-Pass Canvas Pipeline (menggabungkan sensor + watermark + WebP dalam 1x draw).
-3. `functions/public/components/KostFormMitra.tsx`:
-   - Menghubungkan pre-warming saat masuk ke langkah FOTO.
-   - Mengadopsi pipeline single-pass terpadu dari `autoSensorService.ts`, menghapus duplikasi fungsi lama `applyBlurToBoundingBoxes`.
-4. `functions/public/components/admin/KostManagerPropertyFormModal.tsx` & `functions/public/pages/AgentDashboard.tsx`:
-   - Memastikan pre-warming dan deteksi poligon perspektif aktif pada dashboard agen survei.
-5. `functions/public/adminService.ts`:
-   - Menyelaraskan interface `detectPhotoContactBanner` agar mendukung 4 titik koordinat poligon.
+1. **`supabase/functions/detect-contact-banner/index.ts`**:
+   - Memperbarui daftar `CANDIDATE_MODELS` dengan menempatkan `gemini-3.7-flash` di posisi teratas (#1).
+   - Menambahkan varian fallback resmi seperti `gemini-2.0-flash-exp` atau `gemini-3.8-flash` (jika tersedia), serta membersihkan model yang tidak aktif.
+   - Memastikan format pengembalian koordinat poligon 4 titik (`[x, y]`) dan bounding box (`ymin, xmin, ymax, xmax`) ter-validasi dengan baik.
+   - Men-deploy ulang Edge Function ke Supabase project `sgcmnsnokrztocnhxnqm`.
 
----
+2. **`functions/public/autoSensorService.ts`**:
+   - Menyesuaikan timeout pemanggilan AI dari 7,5s menjadi 12s agar memberikan toleransi jaringan seluler yang memadai namun tetap responsif bagi pengguna.
+   - Memperkuat kalkulasi parsing koordinat poligon 4 titik agar memastikan titik koordinat `[x, y]` selalu terpetakan secara presisi 1:1 ke kanvas foto asli.
+   - Menyempurnakan pembobotan heuristik fallback client-side agar tidak menargetkan pagar kayu/besi jika AI sedang tidak terjangkau.
 
-## 4. Langkah-Langkah Eksekusi Bertahap
+3. **`functions/PROGRESS.md`**:
+   - Mencatat progres fitur dan penyesuaian model AI terbaru.
 
-- [ ] **Langkah 1: Optimasi Edge Function `detect-contact-banner`**
-  - Mengubah urutan prioritas model ke `gemini-2.5-flash` di posisi pertama.
-  - Memperbarui instruksi prompt untuk menghasilkan koordinat 4 sudut (`polygon`: top-left, top-right, bottom-right, bottom-left) berskala 0-1000.
-  - Menambahkan endpoint handler untuk `{ ping: true }`.
-  - Menguji waktu respon via script uji.
-
-- [ ] **Langkah 2: Pembaruan Engine Rendering Kanvas di `autoSensorService.ts`**
-  - Membuat fungsi `applyPerspectivePolygonSensorToCanvas` dengan `ctx.beginPath()`, `ctx.clip()`, dan rotasi badge `ruangsinggah.id`.
-  - Menyediakan fallback ke bounding box jika poligon tidak terdeteksi.
-  - Mengintegrasikan pre-warming function `warmUpBannerDetectionEngine`.
-  - Mengimplementasikan Single-Pass Canvas Pipeline (skala -> AI/heuristik -> sensor poligon -> watermark -> WebP blob).
-
-- [ ] **Langkah 3: Integrasi ke `KostFormMitra.tsx` & Dashboard Agen**
-  - Menghapus double canvas round-trip di `KostFormMitra.tsx`.
-  - Memasang pre-warming otomatis saat pengguna mencapai Step 5 (Foto).
-  - Memastikan kategori non-banner langsung selesai dalam < 150ms tanpa request AI.
-  - Memastikan kategori banner rawan kontak memproses poligon miring secara mulus.
-
-- [ ] **Langkah 4: Kompilasi, Verifikasi Build & Pengujian**
-  - Menjalankan `npm run build` di `functions/public` untuk memastikan 0 error TypeScript / linting.
-  - Menjalankan script simulasi pemrosesan citra dengan spanduk miring.
-
-- [ ] **Langkah 5: Dokumentasi Progres & Sinkronisasi Git**
-  - Mencatat riwayat pembaruan ke `functions/PROGRESS.md`.
-  - Menyusun panduan hasil pengujian di `WALKTHROUGH.md`.
-  - Melakukan commit dan push ke remote branch `bukan-productions`.
+4. **`WALKTHROUGH.md`**:
+   - Membuat panduan ringkasan perubahan teknis dan langkah verifikasi hasil.
 
 ---
 
-## 5. Rencana Verifikasi
+## 3. Langkah-Langkah Eksekusi (FASE 2 - Setelah di-ACC)
 
-1. **Uji Kecepatan (Benchmark Latensi)**:
-   - Pemanggilan pre-warmed Edge Function harus selesai dalam < 1.8 detik (sebelumnya 8–18 detik).
-   - Foto non-banner (kamar mandi, kamar tidur) selesai diproses dan diberi watermark dalam < 200ms.
-2. **Uji Presisi Sudut & Kemiringan Banner (Perspective Quad)**:
-   - Menguji foto dengan spanduk sewa kost yang posisinya miring/diambil dari sudut samping (seperti pada contoh pagar kayu dan jendela depan).
-   - Memastikan sensor hanya menutupi kain spanduk mengikuti 4 sudut miringnya, tanpa memotong pagar atau dinding di luar batas spanduk.
-   - Memastikan teks badge `ruangsinggah.id` berotasi sejajar dengan kemiringan spanduk.
-3. **Uji Kelulusan Build**:
-   - Menjalankan `npm run build` pada direktori frontend untuk memastikan tidak ada kesalahan tipe atau regresi.
+1. **Langkah 1: Konfigurasi Model Prioritas pada Edge Function**:
+   - Mengubah `CANDIDATE_MODELS` pada `supabase/functions/detect-contact-banner/index.ts`:
+     ```ts
+     const CANDIDATE_MODELS = [
+       "gemini-3.7-flash",
+       "gemini-2.0-flash-exp",
+       "gemini-2.0-flash"
+     ];
+     ```
+   - Menambahkan pengaman agar model 404/400 langsung di-skip seketika tanpa menunggu berulang.
+
+2. **Langkah 2: Deployment Ulang Edge Function**:
+   - Menjalankan perintah `cmd /c npx supabase functions deploy detect-contact-banner --project-ref sgcmnsnokrztocnhxnqm`.
+
+3. **Langkah 3: Pengujian Kecepatan & Akurasi Langsung (Live Benchmark)**:
+   - Menjalankan kembali skrip uji diagnostik dengan gambar pagar kost pengguna untuk memverifikasi bahwa respon kembali dalam < 3 detik dengan koordinat spanduk "TERIMA KOST PUTRI".
+
+4. **Langkah 4: Sinkronisasi Frontend `autoSensorService.ts`**:
+   - Memastikan timeout 12s dan normalisasi poligon `[x, y]` terpetakan sempurna ke canvas.
+
+5. **Langkah 5: Kompilasi & Build Verification**:
+   - Menjalankan `cmd /c npm run build` di direktori `functions/public/` hingga lulus 100% tanpa error.
+
+6. **Langkah 6: Git Commit & Push**:
+   - Melakukan commit dan push ke branch `bukan-productions`.
 
 ---
-*Mohon tinjau rencana implementasi ini. Jika disetujui, silakan berikan persetujuan ("ACC" / "Proceed") agar saya dapat melanjutkan ke Fase 2 (Eksekusi).*
+
+## 4. Rencana Verifikasi
+
+- **Verifikasi Latensi Respon**: Pemanggilan `detect-contact-banner` harus selesai dalam kurun waktu **1,5 – 3,5 detik** (dari sebelumnya 96 detik).
+- **Verifikasi Deteksi Teks Spanduk**: Teks "TERIMA KOST PUTRI" terdeteksi oleh `gemini-3.7-flash`.
+- **Verifikasi Penempatan Sensor**: Kotak sensor poligon terpasang tepat membungkus plang kayu/kertas "TERIMA KOST PUTRI", tidak meleset ke pagar besi hitam di sampingnya.
+- **Verifikasi Kompilasi Frontend**: `npm run build` sukses 0 error.
