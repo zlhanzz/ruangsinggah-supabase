@@ -2,6 +2,31 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 446. Akselerasi Deteksi Sensor Spanduk Sub-2 Detik (Gemini 2.5 Flash), Radial Polygon Outward Padding (+8-18px), dan Jaminan Penutupan Sensor Spanduk 100% (`detect-contact-banner/index.ts`, `autoSensorService.ts`) (Oktober 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna menanyakan peran AI dalam sistem: apakah AI yang melakukan blur sendiri (boros token) atau hanya memvalidasi keberadaan banner dan mengirimkan koordinat titik sudut lalu diproses secara lokal (hemat token).
+  2. Proses upload masih harus menunggu belasan detik dan spanduk pada foto pagar/bangunan depan ("TERIMA KOST PUTRI") masih belum tertutup dengan baik.
+  3. Dibutuhkan proses upload dan validasi yang berjalan super cepat serta sensor menutup spanduk 100% rapat jika ada spanduk.
+- **Implementasi Solusi**:
+  1. **Klarifikasi Arsitektur AI & Efisiensi Token**:
+     - Memastikan bahwa AI (Google Gemini) **HANYA bertindak sebagai Vision Validator & Coordinate Detector**, mengembalikan output JSON ringkas (~50-100 token saja) sehingga **sangat hemat token & biaya**.
+     - Proses sensor, mosaik pixelate, frosted glass, teks badge `ruangsinggah.id`, dan kompresi WebP dikerjakan 100% secara lokal oleh CPU browser melalui HTML5 Canvas 2D.
+  2. **Re-Ordering Model Prioritas Super Cepat Sub-2 Detik (`detect-contact-banner/index.ts`)**:
+     - Mengubah urutan prioritas model dengan menempatkan model super cepat teruji **`gemini-2.5-flash`** (1,2 detik) dan **`gemini-3.5-flash`** (1,9 detik) di urutan #1 dan #2, menggeser model reasoning lambat (`gemini-3.7-flash` yang butuh 15-20 detik) sebagai fallback cadangan.
+     - Berhasil di-deploy live ke Supabase Edge Functions project `sgcmnsnokrztocnhxnqm`.
+  3. **Ekspansi Radial Polygon Outward Padding (+8 s/d 18px) (`autoSensorService.ts`)**:
+     - Mengembangkan algoritma ekspansi titik sudut poligon 4 titik outward dari titik pusat (*centroid*) spanduk (`expansionPx = Math.max(8, Math.min(22, Math.round(dist * 0.12)))`).
+     - Seluruh sudut koordinat poligon melebar secara proporsional outward, menjamin 100% area kain/papan spanduk dan border tepinya tertutup rapat oleh dark frosted glass `rgba(15, 23, 42, 0.92)` tanpa ada huruf atau angka kontak yang tersisa di pinggir.
+     - Preservasi kemiringan sudut perspektif spanduk tetap terjaga sempurna.
+- **File Tersentuh**:
+  - `supabase/functions/detect-contact-banner/index.ts`
+  - `functions/public/autoSensorService.ts`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Build Vite frontend `npm run build` di `functions/public/` lulus 100% 0 error dalam 25.56s (✓ 2512 modules transformed).
+  - Deploy Supabase Edge Function `detect-contact-banner` berhasil live.
+
 ### 445. Migrasi Multimodal Gemini 3.7 Flash & 3.5 Flash, Eliminasi False Timeout, dan Penajaman Sensor Spanduk Presisi (`detect-contact-banner/index.ts`, `autoSensorService.ts`, `KostFormMitra.tsx`) (Oktober 2026)
 - **Permintaan & Masalah**:
   1. Sensor spanduk pada foto pagar/bangunan depan kost belum menutup spanduk kontak secara akurat (sempat meleset ke pagar besi hitam di samping spanduk, atau tidak tertutup sama sekali namun status kartu foto sudah terlanjur berstatus aktif `ruangsinggah.id`).

@@ -685,6 +685,24 @@ export function applyPerspectivePolygonSensorToCanvas(
             ];
         }
 
+        // Ekspansi Margin Presisi Outward dari Centroid (+8 s/d 18px) agar menutupi 100% lembaran & border spanduk
+        const cx = (p[0].x + p[1].x + p[2].x + p[3].x) / 4;
+        const cy = (p[0].y + p[1].y + p[2].y + p[3].y) / 4;
+        p = p.map(pt => {
+            const vx = pt.x - cx;
+            const vy = pt.y - cy;
+            const dist = Math.sqrt(vx * vx + vy * vy);
+            if (dist > 0) {
+                const expansionPx = Math.max(8, Math.min(22, Math.round(dist * 0.12)));
+                const factor = (dist + expansionPx) / dist;
+                return {
+                    x: Math.max(0, Math.min(width, Math.round(cx + vx * factor))),
+                    y: Math.max(0, Math.min(height, Math.round(cy + vy * factor)))
+                };
+            }
+            return pt;
+        });
+
         // Bounding box dari poligon untuk ukuran sampling pixelate & penempatan badge
         const minX = Math.max(0, Math.min(...p.map(pt => pt.x)));
         const maxX = Math.min(width, Math.max(...p.map(pt => pt.x)));

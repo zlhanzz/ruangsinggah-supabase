@@ -6,11 +6,11 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-// Model priority cascade: gemini-3.7-flash nomor 1, diikuti gemini-3.5-flash (1.9s), gemini-2.5-flash (1.2s), dan gemini-3.8-flash
+// Model priority cascade: gemini-2.5-flash (1.2s) & gemini-3.5-flash (1.9s) untuk kecepatan sub-2 detik
 const CANDIDATE_MODELS = [
-  "gemini-3.7-flash",
-  "gemini-3.5-flash",
   "gemini-2.5-flash",
+  "gemini-3.5-flash",
+  "gemini-3.7-flash",
   "gemini-3.8-flash"
 ];
 
