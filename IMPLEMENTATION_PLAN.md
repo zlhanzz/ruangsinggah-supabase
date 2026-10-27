@@ -1,87 +1,75 @@
-# Rencana Implementasi: Pemindahan Indikator Loading ke Kartu Foto & Otomasi 100% Sensor Spanduk Tanpa Klik Manual
+# IMPLEMENTATION PLAN: Penyesuaian Teks Loading Foto ("Sedang diproses...") dan Edukasi Keamanan Sensor Spanduk
 
-## 1. Analisis Masalah
+## 1. Analisis Masalah & Kebutuhan
 
-Berdasarkan pengujian pengguna dan tangkapan layar antarmuka:
+### A. Konteks & Permintaan Pengguna
+1. **Teks Indikator Loading**: Saat foto baru diunggah, teks loading di kartu foto sebelumnya menampilkan *"Memindai Spanduk..."*. Pengguna meminta agar teks tersebut diganti menjadi lebih netral dan umum, yaitu: **`"Sedang diproses..."`**.
+2. **Penjelasan Alasan Keamanan saat Sensor Terjadi**: Jika pada foto yang diunggah terdeteksi adanya spanduk/banner nomor kontak dan sensor bekerja menyamarkannya, pengguna ingin disematkan keterangan penjelasan yang jelas dan mendidik kepada pemilik kost bahwa penyamaran tersebut dilakukan **demi alasan keamanan transaksi dan perlindungan data privasi**.
 
-### A. Mengapa Loading Terjadi di Kotak Sampingnya (Bukan Pada Foto yang Diupload)?
-1. **Penggantian Slot "+ Tambah Foto" oleh State `uploadingCategory`**:
-   - Di `KostFormMitra.tsx` (baris 6039 dan 6254), slot tombol `+ Tambah Foto` dibungkus kondisi ternary:
-     `uploadingCategory === cat.id ? (<div ...>Memproses... Mohon tunggu</div>) : (<label ...>+ Tambah Foto</label>)`.
-   - Karena slot `+ Tambah Foto` terletak tepat di sebelah kanan foto yang baru masuk, slot tersebut berubah menjadi kotak oranye putus-putus bertuliskan *"Memproses... Mohon tunggu"*.
-   - Akibatnya, pengguna melihat animasi loading ganda yang membingungkan: indikator loading justru muncul di slot samping tempat tombol tambah foto, bukan terpusat pada kartu foto itu sendiri.
-
-### B. Mengapa Sensor Spanduk Tidak Langsung Tampil Otomatis dan Terkesan Harus Di-klik Manual?
-1. **Menunggu Upload Cloud Storage Sebelum Memperbarui Tampilan Gambar**:
-   - Pada `handleCategoryFilesUpload`, urutan eksekusi sebelumnya adalah:
-     1. `processPhotoWithAutoSensor` berjalan di kanvas lokal (1–2 detik) dan menghasilkan WebP tersensor.
-     2. Sistem kemudian menunggu `uploadDraftPhotoToStorage` (mengirim WebP ke cloud storage Supabase via jaringan internet, butuh beberapa detik).
-     3. **Hanya setelah upload cloud selesai**, fungsi `setNewPhotoItems` dipanggil untuk mengganti `preview` ke gambar yang telah disensor.
-   - Akibatnya, selama upload cloud berlangsung, kartu foto di layar **masih menampilkan ObjectURL foto mentah asli yang belum disensor**.
-2. **Tombol Perisai Manual Muncul Terlalu Dini**:
-   - Di pojok kanan atas kartu, tombol perisai pemindaian manual (`handleReScanBanner`) langsung tampil karena kondisi `!item.isBlurred` bernilai `true` selama proses upload berlangsung.
-   - Pengguna melihat foto belum tertutup sensor dan melihat tombol perisai aktif, sehingga pengguna berasumsi proses otomatis tidak berjalan dan mengklik tombol tersebut secara manual.
-   - Ketika tombol perisai diklik, pemindaian ulang dipaksa berjalan dan sensor pun muncul, sehingga timbul kesan bahwa sensor hanya bekerja lewat klik manual.
+### B. Manfaat bagi Pengguna / Mitra Kost
+- Tampilan loading menjadi lebih universal dan tidak menimbulkan kebingungan saat mengunggah foto selain spanduk.
+- Mitra kost memahami secara transparan bahwa stempel sensor `ruangsinggah.id` bukan merusak foto mereka, melainkan bentuk perlindungan proaktif platform dari potensi penipuan di luar sistem, transaksi liar (*bypass* tanpa jaminan), dan penyalahgunaan nomor pribadi oleh pihak ketiga.
 
 ---
 
-## 2. Rencana Solusi & Perubahan
+## 2. Dampak Perubahan
 
-```
-+-----------------------------------------------------------------------------------------+
-| ALUR BARU: AUTO-SENSOR INSTAN & LOADING TERPUSAT DI KARTU FOTO                          |
-|                                                                                         |
-| 1. Pengguna Memilih Foto                                                                |
-|    |                                                                                    |
-|    +--> Slot "+ Tambah Foto" TETAP UTUH & BERSIH (Tidak berubah jadi kotak loading)     |
-|    |                                                                                    |
-|    +--> Kartu Foto Muncul Seketika (<50ms) dengan Overlay Loading di Atas Foto:         |
-|         [ Dark Glass Overlay + Spinner + "Memindai Spanduk..." ]                        |
-|         (Tombol perisai manual DISEMBUNYIKAN selama proses berlangsung)                 |
-|                                                                                         |
-| 2. `processPhotoWithAutoSensor` Selesai (1-2 Detik)                                     |
-|    |                                                                                    |
-|    +--> SEKETIKA ITU JUGA UI DIPERBARUI:                                                |
-|         - Preview foto langsung berganti ke WebP tersensor                              |
-|         - Overlay loading dihilangkan                                                   |
-|         - Badge `● ruangsinggah.id` langsung muncul otomatis di atas foto               |
-|                                                                                         |
-| 3. Upload ke Supabase Storage Berlangsung Hening di Background                          |
-|    |                                                                                    |
-|    +--> Menyimpan `storagePath` dan URL permanen tanpa kedipan visual di layar          |
-+-----------------------------------------------------------------------------------------+
-```
-
-### A. Modifikasi `functions/public/components/KostFormMitra.tsx`
-1. **Pembaruan State UI Instan pada `handleCategoryFilesUpload`**:
-   - Begitu `processPhotoWithAutoSensor(originalFile)` selesai di kanvas lokal, **langsung perbarui item di state**:
-     `preview: URL.createObjectURL(webpFile)`, `file: webpFile`, `isBlurred`, `isProcessing: false`.
-   - Pengguna langsung melihat hasil sensor dan badge `● ruangsinggah.id` dalam 1–2 detik secara otomatis.
-   - Panggilan `uploadDraftPhotoToStorage` dijalankan setelahnya untuk memperbarui `storagePath` dan URL cloud secara hening di latar belakang.
-2. **Hapus Kotak Loading Samping di Slot "+ Tambah Foto"**:
-   - Hapus pengecekan `uploadingCategory === cat.id` pada baris 6039 dan 6254.
-   - Tombol `+ Tambah Foto` tetap tampil sebagai tombol penambahan foto standar yang stabil, tidak lagi berubah menjadi kotak *"Memproses... Mohon tunggu"*.
-3. **Penyematan Overlay Loading Terpusat di Kartu Foto**:
-   - Jika `item.isProcessing === true`, render overlay semi-transparan elegan (`absolute inset-0 bg-black/50 backdrop-blur-xs flex flex-col items-center justify-center gap-1.5 z-20`) tepat di atas kartu foto yang sedang diproses.
-   - Dilengkapi spinner animasi oranye dan teks *"Memindai Spanduk..."*.
-4. **Sembunyikan Tombol Re-Scan Selama Pemrosesan Otomatis**:
-   - Ubah kondisi render tombol perisai manual menjadi `!item.isBlurred && !item.isProcessing && isBannerProneCategory(...)`.
-   - Tombol manual hanya muncul jika proses otomatis telah selesai dan foto terbukti bersih (tidak ada spanduk), sehingga tidak memicu salah paham pengguna.
+File yang akan dimodifikasi:
+1. **`functions/public/components/KostFormMitra.tsx`**:
+   - Memperbarui teks overlay loading kartu foto dari `{isBannerProneCategory(cat.id) ? 'Memindai Spanduk...' : 'Memproses Foto...'}` menjadi **`"Sedang diproses..."`** pada kedua lokasi render (Fasilitas Umum & Kamar Tidur).
+   - Memperkaya teks notifikasi `bannerNotice` dengan narasi keamanan komprehensif.
+   - Menambahkan tombol interaktif/badge informasi keamanan (ikon `Info` dari `lucide-react`) pada kartu foto yang tersensor (`isBlurred === true`), sehingga mitra dapat mengklik untuk melihat modal/popover penjelasan alasan keamanan.
+2. **`functions/PROGRESS.md`**:
+   - Mencatat pekerjaan pada entri #449.
+3. **`WALKTHROUGH.md`**:
+   - Dokumentasi perubahan dan panduan uji verifikasi UI.
 
 ---
 
-## 3. Dampak Perubahan (Files to Modify)
-- `functions/public/components/KostFormMitra.tsx`
+## 3. Langkah-Langkah Eksekusi (FASE 2 setelah di-ACC)
+
+1. **Langkah 1: Perubahan Teks Loading Overlay Kartu Foto**
+   - Di `KostFormMitra.tsx` pada baris ~5990 (Location 1: Fasilitas Umum) dan ~6191 (Location 2: Kamar Tidur):
+     ```tsx
+     <p className="text-[10px] font-bold text-white tracking-wide leading-tight">
+         Sedang diproses...
+     </p>
+     ```
+
+2. **Langkah 2: Penyempurnaan Banner Edukasi Keamanan (`bannerNotice`)**
+   - Memperbarui teks `bannerNotice` saat spanduk terdeteksi:
+     ```tsx
+     setBannerNotice(
+         'Sistem mendeteksi adanya spanduk atau informasi kontak langsung pada foto yang diunggah. ' +
+         'Demi alasan keamanan transaksi, pencegahan penipuan di luar platform, serta perlindungan data privasi pemilik kost, ' +
+         'bagian kontak tersebut telah disamarkan secara otomatis dengan watermark resmi ruangsinggah.id.'
+     );
+     ```
+
+3. **Langkah 3: Komponen Edukasi Keamanan Interaktif pada Kartu Foto Tersensor**
+   - Menambahkan state modal info keamanan (misal `securityExplanationOpen: boolean`).
+   - Pada kartu foto yang `item.isBlurred === true`, menambahkan tombol kecil info keamanan (`Info` icon dari `lucide-react`) di samping badge `ruangsinggah.id`.
+   - Ketika diklik, membuka pop-up modal penjelasan yang menjelaskan:
+     - 🛡️ **Pencegahan Penipuan**: Menghindarkan pemilik & pencari kost dari transaksi liar di luar sistem resmi.
+     - 🔒 **Perlindungan Privasi**: Mencegah nomor pribadi disalahgunakan oleh pihak ketiga/scammer.
+     - 🤝 **Jaminan Transaksi**: Memastikan seluruh proses sewa terlindungi oleh sistem garansi resmi RuangSinggah.id.
+
+4. **Langkah 4: Kompilasi & Build Test**
+   - Menjalankan `cmd.exe /c "npm --prefix functions/public run build"` untuk memastikan 0 error kompilasi TypeScript/Vite.
+
+5. **Langkah 5: Pencatatan Progres, Walkthrough, dan Push ke GitHub**
+   - Menulis entri #449 di `functions/PROGRESS.md`.
+   - Menulis dokumen `WALKTHROUGH.md`.
+   - Melakukan commit dan push ke branch `bukan-productions`.
 
 ---
 
-## 4. Rencana Verifikasi (Testing Plan)
-1. **Kompilasi Frontend (Build Test)**:
-   - Menjalankan `npm --prefix functions/public run build` untuk memastikan 0 kesalahan kompilasi TypeScript.
-2. **Verifikasi Alur UI**:
-   - Memastikan tombol `+ Tambah Foto` tidak lagi berubah menjadi kotak loading di samping foto.
-   - Memastikan overlay loading muncul terpusat di atas foto yang sedang diproses.
-   - Memastikan hasil sensor spanduk dan badge `● ruangsinggah.id` langsung aktif secara otomatis tanpa memerlukan klik manual.
-3. **Dokumentasi & Git Commit**:
-   - Mencatat hasil pekerjaan ke `functions/PROGRESS.md` dan `WALKTHROUGH.md`.
-   - Commit dan push ke branch `bukan-productions`.
+## 4. Rencana Verifikasi
+
+- **Verifikasi Tampilan Loading**:
+  - Saat memilih foto baru, pastikan teks yang tampil di tengah kartu foto adalah `"Sedang diproses..."` dengan sub-teks `"Mohon tunggu sebentar"`.
+- **Verifikasi Penjelasan Keamanan**:
+  - Saat foto memuat spanduk disensor, pastikan banner di bagian atas foto menyajikan penjelasan alasan keamanan yang komprehensif.
+  - Klik ikon info pada foto yang tersensor untuk memastikan dialog/modal edukasi keamanan muncul dengan rapi, ramah seluler, dan informatif.
+- **Verifikasi Kelulusan Build**:
+  - Memastikan proses `npm run build` selesai dengan exit code 0 tanpa peringatan tipe.

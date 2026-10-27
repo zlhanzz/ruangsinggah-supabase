@@ -1,75 +1,63 @@
-# WALKTHROUGH: Perbaikan Indikator Loading Kartu Foto Presisi & Eksekusi Auto-Sensor Otomatis Instan (<1-2 Detik)
+# WALKTHROUGH: Penyesuaian Teks Loading Foto ("Sedang diproses...") dan Edukasi Keamanan Transaksi Penyamaran Spanduk
 
 ## 1. Ringkasan Eksekusi
 
-Sesuai permintaan dan persetujuan pada `IMPLEMENTATION_PLAN.md`, dua masalah utama pada antarmuka upload foto formulir mitra telah berhasil diatasi:
-1. **Posisi Indikator Loading**: Indikator loading sebelumnya berkedip dan muncul di kotak sebelahnya (di slot tombol `+ Tambah Foto` yang berubah menjadi placeholder pulsing). Kini tombol `+ Tambah Foto` tetap konsisten dan tidak berubah menjadi kotak terpisah, sementara overlay loading terpusat (`Loader2` putar + teks `Memindai Spanduk...` / `Memproses Foto...`) muncul langsung dan presisi di atas kartu foto yang sedang diunggah.
-2. **Eksekusi Sensor Otomatis**: Sensor spanduk kini langsung diaplikasikan secara otomatis dalam waktu **<1-2 detik** seketika foto selesai diproses di kanvas lokal tanpa perlu menunggu antrean upload Supabase Storage dan tanpa perlu menekan tombol perisai kuning (`handleReScanBanner`) secara manual.
+Sesuai persetujuan pada `IMPLEMENTATION_PLAN.md`, dua penyesuaian penting pada pengalaman pengguna (UX) formulir upload foto mitra telah berhasil diimplementasikan:
+1. **Penyederhanaan Teks Loading**: Teks judul pada overlay loading kartu foto yang sebelumnya bertuliskan *"Memindai Spanduk..."* kini telah diubah menjadi lebih netral dan universal: **`"Sedang diproses..."`** (dengan sub-teks *"Mohon tunggu sebentar"*).
+2. **Edukasi Alasan Keamanan saat Spanduk Tersensor**: Menyematkan penjelasan komprehensif kepada mitra kost bahwa penyamaran spanduk kontak dilakukan secara otomatis **demi alasan keamanan transaksi dan perlindungan data privasi**. Penjelasan disajikan dalam bentuk banner notifikasi dengan tombol aksi dan modal dialog interaktif (`SecurityExplanationModal`) yang dapat diakses langsung dari stempel foto tersensor.
 
 ---
 
-## 2. Analisis & Akar Masalah (Root Causes)
+## 2. Rincian Perubahan Kode
 
-1. **Kotak Pulsing Tambah Foto**:
-   - Pada baris 6044 dan 6250 di `KostFormMitra.tsx`, terdapat pengkondisian `{uploadingCategory === cat.id ? (<div className="... animate-pulse">Memproses... Mohon tunggu</div>) : (<label>+ Tambah Foto</label>)}`.
-   - Ini menyebabkan saat kategori sedang diproses, slot tambah foto berubah menjadi kotak placeholder baru di samping foto, membingungkan pengguna.
-2. **Keterlambatan Visualisasi Sensor**:
-   - Fungsi `handleCategoryFilesUpload` sebelumnya menunggu proses upload cloud `uploadDraftPhotoToStorage` tuntas sebelum memperbarui preview kartu foto.
-   - Karena upload file asli membutuhkan 3–6 detik, foto mentah belum tersensor sempat tampil di layar selama beberapa detik berdampingan dengan tombol perisai kuning aktif (`!item.isBlurred && isBannerProneCategory(cat.id)`).
-   - Pengguna mengira sensor otomatis tidak bekerja dan terpaksa menekan tombol perisai tersebut secara manual.
+### [KostFormMitra.tsx](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/components/KostFormMitra.tsx)
 
----
-
-## 3. Daftar Perubahan Kode
-
-### `functions/public/components/KostFormMitra.tsx`
-
-1. **Instant Reactive Sensor Preview (<1-2 Detik)**:
-   - Di dalam `handleCategoryFilesUpload`, segera setelah fungsi kanvas `processPhotoWithAutoSensor` mengembalikan file WebP yang tersensor/berwatermark, state `newPhotoItems` langsung diperbarui secara instan dengan `URL.createObjectURL(webpFile)` lokal dan `isProcessing: false`.
-   - Pengguna langsung melihat hasil sensor dan watermark dalam 1–2 detik pertama.
-   - Panggilan `uploadDraftPhotoToStorage` berjalan di latar belakang (*asynchronous background promise*) untuk mendapatkan URL permanen dari Supabase Storage tanpa menahan visual kartu foto.
-
-2. **Overlay Loading Terpusat di Atas Kartu Foto**:
-   - Menambahkan overlay semi-transparan `bg-slate-950/75 backdrop-blur-xs` langsung di atas kartu foto:
+1. **Pembaruan Teks Loading Overlay Kartu Foto**:
+   - Pada Location 1 (Fasilitas & Area Umum) dan Location 2 (Kamar Tidur / Cover):
      ```tsx
      {item.isProcessing && (
          <div className="absolute inset-0 bg-slate-950/75 backdrop-blur-xs flex flex-col items-center justify-center gap-1.5 p-2 text-center z-20 animate-in fade-in duration-200">
              <Loader2 className="w-6 h-6 text-orange-400 animate-spin" />
              <p className="text-[10px] font-bold text-white tracking-wide leading-tight">
-                 {isBannerProneCategory(cat.id) ? 'Memindai Spanduk...' : 'Memproses Foto...'}
+                 Sedang diproses...
              </p>
              <span className="text-[8px] text-slate-300">Mohon tunggu sebentar</span>
          </div>
      )}
      ```
-   - Diterapkan pada kedua kategori: Area Fasilitas Umum (Location 1) dan Kamar Tidur / Cover (Location 2).
 
-3. **Konsistensi Slot Tombol `+ Tambah Foto`**:
-   - Menghapus komponen placeholder pengganti `uploadingCategory === cat.id`.
-   - Tombol `<label>+ Tambah Foto</label>` tetap berada di posisinya secara statis tanpa bergeser atau berkedip saat upload berjalan.
+2. **Penyempurnaan Narasi Keamanan pada `bannerNotice`**:
+   - Teks notifikasi diperbarui untuk menjelaskan bahwa penyamaran kontak dilakukan demi perlindungan keamanan transaksi dan privasi pemilik kost.
+   - Ditambahkan tombol aksi *"Baca Alasan Keamanan Selengkapnya"* untuk membuka pop-up penjelasan.
 
-4. **Penyembunyian Tombol Re-Scan Manual Selama Pemrosesan**:
-   - Memperbarui kondisi tombol perisai kuning menjadi `!item.isBlurred && !item.isProcessing && isBannerProneCategory(cat.id)`.
-   - Tombol ini tidak akan tampil selama sistem sedang memindai spanduk secara otomatis, sehingga mencegah pengguna mengklik dobel atau bingung.
+3. **Tombol Interaktif Info Keamanan pada Badge `ruangsinggah.id`**:
+   - Pada kartu foto yang tersensor (`item.isBlurred`), di samping stempel `ruangsinggah.id` disematkan ikon `Info` (lucide-react).
+   - Mengklik ikon ini akan membuka `SecurityExplanationModal`.
+
+4. **Komponen Pop-up Dialog `SecurityExplanationModal`**:
+   - Menyajikan modal elegan dengan 3 poin edukasi utama:
+     - 🛡️ **Pencegahan Penipuan Transaksi**: Mencegah pihak tak bertanggung jawab menduplikasi listing atau mengalihkan calon penyewa bertransaksi di luar sistem tanpa jaminan keamanan uang sewa.
+     - 🔒 **Perlindungan Privasi Pemilik Kost**: Menjaga nomor telepon pribadi dari bahaya spam, telemarketing, atau penyalahgunaan nomor pribadi.
+     - 🤝 **Penyewa Tetap Terhubung Resmi**: Calon penyewa tetap dapat menghubungi pemilik kost melalui chat terintegrasi atau tombol WhatsApp resmi yang terverifikasi di listing.
 
 ---
 
-## 4. Hasil Verifikasi & Pengujian
+## 3. Hasil Verifikasi & Pengujian
 
 ### A. Kompilasi Build Frontend
-- **Perintah**: `npm --prefix functions/public run build`
-- **Hasil**: **LULUS 100% (0 Error, Exit Code 0)** dalam **26.66 detik** (`✓ 2512 modules transformed`).
-- Asset bundling production di `./public` dan `./dist` terupdate sempurna.
+- **Perintah**: `cmd.exe /c "npm --prefix functions/public run build"`
+- **Hasil**: **LULUS 100% (0 Error, Exit Code 0)** dalam **29.23 detik** (`✓ 2512 modules transformed`).
+- Seluruh asset statis production tersinkronisasi di `./public` dan `./dist`.
 
 ---
 
-## 5. Panduan Pengujian bagi Pengguna di Antarmuka (UI)
+## 4. Panduan Pengujian bagi Pengguna di Antarmuka (UI)
 
-1. Buka formulir tambah kost atau edit kost di **Mitra Dashboard** -> Tab **Langkah 5 (Foto Properti)**.
-2. Pada kategori **Bangunan Depan (Fasad)** atau kamar tidur, klik tombol `+ Tambah Foto` dan pilih foto properti yang memuat spanduk/kontak telepon.
-3. **Amati Perilaku Baru**:
-   - Tombol `+ Tambah Foto` **TIDAK lagi berubah menjadi kotak pulsing di samping**.
-   - Kartu foto yang baru diunggah langsung muncul dengan **overlay gelap elegan di tengah kartu foto itu sendiri** bertuliskan `Memindai Spanduk...` dan spinner `Loader2`.
-   - Tombol perisai kuning manual **tidak muncul** saat pemindaian sedang berlangsung.
-   - Dalam waktu **1–2 detik**, overlay loading hilang, spanduk kontak otomatis tertutup rapat oleh sensor frosted glass + watermark `ruangsinggah.id`, dan badge berubah menjadi `● ruangsinggah.id`.
-   - Seluruh proses berjalan **100% otomatis tanpa perlu menekan tombol apa pun**.
+1. Buka formulir tambah kost / edit kost di **Mitra Dashboard** -> **Langkah 5 (Foto Properti)**.
+2. Unggah foto apa pun pada kategori fasilitas umum atau kamar tidur:
+   - **Perhatikan Teks Loading**: Kartu foto yang sedang diunggah kini menampilkan teks **`Sedang diproses...`** (bukan lagi *Memindai Spanduk...*).
+3. Unggah foto yang memuat spanduk nomor kontak/telepon:
+   - Dalam 1–2 detik, foto otomatis diberi sensor frosted glass dan stempel badge `ruangsinggah.id` dengan ikon `(i)`.
+   - Di bagian atas grid foto muncul banner notifikasi yang menjelaskan alasan penyamaran kontak.
+   - Klik tombol **"Baca Alasan Keamanan Selengkapnya"** pada banner atau klik ikon `(i)` pada badge foto.
+   - Pop-up modal **"Kenapa Spanduk Disensor?"** akan terbuka dengan penjelasan keamanan yang rapi, transparan, dan meyakinkan.

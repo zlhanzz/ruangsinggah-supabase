@@ -2390,6 +2390,7 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
     const [uploadingCategory, setUploadingCategory] = useState<string | null>(null);
     const [reScanningId, setReScanningId] = useState<string | null>(null);
     const [bannerNotice, setBannerNotice] = useState<string | null>(null);
+    const [showSecurityExplanationModal, setShowSecurityExplanationModal] = useState<boolean>(false);
     
     // State sub-wizard pengisian kamar bertahap (Langkah 3)
     const [editingRoomIndex, setEditingRoomIndex] = useState<number | null>(null);
@@ -3542,7 +3543,7 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
             );
 
             if (anyContactDetected) {
-                setBannerNotice('Foto Anda terdeteksi memuat informasi spanduk/kontak dan telah disematkan sensor watermark resmi ruangsinggah.id secara otomatis demi keamanan transaksi.');
+                setBannerNotice('Foto Anda terdeteksi memuat informasi spanduk atau kontak langsung. Demi alasan keamanan transaksi dan perlindungan data privasi pemilik kost dari potensi penipuan di luar sistem, bagian kontak tersebut telah disamarkan secara otomatis dengan stempel resmi ruangsinggah.id.');
             }
         } finally {
             setUploadingCategory(null);
@@ -3604,7 +3605,7 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
             }));
 
             if (isBlurred) {
-                setBannerNotice('Spanduk kontak pada foto berhasil dideteksi dan disematkan watermark resmi ruangsinggah.id!');
+                setBannerNotice('Spanduk kontak pada foto berhasil dideteksi dan disamarkan secara otomatis dengan stempel resmi ruangsinggah.id demi alasan keamanan transaksi!');
             } else {
                 alert('AI telah memindai foto ini dan tidak menemukan spanduk nomor kontak/telepon.');
             }
@@ -5870,6 +5871,14 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                                     <div className="text-xs">
                                         <p className="font-black text-amber-900 uppercase tracking-wider">Perlindungan Kontak &amp; Privasi Aktif</p>
                                         <p className="text-amber-800 mt-0.5 font-medium leading-relaxed">{bannerNotice}</p>
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowSecurityExplanationModal(true)}
+                                            className="mt-2 inline-flex items-center gap-1.5 px-3 py-1 bg-amber-200/80 hover:bg-amber-300 text-amber-950 font-bold rounded-lg text-[11px] transition-colors cursor-pointer"
+                                        >
+                                            <Info size={12} className="text-amber-800" />
+                                            <span>Baca Alasan Keamanan Selengkapnya</span>
+                                        </button>
                                     </div>
                                 </div>
                                 <button 
@@ -5988,7 +5997,7 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                                                         <div className="absolute inset-0 bg-slate-950/75 backdrop-blur-xs flex flex-col items-center justify-center gap-1.5 p-2 text-center z-20 animate-in fade-in duration-200">
                                                             <Loader2 className="w-6 h-6 text-orange-400 animate-spin" />
                                                             <p className="text-[10px] font-bold text-white tracking-wide leading-tight">
-                                                                {isBannerProneCategory(cat.id) ? 'Memindai Spanduk...' : 'Memproses Foto...'}
+                                                                Sedang diproses...
                                                             </p>
                                                             <span className="text-[8px] text-slate-300">Mohon tunggu sebentar</span>
                                                         </div>
@@ -5997,9 +6006,20 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                                                     {/* Status Badges */}
                                                     {!item.isProcessing && (
                                                         item.isBlurred ? (
-                                                            <span className="absolute top-1.5 left-1.5 bg-slate-900/90 border border-orange-500/50 text-white text-[9px] font-black px-2 py-0.5 rounded-full shadow-md uppercase tracking-wider flex items-center gap-1 backdrop-blur-xs" title="Spanduk kontak telah diberi watermark resmi ruangsinggah.id">
+                                                            <span className="absolute top-1.5 left-1.5 bg-slate-900/90 border border-orange-500/50 text-white text-[9px] font-black px-2 py-0.5 rounded-full shadow-md uppercase tracking-wider flex items-center gap-1 backdrop-blur-xs" title="Spanduk kontak telah disamarkan secara otomatis demi alasan keamanan. Klik info untuk penjelasan lengkap.">
                                                                 <span className="w-1.5 h-1.5 rounded-full bg-orange-500 animate-pulse"></span>
-                                                                ruangsinggah.id
+                                                                <span>ruangsinggah.id</span>
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        setShowSecurityExplanationModal(true);
+                                                                    }}
+                                                                    className="ml-0.5 text-orange-300 hover:text-white transition-colors cursor-pointer"
+                                                                    title="Kenapa foto ini disensor? Klik untuk membaca alasan keamanan"
+                                                                >
+                                                                    <Info size={10} />
+                                                                </button>
                                                             </span>
                                                         ) : (
                                                             <span className="absolute top-1.5 left-1.5 bg-emerald-600 text-white text-[8px] font-black px-1.5 py-0.5 rounded-md shadow-xs uppercase tracking-wider">
@@ -6189,7 +6209,7 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                                                             <div className="absolute inset-0 bg-slate-950/75 backdrop-blur-xs flex flex-col items-center justify-center gap-1.5 p-2 text-center z-20 animate-in fade-in duration-200">
                                                                 <Loader2 className="w-6 h-6 text-orange-400 animate-spin" />
                                                                 <p className="text-[10px] font-bold text-white tracking-wide leading-tight">
-                                                                    {isBannerProneCategory(cat.id) ? 'Memindai Spanduk...' : 'Memproses Foto...'}
+                                                                    Sedang diproses...
                                                                 </p>
                                                                 <span className="text-[8px] text-slate-300">Mohon tunggu sebentar</span>
                                                             </div>
@@ -6202,9 +6222,20 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                                                             </span>
                                                         ) : !item.isProcessing && (
                                                             item.isBlurred ? (
-                                                                <span className="absolute top-1.5 left-1.5 bg-slate-900/90 border border-orange-500/50 text-white text-[9px] font-black px-2 py-0.5 rounded-full shadow-md uppercase tracking-wider flex items-center gap-1 backdrop-blur-xs" title="Spanduk kontak telah diberi watermark resmi ruangsinggah.id">
+                                                                <span className="absolute top-1.5 left-1.5 bg-slate-900/90 border border-orange-500/50 text-white text-[9px] font-black px-2 py-0.5 rounded-full shadow-md uppercase tracking-wider flex items-center gap-1 backdrop-blur-xs" title="Spanduk kontak telah disamarkan secara otomatis demi alasan keamanan. Klik info untuk penjelasan lengkap.">
                                                                     <span className="w-1.5 h-1.5 rounded-full bg-orange-500 animate-pulse"></span>
-                                                                    ruangsinggah.id
+                                                                    <span>ruangsinggah.id</span>
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={(e) => {
+                                                                            e.stopPropagation();
+                                                                            setShowSecurityExplanationModal(true);
+                                                                        }}
+                                                                        className="ml-0.5 text-orange-300 hover:text-white transition-colors cursor-pointer"
+                                                                        title="Kenapa foto ini disensor? Klik untuk membaca alasan keamanan"
+                                                                    >
+                                                                        <Info size={10} />
+                                                                    </button>
                                                                 </span>
                                                             ) : (
                                                                 <span className="absolute top-1.5 left-1.5 bg-emerald-600 text-white text-[8px] font-black px-1.5 py-0.5 rounded-md shadow-xs uppercase tracking-wider">
@@ -6371,6 +6402,80 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                                             className="px-4 py-1.5 rounded-xl text-xs font-bold bg-orange-600 hover:bg-orange-700 text-white transition-colors shadow-xs"
                                         >
                                             Simpan Keterangan
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Modal Edukasi Alasan Keamanan Penyamaran Spanduk */}
+                        {showSecurityExplanationModal && (
+                            <div className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-200">
+                                <div className="bg-white rounded-3xl p-5 sm:p-6 max-w-md w-full shadow-2xl border border-gray-100 animate-in zoom-in-95 duration-200 space-y-4">
+                                    <div className="flex items-start justify-between gap-3 border-b border-gray-100 pb-3">
+                                        <div className="flex items-center gap-2.5">
+                                            <div className="w-9 h-9 rounded-2xl bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
+                                                <ShieldCheck size={20} />
+                                            </div>
+                                            <div>
+                                                <h5 className="text-sm font-black text-gray-900 leading-tight">Kenapa Spanduk Disensor?</h5>
+                                                <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Perlindungan Keamanan Platform</p>
+                                            </div>
+                                        </div>
+                                        <button 
+                                            type="button" 
+                                            onClick={() => setShowSecurityExplanationModal(false)}
+                                            className="text-gray-400 hover:text-gray-600 text-lg leading-none font-bold p-1 cursor-pointer"
+                                        >
+                                            &times;
+                                        </button>
+                                    </div>
+
+                                    <div className="space-y-3 text-xs text-gray-600 leading-relaxed">
+                                        <p className="font-medium">
+                                            Demi menjaga kenyamanan dan keamanan ekosistem sewa menyewa di <strong>RuangSinggah.id</strong>, nomor telepon atau spanduk kontak pada foto properti disamarkan secara otomatis berdasarkan alasan berikut:
+                                        </p>
+
+                                        <div className="space-y-2.5 pt-1">
+                                            <div className="p-3 bg-amber-50/70 rounded-2xl border border-amber-200/60 flex items-start gap-2.5">
+                                                <span className="text-base shrink-0">🛡️</span>
+                                                <div>
+                                                    <p className="font-bold text-amber-950 text-xs">Pencegahan Penipuan Transaksi</p>
+                                                    <p className="text-[11px] text-amber-900/80 mt-0.5">
+                                                        Mencegah pihak tak bertanggung jawab menduplikasi listing atau mengalihkan calon penyewa bertransaksi di luar sistem resmi tanpa jaminan keamanan uang sewa.
+                                                    </p>
+                                                </div>
+                                            </div>
+
+                                            <div className="p-3 bg-blue-50/70 rounded-2xl border border-blue-200/60 flex items-start gap-2.5">
+                                                <span className="text-base shrink-0">🔒</span>
+                                                <div>
+                                                    <p className="font-bold text-blue-950 text-xs">Perlindungan Privasi Pemilik Kost</p>
+                                                    <p className="text-[11px] text-blue-900/80 mt-0.5">
+                                                        Nomor kontak pribadi Anda tidak terpampang bebas di internet terbuka, menghindari spam, telemarketing, atau penyalahgunaan nomor pribadi.
+                                                    </p>
+                                                </div>
+                                            </div>
+
+                                            <div className="p-3 bg-emerald-50/70 rounded-2xl border border-emerald-200/60 flex items-start gap-2.5">
+                                                <span className="text-base shrink-0">🤝</span>
+                                                <div>
+                                                    <p className="font-bold text-emerald-950 text-xs">Calon Penyewa Tetap Terhubung Resmi</p>
+                                                    <p className="text-[11px] text-emerald-900/80 mt-0.5">
+                                                        Penyewa resmi tetap dapat menghubungi Anda via chat terintegrasi atau tombol WhatsApp resmi yang terverifikasi di halaman listing kost Anda.
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="pt-2 border-t border-gray-100 flex justify-end">
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowSecurityExplanationModal(false)}
+                                            className="w-full sm:w-auto px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider bg-gray-900 hover:bg-black text-white transition-all shadow-md active:scale-95 cursor-pointer"
+                                        >
+                                            Saya Mengerti
                                         </button>
                                     </div>
                                 </div>

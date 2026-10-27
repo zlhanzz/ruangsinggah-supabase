@@ -2,6 +2,29 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 449. Penyesuaian Teks Loading Foto ("Sedang diproses...") dan Edukasi Keamanan Transaksi Penyamaran Spanduk (`KostFormMitra.tsx`) (Oktober 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna meminta agar teks indikator yang muncul saat loading foto diubah dari *"Memindai Spanduk..."* menjadi lebih universal dan netral: **`"Sedang diproses..."`**.
+  2. Ketika terdeteksi ada spanduk/nomor kontak dan sensor bekerja menyamarkannya, pengguna ingin disematkan keterangan penjelasan yang jelas kepada pemilik kost mengenai alasan di balik sensor tersebut demi alasan keamanan.
+- **Implementasi Solusi**:
+  1. **Pembaruan Teks Loading Overlay**:
+     - Mengubah teks judul overlay pada seluruh kartu foto di [KostFormMitra.tsx](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/components/KostFormMitra.tsx) (Area Fasilitas Umum & Kamar Tidur) menjadi **`"Sedang diproses..."`** dengan sub-teks *"Mohon tunggu sebentar"*.
+  2. **Edukasi Keamanan pada Banner Notifikasi (`bannerNotice`)**:
+     - Memperbarui pesan banner notifikasi spanduk: menyertakan alasan keamanan transaksi, pencegahan risiko penipuan di luar sistem platform, dan perlindungan privasi nomor kontak pemilik kost.
+     - Menyematkan tombol aksi *"Baca Alasan Keamanan Selengkapnya"* di dalam banner notifikasi untuk membuka modal edukasi lengkap.
+  3. **Ikon & Modal Edukasi Keamanan Interaktif pada Badge Kartu Foto**:
+     - Pada stempel badge `ruangsinggah.id` di foto yang tersensor (`isBlurred === true`), disematkan ikon `Info` interaktif.
+     - Saat diklik atau di-tap, membuka modal pop-up elegan (`SecurityExplanationModal`) yang merinci 3 pilar alasan keamanan:
+       - 🛡️ **Pencegahan Penipuan Transaksi**: Mencegah duplikasi listing atau pengalihan transaksi tanpa jaminan uang sewa.
+       - 🔒 **Perlindungan Privasi Pemilik Kost**: Menjaga nomor pribadi dari bahaya spam, telemarketing, atau pinjol ilegal.
+       - 🤝 **Penyewa Tetap Terhubung Resmi**: Calon penyewa tetap dapat berkomunikasi melalui fitur chat dan tombol WhatsApp resmi terverifikasi.
+- **File Tersentuh**:
+  - `functions/public/components/KostFormMitra.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi build frontend `npm --prefix functions/public run build` lulus 100% 0 error dalam **29.23s** (`✓ 2512 modules transformed`).
+
 ### 448. Perbaikan Indikator Loading Kartu Foto Presisi & Eksekusi Auto-Sensor Otomatis Instan (<1-2 Detik) (`KostFormMitra.tsx`) (Oktober 2026)
 - **Permintaan & Masalah**:
   1. Pengguna melaporkan bahwa ketika baru mengunggah foto kost, indikator loading berkedip/muncul di kotak sebelahnya (di slot tombol `+ Tambah Foto`), BUKAN pada kartu foto yang sedang diunggah.
