@@ -10590,3 +10590,47 @@
 - **Verifikasi**:
   - Build Vite frontend `npm run build` di `functions/public/` sukses 100% dengan 0 error dalam 39.94s (✓ 2512 modules transformed).
   - Deploy Edge Function ke Supabase berhasil: `Deployed Functions on project sgcmnsnokrztocnhxnqm: detect-contact-banner`.
+
+### 270. Penyesuaian Teks Loading Foto ("Sedang diproses...") dan Edukasi Keamanan Sensor Spanduk (Oktober 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna meminta agar teks indikator loading saat upload foto tidak menampilkan *"Memindai Spanduk..."*, melainkan diganti menjadi teks netral yang lebih ramah pengguna: **`"Sedang diproses..."`**.
+  2. Saat sensor banner mendeteksi adanya spanduk kontak dan melakukan penyamaran otomatis, pengguna menginginkan adanya penjelasan edukatif mengenai alasan penyamaran dilakukan demi keamanan transaksi dan perlindungan data privasi.
+- **Implementasi & Solusi**:
+  1. **Teks Indikator Loading Universal**:
+     - Mengubah overlay loading kartu foto pada kategori Fasilitas Umum dan Kamar Tidur di `KostFormMitra.tsx` menjadi:
+       - Judul: **`Sedang diproses...`**
+       - Subteks: **`Mohon tunggu sebentar`**
+  2. **Banner Edukasi Keamanan & Notifikasi Transparan**:
+     - Menambahkan notifikasi transparan saat spanduk terdeteksi bahwa penyamaran dilakukan demi alasan keamanan transaksi, pencegahan transaksi liar/penipuan di luar sistem, serta perlindungan nomor kontak pribadi pemilik kost.
+  3. **Badge & Modal Edukasi Keamanan Interaktif (`ShieldAlert` & `Info`)**:
+     - Menambahkan tombol interaktif `Info` pada badge sensor `ruangsinggah.id` di kartu foto yang tersensor.
+     - Menyediakan modal popup penjelasan keamanan lengkap jika mitra mengklik ikon info.
+- **File Tersentuh**:
+  - `functions/public/components/KostFormMitra.tsx`
+  - `functions/PROGRESS.md`
+- **Verifikasi**:
+  - Build Vite frontend `npm run build` di `functions/public/` sukses 100% dengan 0 error dalam 29.23s (✓ 2512 modules transformed).
+
+### 271. Pembersihan Label Teknis Algoritma ("Cover Utama - Kamar Termahal") dari Antarmuka Mitra (Oktober 2026)
+- **Permintaan & Masalah**:
+  1. Pada formulir kost mitra (`KostFormMitra.tsx`), muncul badge oranye bertuliskan `⭐ COVER UTAMA (KAMAR TERMAHAL)` pada salah satu kartu kategori kamar tidur serta teks instruksi yang menyebutkan "tipe kamar berharga termahal".
+  2. Pengguna menegaskan bahwa logika penentuan kamar berharga tertinggi sebagai cover katalog adalah kinerja sistem di latar belakang (*background logic*), bukan hal yang semestinya ditampilkan secara eksplisit kepada user atau mitra.
+- **Implementasi & Solusi**:
+  1. **Penghapusan Badge Kategori Teknis**:
+     - Menghapus badge `⭐ Cover Utama (Kamar Termahal)` dari header kartu kategori kamar tidur di `KostFormMitra.tsx`.
+  2. **Penyeragaman Tampilan Kartu Kategori Kamar**:
+     - Menghilangkan gradien oranye pembeda dan border tebal pada kartu kamar termahal, sehingga seluruh kartu tipe kamar tidur tampil bersih, rapi, dan setara tanpa visual bias.
+  3. **Sanitasi Teks Panduan & Peringatan**:
+     - Baris 5845 diubah menjadi: *"Foto kamar tidur utama akan otomatis dijadikan Foto Cover Utama pada preview pencarian. Anda juga dapat memberi keterangan (caption) pada masing-masing foto."*
+     - Baris 5859 diubah menjadi: *"Mohon unggah minimal 1 foto pada kategori Kamar Tidur untuk dijadikan Cover Utama preview kost Anda."*
+  4. **Pembersihan Badge Cover pada Foto**:
+     - Menghapus tag status `Cover Utama` pada pratinjau foto individual agar seleksi cover murni berlangsung otomatis di background saat submit.
+  5. **Keutuhan Logika Latar Belakang (*Zero Regression*)**:
+     - Algoritma pengurutan foto di latar belakang (`getPhotoScore` pada baris 4182-4232) tetap beroperasi penuh saat form disimpan, memastikan foto interior dari tipe kamar dengan tarif tertinggi otomatis ditempatkan pada index 0 sebagai cover katalog utama properti di Supabase.
+- **File Tersentuh**:
+  - `functions/public/components/KostFormMitra.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Build Vite frontend `npm run build` di `functions/public/` sukses 100% dengan 0 error dalam 35.49s (✓ 2512 modules transformed).
+

@@ -5809,26 +5809,6 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                 const totalAllPhotos = existingWithCats.length + newPhotoItems.length;
                 const hasRoomCover = existingWithCats.some(p => p.cat.startsWith('Kamar:')) || newPhotoItems.some(p => p.category.startsWith('Kamar:'));
 
-                // Cari tipe kamar dengan tarif bulanan tertinggi (paling mahal)
-                const mostExpensiveRoom = (() => {
-                    const rooms = form.roomTypes || [];
-                    if (rooms.length === 0) return null;
-                    const getPrice = (r: any) => {
-                        if (Array.isArray(r.pricing) && r.pricing.length > 0) {
-                            const bulanan = r.pricing.find((p: any) => p.period === 'bulanan');
-                            if (bulanan && Number(bulanan.price) > 0) return Number(bulanan.price);
-                            const highest = Math.max(...r.pricing.map((p: any) => Number(p.price || 0)));
-                            if (highest > 0) return highest;
-                        }
-                        return Number(r.price || 0);
-                    };
-                    return [...rooms].sort((a, b) => getPrice(b) - getPrice(a))[0];
-                })();
-
-                const primaryCoverCategoryTarget = mostExpensiveRoom 
-                    ? `Kamar: ${mostExpensiveRoom.name || 'Tipe Kamar 1'}`
-                    : '';
-
                 return (
                     <div className="space-y-6">
                         {/* Header Ringkasan Media */}
@@ -5842,7 +5822,7 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                                         </h3>
                                     </div>
                                     <p className="text-xs text-gray-600 mt-1">
-                                        Foto kamar dari tipe kamar berharga termahal akan otomatis dijadikan <strong>Foto Cover Utama</strong> pada preview pencarian. Anda juga dapat memberi keterangan (caption) pada masing-masing foto.
+                                        Foto kamar tidur utama akan otomatis dijadikan <strong>Foto Cover Utama</strong> pada preview pencarian. Anda juga dapat memberi keterangan (caption) pada masing-masing foto.
                                     </p>
                                 </div>
                                 <div className="flex items-center gap-2">
@@ -5856,7 +5836,7 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                             {!hasRoomCover && (
                                 <div className="mt-3 flex items-center gap-2 bg-amber-100/70 border border-amber-300/80 text-amber-900 text-xs px-3 py-2 rounded-xl">
                                     <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
-                                    <span><strong>Perhatian:</strong> Mohon unggah minimal 1 foto pada kategori <strong>Kamar Tidur</strong> (terutama tipe kamar termahal) untuk dijadikan Cover Utama preview kost Anda.</span>
+                                    <span><strong>Perhatian:</strong> Mohon unggah minimal 1 foto pada kategori <strong>Kamar Tidur</strong> untuk dijadikan Cover Utama preview kost Anda.</span>
                                 </div>
                             )}
                         </div>
@@ -6114,23 +6094,20 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                                     const currentCatNew = newPhotoItems.filter(p => p.category === cat.id);
                                     const catPhotosCount = currentCatExisting.length + currentCatNew.length;
                                     const isBathroom = cat.id.startsWith('Kamar Mandi:');
-                                    const isPrimaryCoverTarget = primaryCoverCategoryTarget && cat.id === primaryCoverCategoryTarget;
 
                                     return (
                                         <div 
                                             key={cat.id} 
                                             className={`p-4 sm:p-5 rounded-3xl border transition-all ${
-                                                isPrimaryCoverTarget
-                                                    ? 'bg-gradient-to-br from-orange-50/70 to-white border-orange-300 shadow-xs'
-                                                    : catPhotosCount > 0 
-                                                        ? 'bg-white border-orange-200 shadow-xs' 
-                                                        : 'bg-white border-gray-200/80'
+                                                catPhotosCount > 0 
+                                                    ? 'bg-white border-orange-200 shadow-xs' 
+                                                    : 'bg-white border-gray-200/80'
                                             }`}
                                         >
                                             <div className="flex flex-wrap items-start justify-between gap-2 mb-3">
                                                 <div className="flex items-start gap-2.5">
                                                     <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${
-                                                        isPrimaryCoverTarget ? 'bg-orange-500 text-white' : isBathroom ? 'bg-blue-100 text-blue-600' : 'bg-orange-100 text-orange-600'
+                                                        isBathroom ? 'bg-blue-100 text-blue-600' : 'bg-orange-100 text-orange-600'
                                                     }`}>
                                                         {isBathroom ? <Droplets size={16} /> : <Bed size={16} />}
                                                     </div>
@@ -6139,11 +6116,6 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                                                             <span className="text-xs sm:text-sm font-black text-gray-900">
                                                                 {cat.label}
                                                             </span>
-                                                            {isPrimaryCoverTarget && (
-                                                                <span className="px-2 py-0.5 bg-orange-500 text-white text-[9px] font-black uppercase rounded-md tracking-wider shadow-xs">
-                                                                    ⭐ Cover Utama (Kamar Termahal)
-                                                                </span>
-                                                            )}
                                                         </div>
                                                         <p className="text-[11px] text-gray-500 mt-0.5">
                                                             {cat.desc}
@@ -6165,11 +6137,6 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                                                 {currentCatExisting.map((p, idx) => (
                                                     <div key={`existing-${idx}`} className="aspect-square rounded-2xl overflow-hidden border border-gray-200 relative group bg-gray-50">
                                                         <img src={p.src} alt={cat.label} className="w-full h-full object-cover" />
-                                                        {isPrimaryCoverTarget && idx === 0 && (
-                                                            <span className="absolute top-1.5 left-1.5 bg-orange-500 text-white text-[8px] font-black px-2 py-0.5 rounded-md shadow-xs uppercase tracking-wider z-10">
-                                                                Cover Utama
-                                                            </span>
-                                                        )}
                                                         <div className="absolute top-1.5 right-1.5 flex items-center gap-1">
                                                             <button 
                                                                 type="button" 
@@ -6216,11 +6183,7 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                                                         )}
 
                                                         {/* Status Badges */}
-                                                        {isPrimaryCoverTarget && currentCatExisting.length === 0 && itemIdx === 0 ? (
-                                                            <span className="absolute top-1.5 left-1.5 bg-orange-500 text-white text-[8px] font-black px-2 py-0.5 rounded-md shadow-xs uppercase tracking-wider z-10">
-                                                                Cover Utama
-                                                            </span>
-                                                        ) : !item.isProcessing && (
+                                                        {!item.isProcessing && (
                                                             item.isBlurred ? (
                                                                 <span className="absolute top-1.5 left-1.5 bg-slate-900/90 border border-orange-500/50 text-white text-[9px] font-black px-2 py-0.5 rounded-full shadow-md uppercase tracking-wider flex items-center gap-1 backdrop-blur-xs" title="Spanduk kontak telah disamarkan secara otomatis demi alasan keamanan. Klik info untuk penjelasan lengkap.">
                                                                     <span className="w-1.5 h-1.5 rounded-full bg-orange-500 animate-pulse"></span>

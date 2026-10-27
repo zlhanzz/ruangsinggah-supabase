@@ -1,14 +1,27 @@
-# IMPLEMENTATION PLAN: Penyesuaian Teks Loading Foto ("Sedang diproses...") dan Edukasi Keamanan Sensor Spanduk
+# IMPLEMENTATION PLAN: Pembersihan Label Teknis Algoritma ("Cover Utama - Kamar Termahal") dari Antarmuka Mitra
 
 ## 1. Analisis Masalah & Kebutuhan
 
-### A. Konteks & Permintaan Pengguna
-1. **Teks Indikator Loading**: Saat foto baru diunggah, teks loading di kartu foto sebelumnya menampilkan *"Memindai Spanduk..."*. Pengguna meminta agar teks tersebut diganti menjadi lebih netral dan umum, yaitu: **`"Sedang diproses..."`**.
-2. **Penjelasan Alasan Keamanan saat Sensor Terjadi**: Jika pada foto yang diunggah terdeteksi adanya spanduk/banner nomor kontak dan sensor bekerja menyamarkannya, pengguna ingin disematkan keterangan penjelasan yang jelas dan mendidik kepada pemilik kost bahwa penyamaran tersebut dilakukan **demi alasan keamanan transaksi dan perlindungan data privasi**.
+### A. Konteks Masalah
+Pada formulir pengelolaan foto properti & kamar mitra (`KostFormMitra.tsx`), saat ini terdapat badge oranye yang bertuliskan:
+`⭐ COVER UTAMA (KAMAR TERMAHAL)`
+pada header kategori tipe kamar yang memiliki tarif tertinggi, disertai beberapa teks instruksi yang menyebutkan *"tipe kamar berharga termahal"* dan *"terutama tipe kamar termahal"*.
 
-### B. Manfaat bagi Pengguna / Mitra Kost
-- Tampilan loading menjadi lebih universal dan tidak menimbulkan kebingungan saat mengunggah foto selain spanduk.
-- Mitra kost memahami secara transparan bahwa stempel sensor `ruangsinggah.id` bukan merusak foto mereka, melainkan bentuk perlindungan proaktif platform dari potensi penipuan di luar sistem, transaksi liar (*bypass* tanpa jaminan), dan penyalahgunaan nomor pribadi oleh pihak ketiga.
+### B. Masukan Pengguna
+Pengguna menegaskan:
+> *"kenapa ada keterangan ginian. ini seharusnya kinerja latar belakang, bukan untuk ditampilkan ke user atau mitra"*
+
+Pernyataan ini 100% tepat. Logika penentuan foto cover katalog dari kamar dengan tarif tertinggi merupakan **aturan bisnis/algoritma internal sistem di latar belakang (*background ranking logic*)**. 
+Mitra atau pengguna tidak perlu dan tidak semestinya melihat label teknis seperti `(KAMAR TERMAHAL)` di layar mereka. Mitra hanya perlu mengunggah foto-foto kamar dan fasilitas mereka secara wajar tanpa dibebani istilah algoritma internal.
+
+### C. Solusi yang Diterapkan
+1. **Menghapus Badge Kategori**: Menghapus badge `⭐ Cover Utama (Kamar Termahal)` dari header kartu kategori kamar tidur.
+2. **Menyeragamkan Tampilan Kartu Kategori**: Menghilangkan efek visual pembeda (seperti border oranye tebal dan latar belakang gradien khusus) pada kamar termahal, sehingga semua kartu kategori kamar tampil bersih, rapi, dan setara.
+3. **Membersihkan Teks Panduan (Sanitasi)**:
+   - Baris ~5845: Mengubah *"Foto kamar dari tipe kamar berharga termahal akan otomatis dijadikan Foto Cover Utama..."* menjadi teks yang lebih natural: *"Foto kamar tidur utama akan otomatis dijadikan <strong>Foto Cover Utama</strong> pada preview pencarian. Anda juga dapat memberi keterangan (caption) pada masing-masing foto."*
+   - Baris ~5859: Mengubah *"Mohon unggah minimal 1 foto pada kategori Kamar Tidur (terutama tipe kamar termahal)..."* menjadi: *"Mohon unggah minimal 1 foto pada kategori <strong>Kamar Tidur</strong> untuk dijadikan Cover Utama preview kost Anda."*
+4. **Menjaga Logika Latar Belakang Tetap Utuh**:
+   - Fungsi pengurutan otomatis di latar belakang saat simpan data (`getPhotoScore` pada baris 4182-4232) tetap mempertahankan kinerja aslinya di background (memilih foto interior kamar tidur berharga tertinggi ke posisi index 0 untuk cover katalog di Supabase/cloud).
 
 ---
 
@@ -16,60 +29,49 @@
 
 File yang akan dimodifikasi:
 1. **`functions/public/components/KostFormMitra.tsx`**:
-   - Memperbarui teks overlay loading kartu foto dari `{isBannerProneCategory(cat.id) ? 'Memindai Spanduk...' : 'Memproses Foto...'}` menjadi **`"Sedang diproses..."`** pada kedua lokasi render (Fasilitas Umum & Kamar Tidur).
-   - Memperkaya teks notifikasi `bannerNotice` dengan narasi keamanan komprehensif.
-   - Menambahkan tombol interaktif/badge informasi keamanan (ikon `Info` dari `lucide-react`) pada kartu foto yang tersensor (`isBlurred === true`), sehingga mitra dapat mengklik untuk melihat modal/popover penjelasan alasan keamanan.
+   - Menghapus badge `⭐ Cover Utama (Kamar Termahal)` pada header kategori kamar.
+   - Menyeragamkan styling container dan ikon kategori kamar.
+   - Menyesuaikan redaksi instruksi header dan alert menjadi bersih dan netral tanpa embel-embel "kamar termahal".
 2. **`functions/PROGRESS.md`**:
-   - Mencatat pekerjaan pada entri #449.
+   - Mencatat penyelesaian tugas pada Entri #450.
 3. **`WALKTHROUGH.md`**:
-   - Dokumentasi perubahan dan panduan uji verifikasi UI.
+   - Menyajikan dokumentasi detail perubahan dan panduan verifikasi UI.
 
 ---
 
-## 3. Langkah-Langkah Eksekusi (FASE 2 setelah di-ACC)
+## 3. Langkah-Langkah Eksekusi (FASE 2 setelah ACC)
 
-1. **Langkah 1: Perubahan Teks Loading Overlay Kartu Foto**
-   - Di `KostFormMitra.tsx` pada baris ~5990 (Location 1: Fasilitas Umum) dan ~6191 (Location 2: Kamar Tidur):
+1. **Langkah 1: Hapus Badge Teknis di Header Kategori Kamar**
+   - Pada `KostFormMitra.tsx` baris ~6142:
+     Hapus blok render badge:
      ```tsx
-     <p className="text-[10px] font-bold text-white tracking-wide leading-tight">
-         Sedang diproses...
-     </p>
+     {isPrimaryCoverTarget && (
+         <span className="px-2 py-0.5 bg-orange-500 text-white text-[9px] font-black uppercase rounded-md tracking-wider shadow-xs">
+             ⭐ Cover Utama (Kamar Termahal)
+         </span>
+     )}
      ```
+     Menjadi tidak dirender sama sekali sehingga header kategori kamar bersih dari teks teknis.
 
-2. **Langkah 2: Penyempurnaan Banner Edukasi Keamanan (`bannerNotice`)**
-   - Memperbarui teks `bannerNotice` saat spanduk terdeteksi:
-     ```tsx
-     setBannerNotice(
-         'Sistem mendeteksi adanya spanduk atau informasi kontak langsung pada foto yang diunggah. ' +
-         'Demi alasan keamanan transaksi, pencegahan penipuan di luar platform, serta perlindungan data privasi pemilik kost, ' +
-         'bagian kontak tersebut telah disamarkan secara otomatis dengan watermark resmi ruangsinggah.id.'
-     );
-     ```
+2. **Langkah 2: Seragamkan Desain Kartu Kategori Kamar**
+   - Menetralkan styling pembungkus kartu kategori (baris ~6122-6134) agar tidak menonjolkan satu kamar tertentu dengan warna berbeda, melainkan seragam dengan kategori kamar lainnya.
 
-3. **Langkah 3: Komponen Edukasi Keamanan Interaktif pada Kartu Foto Tersensor**
-   - Menambahkan state modal info keamanan (misal `securityExplanationOpen: boolean`).
-   - Pada kartu foto yang `item.isBlurred === true`, menambahkan tombol kecil info keamanan (`Info` icon dari `lucide-react`) di samping badge `ruangsinggah.id`.
-   - Ketika diklik, membuka pop-up modal penjelasan yang menjelaskan:
-     - 🛡️ **Pencegahan Penipuan**: Menghindarkan pemilik & pencari kost dari transaksi liar di luar sistem resmi.
-     - 🔒 **Perlindungan Privasi**: Mencegah nomor pribadi disalahgunakan oleh pihak ketiga/scammer.
-     - 🤝 **Jaminan Transaksi**: Memastikan seluruh proses sewa terlindungi oleh sistem garansi resmi RuangSinggah.id.
+3. **Langkah 3: Bersihkan Redaksi Teks Panduan & Peringatan**
+   - Baris ~5845: Hapus frasa *"dari tipe kamar berharga termahal"*.
+   - Baris ~5859: Hapus frasa *"(terutama tipe kamar termahal)"*.
 
-4. **Langkah 4: Kompilasi & Build Test**
-   - Menjalankan `cmd.exe /c "npm --prefix functions/public run build"` untuk memastikan 0 error kompilasi TypeScript/Vite.
+4. **Langkah 4: Kompilasi & Uji Build**
+   - Menjalankan `npm --prefix functions/public run build` untuk memverifikasi 0 TypeScript error dan 0 syntax error.
 
-5. **Langkah 5: Pencatatan Progres, Walkthrough, dan Push ke GitHub**
-   - Menulis entri #449 di `functions/PROGRESS.md`.
-   - Menulis dokumen `WALKTHROUGH.md`.
-   - Melakukan commit dan push ke branch `bukan-productions`.
+5. **Langkah 5: Dokumentasi & Git Push**
+   - Mencatat ke `functions/PROGRESS.md` (Entri #450).
+   - Membuat `WALKTHROUGH.md`.
+   - Melakukan git commit dan push ke branch `bukan-productions`.
 
 ---
 
 ## 4. Rencana Verifikasi
 
-- **Verifikasi Tampilan Loading**:
-  - Saat memilih foto baru, pastikan teks yang tampil di tengah kartu foto adalah `"Sedang diproses..."` dengan sub-teks `"Mohon tunggu sebentar"`.
-- **Verifikasi Penjelasan Keamanan**:
-  - Saat foto memuat spanduk disensor, pastikan banner di bagian atas foto menyajikan penjelasan alasan keamanan yang komprehensif.
-  - Klik ikon info pada foto yang tersensor untuk memastikan dialog/modal edukasi keamanan muncul dengan rapi, ramah seluler, dan informatif.
-- **Verifikasi Kelulusan Build**:
-  - Memastikan proses `npm run build` selesai dengan exit code 0 tanpa peringatan tipe.
+- **Verifikasi Build**: Memastikan `npm --prefix functions/public run build` selesai dengan status sukses (*exit code 0*).
+- **Verifikasi UI**: Memastikan antarmuka galeri foto di formulir kost mitra tidak lagi menampilkan badge `⭐ COVER UTAMA (KAMAR TERMAHAL)` maupun teks "kamar termahal", sehingga tampilan terlihat bersih dan elegan.
+- **Verifikasi Fungsionalitas**: Memastikan fitur unggah foto, penyamaran sensor spanduk kontak, modal penjelasan privasi, serta penyimpanan urutan foto cover tetap berjalan normal di background tanpa kendala.
