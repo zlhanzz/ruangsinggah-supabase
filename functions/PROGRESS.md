@@ -2,6 +2,38 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 448. Perbaikan Indikator Loading Kartu Foto Presisi & Eksekusi Auto-Sensor Otomatis Instan (<1-2 Detik) (`KostFormMitra.tsx`) (Oktober 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna melaporkan bahwa ketika baru mengunggah foto kost, indikator loading berkedip/muncul di kotak sebelahnya (di slot tombol `+ Tambah Foto`), BUKAN pada kartu foto yang sedang diunggah.
+  2. Fungsi sensor banner tidak langsung menutup spanduk saat foto pertama kali diunggah, melainkan harus diklik tombol perisai kuning (`handleReScanBanner`) secara manual baru bekerja. Pengguna menginginkan sensor bekerja 100% otomatis seketika saat foto pertama kali diunggah tanpa perlu klik tombol manual apa pun.
+- **Hasil Diagnostik & Analisis**:
+  1. *Slot "+ Tambah Foto" Berubah Menjadi Loading*:
+     - Pada baris 6044 dan 6250 di `KostFormMitra.tsx`, terdapat pengkondisian `{uploadingCategory === cat.id ? (<div className="... animate-pulse">Memproses... Mohon tunggu</div>) : (<label>+ Tambah Foto</label>)}`.
+     - Akibatnya, saat upload dipicu, slot upload di sebelah foto berubah menjadi kotak placeholder terpisah yang berkedip, bukan di atas kartu foto asli.
+  2. *Sensor Tertunda Menunggu Upload Cloud & Tombol Manual Menggoda Klik*:
+     - Pada `handleCategoryFilesUpload`, kode menunggu `uploadDraftPhotoToStorage` (upload ke cloud Supabase Storage) selesai terlebih dahulu sebelum memperbarui state `preview` kartu foto dengan WebP hasil sensor.
+     - Selama proses upload cloud berlangsung (~3-6 detik), foto mentah tanpa blur tampil di kartu bersama dengan tombol perisai kuning pemindai manual aktif (`!item.isBlurred && isBannerProneCategory(...)`).
+     - Hal ini membuat pengguna mengira auto-sensor tidak berjalan otomatis dan terpaksa menekan tombol perisai manual tersebut.
+- **Implementasi Solusi**:
+  1. **Instant Reactive UI Update Hasil Sensor (<1-2s)**:
+     - Di `handleCategoryFilesUpload`, begitu fungsi kanvas `processPhotoWithAutoSensor` selesai mendeteksi dan menyensor spanduk (hanya butuh ~1-2 detik berkat Gemini 3.5 Flash), state `preview` langsung diperbarui secara instan dengan `URL.createObjectURL(webpFile)` lokal dan `isProcessing: false`.
+     - Proses `uploadDraftPhotoToStorage` dialihkan ke latar belakang (*background promise*) tanpa memblokir visual kartu foto.
+  2. **Indikator Loading Terpusat Langsung di Atas Kartu Foto**:
+     - Menghilangkan rendering kondisional yang mengubah tombol `+ Tambah Foto` menjadi kotak pulsing. Tombol `+ Tambah Foto` kini tetap rapi dan konsisten di posisinya.
+     - Menyematkan overlay loading terpusat tepat di atas kartu foto yang sedang diproses (`item.isProcessing`):
+       `<div className="absolute inset-0 bg-slate-950/75 backdrop-blur-xs flex flex-col items-center justify-center gap-1.5 p-2 text-center z-20">...</div>`.
+     - Pengguna melihat animasi putar `Loader2` dan teks `"Memindai Spanduk..."` atau `"Memproses Foto..."` langsung di atas foto yang bersangkutan.
+  3. **Penyembunyian Tombol Perisai Manual saat Auto-Sensor Sedang Berjalan**:
+     - Tombol re-scan manual hanya muncul jika pemrosesan awal telah selesai dan foto terbukti bersih tanpa sensor: `!item.isBlurred && !item.isProcessing && isBannerProneCategory(cat.id)`.
+     - Menghilangkan kebingungan pengguna dan mencegah klik manual yang tidak perlu.
+- **File Tersentuh**:
+  - `functions/public/components/KostFormMitra.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi build frontend `npm --prefix functions/public run build` lulus 100% 0 error (`✓ built in 26.66s`, exit code 0).
+  - Distribusi statis `./public` dan `./dist` tersinkronisasi sempurna.
+
 ### 447. Eliminasi Bottleneck Kuota 429, Migrasi Gemini 3.5 Flash dengan thinkingBudget=0, Optimasi Base64 28KB, dan Instant Optimistic Preview (<50ms) (`detect-contact-banner/index.ts`, `autoSensorService.ts`, `KostFormMitra.tsx`) (Oktober 2026)
 - **Permintaan & Masalah**:
   1. Pengguna melaporkan waktu upload memakan waktu 22 detik untuk 1 foto dengan hasil auto-sensor yang tidak menutup spanduk kontak ("TERIMA KOST PUTRI" pada pagar dan "RUMAH INI DI JUAL" pada dinding garasi), namun kartu foto keliru menampilkan status `● RUANGSINGGAH.ID`.

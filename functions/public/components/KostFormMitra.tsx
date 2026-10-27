@@ -3498,32 +3498,37 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                             }
                         });
 
-                        // Upload ke Supabase Storage di folder 'drafts/{userId}/'
-                        let previewUrl = '';
-                        let storagePath: string | undefined = undefined;
-                        try {
-                            const uploadRes = await uploadDraftPhotoToStorage(webpFile, user?.id);
-                            previewUrl = uploadRes.publicUrl;
-                            storagePath = uploadRes.storagePath;
-                        } catch (uploadErr) {
-                            console.warn('Gagal upload instan ke storage, fallback ke local objectURL:', uploadErr);
-                            previewUrl = URL.createObjectURL(webpFile);
-                        }
-
-                        // Perbarui item spesifik di state secara reaktif
+                        // 1. Seketika perbarui UI dengan hasil sensor kanvas lokal (1-2 detik)
+                        const localWebpPreview = URL.createObjectURL(webpFile);
                         setNewPhotoItems(prev => prev.map(p => {
                             if (p.id === item.id) {
                                 return {
                                     ...p,
                                     file: webpFile,
-                                    preview: previewUrl,
+                                    preview: localWebpPreview,
                                     isBlurred,
-                                    storagePath,
                                     isProcessing: false
                                 };
                             }
                             return p;
                         }));
+
+                        // 2. Upload ke Supabase Storage di latar belakang (background) tanpa mengunci visualisasi UI
+                        try {
+                            const uploadRes = await uploadDraftPhotoToStorage(webpFile, user?.id);
+                            setNewPhotoItems(prev => prev.map(p => {
+                                if (p.id === item.id) {
+                                    return {
+                                        ...p,
+                                        preview: uploadRes.publicUrl,
+                                        storagePath: uploadRes.storagePath
+                                    };
+                                }
+                                return p;
+                            }));
+                        } catch (uploadErr) {
+                            console.warn('Gagal upload background ke storage, tetap memakai preview lokal:', uploadErr);
+                        }
                     } catch (err) {
                         console.error("Error processing photo:", err);
                         setNewPhotoItems(prev => prev.map(p => {
@@ -5975,25 +5980,37 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                                             ))}
 
                                             {currentCatNew.map((item) => (
-                                                <div key={item.id} className="aspect-square rounded-2xl overflow-hidden border-2 border-orange-400 relative group bg-gray-50 shadow-xs animate-in zoom-in-95 duration-200">
+                                                <div key={item.id} className="aspect-square rounded-2xl border-2 border-orange-400 relative group bg-gray-50 shadow-xs animate-in zoom-in-95 duration-200 overflow-hidden">
                                                     <img src={item.preview} alt={cat.label} className="w-full h-full object-cover" />
-                                                    {item.isProcessing ? (
-                                                        <span className="absolute top-1.5 left-1.5 bg-slate-900/90 border border-amber-500/50 text-white text-[9px] font-bold px-2 py-0.5 rounded-full shadow-md flex items-center gap-1 backdrop-blur-xs">
-                                                            <Loader2 size={10} className="animate-spin text-amber-400" />
-                                                            Memindai...
-                                                        </span>
-                                                    ) : item.isBlurred ? (
-                                                        <span className="absolute top-1.5 left-1.5 bg-slate-900/90 border border-orange-500/50 text-white text-[9px] font-black px-2 py-0.5 rounded-full shadow-md uppercase tracking-wider flex items-center gap-1 backdrop-blur-xs" title="Spanduk kontak telah diberi watermark resmi ruangsinggah.id">
-                                                            <span className="w-1.5 h-1.5 rounded-full bg-orange-500 animate-pulse"></span>
-                                                            ruangsinggah.id
-                                                        </span>
-                                                    ) : (
-                                                        <span className="absolute top-1.5 left-1.5 bg-emerald-600 text-white text-[8px] font-black px-1.5 py-0.5 rounded-md shadow-xs uppercase tracking-wider">
-                                                            Baru
-                                                        </span>
+                                                    
+                                                    {/* Full Overlay when processing */}
+                                                    {item.isProcessing && (
+                                                        <div className="absolute inset-0 bg-slate-950/75 backdrop-blur-xs flex flex-col items-center justify-center gap-1.5 p-2 text-center z-20 animate-in fade-in duration-200">
+                                                            <Loader2 className="w-6 h-6 text-orange-400 animate-spin" />
+                                                            <p className="text-[10px] font-bold text-white tracking-wide leading-tight">
+                                                                {isBannerProneCategory(cat.id) ? 'Memindai Spanduk...' : 'Memproses Foto...'}
+                                                            </p>
+                                                            <span className="text-[8px] text-slate-300">Mohon tunggu sebentar</span>
+                                                        </div>
                                                     )}
-                                                    <div className="absolute top-1.5 right-1.5 flex items-center gap-1">
-                                                        {!item.isBlurred && isBannerProneCategory(cat.id) && (
+
+                                                    {/* Status Badges */}
+                                                    {!item.isProcessing && (
+                                                        item.isBlurred ? (
+                                                            <span className="absolute top-1.5 left-1.5 bg-slate-900/90 border border-orange-500/50 text-white text-[9px] font-black px-2 py-0.5 rounded-full shadow-md uppercase tracking-wider flex items-center gap-1 backdrop-blur-xs" title="Spanduk kontak telah diberi watermark resmi ruangsinggah.id">
+                                                                <span className="w-1.5 h-1.5 rounded-full bg-orange-500 animate-pulse"></span>
+                                                                ruangsinggah.id
+                                                            </span>
+                                                        ) : (
+                                                            <span className="absolute top-1.5 left-1.5 bg-emerald-600 text-white text-[8px] font-black px-1.5 py-0.5 rounded-md shadow-xs uppercase tracking-wider">
+                                                                Baru
+                                                            </span>
+                                                        )
+                                                    )}
+
+                                                    {/* Action Buttons */}
+                                                    <div className="absolute top-1.5 right-1.5 flex items-center gap-1 z-10">
+                                                        {!item.isBlurred && !item.isProcessing && isBannerProneCategory(cat.id) && (
                                                             <button 
                                                                 type="button" 
                                                                 onClick={() => handleReScanBanner(item)}
@@ -6036,41 +6053,28 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                                                 </div>
                                             ))}
 
-                                            {uploadingCategory === cat.id ? (
-                                                <div className="aspect-square border-2 border-dashed border-orange-300 bg-orange-50/70 rounded-2xl flex flex-col items-center justify-center p-3 text-center gap-1.5 animate-pulse">
-                                                    <div className="w-8 h-8 rounded-full bg-orange-100 text-orange-600 flex items-center justify-center">
-                                                        <Loader2 size={18} className="animate-spin text-orange-600" />
-                                                    </div>
-                                                    <span className="text-[11px] font-bold text-orange-700">
-                                                        Memproses...
-                                                    </span>
-                                                    <span className="text-[9px] text-gray-400 font-medium">
-                                                        Mohon tunggu
-                                                    </span>
+                                            <label className={`aspect-square border-2 border-dashed rounded-2xl flex flex-col items-center justify-center transition-all gap-1.5 p-3 text-center group ${uploadingCategory === cat.id ? 'border-orange-200 bg-orange-50/20 cursor-not-allowed opacity-60' : 'border-orange-200 hover:border-orange-500 bg-orange-50/40 hover:bg-orange-50/80 cursor-pointer'}`}>
+                                                <input 
+                                                    type="file" 
+                                                    multiple 
+                                                    accept="image/*" 
+                                                    disabled={uploadingCategory === cat.id}
+                                                    className="hidden" 
+                                                    onChange={e => {
+                                                        handleCategoryFilesUpload(cat.id, e.target.files);
+                                                        e.target.value = '';
+                                                    }} 
+                                                />
+                                                <div className="w-8 h-8 rounded-full bg-orange-100 text-orange-600 flex items-center justify-center group-hover:scale-110 transition-transform">
+                                                    <Plus size={18} />
                                                 </div>
-                                            ) : (
-                                                <label className="aspect-square border-2 border-dashed border-orange-200 hover:border-orange-500 bg-orange-50/40 hover:bg-orange-50/80 rounded-2xl flex flex-col items-center justify-center cursor-pointer transition-all gap-1.5 p-3 text-center group">
-                                                    <input 
-                                                        type="file" 
-                                                        multiple 
-                                                        accept="image/*" 
-                                                        className="hidden" 
-                                                        onChange={e => {
-                                                            handleCategoryFilesUpload(cat.id, e.target.files);
-                                                            e.target.value = '';
-                                                        }} 
-                                                    />
-                                                    <div className="w-8 h-8 rounded-full bg-orange-100 text-orange-600 flex items-center justify-center group-hover:scale-110 transition-transform">
-                                                        <Plus size={18} />
-                                                    </div>
-                                                    <span className="text-[11px] font-black text-orange-600 group-hover:underline">
-                                                        + Tambah Foto
-                                                    </span>
-                                                    <span className="text-[9px] text-gray-400 font-medium">
-                                                        Pilih dari Galeri
-                                                    </span>
-                                                </label>
-                                            )}
+                                                <span className="text-[11px] font-black text-orange-600 group-hover:underline">
+                                                    + Tambah Foto
+                                                </span>
+                                                <span className="text-[9px] text-gray-400 font-medium">
+                                                    Pilih dari Galeri
+                                                </span>
+                                            </label>
                                         </div>
                                     </div>
                                 );
@@ -6177,29 +6181,41 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                                                 ))}
 
                                                 {currentCatNew.map((item, itemIdx) => (
-                                                    <div key={item.id} className="aspect-square rounded-2xl overflow-hidden border-2 border-orange-400 relative group bg-gray-50 shadow-xs animate-in zoom-in-95 duration-200">
+                                                    <div key={item.id} className="aspect-square rounded-2xl border-2 border-orange-400 relative group bg-gray-50 shadow-xs animate-in zoom-in-95 duration-200 overflow-hidden">
                                                         <img src={item.preview} alt={cat.label} className="w-full h-full object-cover" />
+                                                        
+                                                        {/* Full Overlay when processing */}
+                                                        {item.isProcessing && (
+                                                            <div className="absolute inset-0 bg-slate-950/75 backdrop-blur-xs flex flex-col items-center justify-center gap-1.5 p-2 text-center z-20 animate-in fade-in duration-200">
+                                                                <Loader2 className="w-6 h-6 text-orange-400 animate-spin" />
+                                                                <p className="text-[10px] font-bold text-white tracking-wide leading-tight">
+                                                                    {isBannerProneCategory(cat.id) ? 'Memindai Spanduk...' : 'Memproses Foto...'}
+                                                                </p>
+                                                                <span className="text-[8px] text-slate-300">Mohon tunggu sebentar</span>
+                                                            </div>
+                                                        )}
+
+                                                        {/* Status Badges */}
                                                         {isPrimaryCoverTarget && currentCatExisting.length === 0 && itemIdx === 0 ? (
                                                             <span className="absolute top-1.5 left-1.5 bg-orange-500 text-white text-[8px] font-black px-2 py-0.5 rounded-md shadow-xs uppercase tracking-wider z-10">
                                                                 Cover Utama
                                                             </span>
-                                                        ) : item.isProcessing ? (
-                                                            <span className="absolute top-1.5 left-1.5 bg-slate-900/90 border border-amber-500/50 text-white text-[9px] font-bold px-2 py-0.5 rounded-full shadow-md flex items-center gap-1 backdrop-blur-xs">
-                                                                <Loader2 size={10} className="animate-spin text-amber-400" />
-                                                                Memindai...
-                                                            </span>
-                                                        ) : item.isBlurred ? (
-                                                            <span className="absolute top-1.5 left-1.5 bg-slate-900/90 border border-orange-500/50 text-white text-[9px] font-black px-2 py-0.5 rounded-full shadow-md uppercase tracking-wider flex items-center gap-1 backdrop-blur-xs" title="Spanduk kontak telah diberi watermark resmi ruangsinggah.id">
-                                                                <span className="w-1.5 h-1.5 rounded-full bg-orange-500 animate-pulse"></span>
-                                                                ruangsinggah.id
-                                                            </span>
-                                                        ) : (
-                                                            <span className="absolute top-1.5 left-1.5 bg-emerald-600 text-white text-[8px] font-black px-1.5 py-0.5 rounded-md shadow-xs uppercase tracking-wider">
-                                                                Baru
-                                                            </span>
+                                                        ) : !item.isProcessing && (
+                                                            item.isBlurred ? (
+                                                                <span className="absolute top-1.5 left-1.5 bg-slate-900/90 border border-orange-500/50 text-white text-[9px] font-black px-2 py-0.5 rounded-full shadow-md uppercase tracking-wider flex items-center gap-1 backdrop-blur-xs" title="Spanduk kontak telah diberi watermark resmi ruangsinggah.id">
+                                                                    <span className="w-1.5 h-1.5 rounded-full bg-orange-500 animate-pulse"></span>
+                                                                    ruangsinggah.id
+                                                                </span>
+                                                            ) : (
+                                                                <span className="absolute top-1.5 left-1.5 bg-emerald-600 text-white text-[8px] font-black px-1.5 py-0.5 rounded-md shadow-xs uppercase tracking-wider">
+                                                                    Baru
+                                                                </span>
+                                                            )
                                                         )}
-                                                        <div className="absolute top-1.5 right-1.5 flex items-center gap-1">
-                                                            {!item.isBlurred && isBannerProneCategory(cat.id) && (
+
+                                                        {/* Action Buttons */}
+                                                        <div className="absolute top-1.5 right-1.5 flex items-center gap-1 z-10">
+                                                            {!item.isBlurred && !item.isProcessing && isBannerProneCategory(cat.id) && (
                                                                 <button 
                                                                     type="button" 
                                                                     onClick={() => handleReScanBanner(item)}
@@ -6242,24 +6258,12 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                                                     </div>
                                                 ))}
 
-                                            {uploadingCategory === cat.id ? (
-                                                <div className="aspect-square border-2 border-dashed border-orange-300 bg-orange-50/70 rounded-2xl flex flex-col items-center justify-center p-3 text-center gap-1.5 animate-pulse">
-                                                    <div className="w-8 h-8 rounded-full bg-orange-100 text-orange-600 flex items-center justify-center">
-                                                        <Loader2 size={18} className="animate-spin text-orange-600" />
-                                                    </div>
-                                                    <span className="text-[11px] font-bold text-orange-700">
-                                                        Memproses...
-                                                    </span>
-                                                    <span className="text-[9px] text-gray-400 font-medium">
-                                                        Mohon tunggu
-                                                    </span>
-                                                </div>
-                                            ) : (
-                                                <label className="aspect-square border-2 border-dashed border-orange-200 hover:border-orange-500 bg-orange-50/40 hover:bg-orange-50/80 rounded-2xl flex flex-col items-center justify-center cursor-pointer transition-all gap-1.5 p-3 text-center group">
+                                                <label className={`aspect-square border-2 border-dashed rounded-2xl flex flex-col items-center justify-center transition-all gap-1.5 p-3 text-center group ${uploadingCategory === cat.id ? 'border-orange-200 bg-orange-50/20 cursor-not-allowed opacity-60' : 'border-orange-200 hover:border-orange-500 bg-orange-50/40 hover:bg-orange-50/80 cursor-pointer'}`}>
                                                     <input 
                                                         type="file" 
                                                         multiple 
                                                         accept="image/*" 
+                                                        disabled={uploadingCategory === cat.id}
                                                         className="hidden" 
                                                         onChange={e => {
                                                             handleCategoryFilesUpload(cat.id, e.target.files);
@@ -6276,7 +6280,6 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                                                         Pilih dari Galeri
                                                     </span>
                                                 </label>
-                                            )}
                                             </div>
                                         </div>
                                     );

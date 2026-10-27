@@ -1,115 +1,87 @@
-# Rencana Implementasi: Akselerasi Sub-3 Detik Upload Foto & Presisi 100% Sensor Spanduk Kontak
+# Rencana Implementasi: Pemindahan Indikator Loading ke Kartu Foto & Otomasi 100% Sensor Spanduk Tanpa Klik Manual
 
-## 1. Analisis Masalah Mendalam (Root Cause Forensic)
+## 1. Analisis Masalah
 
-Berdasarkan investigasi menyeluruh pada log eksekusi Edge Function dan tangkapan layar pengujian pengguna:
+Berdasarkan pengujian pengguna dan tangkapan layar antarmuka:
 
-### A. Mengapa Proses Upload Memakan Waktu 22 Detik?
-1. **Model Quota Exhaustion (Status 429 pada Model #1)**:
-   - Pada konfigurasi sebelumnya, `gemini-2.5-flash` ditempatkan di prioritas #1. Model preview ini memiliki kuota sangat ketat di Google AI Studio Free Tier, yaitu **hanya 20 request per hari**.
-   - Ketika 20 request habis, setiap pemanggilan menghasilkan error `429 RESOURCE_EXHAUSTED: Quota exceeded... Please retry in 7h24m`. Server Edge Function membuang waktu ~3–4 detik menunggu respon error ini sebelum beralih ke model berikutnya.
-2. **Model Produksi Tercepat Google Belum Terdaftar**:
-   - Model produksi resmi Google dengan kuota tinggi (**1.500 request/hari**) dan kecepatan sub-2 detik, yaitu **`gemini-2.0-flash`** dan **`gemini-1.5-flash`**, belum ada di dalam daftar `CANDIDATE_MODELS`.
-3. **Mekanisme Extended Thinking pada Gemini 3.7**:
-   - Model `gemini-3.7-flash` secara default mengaktifkan fitur *extended thinking / reasoning* yang menghabiskan waktu 15–20 detik untuk menganalisis gambar, kecuali jika dimatikan dengan parameter `thinkingBudget: 0`.
-4. **False Timeout di Sisi Frontend (15 Detik)**:
-   - Frontend `autoSensorService.ts` memiliki batasan waktu kaku `15.000ms (15 detik)`.
-   - Karena gabungan error kuota 429 dan model reasoning memakan waktu total ~18 detik, **frontend membatalkan request AI tepat di detik ke-15**.
-5. **Rantai Waktu Total 22 Detik**:
-   - Menunggu AI hingga batas timeout (15s) + pemrosesan heuristik lokal (1.5s) + upload WebP ke Supabase Storage (4-5s) = **tepat 21–22 detik**!
+### A. Mengapa Loading Terjadi di Kotak Sampingnya (Bukan Pada Foto yang Diupload)?
+1. **Penggantian Slot "+ Tambah Foto" oleh State `uploadingCategory`**:
+   - Di `KostFormMitra.tsx` (baris 6039 dan 6254), slot tombol `+ Tambah Foto` dibungkus kondisi ternary:
+     `uploadingCategory === cat.id ? (<div ...>Memproses... Mohon tunggu</div>) : (<label ...>+ Tambah Foto</label>)`.
+   - Karena slot `+ Tambah Foto` terletak tepat di sebelah kanan foto yang baru masuk, slot tersebut berubah menjadi kotak oranye putus-putus bertuliskan *"Memproses... Mohon tunggu"*.
+   - Akibatnya, pengguna melihat animasi loading ganda yang membingungkan: indikator loading justru muncul di slot samping tempat tombol tambah foto, bukan terpusat pada kartu foto itu sendiri.
 
-### B. Mengapa Spanduk Tidak Disensor (Padahal Muncul Badge `● RUANGSINGGAH.ID`)?
-1. **Hasil Deteksi AI Sebenarnya Berhasil 100%**:
-   - Uji log server membuktikan AI sebenarnya sukses membaca teks spanduk:
-     - Foto 1: `"TERIMA KOST PUTRI HUBUNGI: 082238406909"` (koordinat `xmin: 256, ymin: 705`).
-     - Foto 2: `"RUMAH INI DI JUAL 'TANPA PERANTARA' HUBUNGI: 0823 9925 6926"` (koordinat `xmin: 699, ymin: 255`).
-   - Namun karena frontend keburu **timeout di detik ke-15**, data koordinat yang sangat akurat ini **terbuang dan tidak sempat digambar di kanvas**.
-2. **Fallback Heuristik Salah Sasaran (False Target)**:
-   - Ketika AI dianggap gagal (timeout), sistem beralih ke `detectBannerRegionsClientSide` yang menebak area spanduk berdasarkan kontras piksel.
-   - Akibatnya, sensor jatuh pada jeruji pagar besi vertikal atau pantulan jendela kaca rumah, sementara lembaran spanduk aslinya tetap terbuka tanpa sensor.
-   - Karena heuristik menemukan kotak kontras palsu tersebut, status `isBlurred` disetel `true` (memunculkan badge oranye `● RUANGSINGGAH.ID`), menciptakan ilusi bahwa sensor aktif padahal spanduk tidak tertutup.
+### B. Mengapa Sensor Spanduk Tidak Langsung Tampil Otomatis dan Terkesan Harus Di-klik Manual?
+1. **Menunggu Upload Cloud Storage Sebelum Memperbarui Tampilan Gambar**:
+   - Pada `handleCategoryFilesUpload`, urutan eksekusi sebelumnya adalah:
+     1. `processPhotoWithAutoSensor` berjalan di kanvas lokal (1–2 detik) dan menghasilkan WebP tersensor.
+     2. Sistem kemudian menunggu `uploadDraftPhotoToStorage` (mengirim WebP ke cloud storage Supabase via jaringan internet, butuh beberapa detik).
+     3. **Hanya setelah upload cloud selesai**, fungsi `setNewPhotoItems` dipanggil untuk mengganti `preview` ke gambar yang telah disensor.
+   - Akibatnya, selama upload cloud berlangsung, kartu foto di layar **masih menampilkan ObjectURL foto mentah asli yang belum disensor**.
+2. **Tombol Perisai Manual Muncul Terlalu Dini**:
+   - Di pojok kanan atas kartu, tombol perisai pemindaian manual (`handleReScanBanner`) langsung tampil karena kondisi `!item.isBlurred` bernilai `true` selama proses upload berlangsung.
+   - Pengguna melihat foto belum tertutup sensor dan melihat tombol perisai aktif, sehingga pengguna berasumsi proses otomatis tidak berjalan dan mengklik tombol tersebut secara manual.
+   - Ketika tombol perisai diklik, pemindaian ulang dipaksa berjalan dan sensor pun muncul, sehingga timbul kesan bahwa sensor hanya bekerja lewat klik manual.
 
 ---
 
 ## 2. Rencana Solusi & Perubahan
 
 ```
-+-----------------------------------------------------------------------------------+
-| ALUR OPTIMASI BARU SUB-3 DETIK                                                    |
-|                                                                                   |
-| 1. Foto Dipilih (File)                                                            |
-|    |                                                                              |
-|    v (Optimistic Preview <50ms)                                                   |
-| 2. Kartu UI Langsung Tampil dengan Indikator "Memindai & Mengoptimasi..."         |
-|    |                                                                              |
-|    v (Ringkas Base64 800px, 28KB - Pengiriman Jaringan ~120ms)                    |
-| 3. Supabase Edge Function: `gemini-2.0-flash` / `gemini-3.7-flash (Budget: 0)`    |
-|    | (Respon AI: ~1.2 - 1.5 detik, Kuota: 1.500 RPD)                              |
-|    v                                                                              |
-| 4. Frontend Menerima Koordinat Presisi Tanpa Timeout                              |
-|    |                                                                              |
-|    v (Rendering Canvas 2D: Sensor Frosted Glass + Watermark Diagonal: ~100ms)     |
-| 5. Hasil WebP Ditampilkan di UI & Diunggah ke Storage Background (~1.2s)          |
-|    |                                                                              |
-|    v                                                                              |
-| TOTAL WAKTU TUNTAS: ~2.5 - 3.2 DETIK (Jauh dari 22 detik!)                        |
-+-----------------------------------------------------------------------------------+
++-----------------------------------------------------------------------------------------+
+| ALUR BARU: AUTO-SENSOR INSTAN & LOADING TERPUSAT DI KARTU FOTO                          |
+|                                                                                         |
+| 1. Pengguna Memilih Foto                                                                |
+|    |                                                                                    |
+|    +--> Slot "+ Tambah Foto" TETAP UTUH & BERSIH (Tidak berubah jadi kotak loading)     |
+|    |                                                                                    |
+|    +--> Kartu Foto Muncul Seketika (<50ms) dengan Overlay Loading di Atas Foto:         |
+|         [ Dark Glass Overlay + Spinner + "Memindai Spanduk..." ]                        |
+|         (Tombol perisai manual DISEMBUNYIKAN selama proses berlangsung)                 |
+|                                                                                         |
+| 2. `processPhotoWithAutoSensor` Selesai (1-2 Detik)                                     |
+|    |                                                                                    |
+|    +--> SEKETIKA ITU JUGA UI DIPERBARUI:                                                |
+|         - Preview foto langsung berganti ke WebP tersensor                              |
+|         - Overlay loading dihilangkan                                                   |
+|         - Badge `● ruangsinggah.id` langsung muncul otomatis di atas foto               |
+|                                                                                         |
+| 3. Upload ke Supabase Storage Berlangsung Hening di Background                          |
+|    |                                                                                    |
+|    +--> Menyimpan `storagePath` dan URL permanen tanpa kedipan visual di layar          |
++-----------------------------------------------------------------------------------------+
 ```
 
-### A. Modifikasi `supabase/functions/detect-contact-banner/index.ts`
-1. **Perombakan `CANDIDATE_MODELS` ke Model Kuota Besar & Kecepatan Tinggi**:
-   ```ts
-   const CANDIDATE_MODELS = [
-     "gemini-2.0-flash",       // Prioritas #1: 1.2 detik, kuota 1.500 req/hari
-     "gemini-2.0-flash-lite",  // Prioritas #2: ~0.8 detik, kuota 1.500 req/hari
-     "gemini-1.5-flash",       // Prioritas #3: ~1.8 detik, kuota 1.500 req/hari
-     "gemini-3.7-flash",       // Prioritas #4: reasoning hybrid
-     "gemini-3.5-flash"        // Prioritas #5: fallback
-   ];
-   ```
-2. **Eliminasi Extended Thinking pada Gemini 3.7**:
-   - Menambahkan konfigurasi `thinking_config: { thinking_budget: 0 }` agar model 3.7 tidak menghabiskan waktu 15 detik untuk "berpikir".
-3. **Pembatasan Token Output**:
-   - Menyetel `max_output_tokens: 800` karena output deteksi hanya berupa JSON ringkas (koordinat kotak).
-4. **Penajaman Deteksi Banner Penjualan Rumah/Properti**:
-   - Memperkaya prompt deteksi dengan kata kunci: `"RUMAH INI DI JUAL"`, `"DIJUAL"`, `"DI JUAL"`, `"TANPA PERANTARA"`, `"SEWA/KONTRAK"`, dan deretan nomor WhatsApp/telepon.
-
-### B. Modifikasi `functions/public/autoSensorService.ts`
-1. **Pengecilan Payload Base64**:
-   - Mengubah parameter `createLowResBase64ForAi(file, 800, 0.55)` (dari sebelumnya 1024px, 0.65).
-   - Ukuran payload berkurang drastis dari ~100KB menjadi **hanya ~28KB**, memotong waktu transfer di jaringan seluler mitra hingga 70%.
-2. **Penyelarasan Timeout Toleran**:
-   - Menyesuaikan batas timeout menjadi 20 detik sebagai batas pengaman jika terjadi gangguan sinyal jaringan seluler, memastikan hasil deteksi AI tidak terputus di tengah jalan.
-3. **Penyempurnaan Penanganan Koordinat**:
-   - Memastikan bahwa jika AI sukses merespons (`aiScanSucceeded = true`), hasil AI dihormati 100% dan fallback heuristik tidak akan dijalankan.
-
-### C. Modifikasi `functions/public/components/KostFormMitra.tsx`
-1. **Instant Local Preview (< 100ms)**:
-   - Ketika file dipilih, segera tampilkan foto di grid form menggunakan blob URL lokal dengan badge status *"Memindai Spanduk..."*.
-   - Halaman tidak lagi membeku dengan spinner upload yang menghalangi pengguna.
-2. **Seamless Background Processing & Sensor Update**:
-   - Proses sensor dan watermark disematkan ke kanvas lokal, kemudian URL preview diperbarui secara otomatis.
-   - Foto tersimpan di draft storage secara mulus di latar belakang.
+### A. Modifikasi `functions/public/components/KostFormMitra.tsx`
+1. **Pembaruan State UI Instan pada `handleCategoryFilesUpload`**:
+   - Begitu `processPhotoWithAutoSensor(originalFile)` selesai di kanvas lokal, **langsung perbarui item di state**:
+     `preview: URL.createObjectURL(webpFile)`, `file: webpFile`, `isBlurred`, `isProcessing: false`.
+   - Pengguna langsung melihat hasil sensor dan badge `● ruangsinggah.id` dalam 1–2 detik secara otomatis.
+   - Panggilan `uploadDraftPhotoToStorage` dijalankan setelahnya untuk memperbarui `storagePath` dan URL cloud secara hening di latar belakang.
+2. **Hapus Kotak Loading Samping di Slot "+ Tambah Foto"**:
+   - Hapus pengecekan `uploadingCategory === cat.id` pada baris 6039 dan 6254.
+   - Tombol `+ Tambah Foto` tetap tampil sebagai tombol penambahan foto standar yang stabil, tidak lagi berubah menjadi kotak *"Memproses... Mohon tunggu"*.
+3. **Penyematan Overlay Loading Terpusat di Kartu Foto**:
+   - Jika `item.isProcessing === true`, render overlay semi-transparan elegan (`absolute inset-0 bg-black/50 backdrop-blur-xs flex flex-col items-center justify-center gap-1.5 z-20`) tepat di atas kartu foto yang sedang diproses.
+   - Dilengkapi spinner animasi oranye dan teks *"Memindai Spanduk..."*.
+4. **Sembunyikan Tombol Re-Scan Selama Pemrosesan Otomatis**:
+   - Ubah kondisi render tombol perisai manual menjadi `!item.isBlurred && !item.isProcessing && isBannerProneCategory(...)`.
+   - Tombol manual hanya muncul jika proses otomatis telah selesai dan foto terbukti bersih (tidak ada spanduk), sehingga tidak memicu salah paham pengguna.
 
 ---
 
 ## 3. Dampak Perubahan (Files to Modify)
-1. `supabase/functions/detect-contact-banner/index.ts` (Model cascade, thinkingBudget: 0, prompt spanduk jual/sewa)
-2. `functions/public/autoSensorService.ts` (Payload 800px 28KB, timeout toleran, sinkronisasi koordinat)
-3. `functions/public/components/KostFormMitra.tsx` (Instant preview responsif & upload non-blocking)
+- `functions/public/components/KostFormMitra.tsx`
 
 ---
 
 ## 4. Rencana Verifikasi (Testing Plan)
-1. **Uji Kecepatan & Responsivitas Edge Function**:
-   - Melakukan uji live pemanggilan Edge Function dengan model `gemini-2.0-flash` dan `gemini-1.5-flash` menggunakan payload gambar nyata.
-   - Memastikan latensi Edge Function berada di kisaran **sub-2 detik**.
-2. **Uji Akurasi Koordinat Sensor**:
-   - Memastikan koordinat spanduk `"TERIMA KOST PUTRI"` dan `"RUMAH INI DI JUAL"` terdeteksi dan kanvas menutup spanduk 100% rapat.
-3. **Kompilasi Frontend (Build Test)**:
-   - Menjalankan `npm run build` di direktori `functions/public/` untuk memastikan 0 kesalahan kompilasi TypeScript.
-4. **Deploy Edge Function**:
-   - Melakukan deployment Edge Function ke Supabase project `sgcmnsnokrztocnhxnqm`.
-5. **Dokumentasi & Commit**:
+1. **Kompilasi Frontend (Build Test)**:
+   - Menjalankan `npm --prefix functions/public run build` untuk memastikan 0 kesalahan kompilasi TypeScript.
+2. **Verifikasi Alur UI**:
+   - Memastikan tombol `+ Tambah Foto` tidak lagi berubah menjadi kotak loading di samping foto.
+   - Memastikan overlay loading muncul terpusat di atas foto yang sedang diproses.
+   - Memastikan hasil sensor spanduk dan badge `● ruangsinggah.id` langsung aktif secara otomatis tanpa memerlukan klik manual.
+3. **Dokumentasi & Git Commit**:
    - Mencatat hasil pekerjaan ke `functions/PROGRESS.md` dan `WALKTHROUGH.md`.
-   - Melakukan commit dan push ke branch `bukan-productions`.
+   - Commit dan push ke branch `bukan-productions`.
