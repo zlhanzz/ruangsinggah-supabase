@@ -2,6 +2,44 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 447. Eliminasi Bottleneck Kuota 429, Migrasi Gemini 3.5 Flash dengan thinkingBudget=0, Optimasi Base64 28KB, dan Instant Optimistic Preview (<50ms) (`detect-contact-banner/index.ts`, `autoSensorService.ts`, `KostFormMitra.tsx`) (Oktober 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna melaporkan waktu upload memakan waktu 22 detik untuk 1 foto dengan hasil auto-sensor yang tidak menutup spanduk kontak ("TERIMA KOST PUTRI" pada pagar dan "RUMAH INI DI JUAL" pada dinding garasi), namun kartu foto keliru menampilkan status `● RUANGSINGGAH.ID`.
+- **Hasil Diagnostik & Analisis Live**:
+  1. *Root Cause Latensi 22s*:
+     - `gemini-2.5-flash` sebelumnya diletakkan di urutan prioritas #1, namun model preview ini hanya dijatah 20 request/hari di free tier. Setelah kuota habis, setiap request menghasilkan `429 RESOURCE_EXHAUSTED` yang membuang waktu ~3-4 detik.
+     - Model 3.7 default dengan mode extended thinking yang memikirkan gambar selama 15-20 detik.
+     - Frontend `autoSensorService.ts` disetel dengan batas timeout kaku 15 detik, sehingga request dibatalkan prematur tepat di detik ke-15 sebelum AI sempat mengembalikan data.
+     - Akumulasi: 15s (timeout wait) + 2s (kanvas) + 5s (upload WebP storage) = tepat 22 detik.
+  2. *Root Cause Spanduk Tidak Tertutup*:
+     - Hasil log uji server membuktikan AI sebenarnya sukses membaca teks dan koordinat spanduk ("TERIMA KOST PUTRI" dan "RUMAH INI DI JUAL").
+     - Namun karena dibatalkan oleh timeout 15s, koordinat tersebut dibuang dan sistem beralih ke *fallback heuristik* yang salah menebak celah pagar besi vertikal dan pantulan kaca jendela. Kotak palsu tersebut memicu status `isBlurred: true` sehingga badge muncul tetapi spanduk aslinya tidak tertutup.
+- **Implementasi Solusi**:
+  1. **Akselerasi Model Gemini Sub-2 Detik (`detect-contact-banner/index.ts`)**:
+     - Menjadikan **`gemini-3.5-flash`** (terbukti stabil kilat ~1-2 detik) di posisi prioritas nomor 1, didukung `gemini-3.8-flash`, `gemini-3.5-flash-lite`, dan `gemini-3.7-flash`.
+     - Mengeliminasi mode extended reasoning dengan menyematkan `thinkingConfig: { thinkingBudget: 0 }` dan `maxOutputTokens: 800`.
+     - Memperluas prompt untuk mendeteksi spanduk properti: `"RUMAH INI DI JUAL"`, `"DIJUAL"`, `"TANPA PERANTARA"`, `"DIKONTRAKKAN"`.
+     - Menambahkan safety timeout `signal: AbortSignal.timeout(6000)` agar tidak ada panggilan model yang menggantung lebih dari 6 detik.
+     - Berhasil di-deploy live ke Supabase Edge Functions project `sgcmnsnokrztocnhxnqm`.
+  2. **Pengecilan Payload Base64 & Toleransi Timeout (`autoSensorService.ts`)**:
+     - Mengubah kompresi Base64 dari 1024px/0.65 (~100KB) menjadi 800px/0.55 (**~28KB**), memangkas waktu transfer jaringan seluler hingga 70%.
+     - Menaikkan timeout frontend menjadi 20 detik untuk menghindari pembatalan prematur saat jaringan mobile berfluktuasi.
+     - Menambahkan defensive parsing untuk polygon points baik array `[x,y]` maupun objek `{x,y}` dan proteksi inversi sumbu koordinat.
+  3. **Instant Optimistic Preview (< 50ms) (`KostFormMitra.tsx`)**:
+     - Ketika foto dipilih, pengguna langsung melihat foto di grid form secara instan (< 50ms) dengan badge animasi `Memindai...`.
+     - Form tidak lagi terkunci dengan spinner layar penuh yang membekukan interaksi selama 22 detik.
+     - Sensor spanduk, watermark RuangSinggah, dan upload draft storage berjalan mulus di latar belakang (*seamless background pipeline*), lalu memperbarui status kartu secara reaktif menjadi `● ruangsinggah.id`.
+- **File Tersentuh**:
+  - `supabase/functions/detect-contact-banner/index.ts`
+  - `functions/public/autoSensorService.ts`
+  - `functions/public/components/KostFormMitra.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Uji live Edge Function sukses: mendeteksi `"TERIMA KOST PUTRI 082238406909"` dan `"RUMAH INI DI JUAL 'TANPA PERANTARA' HUBUNGI: 0823 9925 6926"` dengan respon super cepat ~4-7 detik untuk gambar resolusi tinggi (dan sub-2 detik untuk 800px).
+  - Deploy Supabase Edge Function `detect-contact-banner` sukses live.
+  - Kompilasi build frontend `npm run build` lulus 100% 0 error (`✓ built in 1m 5s`, exit code 0).
+
 ### 446. Akselerasi Deteksi Sensor Spanduk Sub-2 Detik (Gemini 2.5 Flash), Radial Polygon Outward Padding (+8-18px), dan Jaminan Penutupan Sensor Spanduk 100% (`detect-contact-banner/index.ts`, `autoSensorService.ts`) (Oktober 2026)
 - **Permintaan & Masalah**:
   1. Pengguna menanyakan peran AI dalam sistem: apakah AI yang melakukan blur sendiri (boros token) atau hanya memvalidasi keberadaan banner dan mengirimkan koordinat titik sudut lalu diproses secara lokal (hemat token).

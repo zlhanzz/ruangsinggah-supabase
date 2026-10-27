@@ -112,6 +112,7 @@ interface NewPhotoItem {
     caption?: string;
     isBlurred?: boolean;
     storagePath?: string;
+    isProcessing?: boolean;
 }
 
 const initialForm: Partial<Kost> = {
@@ -3464,24 +3465,40 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
 
         setUploadingCategory(category);
 
+        // 1. Optimistic Instant Preview (< 50ms): Tampilkan foto langsung ke antarmuka pengguna
+        const optimisticItems: NewPhotoItem[] = fileArr.map((file) => ({
+            id: `${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
+            file,
+            preview: URL.createObjectURL(file),
+            category,
+            caption: category,
+            isBlurred: false,
+            isProcessing: true
+        }));
+
+        setNewPhotoItems(prev => [...prev, ...optimisticItems]);
+
         try {
             let anyContactDetected = false;
 
-            // Proses seluruh file secara paralel dengan Single-Pass Auto-Sensor + Watermark + WebP
-            const processedItems = await Promise.all(
-                fileArr.map(async (file) => {
+            // 2. Jalankan background pipeline untuk pemrosesan AI sensor, watermark, dan upload storage
+            await Promise.all(
+                optimisticItems.map(async (item) => {
+                    const originalFile = item.file;
+                    if (!originalFile) return;
+
                     try {
                         let isBlurred = false;
 
-                        // Single-Pass Auto-Sensor Pipeline (Fast-path non-banner <150ms, AI polygon sensor jika ada banner, watermark, WebP)
-                        const webpFile = await processPhotoWithAutoSensor(file, category, (detectedInfo) => {
+                        // Single-Pass Auto-Sensor Pipeline (AI polygon sensor jika ada banner, watermark resmi, WebP)
+                        const webpFile = await processPhotoWithAutoSensor(originalFile, category, (detectedInfo) => {
                             if (detectedInfo.detectedCount > 0) {
                                 isBlurred = true;
                                 anyContactDetected = true;
                             }
                         });
 
-                        // Upload Instan ke Cloud Supabase Storage di folder 'drafts/{userId}/'
+                        // Upload ke Supabase Storage di folder 'drafts/{userId}/'
                         let previewUrl = '';
                         let storagePath: string | undefined = undefined;
                         try {
@@ -3493,26 +3510,28 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                             previewUrl = URL.createObjectURL(webpFile);
                         }
 
-                        return {
-                            id: `${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
-                            file: webpFile,
-                            preview: previewUrl,
-                            category,
-                            caption: category,
-                            isBlurred,
-                            storagePath
-                        } as NewPhotoItem;
+                        // Perbarui item spesifik di state secara reaktif
+                        setNewPhotoItems(prev => prev.map(p => {
+                            if (p.id === item.id) {
+                                return {
+                                    ...p,
+                                    file: webpFile,
+                                    preview: previewUrl,
+                                    isBlurred,
+                                    storagePath,
+                                    isProcessing: false
+                                };
+                            }
+                            return p;
+                        }));
                     } catch (err) {
                         console.error("Error processing photo:", err);
-                        const preview = URL.createObjectURL(file);
-                        return {
-                            id: `${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
-                            file,
-                            preview,
-                            category,
-                            caption: category,
-                            isBlurred: false
-                        } as NewPhotoItem;
+                        setNewPhotoItems(prev => prev.map(p => {
+                            if (p.id === item.id) {
+                                return { ...p, isProcessing: false };
+                            }
+                            return p;
+                        }));
                     }
                 })
             );
@@ -3520,8 +3539,6 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
             if (anyContactDetected) {
                 setBannerNotice('Foto Anda terdeteksi memuat informasi spanduk/kontak dan telah disematkan sensor watermark resmi ruangsinggah.id secara otomatis demi keamanan transaksi.');
             }
-
-            setNewPhotoItems(prev => [...prev, ...processedItems]);
         } finally {
             setUploadingCategory(null);
         }
@@ -5960,7 +5977,12 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                                             {currentCatNew.map((item) => (
                                                 <div key={item.id} className="aspect-square rounded-2xl overflow-hidden border-2 border-orange-400 relative group bg-gray-50 shadow-xs animate-in zoom-in-95 duration-200">
                                                     <img src={item.preview} alt={cat.label} className="w-full h-full object-cover" />
-                                                    {item.isBlurred ? (
+                                                    {item.isProcessing ? (
+                                                        <span className="absolute top-1.5 left-1.5 bg-slate-900/90 border border-amber-500/50 text-white text-[9px] font-bold px-2 py-0.5 rounded-full shadow-md flex items-center gap-1 backdrop-blur-xs">
+                                                            <Loader2 size={10} className="animate-spin text-amber-400" />
+                                                            Memindai...
+                                                        </span>
+                                                    ) : item.isBlurred ? (
                                                         <span className="absolute top-1.5 left-1.5 bg-slate-900/90 border border-orange-500/50 text-white text-[9px] font-black px-2 py-0.5 rounded-full shadow-md uppercase tracking-wider flex items-center gap-1 backdrop-blur-xs" title="Spanduk kontak telah diberi watermark resmi ruangsinggah.id">
                                                             <span className="w-1.5 h-1.5 rounded-full bg-orange-500 animate-pulse"></span>
                                                             ruangsinggah.id
@@ -6160,6 +6182,11 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                                                         {isPrimaryCoverTarget && currentCatExisting.length === 0 && itemIdx === 0 ? (
                                                             <span className="absolute top-1.5 left-1.5 bg-orange-500 text-white text-[8px] font-black px-2 py-0.5 rounded-md shadow-xs uppercase tracking-wider z-10">
                                                                 Cover Utama
+                                                            </span>
+                                                        ) : item.isProcessing ? (
+                                                            <span className="absolute top-1.5 left-1.5 bg-slate-900/90 border border-amber-500/50 text-white text-[9px] font-bold px-2 py-0.5 rounded-full shadow-md flex items-center gap-1 backdrop-blur-xs">
+                                                                <Loader2 size={10} className="animate-spin text-amber-400" />
+                                                                Memindai...
                                                             </span>
                                                         ) : item.isBlurred ? (
                                                             <span className="absolute top-1.5 left-1.5 bg-slate-900/90 border border-orange-500/50 text-white text-[9px] font-black px-2 py-0.5 rounded-full shadow-md uppercase tracking-wider flex items-center gap-1 backdrop-blur-xs" title="Spanduk kontak telah diberi watermark resmi ruangsinggah.id">

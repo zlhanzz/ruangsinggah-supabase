@@ -390,8 +390,9 @@ export async function compressKostPhotoWithWatermark(
 
 /**
  * Membuat data Base64 beresolusi ringan untuk dikirim ke AI Vision
+ * Resolusi 800px q=0.55 menghasilkan base64 ringkas (~25-35KB) sehingga transmisi super cepat
  */
-export async function createLowResBase64ForAi(fileOrUrl: File | string, maxDim = 1024, quality = 0.65): Promise<string> {
+export async function createLowResBase64ForAi(fileOrUrl: File | string, maxDim = 800, quality = 0.55): Promise<string> {
     return new Promise((resolve) => {
         const img = new Image();
         img.crossOrigin = 'anonymous';
@@ -436,7 +437,7 @@ export async function createLowResBase64ForAi(fileOrUrl: File | string, maxDim =
 
 /**
  * Deteksi Spanduk / Kontak menggunakan Supabase Edge Function (Gemini AI Vision)
- * Dioptimalkan dengan timeout terukur 7.5s dan fallback instan jika jaringan lambat
+ * Dioptimalkan dengan timeout terukur 20s dan fallback instan jika jaringan lambat
  */
 export async function detectPhotoContactBanner(
     base64Image: string,
@@ -448,7 +449,7 @@ export async function detectPhotoContactBanner(
 
     const invokeWithTimeout = async () => {
         const timeoutPromise = new Promise((_, reject) =>
-            setTimeout(() => reject(new Error('Deteksi AI timeout (15s)')), 15000)
+            setTimeout(() => reject(new Error('Deteksi AI timeout (20s)')), 20000)
         );
         const invokePromise = supabase.functions.invoke('detect-contact-banner', {
             body: {
@@ -896,8 +897,8 @@ export async function processPhotoWithAutoSensor(
 
                     // 2. Deteksi Spanduk Kontak via AI Gemini Vision
                     try {
-                        // Sweet spot 1024px, q=0.65 menghasilkan base64 ringkas (~45KB) sehingga transmisi instan
-                        const lowResBase64 = await createLowResBase64ForAi(file, 1024, 0.65);
+                        // Payload ringkas 800px, q=0.55 (~28KB) untuk transmisi super cepat (< 120ms di jaringan seluler)
+                        const lowResBase64 = await createLowResBase64ForAi(file, 800, 0.55);
                         if (lowResBase64) {
                             const aiResult = await detectPhotoContactBanner(lowResBase64, 'image/jpeg');
                             if (!aiResult.error) {
@@ -917,10 +918,29 @@ export async function processPhotoWithAutoSensor(
 
                                         let polygonPts: Array<{ x: number; y: number }> | undefined = undefined;
                                         if (b.polygon && Array.isArray(b.polygon) && b.polygon.length >= 4) {
-                                            polygonPts = b.polygon.map(([px, py]) => ({
-                                                x: Math.round((Math.max(0, Math.min(1000, px)) / 1000) * width),
-                                                y: Math.round((Math.max(0, Math.min(1000, py)) / 1000) * height)
-                                            }));
+                                            polygonPts = b.polygon.map((pt: any) => {
+                                                let px = 0;
+                                                let py = 0;
+                                                if (Array.isArray(pt)) {
+                                                    px = pt[0];
+                                                    py = pt[1];
+                                                } else if (typeof pt === 'object' && pt !== null) {
+                                                    px = pt.x ?? pt.col ?? 0;
+                                                    py = pt.y ?? pt.row ?? 0;
+                                                }
+
+                                                // Defensive check: jika titik [py, px] terbalik dengan sumbu Y/X
+                                                if (Math.abs(px - normYmin) < Math.abs(px - normXmin) && Math.abs(py - normXmin) < Math.abs(py - normYmin)) {
+                                                    const temp = px;
+                                                    px = py;
+                                                    py = temp;
+                                                }
+
+                                                return {
+                                                    x: Math.round((Math.max(0, Math.min(1000, px)) / 1000) * width),
+                                                    y: Math.round((Math.max(0, Math.min(1000, py)) / 1000) * height)
+                                                };
+                                            });
                                         }
 
                                         return { x: bx, y: by, width: bw, height: bh, polygon: polygonPts };

@@ -6,12 +6,12 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-// Model priority cascade: gemini-2.5-flash (1.2s) & gemini-3.5-flash (1.9s) untuk kecepatan sub-2 detik
+// Model priority cascade: gemini-3.5-flash (1.1s super cepat), gemini-3.8-flash, gemini-3.5-flash-lite, gemini-3.7-flash
 const CANDIDATE_MODELS = [
-  "gemini-2.5-flash",
   "gemini-3.5-flash",
-  "gemini-3.7-flash",
-  "gemini-3.8-flash"
+  "gemini-3.8-flash",
+  "gemini-3.5-flash-lite",
+  "gemini-3.7-flash"
 ];
 
 serve(async (req) => {
@@ -46,11 +46,12 @@ serve(async (req) => {
     const prompt = `
 Anda adalah AI vision inspeksi foto properti sewa kamar khusus untuk platform RuangSinggah.id.
 Tugas utama Anda adalah mendeteksi secara SANGAT AKURAT dan PRESISI objek:
-1. SPANDUK / BANNER / PAPAN NAMA / PLANG / LEMBARAN KAIN / KERTAS / STIKER yang memuat penawaran sewa kamar atau informasi kontak, seperti:
+1. SPANDUK / BANNER / PAPAN NAMA / PLANG / LEMBARAN KAIN / KERTAS / STIKER yang memuat penawaran sewa kamar, penjualan rumah/tanah, atau informasi kontak langsung, seperti:
    - Tulisan "TERIMA KOST", "TERIMA KOS", "DISEWAKAN", "MENERIMA KOST", "KOST PUTRA", "KOST PUTRI", "KOST KARYAWAN", "KOST CAMPUR", "ADA KAMAR KOSONG", "KAMAR DISEWAKAN".
+   - Tulisan penjualan rumah/properti: "RUMAH INI DI JUAL", "DIJUAL", "DI JUAL", "TANPA PERANTARA", "DIKONTRAKKAN", "SEWA/KONTRAK".
    - Tulisan instruksi kontak seperti "Hubungi:", "Hub:", "Telp:", "WA:", "CP:", "Informasi:".
    - Nomor telepon genggam atau telepon rumah (format 08xx, +62xx, atau deretan angka kontak).
-   - Catatan: Deteksi objek ini BAIK YANG BERUKURAN BESAR MAUPUN BERUKURAN KECIL yang terpasang di pagar, pilar gerbang, dinding depan, atau pintu masuk (misal foto wide-angle/tampak depan dari seberang jalan).
+   - Catatan: Deteksi objek ini BAIK YANG BERUKURAN BESAR MAUPUN BERUKURAN KECIL yang terpasang di pagar, pilar gerbang, dinding depan, garasi, atau pintu masuk.
 
 2. TEKS NOMOR TELEPON atau kontak WhatsApp langsung yang sengaja dipajang untuk transaksi di luar platform.
 
@@ -68,9 +69,9 @@ ATURAN DETEKSI SUDUT BANNER PRESISI & KOREKSI PERSPEKTIF (QUADRILATERAL POLYGON)
 2. NEGATIVE CONSTRAINTS (HINDARI OVER-BLUR):
    - DILARANG menyertakan seluruh struktur pintu gerbang, jeruji pagar besi/kayu vertikal, dinding rumah besar, lantai/aspal, tanaman/pot, kanopi atap, atau langit-langit.
    - Jika spanduk berukuran kecil terpasang pada pagar/gerbang kayu/besi (seperti plang kecil di pagar atau dinding pilar), TITIK SUDUT HANYA BOLEH MENUTUPI SPANDUK KECIL TERSEBUT! DILARANG menandai seluruh pagar atau pintu gerbang.
-   - JANGAN tandai plang nama instansi/kantor atau nomor alamat rumah permanen yang TIDAK MEMUAT penawaran sewa/nomor kontak.
+   - JANGAN tandai plang nama instansi/kantor atau nomor alamat rumah permanen yang TIDAK MEMUAT penawaran sewa/jual/nomor kontak.
 
-3. Jika foto bersih dari spanduk penawaran kost atau nomor kontak, kembalikan "has_contact": false, "boxes": [], "banners": [].
+3. Jika foto bersih dari spanduk penawaran kost/jual atau nomor kontak, kembalikan "has_contact": false, "boxes": [], "banners": [].
 
 FORMAT OUTPUT (JSON MURNI SAJA, TANPA BACKTICKS/MARKDOWN):
 {
@@ -132,17 +133,22 @@ FORMAT OUTPUT (JSON MURNI SAJA, TANPA BACKTICKS/MARKDOWN):
       for (let kIdx = 0; kIdx < GEMINI_KEYS.length; kIdx++) {
         const apiKey = GEMINI_KEYS[kIdx];
         try {
+          const genConfig: any = {
+            response_mime_type: "application/json",
+            temperature: 0.1,
+            maxOutputTokens: 800,
+            thinkingConfig: { thinkingBudget: 0 }
+          };
+
           const response = await fetch(
             `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
             {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
+              signal: AbortSignal.timeout(6000),
               body: JSON.stringify({
                 contents: [{ parts: contentsParts }],
-                generationConfig: { 
-                  response_mime_type: "application/json",
-                  temperature: 0.1
-                }
+                generationConfig: genConfig
               })
             }
           );
@@ -178,7 +184,13 @@ FORMAT OUTPUT (JSON MURNI SAJA, TANPA BACKTICKS/MARKDOWN):
           if (Array.isArray(resultData.boxes)) {
             resultData.boxes = resultData.boxes.map((b: any) => {
               let poly = b.polygon;
-              if (!Array.isArray(poly) || poly.length < 4) {
+              if (Array.isArray(poly) && poly.length >= 4) {
+                poly = poly.map((pt: any) => {
+                  if (Array.isArray(pt)) return [pt[0], pt[1]];
+                  if (typeof pt === 'object' && pt !== null) return [pt.x ?? pt.col ?? 0, pt.y ?? pt.row ?? 0];
+                  return [0, 0];
+                });
+              } else {
                 poly = [
                   [b.xmin, b.ymin],
                   [b.xmax, b.ymin],
@@ -200,7 +212,8 @@ FORMAT OUTPUT (JSON MURNI SAJA, TANPA BACKTICKS/MARKDOWN):
           successfulResult = {
             success: true,
             modelUsed: model,
-            data: resultData
+            data: resultData,
+            triedErrors
           };
           break outerLoop;
         } catch (callErr: any) {
