@@ -70,6 +70,7 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
   const [currentPhoto, setCurrentPhoto] = useState(0);
   const [selectedParentTypeIdx, setSelectedParentTypeIdx] = useState(0);
   const [selectedVariantIdx, setSelectedVariantIdx] = useState(0);
+  const [hasSelectedSpecificRoom, setHasSelectedSpecificRoom] = useState(false);
   const [expandedFacilityTypeIdxs, setExpandedFacilityTypeIdxs] = useState<number[]>([]);
 
   const toggleFacilityDropdown = (pIdx: number, e: React.MouseEvent) => {
@@ -848,7 +849,9 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
   }, [kost.roomTypes, kost.isManaged, kost.price, normalizedRooms]);
 
   const currentParentGroup = parentRoomGroups[selectedParentTypeIdx] || parentRoomGroups[0];
-  const selectedChildRoom = currentParentGroup?.rooms.find(r => r.variantIdx === selectedVariantIdx) || currentParentGroup?.rooms[0];
+  const selectedChildRoom = hasSelectedSpecificRoom
+    ? (currentParentGroup?.rooms.find(r => r.variantIdx === selectedVariantIdx) || null)
+    : null;
 
   // Filter rooms for photo navigation bar:
   // - KostManager: hanya tampilkan unit kamar yang masih kosong/tersedia
@@ -1800,6 +1803,9 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
                             setActivePhotoFilter(room.id);
                             setCurrentPhoto(0);
                             setSelectedVariantIdx(room.variantIdx);
+                            if (kost.isManaged) {
+                              setHasSelectedSpecificRoom(true);
+                            }
                           }}
                           className={`px-3.5 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center gap-2 cursor-pointer ${isSelected
                               ? 'bg-orange-500 text-white shadow-md shadow-orange-500/20 ring-2 ring-orange-500 ring-offset-1'
@@ -2034,6 +2040,7 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
                             type="button"
                             onClick={() => {
                               setSelectedParentTypeIdx(gIdx);
+                              setHasSelectedSpecificRoom(false);
                               const firstChild = grp.rooms.find(r => r.isAvailable) || grp.rooms[0];
                               if (firstChild) {
                                 setSelectedVariantIdx(firstChild.variantIdx);
@@ -2620,6 +2627,7 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
                             key={pIdx}
                             onClick={() => {
                               setSelectedParentTypeIdx(pIdx);
+                              setHasSelectedSpecificRoom(false);
                               const firstChild = group.rooms.find(r => r.isAvailable) || group.rooms[0];
                               if (firstChild) {
                                 setSelectedVariantIdx(firstChild.variantIdx);
@@ -2767,7 +2775,11 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
 
                             {/* INTERACTIVE CHIP / PILL GRID: Nomor Kamar Tersedia */}
                             {kost.isManaged && isSelectedParent && (
-                              <div className="mt-3 pt-3 border-t border-orange-200/70 flex flex-col gap-2 animate-in fade-in duration-200" onClick={e => e.stopPropagation()}>
+                              <div 
+                                id="pilih-nomor-kamar-section"
+                                className="mt-3 pt-3 border-t border-orange-200/70 flex flex-col gap-2 animate-in fade-in duration-200 rounded-xl transition-all" 
+                                onClick={e => e.stopPropagation()}
+                              >
                                 <div className="flex items-center justify-between text-[10px] font-black uppercase tracking-wider">
                                   <span className="flex items-center gap-1.5 text-orange-950 font-extrabold">
                                     <Bed size={13} className="text-orange-500" />
@@ -2801,6 +2813,7 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
                                               setSelectedVariantIdx(room.variantIdx);
                                               setActivePhotoFilter(room.id);
                                               setCurrentPhoto(0);
+                                              setHasSelectedSpecificRoom(true);
                                             }}
                                             className={`p-2.5 rounded-xl border text-left transition-all relative flex flex-col justify-between cursor-pointer group/chip ${isSelected
                                                 ? 'bg-orange-500 border-orange-600 text-white shadow-sm ring-2 ring-orange-500/20'
@@ -2882,25 +2895,47 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
                     {(() => {
                       const isUnpublished = kost.status !== 'published';
                       const isManaged = Boolean(kost.isManaged);
+                      const hasAvailableInGroup = isManaged ? Boolean(currentParentGroup?.isAvailable) : false;
                       const isAvailable = isManaged
-                        ? Boolean(selectedChildRoom && selectedChildRoom.isAvailable)
+                        ? hasAvailableInGroup
                         : Boolean(selectedRoom && selectedRoom.isAvailable !== false);
 
                       const buttonText = isUnpublished
                         ? 'Pratinjau (Belum Tayang)'
                         : isManaged
-                          ? (!selectedChildRoom
-                              ? 'Pilih Kamar'
-                              : !selectedChildRoom.isAvailable
-                                ? 'Kamar Penuh'
+                          ? (!hasAvailableInGroup
+                              ? 'Kamar Penuh'
+                              : (!hasSelectedSpecificRoom || !selectedChildRoom || !selectedChildRoom.isAvailable)
+                                ? 'Silahkan Pilih Kamar Tersedia'
                                 : `Ajukan Sewa ${selectedChildRoom.displayName}`)
                           : (!isAvailable
                               ? 'Kamar Penuh'
                               : `Ajukan Sewa (${periodLabels[selectedPeriod] || selectedPeriod})`);
 
+                      const handleMainActionClick = () => {
+                        if (isUnpublished) {
+                          alert('Ini adalah mode pratinjau pemilik. Calon penyewa belum dapat mengajukan sewa sampai listing disetujui dan berstatus tayang publik oleh admin.');
+                          return;
+                        }
+
+                        if (isManaged && (!hasSelectedSpecificRoom || !selectedChildRoom || !selectedChildRoom.isAvailable)) {
+                          const roomSelectorElem = document.getElementById('pilih-nomor-kamar-section');
+                          if (roomSelectorElem) {
+                            roomSelectorElem.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                            roomSelectorElem.classList.add('ring-4', 'ring-orange-500/50', 'ring-offset-2', 'bg-orange-50/70');
+                            setTimeout(() => {
+                              roomSelectorElem.classList.remove('ring-4', 'ring-orange-500/50', 'ring-offset-2', 'bg-orange-50/70');
+                            }, 1500);
+                          }
+                          return;
+                        }
+
+                        handleBookingClick();
+                      };
+
                       return (
                         <button
-                          onClick={isUnpublished ? () => alert('Ini adalah mode pratinjau pemilik. Calon penyewa belum dapat mengajukan sewa sampai listing disetujui dan berstatus tayang publik oleh admin.') : handleBookingClick}
+                          onClick={handleMainActionClick}
                           disabled={!isAvailable && !isUnpublished}
                           className={`w-full py-4 rounded-2xl font-black text-sm uppercase tracking-widest shadow-xl transition-all active:scale-95 ${
                             isUnpublished

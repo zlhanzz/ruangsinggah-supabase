@@ -2,6 +2,33 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 461. Perbaikan Tampilan Default Tombol KostManager Menjadi "Silahkan Pilih Kamar Tersedia" (`KostDetail.tsx`) (Oktober 2026)
+- **Permintaan & Kebutuhan Pengguna**:
+  1. Pada listing kost yang terdaftar di KostManager (`kost.isManaged = true`), saat calon penyewa membuka halaman detail kost, tampilan default sebelumnya keliru memicu tombol mati bertuliskan "Kamar Penuh" (disabled abu-abu).
+  2. Masalah ini terjadi karena unit kamar pertama (`rooms[0]`) kebetulan sedang berstatus Terisi (`isAvailable: false`), sehingga sistem langsung mengevaluasi ketersediaan sebagai false padahal unit kamar lain di tipe tersebut masih banyak yang kosong.
+  3. Pengguna meminta agar tampilan default BUKAN "Kamar Penuh", melainkan tombol aktif bertuliskan **"Silahkan Pilih Kamar Tersedia"**.
+- **Implementasi Solusi**:
+  1. **State Pelacak Pemilihan Kamar Eksplisit (`hasSelectedSpecificRoom`)**:
+     - Menambahkan state `hasSelectedSpecificRoom` (default `false`) di `KostDetail.tsx`.
+     - Sebelum calon penyewa memilih nomor kamar spesifik, `selectedChildRoom` tetap `null` sehingga tidak ada unit kamar terisi yang tercentang sepihak di awal muat.
+  2. **Logika Tombol Dinamis & Cerdas**:
+     - Jika tipe kamar memiliki kamar tersedia (`currentParentGroup.isAvailable === true` atau `availableCount > 0`):
+       - Jika calon penyewa belum memilih kamar spesifik: tombol tampil aktif oranye cerah bertuliskan **"Silahkan Pilih Kamar Tersedia"**.
+       - Ketika tombol ini diklik, halaman melakukan *smooth scroll* terarah ke bagian `#pilih-nomor-kamar-section` disertai efek sorotan ring oranye visual.
+       - Begitu calon penyewa mengeklik salah satu nomor kamar kosong di grid: chip kamar tercentang dan tombol seketika berganti menjadi **"Ajukan Sewa [Nama/Nomor Kamar]"** serta membuka modal pemesanan.
+     - Hanya jika seluruh kamar pada tipe tersebut benar-benar 100% penuh (`availableCount === 0`): tombol menampilkan **"Kamar Penuh"** (disabled abu-abu).
+  3. **Reset State saat Pindah Tipe Kamar**:
+     - Saat calon penyewa beralih tipe kamar, `hasSelectedSpecificRoom` di-reset ke `false` agar calon penyewa selalu dipandu memilih kamar yang tersedia di tipe baru tersebut.
+- **File Tersentuh**:
+  - `functions/public/pages/KostDetail.tsx`
+  - `functions/PROGRESS.md`
+  - `IMPLEMENTATION_PLAN.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi frontend `npm --prefix functions/public run build` sukses 100% tanpa error (`✓ built in 30.73s`).
+  - Kompilasi backend `npm --prefix functions run build` (`tsc`) sukses 100% tanpa error.
+  - Tampilan default KostManager kini menampilkan tombol oranye aktif "Silahkan Pilih Kamar Tersedia" yang interaktif.
+
 ### 460. Pengurutan Komposisi Durasi Sewa dari yang Tersingkat ke yang Terlama (`KostDetail.tsx` & `BookingModal.tsx`) (Oktober 2026)
 - **Permintaan & Kebutuhan Pengguna**:
   1. Pada tampilan pengguna calon penyewa di halaman Detail Kost, urutan tombol pilihan durasi sewa sebelumnya tidak berurutan secara kronologis (misal: Per Bulan mendahului Per Hari, lalu lompat ke Per 6 Bulan dan Per Tahun).

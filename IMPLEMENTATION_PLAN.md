@@ -1,66 +1,53 @@
-# IMPLEMENTATION PLAN: Pengurutan Durasi Sewa dari yang Tersingkat ke yang Terlama
+# IMPLEMENTATION PLAN: Perbaikan Tampilan Default Tombol KostManager Menjadi "Silahkan Pilih Kamar Tersedia"
 
 ## 1. Analisis Masalah & Kebutuhan
 
 ### Masalah Saat Ini
-Pada tampilan calon penyewa di halaman Detail Kost (`KostDetail.tsx`), tombol pemilihan durasi sewa di bawah label **"PILIH DURASI SEWA"** saat ini dirender sesuai urutan data mentah di database tanpa dilakukan pengurutan durasi waktu.
-- Contoh pada tampilan saat ini:
-  `[Per Bulan]` `[Per Hari]` `[Per 6 Bulan]`
-  `[Per Tahun]`
-- Urutan ini tidak kronologis (durasi 30 hari muncul sebelum 1 hari, lalu lompat ke 6 bulan dan 1 tahun).
+Pada properti yang dikelola melalui **KostManager** (`kost.isManaged = true`), saat calon penyewa membuka halaman detail kost untuk pertama kali (tampilan default):
+- Komponen menginisialisasi `selectedVariantIdx` ke indeks `0`.
+- Jika unit kamar pertama (`rooms[0]`) kebetulan sedang berstatus **Terisi** (`isAvailable: false`), sistem langsung menganggap kamar yang aktif adalah tidak tersedia.
+- Akibatnya, tombol utama di sidebar kanan langsung menampilkan status mati:
+  **`KAMAR PENUH`** (disabled abu-abu),
+  padahal pada tipe kamar tersebut **masih terdapat banyak unit kamar kosong/tersedia** (misal: 3 dari 4 kamar masih kosong).
+- Calon penyewa salah mengira bahwa kost sudah penuh total dan tidak dapat disewa.
 
 ### Kebutuhan Pengguna
-Mengatur komposisi urutan durasi sewa secara konsisten agar **selalu berurutan dari rentang waktu yang tersingkat hingga yang terlama**:
-1. **Per Hari** (`harian` - 1 hari)
-2. **Per Minggu** (`mingguan` - 7 hari, jika diaktifkan pemilik)
-3. **Per Bulan** (`bulanan` - 30 hari / 1 bulan)
-4. **Per 3 Bulan** (`3bulanan` - 90 hari / 3 bulan, jika diaktifkan pemilik)
-5. **Per 6 Bulan** (`6bulanan` - 180 hari / 6 bulan, jika diaktifkan pemilik)
-6. **Per Tahun** (`tahunan` - 365 hari / 1 tahun, jika diaktifkan pemilik)
+1. Pada listing yang terdaftar di KostManager, tampilan tombol default saat pertama kali dimuat **BUKAN "Kamar Penuh"**, melainkan **"Silahkan Pilih Kamar Tersedia"** (berwarna oranye aktif).
+2. Jika calon penyewa menekan tombol "Silahkan Pilih Kamar Tersedia", halaman akan mengarahkan / *smooth scroll* langsung ke bagian pilihan nomor kamar (*PILIH NOMOR KAMAR*) dengan sorotan visual.
+3. Begitu calon penyewa memilih salah satu nomor kamar yang tersedia di grid, tombol seketika berganti menjadi **"Ajukan Sewa [Nama/Nomor Kamar]"**.
+4. Tombol **"Kamar Penuh"** (disabled abu-abu) hanya boleh muncul jika seluruh kamar pada tipe tersebut **benar-benar 100% penuh** (`availableCount === 0` atau `isAvailable === false`).
 
 ---
 
 ## 2. Dampak Perubahan
 
-File yang akan disentuh:
-1. `functions/public/pages/KostDetail.tsx`:
-   - Menambahkan konstanta bobot durasi waktu `periodWeights` (misal: `harian: 1`, `mingguan: 7`, `bulanan: 30`, `3bulanan: 90`, `6bulanan: 180`, `tahunan: 365`).
-   - Melakukan pengurutan (`sort`) pada array `selectedRoom.pricing` sebelum me-render tombol-tombol pada blok *"Pilih Durasi Sewa"*.
-2. `functions/public/components/BookingModal.tsx`:
-   - Memastikan daftar `availableOptions` pada modal pengajuan sewa ("Pilih Paket Sewa") juga diurutkan berdasarkan `periodWeights` dari tersingkat ke terlama agar konsisten di seluruh flow transaksi pengguna.
+File yang akan dimodifikasi:
+- `functions/public/pages/KostDetail.tsx`:
+  1. Tambahkan state pelacak pilihan spesifik pengguna: `const [hasSelectedSpecificRoom, setHasSelectedSpecificRoom] = useState(false)`.
+  2. Perbarui penetapan `selectedChildRoom`: jika pengguna telah memilih kamar spesifik, ambil kamar tersebut; jika belum, biarkan `null` agar tidak memilih kamar terisi secara otomatis saat awal muat.
+  3. Beri penanda elemen `id="pilih-nomor-kamar-section"` pada kontainer interaktif nomor kamar.
+  4. Perbarui logika penentuan `isAvailable`, `buttonText`, dan handler klik tombol utama:
+     - Jika `isManaged` dan tipe kamar memiliki kamar tersedia (`currentParentGroup.isAvailable`):
+       - Jika belum memilih nomor kamar spesifik: tombol berstatus aktif oranye dengan teks **"Silahkan Pilih Kamar Tersedia"**, dan ketika diklik akan scroll halus ke blok pemilihan kamar.
+       - Jika sudah memilih nomor kamar: tombol bertuliskan **"Ajukan Sewa [Kamar]"** dan langsung membuka modal booking.
+     - Hanya jika seluruh kamar pada tipe tersebut penuh: tombol menampilkan **"Kamar Penuh"** (disabled abu-abu).
+  5. Saat pengguna berganti tipe kamar (`selectedParentTypeIdx`), reset `hasSelectedSpecificRoom` ke `false`.
+  6. Saat pengguna mengeklik chip nomor kamar di grid, set `hasSelectedSpecificRoom(true)`.
 
 ---
 
 ## 3. Langkah-Langkah Eksekusi (Fase 2 Setelah di-ACC)
 
 1. **Modifikasi `KostDetail.tsx`**:
-   - Definisikan kamus bobot periode sewa:
-     ```typescript
-     const periodWeights: Record<string, number> = {
-       'harian': 1,
-       'mingguan': 7,
-       'bulanan': 30,
-       '3bulanan': 90,
-       '6bulanan': 180,
-       'tahunan': 365
-     };
-     ```
-   - Pada baris 2835, ubah mapping array:
-     ```tsx
-     {[...selectedRoom.pricing]
-       .sort((a, b) => (periodWeights[a.period] || 999) - (periodWeights[b.period] || 999))
-       .map((scheme) => {
-         ...
-       })
-     }
-     ```
-2. **Modifikasi `BookingModal.tsx`**:
-   - Pada `availableOptions`, lakukan `.sort((a, b) => (periodWeights[a] || 999) - (periodWeights[b] || 999))` agar kartu durasi sewa di modal booking juga tersusun rapi dari hari ke tahun.
-3. **Verifikasi Build**:
-   - Jalankan kompilasi frontend: `cmd.exe /c "npm --prefix functions/public run build"`
-   - Jalankan kompilasi backend: `cmd.exe /c "npm --prefix functions run build"`
-4. **Dokumentasi & Git Synchronization**:
-   - Catat riwayat progres **#460** di `functions/PROGRESS.md`.
+   - Definisikan state `hasSelectedSpecificRoom`.
+   - Update logika `selectedChildRoom` dan reset saat pergantian tipe kamar.
+   - Update blok render tombol utama aksi (baris 2880-2915) dengan penanganan state KostManager yang baru.
+   - Tambahkan interaktivitas smooth scroll ke section nomor kamar saat tombol "Silahkan Pilih Kamar Tersedia" diklik.
+2. **Verifikasi Build**:
+   - Jalankan build frontend: `cmd.exe /c "npm --prefix functions/public run build"`
+   - Jalankan build backend: `cmd.exe /c "npm --prefix functions run build"`
+3. **Dokumentasi & Git Synchronization**:
+   - Catat entri progres baru **#461** di `functions/PROGRESS.md`.
    - Terbitkan dokumen `WALKTHROUGH.md`.
    - Commit dan push ke branch GitHub `bukan-productions`.
 
@@ -68,10 +55,13 @@ File yang akan disentuh:
 
 ## 4. Rencana Verifikasi
 
-1. **Uji Tampilan & Urutan**:
-   - Memastikan tombol durasi sewa pada kamar yang memiliki opsi harian, bulanan, 6 bulanan, dan tahunan tampil dengan urutan:
-     `[Per Hari] -> [Per Minggu] -> [Per Bulan] -> [Per 3 Bulan] -> [Per 6 Bulan] -> [Per Tahun]`.
-2. **Uji Fungsionalitas Tombol**:
-   - Mengklik tiap tombol durasi sewa tetap memperbarui `selectedPeriod`, harga aktif, badge diskon hemat, dan label tombol aksi utama `AJUKAN SEWA (PER ...)`.
-3. **Uji Kelulusan Build**:
-   - Memastikan build TypeScript/Vite sukses 100% tanpa error.
+1. **Uji Tampilan Default KostManager**:
+   - Buka halaman kost KostManager yang memiliki kamar terisi dan kamar kosong.
+   - Pastikan tombol tampil berwarna oranye bertuliskan **"Silahkan Pilih Kamar Tersedia"** (bukan "Kamar Penuh").
+2. **Uji Interaksi Pemilihan Kamar**:
+   - Klik tombol "Silahkan Pilih Kamar Tersedia" $\rightarrow$ layar scroll otomatis ke bagian nomor kamar.
+   - Klik salah satu nomor kamar kosong (misal: Kamar 102) $\rightarrow$ tombol berubah menjadi **"Ajukan Sewa Kamar 102"** dan chip kamar tercentang.
+3. **Uji Kondisi Benar-Benar Penuh**:
+   - Buka kamar/tipe yang seluruh kamarnya terisi $\rightarrow$ tombol tetap dengan benar menampilkan **"Kamar Penuh"** (disabled abu-abu).
+4. **Uji Kelulusan Build**:
+   - 0 error pada build TypeScript / Vite.

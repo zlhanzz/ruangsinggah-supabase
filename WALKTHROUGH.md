@@ -1,54 +1,74 @@
-# WALKTHROUGH: Pengurutan Durasi Sewa dari yang Tersingkat ke yang Terlama
+# WALKTHROUGH: Perbaikan Tampilan Default Tombol KostManager Menjadi "Silahkan Pilih Kamar Tersedia"
 
 ## Ringkasan Eksekusi
-Telah diselesaikan perbaikan komposisi urutan pilihan durasi sewa pada tampilan pengguna (calon penyewa). Tombol opsi durasi pada blok **"PILIH DURASI SEWA"** di halaman Detail Kost ([KostDetail.tsx](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/KostDetail.tsx)) serta kartu durasi pada modal booking ([BookingModal.tsx](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/components/BookingModal.tsx)) kini **selalu terurut secara kronologis dari rentang waktu yang tersingkat hingga yang terlama**.
+Telah diselesaikan perbaikan tampilan tombol default pada properti yang dikelola melalui **KostManager** ([KostDetail.tsx](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/KostDetail.tsx)). Saat calon penyewa pertama kali membuka halaman kost yang memiliki kamar kosong, tombol utama di sidebar kini **BUKAN lagi bertuliskan "Kamar Penuh" (disabled abu-abu)**, melainkan tombol aktif oranye cerah bertuliskan **"Silahkan Pilih Kamar Tersedia"**.
 
 ---
 
 ## 1. Detail Perubahan Kode
 
-### A. Halaman Detail Kost (`functions/public/pages/KostDetail.tsx`)
-1. **Definisi Bobot Periode Waktu (`periodWeights`)**:
+### `functions/public/pages/KostDetail.tsx`
+1. **Penambahan State Pelacak Kamar Eksplisit**:
    ```typescript
-   const periodWeights: Record<string, number> = {
-     'harian': 1,
-     'mingguan': 7,
-     'bulanan': 30,
-     '3bulanan': 90,
-     '6bulanan': 180,
-     'tahunan': 365
+   const [hasSelectedSpecificRoom, setHasSelectedSpecificRoom] = useState(false);
+   ```
+2. **Penyelesaian `selectedChildRoom` yang Akurat**:
+   ```typescript
+   const selectedChildRoom = hasSelectedSpecificRoom
+     ? (currentParentGroup?.rooms.find(r => r.variantIdx === selectedVariantIdx) || null)
+     : null;
+   ```
+   Sebelumnya, saat awal muat, sistem langsung mengambil `currentParentGroup?.rooms[0]`. Jika kamar pertama kebetulan sedang terisi (`isAvailable: false`), sistem langsung menganggap tipe kamar tersebut penuh. Dengan perubahan ini, kamar terisi tidak lagi otomatis tercentang sepihak di awal muat.
+
+3. **Logika Tombol Aksi Utama**:
+   ```typescript
+   const hasAvailableInGroup = isManaged ? Boolean(currentParentGroup?.isAvailable) : false;
+   const isAvailable = isManaged
+     ? hasAvailableInGroup
+     : Boolean(selectedRoom && selectedRoom.isAvailable !== false);
+
+   const buttonText = isUnpublished
+     ? 'Pratinjau (Belum Tayang)'
+     : isManaged
+       ? (!hasAvailableInGroup
+           ? 'Kamar Penuh'
+           : (!hasSelectedSpecificRoom || !selectedChildRoom || !selectedChildRoom.isAvailable)
+             ? 'Silahkan Pilih Kamar Tersedia'
+             : `Ajukan Sewa ${selectedChildRoom.displayName}`)
+       : (!isAvailable
+           ? 'Kamar Penuh'
+           : `Ajukan Sewa (${periodLabels[selectedPeriod] || selectedPeriod})`);
+   ```
+
+4. **Interaktivitas Tombol Utama (Smooth Scroll & Highlight)**:
+   ```typescript
+   const handleMainActionClick = () => {
+     if (isUnpublished) {
+       alert('Ini adalah mode pratinjau pemilik...');
+       return;
+     }
+
+     if (isManaged && (!hasSelectedSpecificRoom || !selectedChildRoom || !selectedChildRoom.isAvailable)) {
+       const roomSelectorElem = document.getElementById('pilih-nomor-kamar-section');
+       if (roomSelectorElem) {
+         roomSelectorElem.scrollIntoView({ behavior: 'smooth', block: 'center' });
+         roomSelectorElem.classList.add('ring-4', 'ring-orange-500/50', 'ring-offset-2', 'bg-orange-50/70');
+         setTimeout(() => {
+           roomSelectorElem.classList.remove('ring-4', 'ring-orange-500/50', 'ring-offset-2', 'bg-orange-50/70');
+         }, 1500);
+       }
+       return;
+     }
+
+     handleBookingClick();
    };
    ```
-2. **Pengurutan Tombol Durasi Sewa**:
-   ```tsx
-   {[...selectedRoom.pricing]
-     .sort((a, b) => (periodWeights[a.period] || 999) - (periodWeights[b.period] || 999))
-     .map((scheme) => {
-       const discount = calculateDiscount(scheme);
-       return (
-         <button
-           key={scheme.period}
-           onClick={() => setSelectedPeriod(scheme.period)}
-           ...
-         >
-           {periodLabels[scheme.period] || scheme.period}
-           ...
-         </button>
-       );
-     })}
-   ```
-   **Hasil**: Urutan tombol berubah dari yang sebelumnya acak (`Per Bulan`, `Per Hari`, `Per 6 Bulan`, `Per Tahun`) menjadi urutan kronologis yang konsisten:
-   `Per Hari` $\rightarrow$ `Per Minggu` $\rightarrow$ `Per Bulan` $\rightarrow$ `Per 3 Bulan` $\rightarrow$ `Per 6 Bulan` $\rightarrow$ `Per Tahun`.
 
-### B. Modal Booking (`functions/public/components/BookingModal.tsx`)
-1. **Pengurutan Kartu Paket Sewa**:
-   ```typescript
-   const availableOptions = (hasFlexiblePricing 
-     ? variant.pricing!.map(p => p.period)
-     : ['bulanan', '3bulanan', '6bulanan', 'tahunan']
-   ).sort((a, b) => (periodWeights[a] || 999) - (periodWeights[b] || 999));
-   ```
-   Menjamin kartu durasi sewa di dalam modal pemesanan selaras 100% dengan urutan pada halaman detail.
+5. **Pilihan Nomor Kamar di Grid**:
+   - Menambahkan `id="pilih-nomor-kamar-section"` pada kontainer pilihan nomor kamar.
+   - Saat calon penyewa mengeklik nomor kamar di grid:
+     `setHasSelectedSpecificRoom(true)` aktif, chip kamar tercentang oranye, dan tombol seketika berganti menjadi **"Ajukan Sewa [Nama/Nomor Kamar]"**.
+   - Saat berpindah tipe kamar (`setSelectedParentTypeIdx`), `hasSelectedSpecificRoom` di-reset ke `false` agar alur pemandu tetap berjalan rapi di tipe yang baru.
 
 ---
 
@@ -60,7 +80,7 @@ cmd.exe /c "npm --prefix functions/public run build"
 ```
 - **Hasil**: **LULUS 100% (Exit code 0)**.
 - `✓ 2512 modules transformed.`
-- `✓ built in 53.74s`.
+- `✓ built in 30.73s`.
 - 0 error, 0 warning fatal.
 
 ### B. Uji Kompilasi Build Backend
@@ -74,11 +94,12 @@ cmd.exe /c "npm --prefix functions run build"
 
 ## 3. Panduan Pengujian bagi Pengguna (User Testing)
 
-1. Buka salah satu halaman detail kost yang memiliki beberapa skema sewa (misal: harian, bulanan, 6 bulanan, dan tahunan) di browser.
-2. Perhatikan bagian sidebar kanan (desktop) atau bagian harga (mobile) pada blok **"PILIH DURASI SEWA"**.
-3. **Ekspektasi Visual**:
-   - Tombol durasi sewa tersusun rapi dari kiri ke kanan:
-     `[Per Hari]` `[Per Minggu]` *(jika ada)* `[Per Bulan]` `[Per 3 Bulan]` *(jika ada)* `[Per 6 Bulan]` `[Per Tahun]`.
-   - Mengklik masing-masing tombol akan memperbarui harga aktif, kalkulasi diskon, dan teks tombol aksi:
-     `AJUKAN SEWA (PER HARI)`, `AJUKAN SEWA (PER BULAN)`, `AJUKAN SEWA (PER 6 BULAN)`, dst.
-   - Saat modal booking dibuka, opsi durasi juga tersusun rapi dari yang tersingkat ke yang terlama.
+1. Buka halaman detail kost yang terdaftar di **KostManager** (memiliki unit-unit nomor kamar individual).
+2. Perhatikan tombol aksi utama di sidebar kanan:
+   - **Ekspektasi Default**: Tombol tampil berwarna **oranye cerah** bertuliskan **"SILAHKAN PILIH KAMAR TERSEDIA"** (bukan "KAMAR PENUH" abu-abu).
+3. Klik tombol **"SILAHKAN PILIH KAMAR TERSEDIA"**:
+   - Layar akan melakukan *smooth scroll* otomatis ke blok **PILIH NOMOR KAMAR** dan menyorot grid nomor kamar dengan kilatan oranye lembut.
+4. Klik salah satu nomor kamar yang tersedia di grid (misal: "Kamar 01" atau "Kamar 102"):
+   - Chip kamar terpilih dengan tanda centang.
+   - Tombol utama seketika bertransformasi menjadi **"AJUKAN SEWA [KAMAR]"**.
+5. Klik tombol tersebut: modal formulir sewa langsung terbuka untuk kamar yang dipilih.
