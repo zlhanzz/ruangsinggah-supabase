@@ -501,6 +501,17 @@ export async function detectPhotoContactBanner(
         }
 
         if (data) {
+            // Jika edge function mengembalikan success: false atau ada pesan error AI
+            if (data.success === false || data.error) {
+                console.warn('[AI_SENSOR] Edge Function AI mengembalikan kegagalan/kuota habis:', data.error);
+                return {
+                    hasContact: false,
+                    detectedTexts: [],
+                    boxes: [],
+                    error: data.error || 'Pemindaian AI tidak tersedia'
+                };
+            }
+
             const rawData = data.data || data;
             const hasContact = Boolean(rawData.has_contact ?? rawData.hasContact ?? false);
             const boxes = Array.isArray(rawData.boxes) ? rawData.boxes : [];
@@ -557,7 +568,6 @@ export function detectBannerRegionsClientSide(
 
                 let minLum = 255;
                 let maxLum = 0;
-                let edgeCount = 0;
                 let bannerColorPixels = 0;
                 let totalPixels = 0;
 
@@ -580,12 +590,12 @@ export function detectBannerRegionsClientSide(
 
                         // Ciri khas spanduk sewa/nomor HP/papan nama kost:
                         // 1. Spanduk hijau, merah, biru, oranye, atau kuning pekat (satuan saturasi tinggi)
-                        // 2. Plang putih bersih dengan teks gelap kontras tinggi
+                        // 2. Plang putih/krem bersih dengan teks gelap kontras tinggi (seperti plang di pagar gerbang)
                         // 3. Plang/spanduk gelap dengan teks terang
                         const isBannerColor = 
-                            (sat > 0.28 && lum > 35 && lum < 225) ||
-                            (lum > 160 && (maxLum - minLum > 50)) ||
-                            (lum < 70 && (maxLum - minLum > 55));
+                            (sat > 0.22 && lum > 30 && lum < 235) ||
+                            (lum > 145 && (maxLum - minLum > 40)) ||
+                            (lum < 85 && (maxLum - minLum > 45));
                         if (isBannerColor) bannerColorPixels++;
                         totalPixels++;
                     }
@@ -594,21 +604,22 @@ export function detectBannerRegionsClientSide(
                 const lumDiff = maxLum - minLum;
                 // Skor energi: kontras lokal + proporsi warna spanduk
                 let cellEnergy = 0;
-                if (lumDiff > 55) cellEnergy += 1;
-                if (lumDiff > 95) cellEnergy += 1.5;
-                if ((bannerColorPixels / Math.max(1, totalPixels)) > 0.28) cellEnergy += 1.2;
+                if (lumDiff > 45) cellEnergy += 1;
+                if (lumDiff > 85) cellEnergy += 1.5;
+                if ((bannerColorPixels / Math.max(1, totalPixels)) > 0.22) cellEnergy += 1.2;
 
                 energyGrid[r][c] = cellEnergy;
             }
         }
 
-        // Cari kluster horizontal dengan energi tinggi (deretan baris 1 s/d rows-2)
+        // Cari kluster horizontal dengan energi tinggi
+        const rawBoxes: SensorBoxPixel[] = [];
         for (let r = 1; r < rows - 1; r++) {
             let consecutive = 0;
             let startCol = -1;
 
             for (let c = 0; c < cols; c++) {
-                const isHigh = energyGrid[r][c] >= 1.8 || (energyGrid[r][c] >= 1.0 && (energyGrid[r - 1]?.[c] >= 1.0 || energyGrid[r + 1]?.[c] >= 1.0));
+                const isHigh = energyGrid[r][c] >= 1.6 || (energyGrid[r][c] >= 0.9 && (energyGrid[r - 1]?.[c] >= 0.9 || energyGrid[r + 1]?.[c] >= 0.9));
 
                 if (isHigh) {
                     if (consecutive === 0) startCol = c;
@@ -620,20 +631,13 @@ export function detectBannerRegionsClientSide(
                         const boxW = Math.min(width - boxX, (consecutive + 2) * step);
                         const boxH = Math.min(height - boxY, 4 * step);
 
-                        // Hindari duplikasi region yang berdekatan
-                        const overlaps = regions.some(rg =>
-                            Math.abs(rg.x - boxX) < 40 && Math.abs(rg.y - boxY) < 30
-                        );
-
-                        if (!overlaps) {
-                            regions.push({
-                                x: boxX,
-                                y: boxY,
-                                width: boxW,
-                                height: boxH,
-                                source: 'heuristic'
-                            });
-                        }
+                        rawBoxes.push({
+                            x: boxX,
+                            y: boxY,
+                            width: boxW,
+                            height: boxH,
+                            source: 'heuristic'
+                        });
                     }
                     consecutive = 0;
                     startCol = -1;
@@ -645,7 +649,7 @@ export function detectBannerRegionsClientSide(
                 const boxY = Math.max(0, (r - 1) * step);
                 const boxW = Math.min(width - boxX, (consecutive + 2) * step);
                 const boxH = Math.min(height - boxY, 4 * step);
-                regions.push({
+                rawBoxes.push({
                     x: boxX,
                     y: boxY,
                     width: boxW,
@@ -654,11 +658,57 @@ export function detectBannerRegionsClientSide(
                 });
             }
         }
+
+        // Gabungkan bounding boxes yang bersinggungan / berdekatan (Multi-Row Union Cluster)
+        const merged: SensorBoxPixel[] = [];
+        for (const b of rawBoxes) {
+            let absorbed = false;
+            for (let i = 0; i < merged.length; i++) {
+                const m = merged[i];
+                // Cek jarak horizontal & vertikal dengan margin toleransi 30px
+                const pad = 30;
+                const overlapX = (b.x <= m.x + m.width + pad) && (b.x + b.width + pad >= m.x);
+                const overlapY = (b.y <= m.y + m.height + pad) && (b.y + b.height + pad >= m.y);
+                if (overlapX && overlapY) {
+                    const nx = Math.min(m.x, b.x);
+                    const ny = Math.min(m.y, b.y);
+                    const nw = Math.max(m.x + m.width, b.x + b.width) - nx;
+                    const nh = Math.max(m.y + m.height, b.y + b.height) - ny;
+                    merged[i] = { x: nx, y: ny, width: nw, height: nh, source: 'heuristic' };
+                    absorbed = true;
+                    break;
+                }
+            }
+            if (!absorbed) {
+                merged.push({ ...b });
+            }
+        }
+
+        // Berikan outward padding aman dan filter ukuran anomali
+        for (const m of merged) {
+            if (m.width > width * 0.85 && m.height > height * 0.85) continue; // Hindari blur satu layar penuh
+            if (m.width < 35 || m.height < 25) continue; // Abaikan bintik kecil
+
+            const padX = Math.round(m.width * 0.12);
+            const padY = Math.round(m.height * 0.12);
+            const finalX = Math.max(0, m.x - padX);
+            const finalY = Math.max(0, m.y - padY);
+            const finalW = Math.min(width - finalX, m.width + padX * 2);
+            const finalH = Math.min(height - finalY, m.height + padY * 2);
+
+            regions.push({
+                x: finalX,
+                y: finalY,
+                width: finalW,
+                height: finalH,
+                source: 'heuristic'
+            });
+        }
     } catch (e) {
         console.warn('[AI_SENSOR] Gagal heuristik client-side:', e);
     }
 
-    return regions.slice(0, 5);
+    return regions.slice(0, 6);
 }
 
 /**

@@ -2,6 +2,34 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 452. Perbaikan Penanganan Quota AI 429, Deteksi Validasi Respon Gagal, dan Penguatan Fallback Heuristik Client-Side (`autoSensorService.ts`, `detect-contact-banner/index.ts`) (Oktober 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna melaporkan bahwa saat pengujian unggah foto properti baru (kategori Bangunan Depan), sensor spanduk kontak tidak bekerja lagi (spanduk di pagar gerbang dan dinding tidak tersensor), padahal sebelumnya bekerja dengan sangat baik.
+  2. Hasil diagnostik eksekusi langsung ke endpoint `detect-contact-banner`:
+     - Quota Free Tier Gemini API habis dengan error HTTP 429 (`limit 20 requests per day exceeded`).
+     - Edge Function mengembalikan HTTP 200 dengan `{ success: false, error: "Semua model Gemini gagal...", data: { has_contact: false, boxes: [] } }`.
+     - Frontend `autoSensorService.ts` menganggap respon tersebut sebagai "pemindaian berhasil dan foto bersih", sehingga fallback heuristik client-side offline terlewatkan dan tidak pernah berjalan.
+- **Implementasi Solusi**:
+  1. **Validasi Respon Edge Function di Frontend (`autoSensorService.ts`)**:
+     - Memperbarui `detectPhotoContactBanner`: menambahkan pengecekan `if (data.success === false || data.error)` agar status kegagalan AI diteruskan dengan benar sebagai objek `error: data.error`.
+     - Dengan demikian, `aiScanSucceeded` bernilai `false`, dan sistem otomatis mengalihkan proses ke Fallback Heuristik Client-Side.
+  2. **Peningkatan Algoritma Fallback Heuristik Client-Side (`detectBannerRegionsClientSide`)**:
+     - Menurunkan ambang batas deteksi kontras dan saturasi warna spanduk/plang (`sat > 0.22`, `lumDiff > 45`) agar plang kecil di pagar, pilar, maupun dinding depan dapat dideteksi secara andal.
+     - Menerapkan penggabungan kluster multi-baris (*Multi-Row Union Cluster*) untuk menyatukan area kotak deteksi yang bersinggungan secara vertikal dan horizontal.
+     - Menyematkan penambahan padding outward proporsional 12% (15-20px) untuk memastikan seluruh teks kontak dan tepi spanduk tertutup rapat tanpa celah.
+  3. **Ekspansi Model & Penanganan `thinkingConfig` di Edge Function (`supabase/functions/detect-contact-banner/index.ts`)**:
+     - Memperluas `CANDIDATE_MODELS` dengan model-model cadangan multi-family: `"gemini-2.5-flash"`, `"gemini-2.0-flash"`, `"gemini-1.5-flash"`, `"gemini-2.0-flash-lite"`.
+     - Menambahkan mekanisme auto-retry tanpa `thinkingConfig` jika model mengembalikan HTTP 400 (Invalid Argument).
+     - Mengubah status kode HTTP saat seluruh model gagal dari 200 menjadi 503 Service Unavailable agar terdeteksi tegas di transport layer.
+- **File Tersentuh**:
+  - `functions/public/autoSensorService.ts`
+  - `supabase/functions/detect-contact-banner/index.ts`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi frontend `npm --prefix functions/public run build` lulus 100% 0 error dalam **30.28s** (`✓ 2512 modules transformed`).
+  - Kompilasi backend functions `npm --prefix functions run build` (`tsc`) lulus 100% 0 error.
+
 ### 451. Pemisahan Kategori Kustom Fasilitas Umum Properti dan Sub-Kategori Khusus Tipe Kamar Sesuai Standar Industri (`autoSensorService.ts`, `adminService.ts`, `KostFormMitra.tsx`) (Oktober 2026)
 - **Permintaan & Masalah**:
   1. Pengguna menginginkan kategori kustom di Langkah 5 (Foto Properti & Kamar) dipisahkan menjadi:

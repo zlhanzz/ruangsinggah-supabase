@@ -1,119 +1,82 @@
-# WALKTHROUGH - Pemisahan Kategori Kustom Fasilitas Umum Properti dan Sub-Kategori Khusus Tipe Kamar Sesuai Standar Industri
+# WALKTHROUGH - Perbaikan Penanganan Quota AI 429, Deteksi Validasi Respon Gagal, dan Penguatan Fallback Heuristik Client-Side
 
 ## 📌 Ringkasan Pekerjaan
-Pekerjaan ini menyelesaikan permintaan untuk:
-1. **Memisahkan Kategori Kustom** pada formulir pendaftaran/edit kost mitra (Langkah 5: Foto Properti & Kamar):
-   - Kategori kustom untuk **Fasilitas Umum / Area Properti** (contoh: *Rooftop, Kolam Renang, Balkon Bersama, Taman, Gazebo, Gym*, dll.).
-   - Sub-kategori kustom **khusus untuk setiap Tipe Kamar** yang ditambahkan di Langkah 3 (contoh: *Meja Belajar, Lemari Pakaian, Balkon Kamar, Jendela*, dll.) yang menjadi sub-kategori terikat dari unit tipe kamar tersebut.
-2. **Audit & Penyelarasan dengan Standar Industri (Airbnb, Booking.com, Mamikos)**:
-   - Pemisahan hierarki tingkat properti (*property-level spaces*) vs tingkat unit (*unit/room-level spaces*).
-   - *Auto-pruning* dan tombol hapus (`×`): Kategori kustom yang tidak memiliki foto tidak boleh memblokir pengiriman formulir (*anti form-stuck*). Hanya kategori pokok berstatus `required: true` (**Bangunan Depan** dan **Kamar Tidur Utama**) yang wajib diisi.
-   - *Cascade grouping*: Relasi sub-kategori kamar diikat langsung ke unit tipe kamar.
-   - Seluruh kategori kustom (baik umum maupun kamar) **wajib melewati proses AI Vision auto-detector banner (`isCustom: true`)**.
+Pekerjaan ini menyelesaikan masalah di mana sensor banner/spanduk kontak tidak bekerja pada foto yang baru diunggah mitra:
+1. **Pencegahan Silent Failure**: Memperbaiki pembacaan respon Supabase Edge Function `detect-contact-banner` di [functions/public/autoSensorService.ts](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/autoSensorService.ts). Respon gagal atau kuota habis (`success: false` / `data.error`) kini terdeteksi secara tegas, bukan lagi disalahartikan sebagai "foto bersih".
+2. **Aktivasi Otomatis Fallback Heuristik Client-Side**: Ketika AI offline, kuota API 429 habis, atau model sedang overload (503), sistem seketika mengeksekusi `detectBannerRegionsClientSide` langsung di canvas lokal browser tanpa membiarkan foto lolos tanpa sensor.
+3. **Penyempurnaan Algoritma Heuristik Lokal**: Menerapkan *Multi-Row Union Cluster* dan penambahan outward padding 12% untuk mendeteksi spanduk berukuran kecil pada pagar gerbang, pilar, maupun dinding secara rapat dan presisi.
+4. **Ekspansi Model & Kompatibilitas Edge Function**: Menambahkan model cadangan Gemini lintas keluarga (`gemini-2.5-flash`, `gemini-2.0-flash`, `gemini-1.5-flash`, `gemini-2.0-flash-lite`) serta auto-retry tanpa `thinkingConfig` jika terjadi error 400.
 
 ---
 
-## 🛠️ Daftar Perubahan Kode
+## 🛠️ Detail Perubahan Kode
 
-### 1. [autoSensorService.ts](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/autoSensorService.ts) & [adminService.ts](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/adminService.ts)
-- **Deteksi Banner pada Sub-Kategori Kamar Kustom**:
-  Format identifier sub-kategori kamar adalah `Kamar: [roomName] - [subCat]` (contoh: `Kamar: Deluxe A - Meja Belajar`).
-  Fungsi `isBannerProneCategory` diperbarui agar otomatis memindai AI Vision jika kategori memiliki penanda kustom atau tanda pemisah sub-kategori:
+### 1. [functions/public/autoSensorService.ts](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/autoSensorService.ts)
+- **Validasi Tegas Status Respon AI**:
   ```typescript
-  export const isBannerProneCategory = (categoryName: string, isCustom = false): boolean => {
-      if (!categoryName) return false;
-      const trimmed = categoryName.trim();
-      
-      // Kategori custom buatan mitra atau sub-kategori kamar wajib selalu disensor
-      if (isCustom || trimmed.includes(' - ')) return true;
+  if (data) {
+      // Jika edge function mengembalikan success: false atau ada pesan error AI
+      if (data.success === false || data.error) {
+          console.warn('[AI_SENSOR] Edge Function AI mengembalikan kegagalan/kuota habis:', data.error);
+          return {
+              hasContact: false,
+              detectedTexts: [],
+              boxes: [],
+              error: data.error || 'Pemindaian AI tidak tersedia'
+          };
+      }
       ...
-  ```
-- **Null Safety & Urutan Evaluasi**:
-  Memastikan `trimmed` dideklarasikan setelah validasi null check awal untuk mencegah potensi `ReferenceError`.
-
----
-
-### 2. [KostFormMitra.tsx](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/components/KostFormMitra.tsx)
-- **Ekstensi Antarmuka `PublicPhotoCategoryDef`**:
-  ```typescript
-  export interface PublicPhotoCategoryDef {
-      id: string;
-      label: string;
-      icon: any;
-      required: boolean;
-      description: string;
-      isRoom?: boolean;
-      roomName?: string;
-      isCustom?: boolean;
-      subCategoryName?: string;
   }
   ```
-- **Fungsi Dinamis `computeActivePhotoCategories`**:
-  - Menerima parameter `userCustomRoomCats: Record<string, string[]> = {}`.
-  - Menghasilkan daftar kategori fasilitas umum (standar + kustom umum).
-  - Menghasilkan daftar kamar tidur utama untuk setiap tipe kamar yang ada di formulir (`Kamar: ${roomName}`).
-  - Menghasilkan sub-kategori kustom spesifik untuk masing-masing tipe kamar:
-    - ID: `Kamar: ${roomName} - ${subCat}`
-    - Label: `${subCat} (${roomName})`
-    - `isRoom: true`, `isCustom: true`, `subCategoryName: subCat`
-    - `required: false` (opsional, anti *form-stuck*).
-- **State & Manajemen Kategori Kustom**:
-  - `customRoomCategories: Record<string, string[]>`: Menyimpan relasi `{ [roomName]: string[] }`.
-  - `roomSubCategoryInputs: Record<string, string>`: Mengelola text input per-kamar saat mitra mengetik nama sub-kategori baru.
-  - Inisialisasi draft dari `localStorage` dan objek `editingKost`.
-  - `saveDraftDirect`: Menyimpan referensi `customCategoriesRef` dan `customRoomCategoriesRef`.
-- **Handler Penambahan & Penghapusan Terpisah**:
-  - `handleAddGeneralCategory(name)`: Menambahkan kategori fasilitas umum kustom.
-  - `handleRemoveGeneralCategory(catName)`: Menghapus kategori umum kustom + membersihkan foto terkait dari state dan storage.
-  - `handleAddRoomSubCategory(roomName)`: Menambahkan sub-kategori khusus kamar tertentu.
-  - `handleRemoveRoomSubCategory(roomName, subCatName)`: Menghapus sub-kategori kamar + membersihkan foto kamar terkait dari state dan storage.
-- **Penyelarasan Validasi Langkah 5 (`validateCurrentStep`)**:
-  - Hanya mewajibkan kategori yang berstatus `cat.required === true` (yaitu **Bangunan Depan** dan **Kamar Tidur Utama**).
-  - Kategori kustom umum maupun sub-kategori kamar yang belum sempat diunggah fotonya diabaikan (*auto-pruned*), sehingga mitra tidak mengalami bug *form-stuck*.
-- **Pembaruan Layout UI Langkah 5**:
-  - **Section Fasilitas Umum**:
-    - Kartu foto fasilitas umum standar dan kustom.
-    - Tombol `×` merah elegan pada kartu kategori kustom untuk menghapus kategori secara instan.
-    - Formulir mini `+ Kategori Umum` berada tepat di bawah daftar fasilitas umum dengan input teks dan tombol tambah.
-  - **Section Tipe Kamar (Dipecah per Unit Kamar)**:
-    - Mengelompokkan kartu foto per tipe kamar (`(form.roomTypes || []).map(...)`).
-    - Menampilkan kartu Kamar Tidur Utama (Wajib).
-    - Menampilkan kartu-kartu sub-kategori kustom milik kamar tersebut lengkap dengan tombol `×`.
-    - Formulir mini `+ Sub-Kategori ${roomName}` di bawah masing-masing kamar untuk menambahkan ruang/sudut khusus (misal: Meja Kerja, Lemari, Balkon Pribadi).
+- **Peningkatan Algoritma `detectBannerRegionsClientSide`**:
+  - Ambang batas kontras dan saturasi spanduk dioptimalkan (`sat > 0.22`, `lumDiff > 45`) agar plang putih/krem dengan tulisan teks di gerbang kayu/besi atau dinding depan dapat terdeteksi.
+  - Menggabungkan kotak-kotak bertingkat multi-baris yang berdekatan (*Multi-Row Union Cluster*) agar spanduk tinggi tidak terpotong menjadi garis-garis tipis terpisah.
+  - Menambahkan *outward radial padding* proporsional 12% (15-20px) di sekeliling kotak deteksi.
+
+### 2. [supabase/functions/detect-contact-banner/index.ts](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/supabase/functions/detect-contact-banner/index.ts)
+- **Ekspansi Model Multi-Family**:
+  ```typescript
+  const CANDIDATE_MODELS = [
+    "gemini-2.5-flash",
+    "gemini-2.0-flash",
+    "gemini-1.5-flash",
+    "gemini-2.0-flash-lite",
+    "gemini-3.5-flash",
+    "gemini-3.8-flash",
+    "gemini-3.5-flash-lite",
+    "gemini-3.7-flash"
+  ];
+  ```
+- **Auto-Retry Tanpa `thinkingConfig`**:
+  Jika model mengembalikan HTTP 400 (karena tidak mendukung parameter `thinkingBudget: 0`), sistem secara otomatis mencoba kembali request tanpa parameter tersebut sebelum beralih ke model lain.
+- **Status Kode HTTP 503**:
+  Mengembalikan status HTTP 503 Service Unavailable ketika seluruh model gagal, sehingga terdeteksi secara tegas baik pada layer jaringan maupun layer aplikasi.
 
 ---
 
-## 🧪 Hasil Pengujian & Kompilasi
+## 🧪 Hasil Verifikasi Build
 
 1. **Frontend Build (`npm --prefix functions/public run build`)**:
    - Status: **LULUS (Exit Code: 0)**
-   - Waktu build: **41.05s**
-   - Modul tertransformasi: **2512 modules**
-   - Output asset Vite dihasilkan sempurna di `functions/public/dist` dan disinkronkan ke root `public/`.
-2. **Backend Build (`npm --prefix functions run build`)**:
+   - Waktu kompilasi: **30.28s** (`✓ 2512 modules transformed`).
+   - Bundle production di `functions/public/dist` disinkronkan ke root `public/`.
+2. **Backend Functions Build (`npm --prefix functions run build`)**:
    - Status: **LULUS (Exit Code: 0)**
    - TypeScript compiler (`tsc`) berhasil tanpa error tipe data.
 
 ---
 
-## 📋 Panduan Verifikasi Pengujian bagi Pengguna
+## 💡 Tips & Panduan bagi Pengguna
 
-1. **Buka Formulir Pendaftaran / Edit Kost Mitra**:
-   - Masuk ke dashboard mitra dan buka formulir pendaftaran/edit kost.
-2. **Isi Langkah 3 (Tipe Kamar)**:
-   - Tambahkan setidaknya 1 atau 2 tipe kamar (misal: *Deluxe AC* dan *Standar Non-AC*).
-3. **Buka Langkah 5 (Foto Properti & Kamar)**:
-   - **Bagian Fasilitas Umum**:
-     - Coba ketik nama fasilitas baru di input *Nama Fasilitas Umum Baru* (misal: `Rooftop Santai`) lalu klik **+ Kategori Umum**.
-     - Perhatikan kartu baru `Rooftop Santai` muncul dengan badge kustom dan tombol `×`.
-     - Coba klik tombol `×` untuk memastikan kategori dapat dihapus kembali.
-   - **Bagian Tipe Kamar**:
-     - Perhatikan setiap tipe kamar kini memiliki blok tersendiri.
-     - Pada kamar *Deluxe AC*, ketik nama sub-kategori (misal: `Meja Belajar`) lalu klik **+ Sub-Kategori Deluxe AC**.
-     - Kartu `Meja Belajar (Deluxe AC)` muncul di bawah kamar tersebut. Kategori ini terisolasi dan tidak muncul di tipe kamar lain.
-4. **Uji Unggah Foto & Sensor**:
-   - Unggah foto pada kategori kustom atau sub-kategori kamar.
-   - Sistem akan memproses kompresi WebP, melakukan deteksi banner otomatis via AI Vision, dan menyimpan foto secara aman.
-5. **Uji Validasi Form (Anti Form-Stuck)**:
-   - Tambahkan sub-kategori kamar tanpa mengunggah foto ke dalamnya.
-   - Klik tombol **Lanjut ke Langkah 6** atau **Simpan Draft**. Formulir dapat lanjut dengan mulus tanpa terblokir.
+### A. Deploy Edge Function ke Supabase (Jika Diperlukan)
+Untuk memperbarui Edge Function di Supabase Cloud dengan daftar model baru, jalankan perintah berikut di terminal:
+```bash
+npx supabase functions deploy detect-contact-banner
+```
+
+### B. Menghindari Limit Kuota Free-Tier (Multi-Key)
+Untuk mencegah limit kuota 20 request/hari pada akun gratis Google AI Studio, Anda dapat membuat 2–3 API Key tambahan dari akun Google lain dan menyimpannya ke Supabase Secret `GEMINI_API_KEY` dipisahkan dengan tanda koma:
+```bash
+npx supabase secrets set GEMINI_API_KEY="AIzaSy...,AIzaSy...,AIzaSy..."
+```
+Sistem Edge Function secara otomatis melakukan *round-robin / key fallback* jika salah satu key kehabisan kuota.

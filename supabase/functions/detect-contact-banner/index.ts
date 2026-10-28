@@ -6,8 +6,12 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-// Model priority cascade: gemini-3.5-flash (1.1s super cepat), gemini-3.8-flash, gemini-3.5-flash-lite, gemini-3.7-flash
+// Model priority cascade: multi-family Gemini models dengan kuota terpisah
 const CANDIDATE_MODELS = [
+  "gemini-2.5-flash",
+  "gemini-2.0-flash",
+  "gemini-1.5-flash",
+  "gemini-2.0-flash-lite",
   "gemini-3.5-flash",
   "gemini-3.8-flash",
   "gemini-3.5-flash-lite",
@@ -136,9 +140,11 @@ FORMAT OUTPUT (JSON MURNI SAJA, TANPA BACKTICKS/MARKDOWN):
           const genConfig: any = {
             response_mime_type: "application/json",
             temperature: 0.1,
-            maxOutputTokens: 800,
-            thinkingConfig: { thinkingBudget: 0 }
+            maxOutputTokens: 800
           };
+          if (!model.includes("lite") && !model.includes("1.5")) {
+            genConfig.thinkingConfig = { thinkingBudget: 0 };
+          }
 
           const response = await fetch(
             `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
@@ -156,6 +162,79 @@ FORMAT OUTPUT (JSON MURNI SAJA, TANPA BACKTICKS/MARKDOWN):
           if (!response.ok) {
             const errorText = await response.text();
             console.warn(`Model ${model} with Key #${kIdx + 1} returned status ${response.status}: ${errorText}`);
+
+            // Coba sekali lagi tanpa thinkingConfig jika model menolak parameter tersebut (HTTP 400)
+            if (response.status === 400 && genConfig.thinkingConfig) {
+              try {
+                const retryResponse = await fetch(
+                  `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+                  {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    signal: AbortSignal.timeout(6000),
+                    body: JSON.stringify({
+                      contents: [{ parts: contentsParts }],
+                      generationConfig: {
+                        response_mime_type: "application/json",
+                        temperature: 0.1,
+                        maxOutputTokens: 800
+                      }
+                    })
+                  }
+                );
+                if (retryResponse.ok) {
+                  const retryJson = await retryResponse.json();
+                  const rawText = retryJson.candidates?.[0]?.content?.parts?.[0]?.text || "{}";
+                  const cleanedText = rawText.replace(/```json/g, "").replace(/```/g, "").trim();
+                  let resultData: any = { has_contact: false, boxes: [], detected_texts: [] };
+                  try {
+                    resultData = JSON.parse(cleanedText);
+                  } catch (e) {
+                    console.error("Failed to parse JSON from Gemini:", cleanedText);
+                  }
+                  if (Array.isArray(resultData.banners) && (!Array.isArray(resultData.boxes) || resultData.boxes.length === 0)) {
+                    resultData.boxes = resultData.banners;
+                  }
+                  if (Array.isArray(resultData.boxes)) {
+                    resultData.boxes = resultData.boxes.map((b: any) => {
+                      let poly = b.polygon;
+                      if (Array.isArray(poly) && poly.length >= 4) {
+                        poly = poly.map((pt: any) => {
+                          if (Array.isArray(pt)) return [pt[0], pt[1]];
+                          if (typeof pt === 'object' && pt !== null) return [pt.x ?? pt.col ?? 0, pt.y ?? pt.row ?? 0];
+                          return [0, 0];
+                        });
+                      } else {
+                        poly = [
+                          [b.xmin, b.ymin],
+                          [b.xmax, b.ymin],
+                          [b.xmax, b.ymax],
+                          [b.xmin, b.ymax]
+                        ];
+                      }
+                      return {
+                        ymin: b.ymin,
+                        xmin: b.xmin,
+                        ymax: b.ymax,
+                        xmax: b.xmax,
+                        polygon: poly,
+                        label: b.label || 'contact_banner'
+                      };
+                    });
+                  }
+                  successfulResult = {
+                    success: true,
+                    modelUsed: model,
+                    data: resultData,
+                    triedErrors
+                  };
+                  break outerLoop;
+                }
+              } catch (retryErr) {
+                console.warn(`Retry without thinkingConfig failed for ${model}:`, retryErr);
+              }
+            }
+
             lastError = `Gemini API error ${response.status}: ${errorText}`;
             triedErrors.push({ model, keyIdx: kIdx + 1, status: response.status, error: errorText });
             if (response.status === 404 || response.status === 400 || response.status === 503 || response.status === 429) {
@@ -235,7 +314,7 @@ FORMAT OUTPUT (JSON MURNI SAJA, TANPA BACKTICKS/MARKDOWN):
   } catch (error: any) {
     return new Response(
       JSON.stringify({ success: false, error: error.message || "Unknown error", data: { has_contact: false, boxes: [] } }),
-      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      { status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
 });
