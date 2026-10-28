@@ -1,37 +1,35 @@
-# WALKTHROUGH - Peningkatan Sistem Chat Properti Standar Proptech
+# WALKTHROUGH - Peningkatan & Penyempurnaan Sistem Chat Properti Standar Proptech
 
-Dokumen ini merangkum penyelesaian implementasi peningkatan fitur obrolan properti (*Property In-App Chat System*) di RuangSinggah agar setara standar industri proptech modern (Mamikos & Airbnb) sekaligus melindungi ekosistem dari risiko transaksi luar (*leakage / bypass risk*).
+Dokumen ini merangkum penyelesaian implementasi peningkatan dan penyempurnaan tampilan fitur obrolan properti (*Property In-App Chat System*) di RuangSinggah.
 
 ---
 
-## 1. Ringkasan Perubahan
+## 1. Ringkasan Perbaikan & Penyempurnaan Tampilan
 
-| Komponen / File | Perubahan & Fitur Baru |
-| :--- | :--- |
-| **`functions/public/components/ChatWindow.tsx`** | 1. **Props Kontekstual Baru**: Menambahkan props `propertyPhoto`, `roomNumber`, `roomType`, `roomPrice`, `propertyId`, dan `onRentClick`.<br>2. **Kartu Kamar Tersemat (*Pinned Room Card*)**: Menampilkan thumbnail foto kamar, nama kost, tipe & nomor kamar, serta tarif sewa per bulan.<br>3. **Tombol Konversi Cepat (*Direct Rent Button*)**: Tombol oranye `[ Ajukan Sewa ]` di dalam kartu kamar tersemat yang langsung memicu alur sewa resmi aplikasi.<br>4. **Banner Jaminan Keamanan Transaksi**: `🛡️ Jaminan Keamanan Transaksi & Garansi Uang Kembali 100%: Bayar sewa resmi via sistem RuangSinggah.`<br>5. **Bilah Tanya Cepat (*Quick Reply Chips Bar*)**: Pilihan pertanyaan 1-klik instan di empty state dan di atas form chat bagi calon penyewa.<br>6. **Pure Vector SVG**: 100% menggunakan icon pure vector SVG dari `lucide-react` (`ShieldCheck`, `Home`, `Zap`, `Sparkles`, `Send`). |
-| **`functions/public/pages/KostDetail.tsx`** | Menyalurkan state konteks kamar yang sedang aktif (`selectedChildRoom`, `currentParentGroup`, `selectedRoom`, `activePrice`, `kost.images`) beserta handler aksi `onRentClick` ke dalam pemanggilan `<ChatWindow />`. |
-| **`functions/PROGRESS.md`** | Pencatatan entri riwayat keberlanjutan progres **#464** (Anti-Amnesia). |
+Berdasarkan hasil pengujian antarmuka riil pada properti *kost ryuta*, dilakukan penyempurnaan berikut:
+
+| Komponen / Masalah | Penyebab Teknis | Solusi yang Diterapkan |
+| :--- | :--- | :--- |
+| **Preview Foto Belum Muncul** | Properti foto di database kost tersimpan dengan key `kost.imageUrls`, sedangkan kode sebelumnya hanya membaca `kost.images`. | Rantai ekstraksi foto diperluas untuk memeriksa `selectedChildRoom.images` $\rightarrow$ `selectedRoom.images` $\rightarrow$ `kost.imageUrls` $\rightarrow$ `kost.images` $\rightarrow$ `displayedImages` $\rightarrow$ `propertyPhotos`. Ditambahkan pula fallback `onError` handler (`imgFailed`) yang anggun. |
+| **Banner Keamanan Terpotong (`sis...`)** | Container banner menggunakan class CSS Tailwind `truncate` (`white-space: nowrap; overflow: hidden; text-overflow: ellipsis;`). | Class `truncate` dihapus 100%. Diganti dengan responsive text wrapping (`leading-snug sm:leading-normal text-emerald-950 font-normal break-words`) sehingga seluruh kalimat garansi terbaca utuh di perangkat mobile maupun desktop. |
+| **Label Kamar Dobel (`Kamar Standard • Standard`)** | Pada kost non-managed, `roomNumber` dan `roomType` sama-sama bernilai `"Standard"`. | Diterapkan *smart room label formatter* (`displayRoomLabel`). Jika nama nomor kamar dan tipe kamar sama (atau belum memilih nomor kamar spesifik), teks otomatis dinormalkan menjadi **`Tipe Standard`**. |
 
 ---
 
 ## 2. Fitur Unggulan yang Telah Aktif
 
-### 🛡️ A. Perisai Anti-Bypass & Jaminan Keamanan Transaksi 100%
-- Mengatasi kekhawatiran transaksi ilegal di luar aplikasi dengan mengedukasi calon penyewa secara konsisten:
-  > **Jaminan Keamanan Transaksi & Garansi Uang Kembali 100%**: Bayar sewa resmi via sistem RuangSinggah.
-- Didukung oleh validasi anti-disintermediasi otomatis (`containsPhoneNumber`) yang memblokir pengiriman kontak nomor HP / WhatsApp secara langsung di dalam pesan.
+### 🖼️ A. Pinned Room Card & Thumbnail Foto Nyata
+- Thumbnail foto kamar/kost muncul dengan ukuran proporsional (`w-11 h-11 sm:w-12 sm:h-12 rounded-xl object-cover border border-white/15`).
+- Nama properti, badge tipe kamar yang bersih (`Tipe Standard`), tarif sewa per bulan (`Rp 1.000.000/bln`), serta tombol oranye **`[ ⚡ Ajukan Sewa ]`** yang langsung memicu alur sewa resmi.
 
-### 📌 B. Pinned Room Card dengan Tombol "Ajukan Sewa"
-- Pemilik dan calon penyewa tidak lagi bingung kamar mana yang sedang dibicarakan.
-- Jika calon penyewa sudah yakin saat berdiskusi di chat, mereka dapat langsung menekan tombol **`[ ⚡ Ajukan Sewa ]`** langsung dari dalam obrolan tanpa perlu menutup jendela obrolan secara manual.
+### 🛡️ B. Full Responsive Security Banner
+- Teks keamanan tampil utuh:
+  > **Jaminan Keamanan Transaksi & Garansi Uang Kembali 100%**: Selalu bayar sewa resmi via sistem RuangSinggah agar terhindar dari penipuan.
+- Mencegah calon penyewa dari risiko penipuan transaksi tunai di luar platform tanpa jaminan perlindungan.
+- Didukung deteksi regex kontak telepon/WhatsApp otomatis (`containsPhoneNumber`) dengan warning banner interaktif.
 
-### ⚡ C. Quick Reply Chips (Tanya Cepat 1-Klik)
-- Memudahkan calon penyewa memulai percakapan tanpa repot mengetik kalimat pembuka:
-  1. *"Apakah kamar ini masih tersedia?"*
-  2. *"Berapa biaya listrik & airnya?"*
-  3. *"Apakah ada jam malam atau aturan tamu?"*
-  4. *"Apakah bisa survey lokasi resmi via RuangSinggah?"*
-- Begitu chip diklik, pesan langsung terkirim secara optimistik dan tercatat di database obrolan secara instan.
+### ⚡ C. Quick Reply Chips Bar
+- Tombol pemantik tanya-jawab 1-klik yang memudahkan calon penghuni memulai obrolan tanpa mengetik manual.
 
 ---
 
@@ -42,7 +40,7 @@ Dokumen ini merangkum penyelesaian implementasi peningkatan fitur obrolan proper
    cmd.exe /c "npm --prefix functions/public run build"
    ```
    - **Status**: **Lulus 100% (Exit Code: 0)**
-   - **Hasil Bundle**: `ChatWindow-CJwVcs8O.js` (18.80 kB) & `KostDetail-CK7blzWk.js` (111.16 kB) berhasil di-bundle tanpa error TypeScript maupun Vite.
+   - **Hasil Bundle**: `ChatWindow-C21PNaKZ.js` (19.32 kB) & `KostDetail-C7md5UvD.js` (111.38 kB) berhasil dibundle tanpa error TypeScript maupun Vite (`✓ built in 51.43s`).
 
 2. **Uji Kompilasi Backend Functions (`functions`)**:
    ```powershell
@@ -53,14 +51,11 @@ Dokumen ini merangkum penyelesaian implementasi peningkatan fitur obrolan proper
 
 ---
 
-## 4. Panduan Verifikasi Pengujian oleh Pengguna (User Testing Guide)
+## 4. Panduan Verifikasi Pengguna (User Testing Guide)
 
-1. Buka salah satu halaman Detail Kost (misal kost reguler atau kost kelolaan KostManager).
-2. Pilih salah satu tipe kamar atau nomor kamar tersedia.
-3. Klik tombol **`Chat Pemilik`**.
-4. Perhatikan bagian atas jendela obrolan:
-   - Terlihat kartu kamar tersemat (*Pinned Room Card*) dengan thumbnail foto, nama kost, tipe/nomor kamar, dan tarif sewa.
-   - Terdapat tombol oranye **`Ajukan Sewa`**. Coba klik tombol ini, jendela chat akan tertutup dan modal pengajuan sewa resmi akan langsung terbuka.
-   - Terlihat banner hijau elegan bertuliskan *"Jaminan Keamanan Transaksi & Garansi Uang Kembali 100%"*.
-5. Pada bagian bawah (atau pada obrolan baru kosong), klik salah satu tombol **Tanya Cepat** (misal: *"Apakah kamar ini masih tersedia?"*).
-   - Pesan akan langsung terkirim secara otomatis ke riwayat obrolan dengan status ceklis pengiriman.
+1. Buka kembali halaman Detail Kost (seperti *kost ryuta*).
+2. Klik tombol **`Chat Pemilik`**.
+3. Verifikasi hasil visual:
+   - Preview foto thumbnail kost/kamar kini muncul jelas di samping nama kost.
+   - Badge kamar kini rapi bertuliskan **`Tipe Standard`** (tidak ada lagi duplikasi *"Kamar Standard • Standard"*).
+   - Teks banner hijau keamanan transaksi terbaca 100% lengkap tanpa ada kata yang terpotong elipsis (`sis...`).

@@ -3123,9 +3123,22 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
           (kost as any).kostManager?.status === 'ACTIVE' || 
           (kost as any).kostManager?.isActive
         );
-        const activePhoto = selectedChildRoom?.images?.[0] || selectedRoom?.images?.[0] || kost.images?.[0] || (kost as any).photos?.[0] || (kost as any).image_urls?.[0];
-        const activeRoomNumber = selectedChildRoom?.displayName || selectedChildRoom?.roomNumber || (kost.isManaged ? '' : (selectedRoom?.displayName || selectedRoom?.name));
-        const activeRoomType = currentParentGroup?.typeName || selectedRoom?.type || selectedRoom?.name;
+        const activePhoto = (() => {
+          if (selectedChildRoom?.images?.[0]) return selectedChildRoom.images[0];
+          if (selectedRoom?.images?.[0]) return selectedRoom.images[0];
+          if (kost.imageUrls && kost.imageUrls.length > 0) {
+            const first = kost.imageUrls[0];
+            return typeof first === 'string' ? first : (first as any)?.url || (first as any)?.thumbnail || '';
+          }
+          if (kost.images && kost.images.length > 0) return kost.images[0];
+          if ((kost as any).photos && (kost as any).photos.length > 0) return (kost as any).photos[0];
+          if ((kost as any).image_urls && (kost as any).image_urls.length > 0) return (kost as any).image_urls[0];
+          if (displayedImages && displayedImages.length > 0) return displayedImages[0];
+          if (propertyPhotos && propertyPhotos.length > 0) return propertyPhotos[0].url;
+          return '';
+        })();
+        const activeRoomNumber = selectedChildRoom?.roomNumber || (kost.isManaged ? (selectedChildRoom?.displayName || '') : '');
+        const activeRoomType = currentParentGroup?.typeName || selectedRoom?.type || selectedRoom?.name || 'Standard';
         const activeRoomPrice = activePrice || selectedRoom?.price || kost.price;
 
         return (

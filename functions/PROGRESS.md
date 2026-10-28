@@ -7,13 +7,18 @@
   1. Audit komprehensif sistem obrolan properti terhadap standar industri proptech modern (Mamikos, Airbnb, Tokopedia).
   2. Mengatasi kelemahan ruang obrolan: obrolan sebelumnya belum menyertakan konteks unit/tipe kamar yang ditanyakan (*room context blind*), empty state pasif tanpa pemantik tanya-jawab, serta minim edukasi proteksi transaksi.
   3. Mengakomodasi kekhawatiran pengguna terhadap risiko transaksi liar di luar aplikasi (*leakage / bypass risk*) dengan pendekatan perisai keamanan: menyematkan **"Jaminan Keamanan Transaksi & Garansi Uang Kembali 100%"** dan menyalurkan tombol konversi resmi langsung dari dalam obrolan.
+  4. Penyempurnaan Tampilan Visual (Berdasarkan Feedback Pengguna):
+     - Memperbaiki preview foto properti/kamar yang sebelumnya tidak muncul (muncul icon rumah) akibat perbedaan nama properti gambar database (`kost.imageUrls`).
+     - Menghapus class CSS `truncate` pada banner keamanan transaksi agar teks tidak terpotong elipsis (`sis...`) dan terbaca 100% utuh secara responsif (*multi-line wrapping*).
+     - Menormalkan label kamar (`displayRoomLabel`) sehingga kost non-managed tidak lagi menampilkan teks ganda seperti *"Kamar Standard • Standard"*, melainkan bersih sebagai *"Tipe Standard"*.
 - **Implementasi Solusi**:
   1. **Kartu Konteks Kamar Tersemat (Pinned Room Card)**:
-     - Menambahkan header kamar tersemat di bagian atas chat berisi foto thumbnail unit (`propertyPhoto`), nama kost (`propertyName`), tipe kamar (`roomType`), nomor unit (`roomNumber`), dan tarif sewa per bulan (`roomPrice`).
+     - Menambahkan header kamar tersemat di bagian atas chat berisi foto thumbnail unit (`propertyPhoto` dari `kost.imageUrls`, `selectedRoom.images`, atau `displayedImages`), nama kost (`propertyName`), tipe kamar terformat (`displayRoomLabel`), dan tarif sewa per bulan (`roomPrice`).
+     - Dilengkapi fallback `onError` handler pada gambar kamar (`imgFailed`) agar tampilan tetap rapi jika URL gambar tidak valid.
      - Tombol oranye interaktif `[ Ajukan Sewa ]` yang langsung memicu formulir sewa resmi (`onRentClick`), mengonversi minat obrolan menjadi transaksi resmi tanpa risiko disintermediasi.
-  2. **Banner Perlindungan Transaksi & Garansi Uang Kembali 100%**:
-     - Menyematkan badge keamanan di bawah header: `🛡️ Jaminan Keamanan Transaksi & Garansi Uang Kembali 100%: Bayar sewa resmi via sistem RuangSinggah.`
-     - Menanamkan rasa aman bagi calon penghuni serta mengeliminasi godaan transaksi tunai di luar platform tanpa jaminan perlindungan.
+  2. **Banner Perlindungan Transaksi & Garansi Uang Kembali 100% (Full Responsive)**:
+     - Menyematkan badge keamanan di bawah header tanpa `truncate`: `🛡️ Jaminan Keamanan Transaksi & Garansi Uang Kembali 100%: Selalu bayar sewa resmi via sistem RuangSinggah agar terhindar dari penipuan.`
+     - Menggunakan `leading-snug sm:leading-normal text-emerald-950 font-normal break-words` agar seluruh kalimat terbaca utuh di segala ukuran layar.
   3. **Bilah Tanya Cepat (Quick Reply Chips Bar) & Empty State Interaktif**:
      - Menyediakan tombol pemantik pertanyaan 1-klik (tanpa perlu mengetik manual):
        - *"Apakah kamar ini masih tersedia?"*
@@ -31,9 +36,9 @@
   - `IMPLEMENTATION_PLAN.md`
   - `WALKTHROUGH.md`
 - **Verifikasi**:
-  - Kompilasi frontend `npm --prefix functions/public run build` lulus 100% tanpa error (`✓ built in 49.84s`).
+  - Kompilasi frontend `npm --prefix functions/public run build` lulus 100% tanpa error (`✓ built in 51.43s`).
   - Kompilasi backend `npm --prefix functions run build` (`tsc`) lulus 100% tanpa error.
-  - Kartu kamar, banner garansi keamanan transaksi 100%, dan quick reply chips berfungsi mulus dan responsif.
+  - Foto thumbnail kamar/kost tampil jelas, banner keamanan transaksi terbaca utuh tanpa terpotong `sis...`, dan label kamar bersih tanpa duplikasi.
 
 ### 463. Redesain Kartu Minimalis Kampus & Fasilitas Publik Terdekat Tanpa Truncate (`KostDetail.tsx`) (Oktober 2026)
 - **Permintaan & Kebutuhan Pengguna**:

@@ -47,11 +47,32 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
   const [loading, setLoading] = useState(true);
   const [sendingMessages, setSendingMessages] = useState<Set<string>>(new Set());
   const [warningMessage, setWarningMessage] = useState<string | null>(null);
+  const [imgFailed, setImgFailed] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   // Identitas pengirim saat ini di tingkat komponen (diakses oleh loadMessages, useEffect, dan handleSendMessage)
   const currentId = currentUser?.uid || currentUser?.id || '';
   const currentSenderType: 'user' | 'owner' = currentId === session.user_id ? 'user' : 'owner';
+
+  // Smart Room Label Formatter: Membersihkan duplikasi kata (misal jika nomor kamar & tipe kamar sama-sama "Standard")
+  const displayRoomLabel = (() => {
+    const cleanNum = roomNumber ? roomNumber.replace(/^kamar\s+/i, '').trim() : '';
+    const cleanType = roomType ? roomType.replace(/^tipe\s+/i, '').trim() : '';
+    
+    if (cleanNum && cleanType) {
+      if (cleanNum.toLowerCase() === cleanType.toLowerCase()) {
+        return `Tipe ${cleanType}`;
+      }
+      return `Kamar ${cleanNum} • Tipe ${cleanType}`;
+    }
+    if (cleanNum) {
+      return `Kamar ${cleanNum}`;
+    }
+    if (cleanType) {
+      return `Tipe ${cleanType}`;
+    }
+    return '';
+  })();
 
   useEffect(() => {
     loadMessages();
@@ -241,10 +262,10 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
         </div>
 
         {/* Trust & Safety Banner */}
-        <div className="bg-emerald-500/10 border-b border-emerald-500/20 px-4 py-2 flex items-center gap-2 text-emerald-800 text-[11px] font-semibold shrink-0">
-          <ShieldCheck size={15} className="text-emerald-600 shrink-0" />
-          <div className="flex-1 truncate">
-            <span className="font-extrabold text-emerald-950">Jaminan Keamanan Transaksi & Garansi Uang Kembali 100%</span>: Bayar sewa resmi via sistem RuangSinggah.
+        <div className="bg-emerald-500/10 border-b border-emerald-500/20 px-4 py-2 sm:py-2.5 flex items-start sm:items-center gap-2.5 text-emerald-800 text-[11px] shrink-0">
+          <ShieldCheck size={16} className="text-emerald-600 shrink-0 mt-0.5 sm:mt-0" />
+          <div className="flex-1 text-[11px] leading-snug sm:leading-normal text-emerald-950 font-normal break-words">
+            <span className="font-extrabold text-emerald-950">Jaminan Keamanan Transaksi & Garansi Uang Kembali 100%</span>: Selalu bayar sewa resmi via sistem RuangSinggah agar terhindar dari penipuan.
           </div>
         </div>
 
@@ -402,14 +423,15 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
         </div>
 
         {/* Pinned Room Card (Konteks Kamar Tersemat) */}
-        {(propertyName || roomType || (typeof roomPrice === 'number' && roomPrice > 0)) && (
+        {(propertyName || displayRoomLabel || (typeof roomPrice === 'number' && roomPrice > 0)) && (
           <div className="bg-slate-900/95 border-t border-white/10 px-5 py-3 text-white flex items-center justify-between gap-3 shrink-0 shadow-sm backdrop-blur-sm">
             <div className="flex items-center gap-3 min-w-0 flex-1">
-              {propertyPhoto ? (
+              {propertyPhoto && !imgFailed ? (
                 <img
                   src={propertyPhoto}
                   alt={propertyName || 'Kamar Kost'}
-                  className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl object-cover shrink-0 border border-white/15 shadow-xs"
+                  onError={() => setImgFailed(true)}
+                  className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl object-cover shrink-0 border border-white/15 shadow-xs bg-slate-800"
                 />
               ) : (
                 <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl bg-orange-500/20 border border-orange-500/30 flex items-center justify-center shrink-0 text-orange-400">
@@ -421,9 +443,9 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
                   {propertyName || 'Kamar Kost'}
                 </h4>
                 <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
-                  {(roomNumber || roomType) && (
-                    <span className="text-[10px] font-bold text-orange-300 bg-orange-500/20 px-2 py-0.5 rounded-md border border-orange-500/30 truncate max-w-[160px] sm:max-w-[220px]">
-                      {roomNumber ? `Kamar ${roomNumber} • ${roomType || ''}` : roomType}
+                  {displayRoomLabel && (
+                    <span className="text-[10px] font-bold text-orange-300 bg-orange-500/20 px-2 py-0.5 rounded-md border border-orange-500/30 truncate max-w-[170px] sm:max-w-[240px]">
+                      {displayRoomLabel}
                     </span>
                   )}
                   {typeof roomPrice === 'number' && roomPrice > 0 && (
@@ -450,10 +472,10 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
         )}
 
         {/* Trust & Safety Banner: Jaminan Keamanan Transaksi & Garansi Uang Kembali 100% */}
-        <div className="bg-emerald-500/10 border-b border-emerald-500/20 px-4 py-2 flex items-center gap-2 text-emerald-800 text-[11px] font-semibold shrink-0">
-          <ShieldCheck size={16} className="text-emerald-600 shrink-0" />
-          <div className="flex-1 truncate">
-            <span className="font-extrabold text-emerald-950">Jaminan Keamanan Transaksi & Garansi Uang Kembali 100%</span>: Bayar sewa resmi via sistem RuangSinggah.
+        <div className="bg-emerald-500/10 border-b border-emerald-500/20 px-4 py-2 sm:py-2.5 flex items-start sm:items-center gap-2.5 text-emerald-800 text-[11px] shrink-0">
+          <ShieldCheck size={16} className="text-emerald-600 shrink-0 mt-0.5 sm:mt-0" />
+          <div className="flex-1 text-[11px] leading-snug sm:leading-normal text-emerald-950 font-normal break-words">
+            <span className="font-extrabold text-emerald-950">Jaminan Keamanan Transaksi & Garansi Uang Kembali 100%</span>: Selalu bayar sewa resmi via sistem RuangSinggah agar terhindar dari penipuan.
           </div>
         </div>
 
