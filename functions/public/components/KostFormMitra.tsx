@@ -14,7 +14,7 @@ import {
     Plus, Trash2, Check, AlertCircle, Loader2, Upload, Image as ImageIcon,
     Phone, BookOpen, DollarSign, Search, Navigation, ShieldCheck, User, Users, Maximize2,
     Crosshair, CheckCircle2, Sparkles, LocateFixed, FileText, RotateCcw, Save, Droplets, Bed, Edit3, ShieldAlert,
-    Pencil, Layers, Info, Zap
+    Pencil, Layers, Info, Zap, CookingPot
 } from 'lucide-react';
 
 interface KostFormMitraProps {
@@ -83,6 +83,10 @@ interface PublicPhotoCategoryDef {
     label: string;
     desc: string;
     required?: boolean;
+    isRoom?: boolean;
+    roomName?: string;
+    isCustom?: boolean;
+    subCategoryName?: string;
 }
 
 const PUBLIC_PHOTO_CATEGORIES: PublicPhotoCategoryDef[] = [
@@ -2053,7 +2057,8 @@ const getDraftStorageKey = (userId?: string) => `ruangsinggah_kost_form_draft_${
 // ── HELPER KATEGORI FOTO AKTIF (Digunakan untuk Render Langkah 5 & Validasi Ketat) ──
 const computeActivePhotoCategories = (
     currentForm: typeof initialForm,
-    userCustomCats: string[] = []
+    userCustomCats: string[] = [],
+    userCustomRoomCats: Record<string, string[]> = {}
 ): PublicPhotoCategoryDef[] => {
     // 1. Kategori Area Umum Pokok (Selalu Ada)
     const categories: PublicPhotoCategoryDef[] = [
@@ -2138,14 +2143,14 @@ const computeActivePhotoCategories = (
     const customGeneralFacilities = currentFacilities.filter(f => !knownStandardFacilities.has(f.toLowerCase().trim()));
     customGeneralFacilities.forEach(cg => {
         if (!categories.some(c => c.id.toLowerCase() === cg.toLowerCase())) {
-            categories.push({ id: cg, label: cg, desc: `Dokumentasi fasilitas ${cg}` });
+            categories.push({ id: cg, label: cg, desc: `Dokumentasi fasilitas ${cg}`, isCustom: true });
         }
     });
 
     // Tambahkan kategori kustom tambahan dari user jika ada
     userCustomCats.forEach(cc => {
         if (!categories.some(c => c.id.toLowerCase() === cc.toLowerCase())) {
-            categories.push({ id: cc, label: cc, desc: `Foto area ${cc} properti` });
+            categories.push({ id: cc, label: cc, desc: `Foto area ${cc} properti`, isCustom: true });
         }
     });
 
@@ -2155,7 +2160,10 @@ const computeActivePhotoCategories = (
         categories.push({
             id: `Kamar: ${roomName}`,
             label: `Kamar: ${roomName}`,
-            desc: `Foto interior tempat tidur & suasana ${roomName}`
+            desc: `Foto interior tempat tidur & suasana ${roomName}`,
+            required: true,
+            isRoom: true,
+            roomName: roomName
         });
 
         // Cek jika tipe kamar ini punya kamar mandi dalam
@@ -2164,7 +2172,9 @@ const computeActivePhotoCategories = (
             categories.push({
                 id: `Kamar Mandi: ${roomName}`,
                 label: `KM Dalam: ${roomName}`,
-                desc: `Foto kamar mandi dalam untuk ${roomName}`
+                desc: `Foto kamar mandi dalam untuk ${roomName}`,
+                isRoom: true,
+                roomName: roomName
             });
         }
 
@@ -2174,9 +2184,28 @@ const computeActivePhotoCategories = (
             categories.push({
                 id: `Dapur Dalam: ${roomName}`,
                 label: `Dapur Dalam: ${roomName}`,
-                desc: `Foto area dapur dalam untuk ${roomName}`
+                desc: `Foto area dapur dalam untuk ${roomName}`,
+                isRoom: true,
+                roomName: roomName
             });
         }
+
+        // Sub-Kategori Kustom khusus tipe kamar ini
+        const roomCustoms = userCustomRoomCats[roomName] || [];
+        roomCustoms.forEach(subCat => {
+            const catId = `Kamar: ${roomName} - ${subCat}`;
+            if (!categories.some(c => c.id.toLowerCase() === catId.toLowerCase())) {
+                categories.push({
+                    id: catId,
+                    label: `${subCat} (${roomName})`,
+                    desc: `Foto ${subCat} khusus untuk ${roomName}`,
+                    isRoom: true,
+                    roomName: roomName,
+                    isCustom: true,
+                    subCategoryName: subCat
+                });
+            }
+        });
     });
 
     return categories;
@@ -2364,6 +2393,17 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
     });
 
     const [customCategories, setCustomCategories] = useState<string[]>(() => {
+        if (!freshStart) {
+            try {
+                const savedDraft = localStorage.getItem(storageKey);
+                if (savedDraft) {
+                    const parsed = JSON.parse(savedDraft);
+                    if (Array.isArray(parsed.customCategories)) {
+                        return parsed.customCategories;
+                    }
+                }
+            } catch {}
+        }
         if (editingKost?.photoCategories && Array.isArray(editingKost.photoCategories)) {
             const knownStandardIds = new Set([
                 'bangunan depan', 'fasad', 'koridor', 'area parkir', 'parkir', 'dapur bersama', 
@@ -2382,7 +2422,80 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
         }
         return [];
     });
+
+    const [customRoomCategories, setCustomRoomCategories] = useState<Record<string, string[]>>(() => {
+        if (!freshStart) {
+            try {
+                const savedDraft = localStorage.getItem(storageKey);
+                if (savedDraft) {
+                    const parsed = JSON.parse(savedDraft);
+                    if (parsed.customRoomCategories && typeof parsed.customRoomCategories === 'object') {
+                        return parsed.customRoomCategories;
+                    }
+                }
+            } catch {}
+        }
+        const result: Record<string, string[]> = {};
+        if (editingKost?.photoCategories && Array.isArray(editingKost.photoCategories)) {
+            editingKost.photoCategories.forEach(cat => {
+                if (!cat) return;
+                const match = cat.match(/^Kamar:\s*([^-]+?)\s*-\s*(.+)$/i);
+                if (match) {
+                    const rName = match[1].trim();
+                    const subCat = match[2].trim();
+                    if (!result[rName]) result[rName] = [];
+                    if (!result[rName].includes(subCat)) {
+                        result[rName].push(subCat);
+                    }
+                }
+            });
+        }
+        return result;
+    });
+
+    const [roomSubCategoryInputs, setRoomSubCategoryInputs] = useState<Record<string, string>>({});
     const [newCategoryInput, setNewCategoryInput] = useState('');
+
+    // ── Helper Manajemen Kategori Kustom (Fasilitas Umum & Sub-Kategori Kamar) ──
+    const handleAddGeneralCategory = () => {
+        const trimmed = newCategoryInput.trim();
+        if (!trimmed) return;
+        const allActive = computeActivePhotoCategories(form, customCategories, customRoomCategories);
+        if (!customCategories.includes(trimmed) && !allActive.some(c => c.id.toLowerCase() === trimmed.toLowerCase())) {
+            setCustomCategories(prev => [...prev, trimmed]);
+        }
+        setNewCategoryInput('');
+    };
+
+    const handleRemoveGeneralCategory = (catName: string) => {
+        setCustomCategories(prev => prev.filter(c => c !== catName));
+        setNewPhotoItems(prev => prev.filter(p => p.category !== catName));
+    };
+
+    const handleAddRoomSubCategory = (roomName: string) => {
+        const inputVal = (roomSubCategoryInputs[roomName] || '').trim();
+        if (!inputVal) return;
+        const existingForRoom = customRoomCategories[roomName] || [];
+        if (!existingForRoom.some(sc => sc.toLowerCase() === inputVal.toLowerCase())) {
+            setCustomRoomCategories(prev => ({
+                ...prev,
+                [roomName]: [...(prev[roomName] || []), inputVal]
+            }));
+        }
+        setRoomSubCategoryInputs(prev => ({
+            ...prev,
+            [roomName]: ''
+        }));
+    };
+
+    const handleRemoveRoomSubCategory = (roomName: string, subCat: string) => {
+        const catId = `Kamar: ${roomName} - ${subCat}`;
+        setCustomRoomCategories(prev => ({
+            ...prev,
+            [roomName]: (prev[roomName] || []).filter(c => c !== subCat)
+        }));
+        setNewPhotoItems(prev => prev.filter(p => p.category !== catId));
+    };
     const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState('');
     const [tempRule, setTempRule] = useState('');
@@ -2466,12 +2579,16 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
     const mgmtRef = useRef(managementOption);
     const photosRef = useRef(newPhotoItems);
     const isAdditionalFeeActiveRef = useRef(isAdditionalFeeActive);
+    const customCategoriesRef = useRef(customCategories);
+    const customRoomCategoriesRef = useRef(customRoomCategories);
 
     useEffect(() => { formRef.current = form; }, [form]);
     useEffect(() => { stepRef.current = step; }, [step]);
     useEffect(() => { mgmtRef.current = managementOption; }, [managementOption]);
     useEffect(() => { photosRef.current = newPhotoItems; }, [newPhotoItems]);
     useEffect(() => { isAdditionalFeeActiveRef.current = isAdditionalFeeActive; }, [isAdditionalFeeActive]);
+    useEffect(() => { customCategoriesRef.current = customCategories; }, [customCategories]);
+    useEffect(() => { customRoomCategoriesRef.current = customRoomCategories; }, [customRoomCategories]);
 
     // Instant save helper to guarantee reliable persistence without freshStart blocking
     const saveDraftDirect = useCallback((
@@ -2501,6 +2618,8 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                     managementOption: currentMgmt,
                     isEdit: isEditing,
                     isAdditionalFeeActive: additionalFeeActiveState !== undefined ? additionalFeeActiveState : isAdditionalFeeActiveRef.current,
+                    customCategories: customCategoriesRef.current,
+                    customRoomCategories: customRoomCategoriesRef.current,
                     draftPhotos: photos.map(p => ({
                         id: p.id,
                         preview: p.preview,
@@ -2532,7 +2651,7 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
         }, 400);
 
         return () => clearTimeout(timeoutId);
-    }, [form, step, managementOption, newPhotoItems, isAdditionalFeeActive, saveDraftDirect]);
+    }, [form, step, managementOption, newPhotoItems, isAdditionalFeeActive, customCategories, customRoomCategories, saveDraftDirect]);
 
     // Save draft instantly if user leaves, reloads (F5), or closes tab
     useEffect(() => {
@@ -3492,7 +3611,7 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
         const fileArr = Array.from(files);
         if (fileArr.length === 0) return;
 
-        const isCustom = customCategories.includes(category);
+        const isCustom = customCategories.includes(category) || category.includes(' - ');
         const targetCategory = category;
 
         // 1. Optimistic Instant Preview (< 20ms): Tampilkan seluruh foto langsung ke antarmuka pengguna
@@ -3612,7 +3731,7 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                 return;
             }
 
-            const isCustom = customCategories.includes(item.category || '');
+            const isCustom = customCategories.includes(item.category || '') || (item.category || '').includes(' - ');
             let isBlurred = false;
             const webpFile = await processPhotoWithAutoSensor(
                 sourceFile, 
@@ -4126,7 +4245,7 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
 
         // ── STEP 4 (Langkah 5: Dokumentasi Foto) ──
         if (currentStep === 4) {
-            const activeCategories = computeActivePhotoCategories(form, customCategories);
+            const activeCategories = computeActivePhotoCategories(form, customCategories, customRoomCategories);
 
             const sourceImages = (form.photosMeta && form.photosMeta.length > 0)
                 ? form.photosMeta
@@ -4162,10 +4281,12 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
             }).filter(p => !!p.src);
 
             for (const cat of activeCategories) {
-                const existingCount = existingWithCats.filter(p => p.cat === cat.id).length;
-                const newCount = newPhotoItems.filter(p => p.category === cat.id).length;
-                if (existingCount + newCount < 1) {
-                    return `Kategori foto '${cat.label}' wajib diunggah minimal 1 foto sebelum melanjutkan.`;
+                if (cat.required) {
+                    const existingCount = existingWithCats.filter(p => p.cat === cat.id).length;
+                    const newCount = newPhotoItems.filter(p => p.category === cat.id).length;
+                    if (existingCount + newCount < 1) {
+                        return `Kategori foto '${cat.label}' wajib diunggah minimal 1 foto sebelum melanjutkan.`;
+                    }
                 }
             }
 
@@ -5814,7 +5935,7 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
             // ── STEP 4 (Langkah 5): Foto Properti & Kamar Dinamis ────────────────
             case 4: {
                 // Kategori Foto Aktif Terpadu (Area Umum & Dinamis Reaksi Tipe Kamar / Fasilitas Terpilih)
-                const allActiveCategories = computeActivePhotoCategories(form, customCategories);
+                const allActiveCategories = computeActivePhotoCategories(form, customCategories, customRoomCategories);
                 const dynamicGeneralCategories = allActiveCategories.filter(c => !c.id.startsWith('Kamar: ') && !c.id.startsWith('Kamar Mandi: ') && !c.id.startsWith('Dapur Dalam: '));
                 const dynamicRoomCategories = allActiveCategories.filter(c => c.id.startsWith('Kamar: ') || c.id.startsWith('Kamar Mandi: ') || c.id.startsWith('Dapur Dalam: '));
 
@@ -5960,15 +6081,27 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                                                 </div>
                                             </div>
 
-                                            <span className={`text-[10px] font-black px-2.5 py-1 rounded-full uppercase tracking-wider ${
-                                                catPhotosCount > 0 
-                                                    ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' 
-                                                    : isFront 
-                                                        ? 'bg-amber-100 text-amber-800' 
-                                                        : 'bg-gray-100 text-gray-400'
-                                            }`}>
-                                                {catPhotosCount} Foto
-                                            </span>
+                                            <div className="flex items-center gap-1.5">
+                                                <span className={`text-[10px] font-black px-2.5 py-1 rounded-full uppercase tracking-wider ${
+                                                    catPhotosCount > 0 
+                                                        ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' 
+                                                        : isFront 
+                                                            ? 'bg-amber-100 text-amber-800' 
+                                                            : 'bg-gray-100 text-gray-400'
+                                                }`}>
+                                                    {catPhotosCount} Foto
+                                                </span>
+                                                {customCategories.includes(cat.id) && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleRemoveGeneralCategory(cat.id)}
+                                                        className="w-6 h-6 rounded-full bg-red-50 hover:bg-red-100 text-red-600 flex items-center justify-center text-xs font-bold transition-all cursor-pointer shadow-xs"
+                                                        title={`Hapus kategori kustom ${cat.label}`}
+                                                    >
+                                                        <X size={12} />
+                                                    </button>
+                                                )}
+                                            </div>
                                         </div>
 
                                         {/* Grid Foto Kategori Ini */}
@@ -6116,231 +6249,322 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                                     </div>
                                 );
                             })}
+
+                            {/* Tambah Kategori Kustom Fasilitas Umum */}
+                            <div className="bg-orange-50/40 p-3.5 sm:p-4 rounded-3xl border border-dashed border-orange-200/90 flex flex-col sm:flex-row gap-2.5 items-center">
+                                <div className="w-8 h-8 rounded-full bg-orange-100 text-orange-600 flex items-center justify-center shrink-0">
+                                    <Plus size={16} />
+                                </div>
+                                <input 
+                                    type="text"
+                                    placeholder="Tambah kategori fasilitas umum (Cth: Rooftop, Kolam Renang, Balkon Bersama, Taman)..."
+                                    value={newCategoryInput}
+                                    onChange={e => setNewCategoryInput(e.target.value)}
+                                    onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleAddGeneralCategory(); } }}
+                                    className="w-full h-10 px-3.5 border border-gray-300 rounded-xl text-xs bg-white text-gray-800 outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500 font-medium"
+                                />
+                                <button 
+                                    type="button" 
+                                    onClick={handleAddGeneralCategory}
+                                    className="w-full sm:w-auto h-10 px-4 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-xs font-black uppercase tracking-wider shrink-0 transition-all cursor-pointer shadow-xs whitespace-nowrap"
+                                >
+                                    + Kategori Umum
+                                </button>
+                            </div>
                         </div>
 
-                        {/* SECTION B: Foto per Tipe Kamar Dinamis */}
-                        {dynamicRoomCategories.length > 0 && (
-                            <div className="pt-4 border-t border-gray-200 space-y-4">
+                        {/* SECTION B: Foto per Tipe Kamar Dinamis (Terkelompok Rapi Sesuai Standar Industri) */}
+                        {(form.roomTypes || []).length > 0 && (
+                            <div className="pt-6 border-t border-gray-200 space-y-6">
                                 <div className="flex items-center gap-2">
                                     <Bed className="w-4 h-4 text-orange-600" />
-                                    <h4 className="text-xs font-black text-gray-900 uppercase tracking-wider">Foto Tipe Kamar Tidur &amp; Kamar Mandi Dalam</h4>
+                                    <h4 className="text-xs font-black text-gray-900 uppercase tracking-wider">
+                                        Dokumentasi Foto Khusus per Tipe Kamar
+                                    </h4>
                                 </div>
 
-                                {dynamicRoomCategories.map(cat => {
-                                    const currentCatExisting = existingWithCats.filter(p => p.cat === cat.id);
-                                    const currentCatNew = newPhotoItems.filter(p => p.category === cat.id);
-                                    const catPhotosCount = currentCatExisting.length + currentCatNew.length;
-                                    const isBathroom = cat.id.startsWith('Kamar Mandi:');
+                                {(form.roomTypes || []).map((room, ri) => {
+                                    const roomName = room.name || `Tipe Kamar ${ri + 1}`;
+                                    const roomCategories = dynamicRoomCategories.filter(c => 
+                                        c.roomName === roomName || 
+                                        c.id === `Kamar: ${roomName}` || 
+                                        c.id === `Kamar Mandi: ${roomName}` || 
+                                        c.id === `Dapur Dalam: ${roomName}` || 
+                                        c.id.startsWith(`Kamar: ${roomName} - `)
+                                    );
+
+                                    const roomMonthlyPrice = room.pricing?.find(p => p.period === 'bulanan')?.price || room.price;
 
                                     return (
-                                        <div 
-                                            key={cat.id} 
-                                            className={`p-4 sm:p-5 rounded-3xl border transition-all ${
-                                                catPhotosCount > 0 
-                                                    ? 'bg-white border-orange-200 shadow-xs' 
-                                                    : 'bg-white border-gray-200/80'
-                                            }`}
-                                        >
-                                            <div className="flex flex-wrap items-start justify-between gap-2 mb-3">
-                                                <div className="flex items-start gap-2.5">
-                                                    <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${
-                                                        isBathroom ? 'bg-blue-100 text-blue-600' : 'bg-orange-100 text-orange-600'
-                                                    }`}>
-                                                        {isBathroom ? <Droplets size={16} /> : <Bed size={16} />}
+                                        <div key={`room-group-${ri}`} className="bg-slate-50/60 p-4 sm:p-5 rounded-3xl border border-gray-200/90 space-y-4">
+                                            {/* Header Unit Tipe Kamar */}
+                                            <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-gray-200/70">
+                                                <div className="flex items-center gap-2.5">
+                                                    <div className="w-8 h-8 rounded-xl bg-orange-500 text-white flex items-center justify-center font-bold text-xs shadow-xs">
+                                                        <Bed size={16} />
                                                     </div>
                                                     <div>
-                                                        <div className="flex flex-wrap items-center gap-2">
-                                                            <span className="text-xs sm:text-sm font-black text-gray-900">
-                                                                {cat.label}
-                                                            </span>
-                                                        </div>
-                                                        <p className="text-[11px] text-gray-500 mt-0.5">
-                                                            {cat.desc}
+                                                        <h5 className="text-sm font-black text-gray-900">
+                                                            {roomName}
+                                                        </h5>
+                                                        <p className="text-[11px] text-gray-500 font-medium">
+                                                            {room.size ? `${room.size}` : 'Ukuran standar'}
+                                                            {roomMonthlyPrice ? ` • Rp ${Number(roomMonthlyPrice).toLocaleString('id-ID')}/bln` : ''}
                                                         </p>
                                                     </div>
                                                 </div>
-
-                                                <span className={`text-[10px] font-black px-2.5 py-1 rounded-full uppercase tracking-wider ${
-                                                    catPhotosCount > 0 
-                                                        ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' 
-                                                        : 'bg-gray-100 text-gray-400'
-                                                }`}>
-                                                    {catPhotosCount} Foto
+                                                <span className="text-[10px] font-black px-2.5 py-1 rounded-full bg-orange-100 text-orange-800 uppercase tracking-wider">
+                                                    Tipe #{ri + 1}
                                                 </span>
                                             </div>
 
-                                            {/* Grid Foto Kategori Kamar Ini */}
-                                            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-                                                {currentCatExisting.map((p, idx) => (
-                                                    <div key={`existing-${idx}`} className="aspect-square rounded-2xl overflow-hidden border border-gray-200 relative group bg-gray-50">
-                                                        <img src={p.src} alt={cat.label} className="w-full h-full object-cover" />
-                                                        <div className="absolute top-1.5 right-1.5 flex items-center gap-1">
-                                                            <button 
-                                                                type="button" 
-                                                                onClick={() => setEditingCaptionTarget({
-                                                                    id: `existing-${idx}`,
-                                                                    isNew: false,
-                                                                    caption: p.caption || cat.label,
-                                                                    catLabel: cat.label,
-                                                                    raw: p.raw
-                                                                })}
-                                                                className="bg-gray-900/80 hover:bg-orange-600 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs shadow-md transition-all active:scale-90"
-                                                                title="Beri Keterangan / Caption Foto"
-                                                            >
-                                                                <Edit3 size={11} />
-                                                            </button>
-                                                            <button 
-                                                                type="button" 
-                                                                onClick={() => removeExistingImage(p.raw)}
-                                                                className="absolute top-1.5 right-1.5 bg-red-600/90 hover:bg-red-700 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs font-black shadow-md transition-all active:scale-90"
-                                                                title="Hapus foto ini"
-                                                            >
-                                                                &times;
-                                                            </button>
-                                                        </div>
-                                                        <div className="absolute bottom-0 inset-x-0 bg-black/75 backdrop-blur-xs py-1 px-1.5 text-[9px] text-white text-center">
-                                                            <p className="font-bold truncate">{p.caption || cat.label}</p>
-                                                        </div>
-                                                    </div>
-                                                ))}
+                                            {/* Daftar Kategori Foto untuk Tipe Kamar Ini */}
+                                            <div className="space-y-4">
+                                                {roomCategories.map(cat => {
+                                                    const currentCatExisting = existingWithCats.filter(p => p.cat === cat.id);
+                                                    const currentCatNew = newPhotoItems.filter(p => p.category === cat.id);
+                                                    const catPhotosCount = currentCatExisting.length + currentCatNew.length;
+                                                    const isBathroom = cat.id.startsWith('Kamar Mandi:');
+                                                    const isKitchen = cat.id.startsWith('Dapur Dalam:');
+                                                    const isCustomSub = Boolean(cat.isCustom || cat.subCategoryName);
 
-                                                {currentCatNew.map((item, itemIdx) => (
-                                                    <div key={item.id} className="aspect-square rounded-2xl border-2 border-orange-400 relative group bg-gray-50 shadow-xs animate-in zoom-in-95 duration-200 overflow-hidden">
-                                                        <img src={item.preview} alt={cat.label} className="w-full h-full object-cover" />
-                                                        
-                                                        {/* Full Overlay when processing */}
-                                                        {item.isProcessing && (
-                                                            <div className="absolute inset-0 bg-slate-950/75 backdrop-blur-xs flex flex-col items-center justify-center gap-1.5 p-2 text-center z-20 animate-in fade-in duration-200">
-                                                                <Loader2 className="w-6 h-6 text-orange-400 animate-spin" />
-                                                                <p className="text-[10px] font-bold text-white tracking-wide leading-tight">
-                                                                    Sedang diproses...
-                                                                </p>
-                                                                <span className="text-[8px] text-slate-300">Mohon tunggu sebentar</span>
-                                                            </div>
-                                                        )}
+                                                    return (
+                                                        <div 
+                                                            key={cat.id} 
+                                                            className={`p-4 rounded-2xl border transition-all ${
+                                                                catPhotosCount > 0 
+                                                                    ? 'bg-white border-orange-200 shadow-xs' 
+                                                                    : cat.required 
+                                                                        ? 'bg-white border-dashed border-orange-300' 
+                                                                        : 'bg-white border-gray-200/80'
+                                                            }`}
+                                                        >
+                                                            <div className="flex flex-wrap items-start justify-between gap-2 mb-3">
+                                                                <div className="flex items-start gap-2.5">
+                                                                    <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${
+                                                                        isBathroom ? 'bg-blue-100 text-blue-600' : 
+                                                                        isKitchen ? 'bg-amber-100 text-amber-600' : 
+                                                                        isCustomSub ? 'bg-purple-100 text-purple-600' :
+                                                                        'bg-orange-100 text-orange-600'
+                                                                    }`}>
+                                                                        {isBathroom ? <Droplets size={16} /> : 
+                                                                         isKitchen ? <CookingPot size={16} /> : 
+                                                                         isCustomSub ? <Sparkles size={16} /> :
+                                                                         <Bed size={16} />}
+                                                                    </div>
+                                                                    <div>
+                                                                        <div className="flex flex-wrap items-center gap-2">
+                                                                            <span className="text-xs sm:text-sm font-black text-gray-900">
+                                                                                {cat.label}
+                                                                            </span>
+                                                                            {cat.required && (
+                                                                                <span className="text-[9px] font-black text-orange-600 bg-orange-50 px-1.5 py-0.5 rounded border border-orange-200 uppercase">
+                                                                                    Wajib
+                                                                                </span>
+                                                                            )}
+                                                                        </div>
+                                                                        <p className="text-[11px] text-gray-500 mt-0.5">
+                                                                            {cat.desc}
+                                                                        </p>
+                                                                    </div>
+                                                                </div>
 
-                                                        {/* Status Badges */}
-                                                        {!item.isProcessing && (
-                                                            item.isBlurred ? (
-                                                                <span className="absolute top-1.5 left-1.5 bg-slate-900/90 border border-orange-500/50 text-white text-[9px] font-black px-2 py-0.5 rounded-full shadow-md uppercase tracking-wider flex items-center gap-1 backdrop-blur-xs" title="Spanduk kontak telah disamarkan secara otomatis demi alasan keamanan. Klik info untuk penjelasan lengkap.">
-                                                                    <span className="w-1.5 h-1.5 rounded-full bg-orange-500 animate-pulse"></span>
-                                                                    <span>ruangsinggah.id</span>
-                                                                    <button
-                                                                        type="button"
-                                                                        onClick={(e) => {
-                                                                            e.stopPropagation();
-                                                                            setShowSecurityExplanationModal(true);
-                                                                        }}
-                                                                        className="ml-0.5 text-orange-300 hover:text-white transition-colors cursor-pointer"
-                                                                        title="Kenapa foto ini disensor? Klik untuk membaca alasan keamanan"
-                                                                    >
-                                                                        <Info size={10} />
-                                                                    </button>
-                                                                </span>
-                                                            ) : (
-                                                                <span className="absolute top-1.5 left-1.5 bg-emerald-600 text-white text-[8px] font-black px-1.5 py-0.5 rounded-md shadow-xs uppercase tracking-wider">
-                                                                    Baru
-                                                                </span>
-                                                            )
-                                                        )}
-
-                                                        {/* Action Buttons */}
-                                                        <div className="absolute top-1.5 right-1.5 flex items-center gap-1 z-10">
-                                                            {!item.isBlurred && !item.isProcessing && isBannerProneCategory(cat.id, customCategories.includes(cat.id)) && (
-                                                                <button 
-                                                                    type="button" 
-                                                                    onClick={() => handleReScanBanner(item)}
-                                                                    disabled={reScanningId === item.id}
-                                                                    className="bg-amber-600/90 hover:bg-amber-700 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs shadow-md transition-all active:scale-90 disabled:opacity-50"
-                                                                    title="Pindai Spanduk / Kontak dengan AI"
-                                                                >
-                                                                    {reScanningId === item.id ? (
-                                                                        <Loader2 size={11} className="animate-spin" />
-                                                                    ) : (
-                                                                        <ShieldAlert size={11} />
+                                                                <div className="flex items-center gap-1.5">
+                                                                    <span className={`text-[10px] font-black px-2.5 py-1 rounded-full uppercase tracking-wider ${
+                                                                        catPhotosCount > 0 
+                                                                            ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' 
+                                                                            : cat.required 
+                                                                                ? 'bg-amber-100 text-amber-800' 
+                                                                                : 'bg-gray-100 text-gray-400'
+                                                                    }`}>
+                                                                        {catPhotosCount} Foto
+                                                                    </span>
+                                                                    {isCustomSub && cat.subCategoryName && (
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() => handleRemoveRoomSubCategory(roomName, cat.subCategoryName!)}
+                                                                            className="w-6 h-6 rounded-full bg-red-50 hover:bg-red-100 text-red-600 flex items-center justify-center text-xs font-bold transition-all cursor-pointer shadow-xs"
+                                                                            title={`Hapus sub-kategori ${cat.subCategoryName}`}
+                                                                        >
+                                                                            <X size={12} />
+                                                                        </button>
                                                                     )}
-                                                                </button>
-                                                            )}
-                                                            <button 
-                                                                type="button" 
-                                                                onClick={() => setEditingCaptionTarget({
-                                                                    id: item.id,
-                                                                    isNew: true,
-                                                                    caption: item.caption || cat.label,
-                                                                    catLabel: cat.label
-                                                                })}
-                                                                className="bg-gray-900/80 hover:bg-orange-600 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs shadow-md transition-all active:scale-90"
-                                                                title="Beri Keterangan / Caption Foto"
-                                                            >
-                                                                <Edit3 size={11} />
-                                                            </button>
-                                                            <button 
-                                                                type="button" 
-                                                                onClick={() => removeNewPhotoItem(item.id)}
-                                                                className="bg-red-600/90 hover:bg-red-700 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs font-black shadow-md transition-all active:scale-90"
-                                                                title="Hapus foto ini"
-                                                            >
-                                                                &times;
-                                                            </button>
-                                                        </div>
-                                                        <div className="absolute bottom-0 inset-x-0 bg-black/75 backdrop-blur-xs py-1 px-1.5 text-[9px] text-white text-center">
-                                                            <p className="font-bold truncate">{item.caption || cat.label}</p>
-                                                        </div>
-                                                    </div>
-                                                ))}
+                                                                </div>
+                                                            </div>
 
-                                                <label className="aspect-square border-2 border-dashed rounded-2xl flex flex-col items-center justify-center transition-all gap-1.5 p-3 text-center group border-orange-200 hover:border-orange-500 bg-orange-50/40 hover:bg-orange-50/80 cursor-pointer">
-                                                    <input 
-                                                        type="file" 
-                                                        multiple 
-                                                        accept="image/*" 
-                                                        className="hidden" 
-                                                        onChange={e => {
-                                                            handleCategoryFilesUpload(cat.id, e.target.files);
-                                                            e.target.value = '';
-                                                        }} 
-                                                    />
-                                                    <div className="w-8 h-8 rounded-full bg-orange-100 text-orange-600 flex items-center justify-center group-hover:scale-110 transition-transform">
-                                                        <Plus size={18} />
-                                                    </div>
-                                                    <span className="text-[11px] font-black text-orange-600 group-hover:underline">
-                                                        + Tambah Foto
-                                                    </span>
-                                                    <span className="text-[9px] text-gray-400 font-medium">
-                                                        Pilih dari Galeri
-                                                    </span>
-                                                </label>
+                                                            {/* Grid Foto Kategori Kamar Ini */}
+                                                            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                                                                {currentCatExisting.map((p, idx) => (
+                                                                    <div key={`existing-${idx}`} className="aspect-square rounded-2xl overflow-hidden border border-gray-200 relative group bg-gray-50">
+                                                                        <img src={p.src} alt={cat.label} className="w-full h-full object-cover" />
+                                                                        <div className="absolute top-1.5 right-1.5 flex items-center gap-1">
+                                                                            <button 
+                                                                                type="button" 
+                                                                                onClick={() => setEditingCaptionTarget({
+                                                                                    id: `existing-${idx}`,
+                                                                                    isNew: false,
+                                                                                    caption: p.caption || cat.label,
+                                                                                    catLabel: cat.label,
+                                                                                    raw: p.raw
+                                                                                })}
+                                                                                className="bg-gray-900/80 hover:bg-orange-600 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs shadow-md transition-all active:scale-90"
+                                                                                title="Beri Keterangan / Caption Foto"
+                                                                            >
+                                                                                <Edit3 size={11} />
+                                                                            </button>
+                                                                            <button 
+                                                                                type="button" 
+                                                                                onClick={() => removeExistingImage(p.raw)}
+                                                                                className="absolute top-1.5 right-1.5 bg-red-600/90 hover:bg-red-700 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs font-black shadow-md transition-all active:scale-90"
+                                                                                title="Hapus foto ini"
+                                                                            >
+                                                                                &times;
+                                                                            </button>
+                                                                        </div>
+                                                                        <div className="absolute bottom-0 inset-x-0 bg-black/75 backdrop-blur-xs py-1 px-1.5 text-[9px] text-white text-center">
+                                                                            <p className="font-bold truncate">{p.caption || cat.label}</p>
+                                                                        </div>
+                                                                    </div>
+                                                                ))}
+
+                                                                {currentCatNew.map((item, itemIdx) => (
+                                                                    <div key={item.id} className="aspect-square rounded-2xl border-2 border-orange-400 relative group bg-gray-50 shadow-xs animate-in zoom-in-95 duration-200 overflow-hidden">
+                                                                        <img src={item.preview} alt={cat.label} className="w-full h-full object-cover" />
+                                                                        
+                                                                        {/* Full Overlay when processing */}
+                                                                        {item.isProcessing && (
+                                                                            <div className="absolute inset-0 bg-slate-950/75 backdrop-blur-xs flex flex-col items-center justify-center gap-1.5 p-2 text-center z-20 animate-in fade-in duration-200">
+                                                                                <Loader2 className="w-6 h-6 text-orange-400 animate-spin" />
+                                                                                <p className="text-[10px] font-bold text-white tracking-wide leading-tight">
+                                                                                    Sedang diproses...
+                                                                                </p>
+                                                                                <span className="text-[8px] text-slate-300">Mohon tunggu sebentar</span>
+                                                                            </div>
+                                                                        )}
+
+                                                                        {/* Status Badges */}
+                                                                        {!item.isProcessing && (
+                                                                            item.isBlurred ? (
+                                                                                <span className="absolute top-1.5 left-1.5 bg-slate-900/90 border border-orange-500/50 text-white text-[9px] font-black px-2 py-0.5 rounded-full shadow-md uppercase tracking-wider flex items-center gap-1 backdrop-blur-xs" title="Spanduk kontak telah disamarkan secara otomatis demi alasan keamanan. Klik info untuk penjelasan lengkap.">
+                                                                                    <span className="w-1.5 h-1.5 rounded-full bg-orange-500 animate-pulse"></span>
+                                                                                    <span>ruangsinggah.id</span>
+                                                                                    <button
+                                                                                        type="button"
+                                                                                        onClick={(e) => {
+                                                                                            e.stopPropagation();
+                                                                                            setShowSecurityExplanationModal(true);
+                                                                                        }}
+                                                                                        className="ml-0.5 text-orange-300 hover:text-white transition-colors cursor-pointer"
+                                                                                        title="Kenapa foto ini disensor? Klik untuk membaca alasan keamanan"
+                                                                                    >
+                                                                                        <Info size={10} />
+                                                                                    </button>
+                                                                                </span>
+                                                                            ) : (
+                                                                                <span className="absolute top-1.5 left-1.5 bg-emerald-600 text-white text-[8px] font-black px-1.5 py-0.5 rounded-md shadow-xs uppercase tracking-wider">
+                                                                                    Baru
+                                                                                </span>
+                                                                            )
+                                                                        )}
+
+                                                                        {/* Action Buttons */}
+                                                                        <div className="absolute top-1.5 right-1.5 flex items-center gap-1 z-10">
+                                                                            {!item.isBlurred && !item.isProcessing && isBannerProneCategory(cat.id, customCategories.includes(cat.id) || Boolean(cat.isCustom)) && (
+                                                                                <button 
+                                                                                    type="button" 
+                                                                                    onClick={() => handleReScanBanner(item)}
+                                                                                    disabled={reScanningId === item.id}
+                                                                                    className="bg-amber-600/90 hover:bg-amber-700 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs shadow-md transition-all active:scale-90 disabled:opacity-50"
+                                                                                    title="Pindai Spanduk / Kontak dengan AI"
+                                                                                >
+                                                                                    {reScanningId === item.id ? (
+                                                                                        <Loader2 size={11} className="animate-spin" />
+                                                                                    ) : (
+                                                                                        <ShieldAlert size={11} />
+                                                                                    )}
+                                                                                </button>
+                                                                            )}
+                                                                            <button 
+                                                                                type="button" 
+                                                                                onClick={() => setEditingCaptionTarget({
+                                                                                    id: item.id,
+                                                                                    isNew: true,
+                                                                                    caption: item.caption || cat.label,
+                                                                                    catLabel: cat.label
+                                                                                })}
+                                                                                className="bg-gray-900/80 hover:bg-orange-600 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs shadow-md transition-all active:scale-90"
+                                                                                title="Beri Keterangan / Caption Foto"
+                                                                            >
+                                                                                <Edit3 size={11} />
+                                                                            </button>
+                                                                            <button 
+                                                                                type="button" 
+                                                                                onClick={() => removeNewPhotoItem(item.id)}
+                                                                                className="bg-red-600/90 hover:bg-red-700 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs font-black shadow-md transition-all active:scale-90"
+                                                                                title="Hapus foto ini"
+                                                                            >
+                                                                                &times;
+                                                                            </button>
+                                                                        </div>
+                                                                        <div className="absolute bottom-0 inset-x-0 bg-black/75 backdrop-blur-xs py-1 px-1.5 text-[9px] text-white text-center">
+                                                                            <p className="font-bold truncate">{item.caption || cat.label}</p>
+                                                                        </div>
+                                                                    </div>
+                                                                ))}
+
+                                                                <label className="aspect-square border-2 border-dashed rounded-2xl flex flex-col items-center justify-center transition-all gap-1.5 p-3 text-center group border-orange-200 hover:border-orange-500 bg-orange-50/40 hover:bg-orange-50/80 cursor-pointer">
+                                                                    <input 
+                                                                        type="file" 
+                                                                        multiple 
+                                                                        accept="image/*" 
+                                                                        className="hidden" 
+                                                                        onChange={e => {
+                                                                            handleCategoryFilesUpload(cat.id, e.target.files);
+                                                                            e.target.value = '';
+                                                                        }} 
+                                                                    />
+                                                                    <div className="w-8 h-8 rounded-full bg-orange-100 text-orange-600 flex items-center justify-center group-hover:scale-110 transition-transform">
+                                                                        <Plus size={18} />
+                                                                    </div>
+                                                                    <span className="text-[11px] font-black text-orange-600 group-hover:underline">
+                                                                        + Tambah Foto
+                                                                    </span>
+                                                                    <span className="text-[9px] text-gray-400 font-medium">
+                                                                        Pilih dari Galeri
+                                                                    </span>
+                                                                </label>
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+
+                                            {/* Input Tambah Sub-Kategori Khusus Tipe Kamar Ini */}
+                                            <div className="bg-white p-3 rounded-2xl border border-dashed border-gray-300 flex flex-col sm:flex-row gap-2 items-center">
+                                                <div className="w-7 h-7 rounded-full bg-orange-100 text-orange-600 flex items-center justify-center shrink-0">
+                                                    <Plus size={14} />
+                                                </div>
+                                                <input 
+                                                    type="text"
+                                                    placeholder={`Tambah sub-kategori khusus ${roomName} (Cth: Meja Belajar, Lemari, Balkon Kamar, Jendela)...`}
+                                                    value={roomSubCategoryInputs[roomName] || ''}
+                                                    onChange={e => setRoomSubCategoryInputs(prev => ({ ...prev, [roomName]: e.target.value }))}
+                                                    onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleAddRoomSubCategory(roomName); } }}
+                                                    className="w-full h-9 px-3 border border-gray-300 rounded-xl text-xs bg-white text-gray-800 outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500 font-medium"
+                                                />
+                                                <button 
+                                                    type="button" 
+                                                    onClick={() => handleAddRoomSubCategory(roomName)}
+                                                    className="w-full sm:w-auto h-9 px-3.5 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-xs font-bold shrink-0 transition-all cursor-pointer whitespace-nowrap shadow-xs"
+                                                >
+                                                    + Sub-Kategori {roomName}
+                                                </button>
                                             </div>
                                         </div>
                                     );
                                 })}
                             </div>
                         )}
-
-                        {/* Tambah Kategori Kustom Tambahan */}
-                        <div className="bg-gray-50/80 p-4 rounded-2xl border border-gray-200 flex flex-col sm:flex-row gap-2.5 items-center">
-                            <input 
-                                type="text"
-                                placeholder="Tambah kategori foto lainnya (Cth: Rooftop, Kolam Renang, Balkon)..."
-                                value={newCategoryInput}
-                                onChange={e => setNewCategoryInput(e.target.value)}
-                                className="w-full h-10 px-3.5 border border-gray-300 rounded-xl text-xs bg-white text-gray-800 outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500 font-medium"
-                            />
-                            <button 
-                                type="button"
-                                onClick={() => {
-                                    const trimmed = newCategoryInput.trim();
-                                    if (!trimmed) return;
-                                    if (!customCategories.includes(trimmed) && !allActiveCategories.some(c => c.id.toLowerCase() === trimmed.toLowerCase())) {
-                                        setCustomCategories(prev => [...prev, trimmed]);
-                                    }
-                                    setNewCategoryInput('');
-                                }}
-                                className="w-full sm:w-auto h-10 px-4 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-xs font-black uppercase tracking-wider shrink-0 transition-all cursor-pointer"
-                            >
-                                + Kategori
-                            </button>
-                        </div>
 
                         {/* Modal Dialog Edit Caption Foto */}
                         {editingCaptionTarget && (

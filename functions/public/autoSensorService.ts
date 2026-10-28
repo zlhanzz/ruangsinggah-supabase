@@ -100,10 +100,9 @@ export interface SensorBoxPixel {
  */
 export function isBannerProneCategory(categoryName: string, isCustom = false): boolean {
     if (!categoryName) return false;
-    // 1. Kategori custom yang dibuat oleh mitra selalu wajib melewati proses sensor
-    if (isCustom) return true;
-
     const trimmed = categoryName.trim();
+    // 1. Kategori custom yang dibuat oleh mitra selalu wajib melewati proses sensor
+    if (isCustom || trimmed.includes(' - ')) return true;
     // 2. Cek kecocokan kaku dengan ID kategori baku fasilitas publik
     if (FIXED_BANNER_PRONE_CATEGORIES.has(trimmed)) return true;
 

@@ -6491,8 +6491,8 @@ export const isImageFile = (file: File): boolean => {
 
 export const isBannerProneCategory = (category: string, isCustom = false): boolean => {
   if (!category) return false;
-  if (isCustom) return true;
   const trimmed = category.trim();
+  if (isCustom || trimmed.includes(' - ')) return true;
   if (['Bangunan Depan', 'Koridor', 'Area Parkir', 'Lingkungan'].includes(trimmed)) return true;
 
   const lower = trimmed.toLowerCase();

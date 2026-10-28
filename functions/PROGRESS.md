@@ -2,6 +2,45 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 451. Pemisahan Kategori Kustom Fasilitas Umum Properti dan Sub-Kategori Khusus Tipe Kamar Sesuai Standar Industri (`autoSensorService.ts`, `adminService.ts`, `KostFormMitra.tsx`) (Oktober 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna menginginkan kategori kustom di Langkah 5 (Foto Properti & Kamar) dipisahkan menjadi:
+     - Kategori kustom untuk **Fasilitas Umum / Area Properti** (contoh: *Rooftop, Kolam Renang, Balkon Bersama, Taman, Gazebo, Gym*, dll.).
+     - Sub-kategori kustom **khusus untuk setiap Tipe Kamar** yang ditambahkan di Langkah 3 (contoh: *Meja Belajar, Lemari Pakaian, Balkon Kamar, Jendela*, dll.) yang menjadi sub-kategori terikat dari unit tipe kamar tersebut.
+  2. Audit kesesuaian arsitektur dengan standar industri (Airbnb, Booking.com, Mamikos):
+     - Pemisahan tingkat properti (*property-level spaces*) vs tingkat unit (*unit/room-level spaces*).
+     - *Auto-pruning* dan tombol hapus (`×`): Kategori kustom kosong tidak boleh memblokir formulir (*prevent form-stuck*). Hanya kategori pokok berstatus `required: true` (**Bangunan Depan** dan **Kamar Tidur Utama**) yang wajib diisi.
+     - *Cascade grouping*: Relasi sub-kategori kamar diikat langsung ke unit tipe kamar.
+     - Seluruh kategori kustom (baik umum maupun sub-kategori kamar) wajib melewati proses AI Vision auto-detector banner (`isCustom: true`).
+- **Implementasi Solusi**:
+  1. **Audit AI Vision & Banner-Prone Category (`autoSensorService.ts` & `adminService.ts`)**:
+     - Memperbarui `isBannerProneCategory`: menambahkan check `if (isCustom || trimmed.includes(' - ')) return true;` agar sub-kategori kamar kustom (format: `Kamar: [roomName] - [subCat]`) otomatis dipindai AI Vision.
+     - Menjamin urutan evaluasi aman dan bebas `ReferenceError` dengan validasi null-check dini.
+  2. **Struktur Data & Pemisahan Komputasi Kategori (`KostFormMitra.tsx`)**:
+     - Menambahkan interface field `isRoom?: boolean; roomName?: string; isCustom?: boolean; subCategoryName?: string;` pada `PublicPhotoCategoryDef`.
+     - Mengimpor icon murni SVG `CookingPot` dari `lucide-react` (0 FOUT).
+     - Menambahkan parameter `userCustomRoomCats: Record<string, string[]> = {}` pada fungsi `computeActivePhotoCategories`:
+       - Sub-kategori kustom kamar di-generate dengan id `Kamar: ${roomName} - ${subCat}` dan label `${subCat} (${roomName})`.
+       - Menetapkan `required: true` hanya pada kamar tidur utama (`Kamar: ${roomName}`) dan fasad (`Bangunan Depan`). Kategori kustom umum maupun kamar bersifat opsional agar tidak memblokir tombol simpan / langkah berikutnya (*anti form-stuck*).
+     - State `customRoomCategories: Record<string, string[]>` dan input state `roomSubCategoryInputs: Record<string, string>` untuk input per-kamar.
+     - State disinkronkan dengan draft `localStorage` dan objek `editingKost`.
+  3. **Manajemen Penambahan & Penghapusan Kategori (UX Dinamis)**:
+     - `handleAddGeneralCategory` & `handleRemoveGeneralCategory`: Penambahan kategori umum baru dan penghapusan dengan tombol `×` merah elegan (termasuk auto-cleanup foto terkait).
+     - `handleAddRoomSubCategory` & `handleRemoveRoomSubCategory`: Penambahan sub-kategori spesifik per kamar dan penghapusan dengan tombol `×` merah elegan (termasuk auto-cleanup foto kamar terkait).
+     - Auto-pruning saat simpan/draft: Kategori kustom tanpa foto diabaikan secara anggun tanpa menyebabkan error validasi.
+  4. **Tata Letak UI Terpisah Sesuai Standar Industri**:
+     - **Bagian Fasilitas Umum**: Menampilkan kategori umum bawaan + kartu kategori umum kustom (lengkap dengan badge dan tombol `×`), diikuti formulir mini `+ Kategori Umum` di bawah daftar fasilitas umum.
+     - **Bagian Tipe Kamar**: Dipecah rapi per unit kamar (`(form.roomTypes || []).map(...)`), menampilkan kamar tidur utama bawaan + kartu sub-kategori kamar kustom (lengkap dengan badge dan tombol `×`), diikuti formulir mini `+ Sub-Kategori ${roomName}` di bawah masing-masing kamar.
+- **File Tersentuh**:
+  - `functions/public/autoSensorService.ts`
+  - `functions/public/adminService.ts`
+  - `functions/public/components/KostFormMitra.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi frontend `npm --prefix functions/public run build` lulus 100% 0 error dalam **41.05s** (`✓ 2512 modules transformed`).
+  - Kompilasi backend functions `npm --prefix functions run build` (`tsc`) lulus 100% 0 error.
+
 ### 450. Standar Industri Deteksi Kategori Kaku (Koridor & Akses Masuk), Sensor Wajib Kategori Custom, dan Antrean Upload Terkontrol (Controlled Concurrency Queue Limit = 2) (`autoSensorService.ts`, `adminService.ts`, `KostFormMitra.tsx`) (Oktober 2026)
 - **Permintaan & Masalah**:
   1. Pengguna menginginkan auto-detector banner diterapkan pada kategori **Koridor** (`id: 'Koridor'`, label `'Koridor & Akses Masuk'`).

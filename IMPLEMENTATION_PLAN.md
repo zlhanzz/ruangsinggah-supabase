@@ -1,106 +1,77 @@
-# IMPLEMENTATION PLAN: Standar Industri Deteksi Kategori Kaku (Koridor & Akses Masuk), Sensor Wajib Kategori Custom, dan Antrean Upload Terkontrol (*Controlled Concurrency Queue*)
+# IMPLEMENTATION PLAN: Kategori Kustom Fasilitas Umum & Sub-Kategori Khusus Setiap Tipe Kamar (Standar Industri)
 
 ## 1. Analisis Masalah & Kebutuhan
 
-### A. Evaluasi Sistem Deteksi Kategori
-1. **Kategori Baku Kaku (*Fixed Category Set*)**:
-   - Sistem beralih dari kata kunci bebas ke **ID Kategori Baku & Kaku** (`'Bangunan Depan'`, `'Koridor'`, `'Area Parkir'`, `'Lingkungan'`).
-   - Kategori **`Koridor & Akses Masuk`** (`id: 'Koridor'`) dijamin **100% PASTI dan KAKU** dipindai oleh sensor AI.
-2. **Kategori Custom Buatan Mitra (*Custom Categories*)**:
-   - Pengguna meminta: *"oh iyya pastikan juga kategori foto yang dibuat secara custom melewati proses sensor"*.
-   - Setiap kategori tambahan yang dibuat secara fleksibel oleh mitra (seperti *Balkon*, *Rooftop*, *Pintu Masuk Samping*, *Area Bersantai*, dll.) **WAJIB 100% melewati proses auto-detector sensor banner**, karena area-area ini sering kali memuat spanduk nomor kontak/info sewa.
-   - Hanya area interior kamar privat murni (`Kamar: ...` dan `Kamar Mandi: ...`) yang menggunakan jalur *Fast-Path Non-Banner*.
+### Konteks & Masalah Saat Ini
+1. Pada Langkah 5 (*Dokumentasi Foto Properti & Kamar*) di formulir mitra ([KostFormMitra.tsx](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/components/KostFormMitra.tsx)), kotak input `+ KATEGORI` saat ini hanya berupa 1 kolom tunggal di bagian paling bawah halaman dengan placeholder umum (*"Tambah kategori foto lainnya (Cth: Rooftop, Kolam Renang, Balkon)..."*).
+2. Ketika mitra menambahkan kategori kustom baru, kategori tersebut selalu diperlakukan secara datar (*flat*) sebagai area properti umum, dan tidak dapat dikhususkan untuk unit tipe kamar tertentu.
+3. Kebutuhan Pengguna:
+   - **Fasilitas Umum**: Input `+ KATEGORI` tetap tersedia untuk mendokumentasikan fasilitas umum/properti tambahan (contoh: *Rooftop, Kolam Renang, Balkon Bersama, Taman, Gazebo, Tempat Santai, Gym*, dll.).
+   - **Khusus Setiap Tipe Kamar**: Setiap tipe kamar yang ditambahkan oleh mitra (contoh: *Tipe Standard, Tipe Deluxe, Tipe VIP*, dll.) memiliki kontrol mandiri untuk menambahkan **sub-kategori kustom khusus tipe kamar tersebut** (contoh: *Meja Belajar, Lemari Pakaian, Balkon Kamar, Jendela & Pemandangan, Ruang Kerja, Sudut Santai*, dll.).
+   - Sub-kategori kamar ini harus tampil terikat rapi di bawah grup tipe kamar yang bersangkutan dan foto-foto yang diunggah ke dalamnya otomatis terasosiasi ke tipe kamar tersebut.
+   - Sesuai standar industri dan aturan turn sebelumnya, seluruh kategori kustom (baik fasilitas umum maupun sub-kategori kamar) **wajib melewati proses AI Vision auto-detector banner (`isCustom: true`)**.
+
+### Penyempurnaan Standar Industri (Audit Compliance)
+1. **Pemisahan Tegas Tingkat Properti vs Tingkat Unit**:
+   - Area Fasilitas Umum Properti dikelompokkan dalam container A.
+   - Setiap Tipe Kamar dikelompokkan dalam container tersendiri yang memuat identitas tipe kamar, harga, foto kamar utama, KM dalam, dan sub-kategori kustom milik tipe kamar tersebut.
+2. **Auto-Pruning & Tombol Hapus (`×`) (Pencegahan Form-Stuck)**:
+   - Kategori kustom opsional yang belum ada fotonya tidak boleh mengunci (*blocking*) formulir saat validasi Langkah 5. Hanya kategori pokok bertanda `required: true` (**Bangunan Depan** dan **Kamar Tidur Utama**) yang wajib diisi minimal 1 foto.
+   - Setiap kategori/sub-kategori kustom buatan mitra memiliki tombol hapus `×` di pojok kartu untuk membatalkan kategori yang tidak jadi digunakan.
+   - Saat submit, kategori kustom kosong otomatis diabaikan (*auto-pruning*), sehingga database tetap bersih tanpa kategori yatim (*orphan categories*).
+3. **Cascade Grouping & Persistence**:
+   - Sub-kategori kamar diikat langsung ke nama/identitas tipe kamar (`customRoomCategories: Record<string, string[]>`).
+   - Format identifier tersimpan: `Kamar: ${roomName} - ${subCat}` dengan label tampilan `${subCat} (${roomName})`.
+   - Disimpan ke draft `localStorage` sehingga tahan reload/refresh halaman.
 
 ---
 
-### B. Evaluasi Multi-Processing & Keamanan Arsitektur (Standar Industri)
-1. **Masalah Upload Satu per Satu Kaku (`disabled=uploadingCategory`)**:
-   - Tombol "+ Tambah Foto" saat ini dikunci (`disabled` dan `cursor-not-allowed`) selama proses upload berlangsung.
-   - Mitra yang ingin mengunggah foto kedua di kategori yang sama atau kategori lain secara cepat terhalang atau memicu benturan status (*race condition* pada state tunggal `uploadingCategory`).
-2. **Bahaya Multi-Processing Bebas Tanpa Batas (*Unbounded Parallel*)**:
-   - Jika pengguna mengunggah 5-10 foto sekaligus tanpa batas paralel, HP mitra (RAM 3-4GB) berisiko crash (*canvas context lost* / tab reload) dan koneksi internet seluler tercekik.
-3. **Penerapan Standar Industri (Pilihan C: Antrean Terkontrol / Non-Blocking Queue)**:
-   - Sesuai standar industri platform kelas dunia (WhatsApp Web, Google Photos, Airbnb):
-     - **UX Bebas**: Tombol upload **TIDAK DIKUNCI MATI**. Pengguna bebas mengunggah foto berkali-kali secara cepat di kategori mana pun.
-     - **Pratinjau Instan (*Optimistic Preview*)**: Setiap foto yang baru dipilih langsung muncul seketika di kartu foto dengan loader `Sedang diproses...`.
-     - **Worker Antrean di Latar Belakang (*Controlled Concurrency Limit = 2*)**: Sistem di latar belakang memproses maksimal 2 foto secara paralel (memastikan RAM HP aman dan koneksi stabil). Foto berikutnya mengantre secara otomatis dan diproses bergantian begitu slot sebelumnya selesai.
-     - **Isolasi Mutlak (*Zero Contamination*)**: Setiap foto diikat dengan UUID unik (`crypto.randomUUID()`) dan `category` statis. Foto Koridor hanya akan pernah memperbarui slot Koridor, dan foto custom hanya memperbarui slot custom tersebut.
+## 2. Dampak Perubahan File
+
+- **File Utama yang Dimodifikasi**:
+  1. [functions/public/components/KostFormMitra.tsx](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/components/KostFormMitra.tsx):
+     - Memperbarui interface `PublicPhotoCategoryDef` dengan field pendukung: `isRoom?: boolean; roomName?: string; isCustom?: boolean; subCategoryName?: string;`.
+     - Memisahkan state: `customCategories: string[]` (fasilitas umum) dan `customRoomCategories: Record<string, string[]>` (sub-kategori per tipe kamar).
+     - Menambahkan state input teks per kamar: `roomSubCategoryInputs: Record<string, string>`.
+     - Memperbarui helper `computeActivePhotoCategories` untuk menghasilkan sub-kategori kamar per unit tipe kamar.
+     - Memperbarui validasi Langkah 5 (`validateCurrentStep(4)`) agar hanya memvalidasi `cat.required` (Bangunan Depan & Kamar Tidur Utama).
+     - Memperbarui UI Langkah 5:
+       - Section A: Menempatkan input `+ Kategori Umum` di bawah daftar fasilitas umum.
+       - Section B: Mengelompokkan foto per tipe kamar dalam kartu container terpadu, dengan input `+ Sub-Kategori [Nama Kamar]` di setiap container kamar.
+       - Menyematkan tombol hapus `×` pada kartu kategori kustom.
+     - Menyimpan dan memuat `customCategories` dan `customRoomCategories` pada draft `localStorage`.
+  2. [functions/public/autoSensorService.ts](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/autoSensorService.ts):
+     - Memastikan `isBannerProneCategory` memproses sub-kategori kustom kamar sebagai `isCustom = true`.
 
 ---
 
-## 2. Rincian Teknis & Dampak Perubahan
+## 3. Langkah-Langkah Eksekusi (Fase 2)
 
-File yang akan dimodifikasi:
+### Langkah 1: Update Interface & State di `KostFormMitra.tsx`
+- Tambahkan properti opsional di `PublicPhotoCategoryDef`: `isRoom?: boolean; roomName?: string; isCustom?: boolean; subCategoryName?: string;`.
+- Deklarasikan `customRoomCategories` dan `roomSubCategoryInputs`.
+- Tambahkan handler `handleAddGeneralCategory`, `handleRemoveGeneralCategory`, `handleAddRoomSubCategory`, dan `handleRemoveRoomSubCategory`.
 
-1. **`functions/public/autoSensorService.ts`**:
-   - Menetapkan himpunan kategori baku kaku:
-     ```ts
-     export const FIXED_BANNER_PRONE_CATEGORIES = new Set([
-         'Bangunan Depan',
-         'Koridor',
-         'Area Parkir',
-         'Lingkungan'
-     ]);
-     ```
-   - Memperbarui fungsi deteksi:
-     ```ts
-     export function isBannerProneCategory(categoryName: string, isCustom = false): boolean
-     ```
-     - Jika `isCustom === true`, langsung kembalikan `true` (Wajib Sensor).
-     - Jika ada di `FIXED_BANNER_PRONE_CATEGORIES`, langsung kembalikan `true`.
-     - Ditambah fallback kata kunci untuk form admin/agen.
+### Langkah 2: Pembaruan `computeActivePhotoCategories` & Validasi
+- Integrasikan `userCustomRoomCats: Record<string, string[]>` ke parameter `computeActivePhotoCategories`.
+- Loop setiap `form.roomTypes` dan buat kategori baku (`required: true` untuk kamar tidur utama), KM dalam, Dapur dalam, dan sub-kategori kustom (`isCustom: true`).
+- Perbaiki validasi `validateCurrentStep(4)`: hanya validasi kategori dengan `cat.required === true`.
 
-2. **`functions/public/adminService.ts`**:
-   - Menyelaraskan fungsi `isBannerProneCategory` agar mencakup kategori kaku `'Koridor'`, `'Bangunan Depan'`, `'Area Parkir'`, `'Lingkungan'`, serta deteksi custom.
+### Langkah 3: Redesain UI Langkah 5 (Foto Properti & Kamar)
+- Di akhir daftar Fasilitas Umum: Render input form `+ Kategori Fasilitas Umum`.
+- Pada Section B (Tipe Kamar Dinamis): Loop setiap tipe kamar di `form.roomTypes`.
+  - Tampilkan header Tipe Kamar yang elegan.
+  - Tampilkan seluruh kartu kategori untuk kamar tersebut (Kamar Utama, KM Dalam, Dapur Dalam, dan Sub-kategori kustom).
+  - Tampilkan tombol `×` pada kategori kustom.
+  - Tampilkan mini input form `+ Sub-Kategori [Nama Kamar]` di bawah kartu kamar tersebut.
 
-3. **`functions/public/components/KostFormMitra.tsx`**:
-   - **ID Generator Global**: Menggunakan `crypto.randomUUID()` untuk menjamin 0 benturan ID antar thread upload.
-   - **Membuka Kunci Tombol Unggah**: Menghapus atribut `disabled={uploadingCategory === cat.id}` dan class `cursor-not-allowed opacity-60`. Tombol "+ Tambah Foto" selalu responsif menerima foto baru.
-   - **Reset Input File Otomatis**: Menambahkan `e.target.value = ''` seketika saat event `onChange` terpicu agar memilih foto yang sama atau foto baru berturut-turut selalu terdeteksi oleh browser.
-   - **Integrasi Sensor Kategori Custom**: Menyertakan flag/pengecekan `customCategories.includes(category)` ke dalam pipeline pemrosesan foto, sehingga **seluruh kategori custom otomatis disensor AI**.
-   - **Engine Antrean Terkontrol (*Concurrency Queue Worker Limit = 2*)**:
-     - Mengimplementasikan worker antrean dengan batas konkurensi 2 proses paralel.
-     - Setiap item foto mengikat kategori miliknya sendiri secara *immutable* di dalam payload.
-     - Pembaruan state `newPhotoItems` murni menggunakan `prev => prev.map(...)` terarah berdasarkan `p.id === item.id`.
-   - **Pembersihan Bersih (*Garbage Collection*)**: Jika pengguna menghapus foto saat proses upload Supabase Storage masih berjalan di latar belakang, file draft dibatalkan dan dihapus dari storage.
+### Langkah 4: Sinkronisasi Draft & Submit
+- Simpan `customCategories` dan `customRoomCategories` di `saveDraftDirect`.
+- Muat kembali saat inisialisasi draft dari `localStorage`.
+- Pastikan auto-pruning kategori kosong berjalan lancar saat submit.
 
-4. **`functions/PROGRESS.md`**:
-   - Pencatatan progres Entri #273.
-
-5. **`WALKTHROUGH.md`**:
-   - Dokumentasi lengkap hasil pengujian dan panduan uji multi-processing serta sensor kategori custom.
-
----
-
-## 3. Langkah-Langkah Eksekusi (FASE 2 setelah di-ACC)
-
-1. **Langkah 1: Terapkan Validasi Kategori Kaku & Custom di `autoSensorService.ts` & `adminService.ts`**
-   - Tetapkan `FIXED_BANNER_PRONE_CATEGORIES` dengan `'Koridor'`, `'Bangunan Depan'`, `'Area Parkir'`, `'Lingkungan'`.
-   - Pastikan kategori custom selalu menghasilkan `true` untuk sensor AI.
-2. **Langkah 2: Terapkan Antrean Terkontrol & Hapus Locking di `KostFormMitra.tsx`**
-   - Hapus pembatas `uploadingCategory` yang mengunci tombol input.
-   - Bangun pipeline antrean `enqueuePhotoProcessing` dengan batas konkurensi 2 proses paralel.
-   - Gunakan `crypto.randomUUID()` untuk ID unik tiap foto.
-   - Terapkan pembaruan state murni terisolasi per ID.
-   - Pastikan kategori custom memicu pemindaian banner AI.
-3. **Langkah 3: Uji Kompilasi & Build**
-   - Jalankan `npm --prefix functions/public run build` memastikan 0 error kompilasi TypeScript dan Vite.
-4. **Langkah 4: Dokumentasi & Git Push**
-   - Catat riwayat ke `functions/PROGRESS.md`.
-   - Terbitkan dokumen `WALKTHROUGH.md`.
-   - Commit dan push ke branch `bukan-productions`.
-
----
-
-## 4. Rencana Verifikasi
-
-- **Uji Sensor Koridor & Kategori Custom**:
-  - Mengunggah foto spanduk pada kategori **Koridor & Akses Masuk**. Memastikan sistem otomatis menjalankan AI Vision scan dan menyamarkan nomor kontak dengan stempel `ruangsinggah.id`.
-  - Membuat kategori custom baru (misal: "Balkon Luar" atau "Pintu Belakang") dan mengunggah foto spanduk. Memastikan sistem otomatis menjalankan AI Vision scan dan menyamarkan nomor kontak.
-- **Uji Kecepatan Multi-Processing & Isolasi**:
-  - Mengunggah 1 foto di kategori Koridor, lalu tanpa menunggu selesai, langsung mengunggah foto kedua di Koridor, dan foto ketiga di kategori Custom atau Bangunan Depan.
-  - Memverifikasi ketiga foto tampil seketika di kartu masing-masing dengan loader.
-  - Memverifikasi sistem memprosesnya secara bergantian (2 paralel) tanpa membuat browser lambat.
-  - Memverifikasi masing-masing foto tetap berada di kategorinya sendiri tanpa tertukar (*zero contamination*).
-- **Uji Build**:
-  - `npm --prefix functions/public run build` lulus 100% (exit code 0).
+### Langkah 5: Verifikasi Build & Git Push
+- Jalankan kompilasi frontend `cmd.exe /c "npm --prefix functions/public run build"`.
+- Catat riwayat ke `functions/PROGRESS.md` (entri #451).
+- Perbarui dokumen `WALKTHROUGH.md`.
+- Commit dan push ke branch `bukan-productions`.
