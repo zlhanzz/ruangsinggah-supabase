@@ -2387,8 +2387,29 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
     const [error, setError] = useState('');
     const [tempRule, setTempRule] = useState('');
     const [editingCaptionTarget, setEditingCaptionTarget] = useState<{ id: string; isNew: boolean; caption: string; catLabel: string; raw?: any } | null>(null);
-    const [uploadingCategory, setUploadingCategory] = useState<string | null>(null);
     const [reScanningId, setReScanningId] = useState<string | null>(null);
+
+    // ── Concurrency Queue Runner (Standar Industri: Max 2 Pemrosesan Paralel) ──
+    const activeUploadsCountRef = useRef(0);
+    const uploadTaskQueueRef = useRef<Array<() => Promise<void>>>([]);
+
+    const runNextUploadTask = useCallback(() => {
+        while (activeUploadsCountRef.current < 2 && uploadTaskQueueRef.current.length > 0) {
+            const nextTask = uploadTaskQueueRef.current.shift();
+            if (nextTask) {
+                activeUploadsCountRef.current++;
+                nextTask().finally(() => {
+                    activeUploadsCountRef.current--;
+                    runNextUploadTask();
+                });
+            }
+        }
+    }, []);
+
+    const enqueuePhotoUploadTask = useCallback((task: () => Promise<void>) => {
+        uploadTaskQueueRef.current.push(task);
+        runNextUploadTask();
+    }, [runNextUploadTask]);
     const [bannerNotice, setBannerNotice] = useState<string | null>(null);
     const [showSecurityExplanationModal, setShowSecurityExplanationModal] = useState<boolean>(false);
     
@@ -3459,65 +3480,86 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
         });
     };
 
+    const generateUniquePhotoId = () => {
+        if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+            return crypto.randomUUID();
+        }
+        return `rs_${Date.now()}_${Math.random().toString(36).substring(2, 9)}_${Math.random().toString(36).substring(2, 9)}`;
+    };
+
     const handleCategoryFilesUpload = async (category: string, files: FileList | File[] | null) => {
         if (!files) return;
         const fileArr = Array.from(files);
         if (fileArr.length === 0) return;
 
-        setUploadingCategory(category);
+        const isCustom = customCategories.includes(category);
+        const targetCategory = category;
 
-        // 1. Optimistic Instant Preview (< 50ms): Tampilkan foto langsung ke antarmuka pengguna
+        // 1. Optimistic Instant Preview (< 20ms): Tampilkan seluruh foto langsung ke antarmuka pengguna
         const optimisticItems: NewPhotoItem[] = fileArr.map((file) => ({
-            id: `${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
+            id: generateUniquePhotoId(),
             file,
             preview: URL.createObjectURL(file),
-            category,
-            caption: category,
+            category: targetCategory,
+            caption: targetCategory,
             isBlurred: false,
             isProcessing: true
         }));
 
         setNewPhotoItems(prev => [...prev, ...optimisticItems]);
 
-        try {
-            let anyContactDetected = false;
+        // 2. Masukkan setiap foto ke dalam Worker Antrean Terkontrol (Max 2 Paralel)
+        optimisticItems.forEach((item) => {
+            enqueuePhotoUploadTask(async () => {
+                const originalFile = item.file;
+                if (!originalFile) return;
 
-            // 2. Jalankan background pipeline untuk pemrosesan AI sensor, watermark, dan upload storage
-            await Promise.all(
-                optimisticItems.map(async (item) => {
-                    const originalFile = item.file;
-                    if (!originalFile) return;
+                try {
+                    let isBlurred = false;
 
-                    try {
-                        let isBlurred = false;
-
-                        // Single-Pass Auto-Sensor Pipeline (AI polygon sensor jika ada banner, watermark resmi, WebP)
-                        const webpFile = await processPhotoWithAutoSensor(originalFile, category, (detectedInfo) => {
+                    // Single-Pass Auto-Sensor Pipeline (AI Vision banner sensor untuk Koridor, Bangunan Depan, Area Parkir, Lingkungan, dan SELURUH kategori custom)
+                    const webpFile = await processPhotoWithAutoSensor(
+                        originalFile, 
+                        item.category, 
+                        (detectedInfo) => {
                             if (detectedInfo.detectedCount > 0) {
                                 isBlurred = true;
-                                anyContactDetected = true;
+                                setBannerNotice(
+                                    'Foto Anda terdeteksi memuat informasi spanduk atau kontak langsung. ' +
+                                    'Demi alasan keamanan transaksi dan perlindungan data privasi pemilik kost, ' +
+                                    'bagian kontak tersebut telah disamarkan secara otomatis dengan stempel resmi ruangsinggah.id.'
+                                );
                             }
-                        });
+                        },
+                        isCustom
+                    );
 
-                        // 1. Seketika perbarui UI dengan hasil sensor kanvas lokal (1-2 detik)
-                        const localWebpPreview = URL.createObjectURL(webpFile);
-                        setNewPhotoItems(prev => prev.map(p => {
-                            if (p.id === item.id) {
-                                return {
-                                    ...p,
-                                    file: webpFile,
-                                    preview: localWebpPreview,
-                                    isBlurred,
-                                    isProcessing: false
-                                };
+                    // 1. Seketika perbarui UI dengan hasil sensor kanvas lokal WebP
+                    const localWebpPreview = URL.createObjectURL(webpFile);
+                    setNewPhotoItems(prev => prev.map(p => {
+                        if (p.id === item.id) {
+                            return {
+                                ...p,
+                                file: webpFile,
+                                preview: localWebpPreview,
+                                isBlurred,
+                                isProcessing: false
+                            };
+                        }
+                        return p;
+                    }));
+
+                    // 2. Upload ke Supabase Storage di latar belakang
+                    try {
+                        const uploadRes = await uploadDraftPhotoToStorage(webpFile, user?.id);
+                        let isStillPresent = true;
+                        setNewPhotoItems(prev => {
+                            const exists = prev.some(p => p.id === item.id);
+                            if (!exists) {
+                                isStillPresent = false;
+                                return prev;
                             }
-                            return p;
-                        }));
-
-                        // 2. Upload ke Supabase Storage di latar belakang (background) tanpa mengunci visualisasi UI
-                        try {
-                            const uploadRes = await uploadDraftPhotoToStorage(webpFile, user?.id);
-                            setNewPhotoItems(prev => prev.map(p => {
+                            return prev.map(p => {
                                 if (p.id === item.id) {
                                     return {
                                         ...p,
@@ -3526,28 +3568,27 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                                     };
                                 }
                                 return p;
-                            }));
-                        } catch (uploadErr) {
-                            console.warn('Gagal upload background ke storage, tetap memakai preview lokal:', uploadErr);
-                        }
-                    } catch (err) {
-                        console.error("Error processing photo:", err);
-                        setNewPhotoItems(prev => prev.map(p => {
-                            if (p.id === item.id) {
-                                return { ...p, isProcessing: false };
-                            }
-                            return p;
-                        }));
-                    }
-                })
-            );
+                            });
+                        });
 
-            if (anyContactDetected) {
-                setBannerNotice('Foto Anda terdeteksi memuat informasi spanduk atau kontak langsung. Demi alasan keamanan transaksi dan perlindungan data privasi pemilik kost dari potensi penipuan di luar sistem, bagian kontak tersebut telah disamarkan secara otomatis dengan stempel resmi ruangsinggah.id.');
-            }
-        } finally {
-            setUploadingCategory(null);
-        }
+                        // Garbage collection: jika pengguna menghapus foto saat sedang upload di storage, bersihkan file storage
+                        if (!isStillPresent && uploadRes.storagePath) {
+                            deleteDraftPhotosFromStorage([uploadRes.storagePath]);
+                        }
+                    } catch (uploadErr) {
+                        console.warn('Gagal upload background ke storage, tetap memakai preview lokal:', uploadErr);
+                    }
+                } catch (err) {
+                    console.error("Error processing photo:", err);
+                    setNewPhotoItems(prev => prev.map(p => {
+                        if (p.id === item.id) {
+                            return { ...p, isProcessing: false };
+                        }
+                        return p;
+                    }));
+                }
+            });
+        });
     };
 
     // ── Helper Pemindaian Ulang (Re-Scan) Spanduk Kontak dengan AI Vision ──────
@@ -3571,12 +3612,18 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                 return;
             }
 
+            const isCustom = customCategories.includes(item.category || '');
             let isBlurred = false;
-            const webpFile = await processPhotoWithAutoSensor(sourceFile, item.category || 'Bangunan Depan', (detectedInfo) => {
-                if (detectedInfo.detectedCount > 0) {
-                    isBlurred = true;
-                }
-            });
+            const webpFile = await processPhotoWithAutoSensor(
+                sourceFile, 
+                item.category || 'Bangunan Depan', 
+                (detectedInfo) => {
+                    if (detectedInfo.detectedCount > 0) {
+                        isBlurred = true;
+                    }
+                },
+                isCustom
+            );
 
             let previewUrl = '';
             let storagePath: string | undefined = undefined;
@@ -6001,7 +6048,7 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
 
                                                     {/* Action Buttons */}
                                                     <div className="absolute top-1.5 right-1.5 flex items-center gap-1 z-10">
-                                                        {!item.isBlurred && !item.isProcessing && isBannerProneCategory(cat.id) && (
+                                                        {!item.isBlurred && !item.isProcessing && isBannerProneCategory(cat.id, customCategories.includes(cat.id)) && (
                                                             <button 
                                                                 type="button" 
                                                                 onClick={() => handleReScanBanner(item)}
@@ -6044,12 +6091,11 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                                                 </div>
                                             ))}
 
-                                            <label className={`aspect-square border-2 border-dashed rounded-2xl flex flex-col items-center justify-center transition-all gap-1.5 p-3 text-center group ${uploadingCategory === cat.id ? 'border-orange-200 bg-orange-50/20 cursor-not-allowed opacity-60' : 'border-orange-200 hover:border-orange-500 bg-orange-50/40 hover:bg-orange-50/80 cursor-pointer'}`}>
+                                            <label className="aspect-square border-2 border-dashed rounded-2xl flex flex-col items-center justify-center transition-all gap-1.5 p-3 text-center group border-orange-200 hover:border-orange-500 bg-orange-50/40 hover:bg-orange-50/80 cursor-pointer">
                                                 <input 
                                                     type="file" 
                                                     multiple 
                                                     accept="image/*" 
-                                                    disabled={uploadingCategory === cat.id}
                                                     className="hidden" 
                                                     onChange={e => {
                                                         handleCategoryFilesUpload(cat.id, e.target.files);
@@ -6200,7 +6246,7 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
 
                                                         {/* Action Buttons */}
                                                         <div className="absolute top-1.5 right-1.5 flex items-center gap-1 z-10">
-                                                            {!item.isBlurred && !item.isProcessing && isBannerProneCategory(cat.id) && (
+                                                            {!item.isBlurred && !item.isProcessing && isBannerProneCategory(cat.id, customCategories.includes(cat.id)) && (
                                                                 <button 
                                                                     type="button" 
                                                                     onClick={() => handleReScanBanner(item)}
@@ -6243,12 +6289,11 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                                                     </div>
                                                 ))}
 
-                                                <label className={`aspect-square border-2 border-dashed rounded-2xl flex flex-col items-center justify-center transition-all gap-1.5 p-3 text-center group ${uploadingCategory === cat.id ? 'border-orange-200 bg-orange-50/20 cursor-not-allowed opacity-60' : 'border-orange-200 hover:border-orange-500 bg-orange-50/40 hover:bg-orange-50/80 cursor-pointer'}`}>
+                                                <label className="aspect-square border-2 border-dashed rounded-2xl flex flex-col items-center justify-center transition-all gap-1.5 p-3 text-center group border-orange-200 hover:border-orange-500 bg-orange-50/40 hover:bg-orange-50/80 cursor-pointer">
                                                     <input 
                                                         type="file" 
                                                         multiple 
                                                         accept="image/*" 
-                                                        disabled={uploadingCategory === cat.id}
                                                         className="hidden" 
                                                         onChange={e => {
                                                             handleCategoryFilesUpload(cat.id, e.target.files);

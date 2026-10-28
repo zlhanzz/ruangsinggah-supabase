@@ -7,6 +7,14 @@
 
 import { supabase } from './supabase';
 
+// Kategori Baku Fasilitas Publik yang WAJIB dan KAKU disensor oleh AI Vision
+export const FIXED_BANNER_PRONE_CATEGORIES = new Set([
+    'Bangunan Depan',
+    'Koridor',
+    'Area Parkir',
+    'Lingkungan'
+]);
+
 // Kategori foto yang rentan memiliki spanduk, banner nomor HP, atau papan nama kontak
 const BANNER_PRONE_KEYWORDS = [
     'depan',
@@ -27,6 +35,11 @@ const BANNER_PRONE_KEYWORDS = [
     'lingkungan',
     'luar',
     'akses',
+    'akses masuk',
+    'koridor',
+    'lorong',
+    'gang',
+    'tangga',
     'jalan',
     'halaman',
     'eksterior'
@@ -82,10 +95,25 @@ export interface SensorBoxPixel {
 
 /**
  * Memeriksa apakah sebuah kategori foto rentan memiliki spanduk/nomor kontak
+ * @param categoryName Nama kategori foto
+ * @param isCustom Apakah kategori ini dibuat secara custom oleh mitra
  */
-export function isBannerProneCategory(categoryName: string): boolean {
+export function isBannerProneCategory(categoryName: string, isCustom = false): boolean {
     if (!categoryName) return false;
-    const lower = categoryName.toLowerCase().trim();
+    // 1. Kategori custom yang dibuat oleh mitra selalu wajib melewati proses sensor
+    if (isCustom) return true;
+
+    const trimmed = categoryName.trim();
+    // 2. Cek kecocokan kaku dengan ID kategori baku fasilitas publik
+    if (FIXED_BANNER_PRONE_CATEGORIES.has(trimmed)) return true;
+
+    const lower = trimmed.toLowerCase();
+    // 3. Kecualikan kamar tidur interior dan kamar mandi dalam (hemat kuota & fast-path)
+    if (lower.startsWith('kamar:') || lower.startsWith('kamar mandi:') || lower.startsWith('dapur dalam:')) {
+        return false;
+    }
+
+    // 4. Cek kecocokan kata kunci untuk variasi nama di admin/agen/kustom
     return BANNER_PRONE_KEYWORDS.some(kw => lower.includes(kw));
 }
 
@@ -843,12 +871,13 @@ export function applySensorBoxesToCanvas(
 export async function processPhotoWithAutoSensor(
     file: File,
     category: string,
-    onDetected?: (info: { detectedCount: number; detectedTexts?: string[] }) => void
+    onDetected?: (info: { detectedCount: number; detectedTexts?: string[] }) => void,
+    isCustom = false
 ): Promise<File> {
-    const shouldCheckBanner = isBannerProneCategory(category);
+    const shouldCheckBanner = isBannerProneCategory(category, isCustom);
 
     // ── FAST-PATH NON-BANNER (< 150ms) ──────────────────────────────────────────
-    // Kategori interior (kamar, ranjang, kasur, lemari, dapur, dsb.) tidak memiliki spanduk sewa.
+    // Kategori interior (kamar, ranjang, kasur, lemari, dapur dalam, dsb.) tidak memiliki spanduk sewa.
     // Langsung jalankan kompresi WebP + Watermark RuangSinggah.id tanpa beban AI scan.
     if (!shouldCheckBanner) {
         return compressKostPhotoWithWatermark(file, 0.82, 1920);
@@ -1007,7 +1036,8 @@ export async function processImageUrlWithAutoSensor(
     imageUrl: string,
     category: string,
     uploadFn: (file: File, path: string) => Promise<string>,
-    explicitBoxes?: Array<{ x: number; y: number; width: number; height: number }>
+    explicitBoxes?: Array<{ x: number; y: number; width: number; height: number }>,
+    isCustom = false
 ): Promise<string> {
     return new Promise((resolve, reject) => {
         const img = new Image();
@@ -1041,7 +1071,7 @@ export async function processImageUrlWithAutoSensor(
                 if (boxesToApply.length === 0) {
                     // Pindai dengan AI jika tidak ada koordinat eksplisit
                     try {
-                        const needAiScan = isBannerProneCategory(category);
+                        const needAiScan = isBannerProneCategory(category, isCustom);
                         const targetDim = needAiScan ? 1600 : 1024;
                         const targetQuality = needAiScan ? 0.82 : 0.65;
                         const lowResBase64 = await createLowResBase64ForAi(imageUrl, targetDim, targetQuality);

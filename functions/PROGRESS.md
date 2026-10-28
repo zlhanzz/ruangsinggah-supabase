@@ -2,6 +2,41 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 450. Standar Industri Deteksi Kategori Kaku (Koridor & Akses Masuk), Sensor Wajib Kategori Custom, dan Antrean Upload Terkontrol (Controlled Concurrency Queue Limit = 2) (`autoSensorService.ts`, `adminService.ts`, `KostFormMitra.tsx`) (Oktober 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna menginginkan auto-detector banner diterapkan pada kategori **Koridor** (`id: 'Koridor'`, label `'Koridor & Akses Masuk'`).
+  2. Pengguna meminta agar **seluruh kategori foto yang dibuat secara custom** (`customCategories`) wajib melewati proses sensor auto detector banner.
+  3. Kesiapan sistem untuk **multi-processing** dengan standar industri:
+     - Ketika pengguna mengunggah foto dengan sangat cepat (belum selesai loading foto 1, sudah mengunggah foto lain di kategori yang sama atau berbeda).
+     - Menggunakan arsitektur **Standar Industri: Antrean Terkontrol (*Controlled Concurrency Queue*, Limit = 2)** tanpa mengunci tombol upload (`disabled` dihapus).
+     - Menjamin **isolasi mutlak (*zero contamination*)** antar foto dan lintas kategori.
+- **Implementasi Solusi**:
+  1. **Himpunan Kategori Kaku & Kata Kunci Sensor (`autoSensorService.ts` & `adminService.ts`)**:
+     - Menambahkan `FIXED_BANNER_PRONE_CATEGORIES` yang berisi `'Bangunan Depan'`, `'Koridor'`, `'Area Parkir'`, `'Lingkungan'`.
+     - Menambahkan kata kunci `'koridor'`, `'akses masuk'`, `'lorong'`, `'gang'`, `'tangga'` ke `BANNER_PRONE_KEYWORDS`.
+     - Memperbarui `isBannerProneCategory(categoryName, isCustom = false)`:
+       - Jika `isCustom === true`, selalu mengembalikan `true` (seluruh kategori kustom mitra otomatis dipindai AI Vision).
+       - Jika termasuk dalam `FIXED_BANNER_PRONE_CATEGORIES`, mengembalikan `true`.
+       - Mengecualikan interior murni (`kamar:`, `kamar mandi:`, `dapur dalam:`) untuk fast-path kompresi WebP (<150ms).
+       - Memperbarui `processPhotoWithAutoSensor` dan `processImageUrlWithAutoSensor` agar menerima parameter `isCustom`.
+  2. **Antrean Upload Terkontrol Concurrency Limit = 2 (`KostFormMitra.tsx`)**:
+     - Menghapus pembatasan `disabled={uploadingCategory === cat.id}` pada tombol `+ Tambah Foto` di seluruh kategori fasilitas umum dan tipe kamar. Pengguna dapat memilih dan mengunggah foto secepat apa pun tanpa terblokir.
+     - Menggunakan `activeUploadsCountRef` dan `uploadTaskQueueRef` dengan konkurensi maksimal 2 proses paralel (*Controlled Concurrency Queue*). Mencegah crash memori canvas HP (*context lost*) dan saturasi bandwidth jaringan seluler mitra.
+     - Menggunakan `generateUniquePhotoId` berbasis `crypto.randomUUID()` dengan fallback nano-timestamp + dual-entropy string untuk menjamin 0 benturan ID.
+     - Mengikat `isCustom = customCategories.includes(category)` dan `targetCategory = category` di `handleCategoryFilesUpload`.
+     - State mutation atomik `prev.map(p => p.id === item.id ? { ...p, ... } : p)` menjamin isolasi mutlak antar foto dan lintas kategori tanpa risiko kontaminasi (*zero contamination*).
+     - Menambahkan garbage collection storage jika foto dihapus pengguna saat proses upload Supabase Storage masih berlangsung di background.
+     - Memperbarui `handleReScanBanner` dan tombol re-scan di JSX (`isBannerProneCategory(cat.id, customCategories.includes(cat.id))`).
+- **File Tersentuh**:
+  - `functions/public/autoSensorService.ts`
+  - `functions/public/adminService.ts`
+  - `functions/public/components/KostFormMitra.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi build frontend `npm --prefix functions/public run build` lulus 100% 0 error dalam **26.39s** (`✓ 2512 modules transformed`).
+  - Kompilasi backend functions `npm --prefix functions run build` (`tsc`) lulus 100% 0 error.
+
 ### 449. Penyesuaian Teks Loading Foto ("Sedang diproses...") dan Edukasi Keamanan Transaksi Penyamaran Spanduk (`KostFormMitra.tsx`) (Oktober 2026)
 - **Permintaan & Masalah**:
   1. Pengguna meminta agar teks indikator yang muncul saat loading foto diubah dari *"Memindai Spanduk..."* menjadi lebih universal dan netral: **`"Sedang diproses..."`**.

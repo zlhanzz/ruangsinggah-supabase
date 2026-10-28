@@ -6489,9 +6489,21 @@ export const isImageFile = (file: File): boolean => {
   return /\.(jpe?g|png|webp|heic|bmp|gif|tiff?)$/i.test(name);
 };
 
-export const isBannerProneCategory = (category: string): boolean => {
-  const lower = (category || '').toLowerCase();
+export const isBannerProneCategory = (category: string, isCustom = false): boolean => {
+  if (!category) return false;
+  if (isCustom) return true;
+  const trimmed = category.trim();
+  if (['Bangunan Depan', 'Koridor', 'Area Parkir', 'Lingkungan'].includes(trimmed)) return true;
+
+  const lower = trimmed.toLowerCase();
+  if (lower.startsWith('kamar:') || lower.startsWith('kamar mandi:') || lower.startsWith('dapur dalam:')) {
+    return false;
+  }
+
   return (
+    lower.includes('koridor') ||
+    lower.includes('akses') ||
+    lower.includes('akses masuk') ||
     lower.includes('depan') || 
     lower.includes('fasad') || 
     lower.includes('lingkungan') || 
@@ -6500,7 +6512,11 @@ export const isBannerProneCategory = (category: string): boolean => {
     lower.includes('gerbang') ||
     lower.includes('spanduk') ||
     lower.includes('banner') ||
-    lower.includes('jalan')
+    lower.includes('jalan') ||
+    lower.includes('lorong') ||
+    lower.includes('gang') ||
+    lower.includes('tangga') ||
+    lower.includes('pintu masuk')
   );
 };
 
