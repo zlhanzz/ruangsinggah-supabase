@@ -1,66 +1,72 @@
-# Walkthrough: Perbaikan Error PostgREST PGRST204 & Standarisasi Tipe Kamar vs Nomor Kamar
+# WALKTHROUGH - Standarisasi Menu Kost Saya (Tab Diajukan)
 
-Dokumen ini merangkum perbaikan tuntas terhadap kendala pengajuan sewa, eliminasi error skema database PostgREST `PGRST204`, serta standarisasi model bisnis penyewaan kost antara **Mitra Biasa** dan **Mitra KostManager**.
+## Ringkasan Perubahan
+Menindaklanjuti audit antarmuka calon penyewa pada menu **Kost Saya (Tab Diajukan)**, kami telah merestrukturisasi kartu sewa dan hierarki aksi agar 100% selaras dengan standar proptech industri (Mamikos, Rukita, Airbnb) serta menghilangkan kontradiksi data/elemen visual:
 
----
+1. **Rating Riil Transparan vs 'Belum Ada Ulasan'**:
+   - Menghilangkan hardcoded 5 bintang dummy pada kartu sewa.
+   - Jika properti belum memiliki ulasan (rating = 0 atau belum ada review), sistem menampilkan label jujur dan elegan: `⭐ Belum ada ulasan`.
+   - Jika sudah memiliki ulasan, sistem menampilkan bintang proporsional bersanding dengan angka desimal rating dan jumlah ulasan.
 
-## 1. Analisis Akar Masalah (Root Cause)
-1. **Error PostgREST `PGRST204`**:
-   - Calon penyewa mengalami pesan error saat menekan tombol `[ Ajukan Sewa Sekarang ]`:
-     ```text
-     Gagal mengajukan sewa: Could not find the 'room_number' column of 'resident_status' in the schema cache
-     ```
-   - **Penyebab**: Kode pada `userService.ts` mengirimkan kolom fisik root `room_number` ke dalam tabel Supabase `resident_status`. Berdasarkan skema tabel PostgreSQL asli, kolom `room_number` **memang tidak ada** di tabel `resident_status`, melainkan berada di tabel relasional `rooms` (melalui relasi `room_id`).
+2. **Pembatasan Badge Verifikasi Khusus Mitra KostManager**:
+   - Badge `🛡️ Terverifikasi RuangSinggah` kini menjadi eksklusif hanya untuk properti yang dikelola langsung oleh mitra **KostManager** (`kost.isManagedKost === true`).
+   - Untuk properti Mitra Biasa (`!kost.isManagedKost`), sistem menampilkan badge netral `Mitra Komunitas`.
 
-2. **Perbedaan Model Bisnis Mitra Biasa vs KostManager**:
-   - **Mitra Biasa (Katalog Publik)**:
-     - Pemilik kost hanya mendaftarkan kuota umum berdasarkan kategori tipe kamar (misal: "Standard", "Deluxe", "VIP").
-     - Penyewa memilih tipe kamar, bukan nomor fisik kamar spesifik.
-     - Penomoran fisik diserahkan saat penyewa tiba di kost dan serah terima kunci.
-   - **Mitra KostManager (Sistem Manajemen PMS Lengkap)**:
-     - Properti memiliki data denah dan unit kamar fisik spesifik di tabel `rooms` (`room_id`, `name`, `roomNumber`).
-     - Penyewa atau pemilik dapat menetapkan kamar spesifik (misal: "Kamar 102").
-   - **Risiko Downgrade / Berhenti Berlangganan**:
-     - Jika sebuah kost KostManager berhenti berlangganan / *downgrade* ke Mitra Biasa, sistem tidak boleh crash atau gagal saat penyewa memesan. Sistem kini secara otomatis dan anggun memperlakukan pesanan sebagai sewa tipe kamar (*category-based booking*).
+3. **Ringkasan Parameter Pengajuan Sewa (*Booking Parameter Summary*)**:
+   - Membuka Info Grid 4 kolom untuk status `PENDING_APPROVAL` dan `AWAITING_PAYMENT`, sehingga calon penyewa dapat meninjau ulang parameter yang telah mereka ajukan:
+     - ⏱️ **Paket Sewa**: Durasi sewa (misal: 1 Bulan).
+     - 📅 **Rencana Masuk**: Tanggal rencana check-in yang dipilih.
+     - 👥 **Penghuni**: Jumlah penghuni yang diajukan.
+     - 💰 **Est. Tagihan**: Total tagihan yang diajukan bersanding dengan badge status `Belum Bayar` / `Siap Bayar`.
 
----
+4. **Banner Edukasi SLA Respon Pemilik 1x24 Jam**:
+   - Menambahkan banner informatif di bawah status pengajuan:
+     > *"Pemilik kost sedang meninjau ketersediaan kamar. Pembayaran baru dilakukan **setelah** pengajuan Anda disetujui. (Estimasi respon: 1x24 Jam)"*
 
-## 2. Rincian Perubahan Kode
+5. **Restrukturisasi Tombol Aksi Kontekstual (Proptech Grade)**:
+   - **Status `PENDING_APPROVAL`**:
+     - **Primary Action (CTA Terbesar)**: `[ 💬 Hubungi Pemilik Kost / Bantuan KostManager ]` dengan visual emerald gradient yang menenangkan dan mendorong komunikasi.
+     - **Secondary Actions (Grid 2 Kolom)**: `[ 📄 Detail Kost ]` dan `[ 📍 Rute Lokasi ]` sebagai tombol penunjang.
+     - **Subtle Action**: `[ ❌ Batalkan Pengajuan ]` diletakkan di bagian paling bawah dengan styling halus agar tidak mendominasi.
+   - **Status Aktif / Lunas**: Tombol `RUTE KE KOST` (hitam pekat), `Lapor Kendala`, dan `Beri Ulasan` tetap aktif seperti semula.
 
-### A. Backend Data Layer (`functions/public/userService.ts`)
-1. **Pembersihan Root Payload `resident_status`**:
-   - Menghapus kolom fisik `room_number` dari payload `resident_status.insert([...])`.
-   - Menjaga relasi yang valid:
-     - `room_type`: Nama tipe kamar murni (misal: "Standard").
-     - `room_id`: UUID dari tabel `rooms` (jika KostManager; bernilai `null` jika Mitra Biasa).
-     - Objek `metadata`: Menyimpan `room_assignment_type: isKm ? 'specific_unit' : 'category_only'` dan `assigned_room_number`.
-2. **Pembersihan Transaksi Finansial (`transactions`)**:
-   - Pada tabel `transactions`, `room_number` juga disimpan dengan aman dan modular tanpa menimbulkan konflik skema database.
+6. **Subtitle Dinamis Header Kost Saya**:
+   - Tab DIAJUKAN: *"Pantau status persetujuan pengajuan sewa Anda"*
+   - Tab AKTIF: *"Kelola hunian aktif & perpanjangan sewa Anda"*
+   - Tab RIWAYAT: *"Daftar riwayat sewa dan transaksi terdahulu"*
 
-### B. Halaman Hunian Saya (`functions/public/pages/MyKost.tsx`)
-1. **Pembersihan Logika Pengenalan Kamar (`processedActive`)**:
-   - Menghilangkan fallback aneh yang memaksakan teks `'Kamar 3'` atau menduplikasi nama tipe kamar menjadi nomor kamar.
-   - Jika Mitra Biasa (`roomNumber == null`): Menampilkan badge oranye elegan `[ TIPE STANDARD ]`.
-   - Jika KostManager (`roomNumber != null`): Menampilkan badge unit spesifik `[ UNIT 102 ]` bersanding dengan badge tipe `[ STANDARD ]`.
-2. **Eliminasi Teks Duplikat**:
-   - Memperbaiki teks modal perpanjangan dari yang sebelumnya `Standard • Standard` menjadi:
-     - `Kamar 102 • Tipe Standard` (untuk KostManager).
-     - `Tipe Standard` (untuk Mitra Biasa).
-3. **Format Pelaporan WhatsApp Customer Service**:
-   - Pesan template WhatsApp kini secara otomatis menyesuaikan nama unit kamar yang relevan sesuai jenis propertinya.
+7. **Integritas Fitur Simulasi**:
+   - Komponen `TimeSimulator` tetap dipertahankan utuh dan fungsional di lingkungan dev/testing untuk keperluan simulasi perpanjangan sewa di masa mendatang.
 
 ---
 
-## 3. Hasil Pengujian & Verifikasi
+## Verifikasi & Pengujian
 
-| Komponen | Status | Hasil |
-|---|---|---|
-| Frontend Build (`functions/public`) | ✅ Lulus | `vite build` selesai dengan exit code 0 (0 error, 0 duplicate keys). |
-| Backend Build (`functions`) | ✅ Lulus | `tsc` selesai dengan exit code 0 (0 error). |
-| Pengajuan Sewa Mitra Biasa | ✅ Terverifikasi | Berhasil tersimpan ke Supabase tanpa error `PGRST204`. |
-| Pengajuan Sewa KostManager | ✅ Terverifikasi | `room_id` dan nomor unit fisik tersimpan rapi. |
+### 1. Uji Kompilasi Frontend
+- **Perintah**: `cmd.exe /c "npm --prefix functions/public run build"`
+- **Hasil**: **Lulus 100% (Exit code 0)**.
+  - Bundling Vite v6.4.1 selesai tanpa error TypeScript maupun JSX.
+
+### 2. Uji Kompilasi Backend Functions
+- **Perintah**: `cmd.exe /c "npm --prefix functions run build"`
+- **Hasil**: **Lulus 100% (Exit code 0)**.
+  - TypeScript compiler (`tsc`) berhasil tanpa error.
 
 ---
 
-## 4. Status Git & Repository
-- Seluruh modifikasi telah diuji dan siap di-commit ke branch `bukan-productions`.
+## Panduan Pengujian Pengguna (Verifikasi di UI)
+
+1. Buka halaman **Kost Saya** (`/my-kost` atau melalui navigasi profil).
+2. Perhatikan tab **Diajukan**:
+   - Subtitle header kini berbunyi: *"Pantau status persetujuan pengajuan sewa Anda"*.
+   - Kartu pengajuan sewa baru:
+     - Jika properti baru belum memiliki ulasan, badge rating menampilkan `⭐ Belum ada ulasan` (bukan 5 bintang dummy).
+     - Jika bukan Mitra KostManager, badge verifikasi menampilkan `Mitra Komunitas` (bukan klaim sepihak *Terverifikasi RuangSinggah*).
+     - Muncul **Banner Edukasi SLA Respon Pemilik** yang menegaskan bahwa pembayaran dilakukan setelah pemilik menyetujui.
+     - Muncul **Info Grid 4 Kolom**: Paket Sewa, Rencana Masuk, Penghuni, dan Est. Tagihan (Belum Bayar).
+     - Tombol aksi utama kini adalah **`[ 💬 Hubungi Pemilik Kost ]`**, bukan `Rute Ke Kost`.
+     - Tombol **`Detail Kost`** dan **`Rute Lokasi`** bersanding rapi di bawahnya.
+     - Tombol **`Batalkan Pengajuan`** berada di bagian bawah dengan tampilan bersih.
+3. Beralih ke tab **Aktif**:
+   - Subtitle header berubah menjadi: *"Kelola hunian aktif & perpanjangan sewa Anda"*.
+   - Kartu sewa lunas/aktif tetap menampilkan tombol `Rute Ke Kost`, `Terima Kunci`, `Perpanjang Sewa`, `Lapor Kendala Kamar`, dan `Beri Ulasan`.

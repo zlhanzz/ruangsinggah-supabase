@@ -2,6 +2,49 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 469. Standarisasi Menu Kost Saya (Tab Diajukan): Rating Riil vs Belum Ada Ulasan, Pembatasan Badge Verifikasi Khusus KostManager, Grid Parameter Sewa & Restrukturisasi Aksi Proptech (`MyKost.tsx`) (Oktober 2026)
+- **Permintaan & Masukan Pengguna**:
+  1. Penyesuaian rating dummy: Kartu kost merender 5 bintang emas statis padahal properti baru di-upload dan belum memiliki ulasan sama sekali. Harus menampilkan kondisi riil.
+  2. Pembatasan badge: Badge `Terverifikasi RuangSinggah` seharusnya hanya eksklusif untuk Mitra KostManager (properti terkelola dan terinspeksi), sedangkan properti Mitra Biasa tidak boleh mengklaim badge tersebut.
+  3. Ketiadaan rincian sewa pada status `PENDING_APPROVAL`: Parameter sewa (mulai masuk, durasi, kapasitas penghuni, dan estimasi tagihan belum bayar) tidak terlihat.
+  4. Hierarki tombol salah sasaran: Tombol `RUTE KE KOST` mendominasi sebagai tombol hitam utama padahal belum disetujui dan belum ada pembayaran. Seharusnya `Hubungi Pemilik` menjadi Primary Action.
+  5. Banner SLA respon pemilik 1x24 jam untuk menenangkan calon penyewa.
+  6. Subtitle header dibuat dinamis sesuai tab aktif.
+  7. Komponen `TimeSimulator` dipertahankan utuh untuk pengujian perpanjangan sewa di masa mendatang.
+- **Implementasi Solusi**:
+  1. **Rating Riil Transparan**:
+     - Meneruskan data `rating` dan `reviewsCount` riil dari tabel `properties` ke objek transaksi dan sewa aktif.
+     - Jika properti baru dan rating 0/belum ada: Menampilkan label elegan `⭐ Belum ada ulasan`.
+     - Jika sudah ada rating: Menampilkan bintang proporsional beserta angka desimal rating dan jumlah ulasan.
+  2. **Eksklusivitas Badge Verifikasi**:
+     - Menjadikan badge `Terverifikasi RuangSinggah` kondisional hanya jika `kost.isManagedKost === true`.
+     - Untuk Mitra Biasa (`!kost.isManagedKost`): Menampilkan badge netral `Mitra Komunitas` (tanpa menyematkan badge verifikasi KostManager).
+  3. **Ringkasan Parameter Pengajuan Sewa (*Booking Parameter Summary*)**:
+     - Membuka Info Grid 4 kolom untuk status `PENDING_APPROVAL` dan `AWAITING_PAYMENT`:
+       - ⏱️ Paket Sewa: Durasi sewa (misal: 1 Bulan).
+       - 📅 Rencana Masuk: Tanggal rencana check-in.
+       - 👥 Penghuni: Jumlah kapasitas penghuni yang diajukan.
+       - 💰 Est. Tagihan: Total tagihan yang diajukan bersanding dengan badge `Belum Bayar` / `Siap Bayar`.
+  4. **Banner Edukasi SLA Respon Pemilik 1x24 Jam**:
+     - Menambahkan banner informatif amber-orange di bawah status countdown: *"Pemilik kost sedang meninjau ketersediaan kamar. Pembayaran baru dilakukan setelah pengajuan Anda disetujui."*
+  5. **Restrukturisasi Hierarki Tombol Aksi Kontekstual**:
+     - Status `PENDING_APPROVAL`:
+       - **Primary CTA**: `[ 💬 Hubungi Pemilik Kost / Bantuan KostManager ]` (Emerald gradient, prominent).
+       - **Secondary Grid**: `[ 📄 Detail Kost ]` dan `[ 📍 Rute Lokasi ]` (Clean outline buttons).
+       - **Subtle Action**: `[ ❌ Batalkan Pengajuan ]` (Text outline halus tanpa visual agresif).
+     - Status aktif / lunas: Mempertahankan tombol `Rute Ke Kost` (hitam pekat), `Lapor Kendala`, dan `Beri Ulasan`.
+  6. **Subtitle Dinamis Header**:
+     - Tab DIAJUKAN: *"Pantau status persetujuan pengajuan sewa Anda"*
+     - Tab AKTIF: *"Kelola hunian aktif & perpanjangan sewa Anda"*
+     - Tab RIWAYAT: *"Daftar riwayat sewa dan transaksi terdahulu"*
+- **File Tersentuh**:
+  - `functions/public/pages/MyKost.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi frontend `npm --prefix functions/public run build` lulus 100% (code 0).
+  - Kompilasi backend `npm --prefix functions run build` (`tsc`) lulus 100% (code 0).
+
 ### 468. Standarisasi Arsitektur Tipe Kamar vs Nomor Kamar (Mitra Biasa vs KostManager) & Perbaikan Definitif Error PostgREST PGRST204 (`userService.ts`, `MyKost.tsx`) (Oktober 2026)
 - **Permintaan & Kebutuhan Pengguna**:
   1. Penyelidikan dan perbaikan error `PGRST204: Could not find the 'room_number' column of 'resident_status' in the schema cache` yang terjadi saat calon penyewa mengajukan sewa kamar kost.

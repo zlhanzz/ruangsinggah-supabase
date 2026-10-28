@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { supabase } from '../supabase';
-import { ArrowLeft, Clock, MapPin, Receipt, Upload, Plus, MessageSquare, AlertCircle, FileText, X, Star, CheckCircle, CheckCircle2, Smartphone, Phone, Calendar, Search, Heart, ChevronRight, XCircle, Zap, Check, Activity, DoorClosed, ChevronDown, ChevronUp, Camera, ShieldCheck, Building, Bed, Bath, Wifi, Maximize2, Share2, PhoneCall, HelpCircle, Layers, Wrench, RotateCcw, ZoomIn, Eye } from 'lucide-react';
+import { ArrowLeft, Clock, MapPin, Receipt, Upload, Plus, MessageSquare, AlertCircle, FileText, X, Star, CheckCircle, CheckCircle2, Smartphone, Phone, Calendar, Search, Heart, ChevronRight, XCircle, Zap, Check, Activity, DoorClosed, ChevronDown, ChevronUp, Camera, ShieldCheck, Building, Bed, Bath, Wifi, Maximize2, Share2, PhoneCall, HelpCircle, Layers, Wrench, RotateCcw, ZoomIn, Eye, Users } from 'lucide-react';
 import { Page } from '../types';
 import { addPropertyReview, getExtraBills, settlePendingBills, cancelBookingRequest, expireBookingTransaction, BOOKING_EXPIRY_HOURS, confirmCheckIn, requestEarlyCheckIn } from '../userService';
 import PaymentGateway from '../components/PaymentGateway';
@@ -819,6 +819,8 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
                             bathroomType: currentRoom?.bathroomType || (currentRoom?.bathroomFacilities?.length ? 'Kamar Mandi Dalam' : 'Kamar Mandi Luar'),
                             roomPhotos: roomPhotos,
                             isManagedKost: prop?.is_managed === true || doc.is_managed_kost === true || metadata.is_managed_kost === true || metadata.isManaged === true || metadata.managed_by === 'kostmanager',
+                            rating: Number(prop?.rating || 0),
+                            reviewsCount: Array.isArray(prop?.reviews) ? prop.reviews.length : Number(prop?.metadata?.reviewsCount || (prop?.reviews ? 1 : 0)),
                             address: prop?.address || doc.address || metadata.address || '',
                             areaCity: [prop?.area, prop?.city].filter(Boolean).join(', ') || '',
                             propertyFacilities: prop?.facilities || [],
@@ -1135,6 +1137,8 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
                     bathroomType: currentRoom?.bathroomType || (currentRoom?.bathroomFacilities?.length ? 'Kamar Mandi Dalam' : 'Kamar Mandi Luar'),
                     roomPhotos: roomPhotos,
                     isManagedKost: prop.is_managed === true || combinedMeta.is_managed_kost === true || combinedMeta.isManaged === true || combinedMeta.managed_by === 'kostmanager',
+                    rating: Number(prop.rating || 0),
+                    reviewsCount: Array.isArray(prop.reviews) ? prop.reviews.length : Number(prop.metadata?.reviewsCount || (prop.reviews ? 1 : 0)),
                     address: prop.address || combinedMeta.address || '',
                     areaCity: [prop.area, prop.city].filter(Boolean).join(', ') || '',
                     propertyFacilities: prop.facilities || [],
@@ -2190,9 +2194,13 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
                             </button>
                             <h1 className="text-4xl sm:text-5xl font-black text-gray-900 tracking-tight">Kost Saya</h1>
                         </div>
-                        <p className="flex items-center gap-2 text-gray-500 font-bold ml-16 md:ml-0">
-                            <span className="text-sm">⚡</span>
-                            Kelola hunian aktif Anda dengan mudah
+                        <p className="flex items-center gap-2 text-gray-500 font-bold ml-16 md:ml-0 text-xs sm:text-sm">
+                            <span className="text-orange-500">⚡</span>
+                            {activeTab === 'diajukan'
+                                ? 'Pantau status persetujuan pengajuan sewa Anda'
+                                : activeTab === 'riwayat'
+                                    ? 'Daftar riwayat sewa dan transaksi terdahulu'
+                                    : 'Kelola hunian aktif & perpanjangan sewa Anda'}
                         </p>
                     </div>
 
@@ -2505,15 +2513,42 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
                                                         <span className="line-clamp-1 sm:truncate text-[11px] sm:text-xs text-gray-600 font-semibold text-center sm:text-left leading-relaxed">{kost.address || kost.areaCity || 'Makassar'}</span>
                                                     </div>
 
-                                                    <div className="flex items-center justify-center sm:justify-start gap-2.5 sm:gap-3">
-                                                        <div className="flex gap-0.5">
-                                                            {[1, 2, 3, 4, 5].map((s) => (
-                                                                <Star key={s} className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-amber-400 fill-amber-400" />
-                                                            ))}
-                                                        </div>
-                                                        <span className="text-[8.5px] sm:text-[9px] font-bold text-gray-400 uppercase tracking-widest flex items-center gap-1">
-                                                            <ShieldCheck className="w-3 h-3 text-emerald-500" /> Terverifikasi RuangSinggah
-                                                        </span>
+                                                    <div className="flex items-center justify-center sm:justify-start gap-2.5 sm:gap-3 flex-wrap">
+                                                        {Number(kost.rating || 0) > 0 ? (
+                                                            <div className="flex items-center gap-1.5">
+                                                                <div className="flex gap-0.5">
+                                                                    {[1, 2, 3, 4, 5].map((s) => (
+                                                                        <Star
+                                                                            key={s}
+                                                                            className={`w-3 h-3 sm:w-3.5 sm:h-3.5 ${
+                                                                                s <= Math.round(Number(kost.rating))
+                                                                                    ? 'text-amber-400 fill-amber-400'
+                                                                                    : 'text-gray-200'
+                                                                            }`}
+                                                                        />
+                                                                    ))}
+                                                                </div>
+                                                                <span className="text-[10px] sm:text-xs font-black text-gray-800">
+                                                                    {Number(kost.rating).toFixed(1)}
+                                                                    {kost.reviewsCount ? ` (${kost.reviewsCount})` : ''}
+                                                                </span>
+                                                            </div>
+                                                        ) : (
+                                                            <div className="flex items-center gap-1 text-gray-400 text-[9.5px] sm:text-[10px] font-semibold">
+                                                                <Star className="w-3 h-3 text-gray-300" />
+                                                                <span>Belum ada ulasan</span>
+                                                            </div>
+                                                        )}
+
+                                                        {kost.isManagedKost ? (
+                                                            <span className="text-[8.5px] sm:text-[9px] font-extrabold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 rounded-full uppercase tracking-wider flex items-center gap-1 shadow-xs">
+                                                                <ShieldCheck className="w-3 h-3 text-emerald-500" /> Terverifikasi RuangSinggah
+                                                            </span>
+                                                        ) : (
+                                                            <span className="text-[8.5px] sm:text-[9px] font-bold text-slate-500 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded-full uppercase tracking-wider flex items-center gap-1">
+                                                                Mitra Komunitas
+                                                            </span>
+                                                        )}
                                                     </div>
                                                 </div>
                                             </div>
@@ -2562,6 +2597,26 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
                                                                 {String(expiry.seconds).padStart(2, '0')}
                                                             </span>
                                                             <span className="text-[8px] font-sans text-gray-400 font-bold uppercase mt-0.5">Dtk</span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {/* Informational Banner for PENDING_APPROVAL (SLA 1x24 Jam) */}
+                                            {(kost.status || '').toUpperCase() === 'PENDING_APPROVAL' && (
+                                                <div className="p-4 sm:p-5 rounded-2xl sm:rounded-3xl bg-gradient-to-r from-amber-50/90 via-orange-50/70 to-amber-50/90 border border-amber-200/80 text-amber-950 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xs">
+                                                    <div className="flex items-center gap-3.5">
+                                                        <div className="w-10 h-10 rounded-2xl bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-xs">
+                                                            <Clock className="w-5 h-5" />
+                                                        </div>
+                                                        <div>
+                                                            <div className="flex items-center gap-2">
+                                                                <span className="text-[10.5px] font-black uppercase tracking-wider text-amber-900">Menunggu Konfirmasi Pemilik</span>
+                                                                <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 text-[9px] font-bold border border-amber-200/60">Estimasi 1x24 Jam</span>
+                                                            </div>
+                                                            <p className="text-xs font-medium text-amber-900/90 mt-0.5 leading-relaxed">
+                                                                Pemilik kost sedang meninjau ketersediaan kamar. Pembayaran baru dilakukan <strong>setelah</strong> pengajuan Anda disetujui.
+                                                            </p>
                                                         </div>
                                                     </div>
                                                 </div>
@@ -2708,6 +2763,59 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
                                                     ))}
                                                 </div>
                                             )}
+
+                                            {/* Info Grid for Pending & Awaiting Payment */}
+                                            {!isPaid && ['PENDING_APPROVAL', 'AWAITING_PAYMENT', 'PENDING'].includes((kost.status || '').toUpperCase()) && (
+                                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3 w-full">
+                                                    {[
+                                                        {
+                                                            label: 'Paket Sewa',
+                                                            value: `${kost.duration || 1} ${kost.period || 'Bulan'}`,
+                                                            subtext: 'Durasi',
+                                                            icon: Clock,
+                                                            color: 'text-orange-500',
+                                                            bg: 'bg-orange-50'
+                                                        },
+                                                        {
+                                                            label: 'Rencana Masuk',
+                                                            value: kost.moveInDate ? FORMAT_DATE(kost.moveInDate) : 'Sesuai Jadwal',
+                                                            subtext: 'Check-in',
+                                                            icon: Calendar,
+                                                            color: 'text-blue-500',
+                                                            bg: 'bg-blue-50'
+                                                        },
+                                                        {
+                                                            label: 'Penghuni',
+                                                            value: `${Number(kMeta.occupants || kost.occupants || 1)} Orang`,
+                                                            subtext: 'Kapasitas',
+                                                            icon: Users,
+                                                            color: 'text-purple-500',
+                                                            bg: 'bg-purple-50'
+                                                        },
+                                                        {
+                                                            label: 'Est. Tagihan',
+                                                            value: FORMAT_CURRENCY(kost.totalPrice || 0),
+                                                            subtext: (kost.status || '').toUpperCase() === 'AWAITING_PAYMENT' ? 'Siap Bayar' : 'Belum Bayar',
+                                                            icon: Receipt,
+                                                            color: (kost.status || '').toUpperCase() === 'AWAITING_PAYMENT' ? 'text-orange-600' : 'text-amber-600',
+                                                            bg: (kost.status || '').toUpperCase() === 'AWAITING_PAYMENT' ? 'bg-orange-50' : 'bg-amber-50'
+                                                        }
+                                                    ].map((item, idx) => (
+                                                        <div key={idx} className="p-2.5 sm:p-3.5 bg-white rounded-xl sm:rounded-2xl border border-gray-100 shadow-xs flex flex-col justify-between gap-1.5 sm:gap-2 hover:border-orange-200 transition-colors group/stat">
+                                                            <div className="flex items-center justify-between gap-1">
+                                                                <div className={`w-7 h-7 sm:w-8 sm:h-8 ${item.bg} rounded-lg sm:rounded-xl flex items-center justify-center shrink-0 group-hover/stat:scale-110 transition-transform`}>
+                                                                    <item.icon className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${item.color}`} />
+                                                                </div>
+                                                                <span className="text-[8px] sm:text-[9px] font-bold text-gray-400 uppercase tracking-wider truncate">{item.subtext}</span>
+                                                            </div>
+                                                            <div>
+                                                                <p className="text-[8px] sm:text-[9px] font-black text-gray-400 uppercase tracking-wider mb-0.5">{item.label}</p>
+                                                                <p className="text-[11px] sm:text-sm font-black text-gray-900 leading-snug truncate">{item.value}</p>
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            )}
                                         </div>
 
                                         {/* Right / Actions Sidebar */}
@@ -2814,61 +2922,110 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
                                                 </div>
                                             )}
 
-                                            {/* Rute Ke Kost */}
-                                            <button
-                                                onClick={() => {
-                                                    if (kost.location?.lat && kost.location?.lng) {
-                                                        window.open(`https://www.google.com/maps/dir/?api=1&destination=${kost.location.lat},${kost.location.lng}`, '_blank');
-                                                    } else if (kost.locationUrl) {
-                                                        window.open(kost.locationUrl, '_blank');
-                                                    } else if (kost.address) {
-                                                        window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(kost.address)}`, '_blank');
-                                                    } else {
-                                                        alert('Lokasi belum tersedia');
-                                                    }
-                                                }}
-                                                className="w-full bg-gray-900 hover:bg-black text-white px-4 sm:px-5 py-3 sm:py-3.5 rounded-xl sm:rounded-2xl font-black flex items-center justify-center gap-2 sm:gap-2.5 transition-all text-[9.5px] sm:text-[10px] uppercase tracking-widest shadow-md active:scale-[0.98] group/btn cursor-pointer"
-                                            >
-                                                <MapPin className="w-4 h-4 text-orange-500 group-hover:scale-110 transition-transform" /> Rute Ke Kost
-                                            </button>
+                                            {/* Specialized Actions for PENDING_APPROVAL (Proptech Grade Priority) */}
+                                            {(kost.status || '').toUpperCase() === 'PENDING_APPROVAL' ? (
+                                                <>
+                                                    <button
+                                                        onClick={() => handleOpenChat(kost)}
+                                                        className="w-full bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white p-3.5 sm:p-4 rounded-xl sm:rounded-2xl font-black flex items-center justify-center gap-2 transition-all shadow-md shadow-emerald-600/20 active:scale-[0.98] text-[10px] sm:text-[11px] uppercase tracking-wider cursor-pointer"
+                                                    >
+                                                        <Smartphone className="w-4 h-4 text-emerald-200" />
+                                                        <span>{kost.isManagedKost ? 'Bantuan KostManager' : 'Hubungi Pemilik Kost'}</span>
+                                                    </button>
 
-                                            {/* Hubungi Pengelola / Pemilik */}
-                                            <button
-                                                onClick={() => handleOpenChat(kost)}
-                                                className="w-full bg-white hover:bg-emerald-50 text-emerald-600 border-2 border-emerald-100 px-4 sm:px-5 py-3 sm:py-3.5 rounded-xl sm:rounded-2xl font-black flex items-center justify-center gap-2 sm:gap-2.5 transition-all text-[9.5px] sm:text-[10px] uppercase tracking-widest active:scale-[0.98] cursor-pointer"
-                                            >
-                                                <Smartphone className="w-4 h-4" /> {kost.isManagedKost ? 'Bantuan KostManager' : 'Hubungi Pemilik'}
-                                            </button>
+                                                    <div className="grid grid-cols-2 gap-2 w-full">
+                                                        <button
+                                                            onClick={() => navigate(`${Page.DETAIL}?kostId=${kost.kostId}`)}
+                                                            className="bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 px-3 py-2.5 rounded-xl font-black flex items-center justify-center gap-1.5 transition-all text-[9px] uppercase tracking-wider active:scale-[0.98] cursor-pointer"
+                                                        >
+                                                            <FileText className="w-3.5 h-3.5 text-slate-400" /> Detail Kost
+                                                        </button>
+                                                        <button
+                                                            onClick={() => {
+                                                                if (kost.location?.lat && kost.location?.lng) {
+                                                                    window.open(`https://www.google.com/maps/dir/?api=1&destination=${kost.location.lat},${kost.location.lng}`, '_blank');
+                                                                } else if (kost.locationUrl) {
+                                                                    window.open(kost.locationUrl, '_blank');
+                                                                } else if (kost.address) {
+                                                                    window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(kost.address)}`, '_blank');
+                                                                } else {
+                                                                    alert('Lokasi belum tersedia');
+                                                                }
+                                                            }}
+                                                            className="bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 px-3 py-2.5 rounded-xl font-black flex items-center justify-center gap-1.5 transition-all text-[9px] uppercase tracking-wider active:scale-[0.98] cursor-pointer"
+                                                        >
+                                                            <MapPin className="w-3.5 h-3.5 text-orange-500" /> Rute Lokasi
+                                                        </button>
+                                                    </div>
 
-                                            {/* Lapor Kendala Fasilitas Kamar */}
-                                            {isPaid && !kost.is_checked_out && (
-                                                <button
-                                                    onClick={() => handleOpenComplaint(kost)}
-                                                    className="w-full bg-white hover:bg-rose-50 text-rose-600 border border-rose-200 px-4 sm:px-5 py-2.5 sm:py-3 rounded-xl sm:rounded-2xl font-black flex items-center justify-center gap-2 transition-all text-[9px] uppercase tracking-widest active:scale-[0.98] cursor-pointer"
-                                                >
-                                                    <Wrench className="w-3.5 h-3.5 text-rose-500" /> Lapor Kendala Kamar
-                                                </button>
-                                            )}
+                                                    {!isExpiredBooking && (
+                                                        <button
+                                                            onClick={() => handleCancelBooking(kost)}
+                                                            className="w-full text-slate-400 hover:text-rose-600 hover:bg-rose-50 border border-transparent hover:border-rose-100 py-2.5 rounded-xl text-[9px] font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+                                                        >
+                                                            <XCircle className="w-3.5 h-3.5" /> Batalkan Pengajuan
+                                                        </button>
+                                                    )}
+                                                </>
+                                            ) : (
+                                                <>
+                                                    {/* Rute Ke Kost (For Paid / Active / Other States) */}
+                                                    <button
+                                                        onClick={() => {
+                                                            if (kost.location?.lat && kost.location?.lng) {
+                                                                window.open(`https://www.google.com/maps/dir/?api=1&destination=${kost.location.lat},${kost.location.lng}`, '_blank');
+                                                            } else if (kost.locationUrl) {
+                                                                window.open(kost.locationUrl, '_blank');
+                                                            } else if (kost.address) {
+                                                                window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(kost.address)}`, '_blank');
+                                                            } else {
+                                                                alert('Lokasi belum tersedia');
+                                                            }
+                                                        }}
+                                                        className="w-full bg-gray-900 hover:bg-black text-white px-4 sm:px-5 py-3 sm:py-3.5 rounded-xl sm:rounded-2xl font-black flex items-center justify-center gap-2 sm:gap-2.5 transition-all text-[9.5px] sm:text-[10px] uppercase tracking-widest shadow-md active:scale-[0.98] group/btn cursor-pointer"
+                                                    >
+                                                        <MapPin className="w-4 h-4 text-orange-500 group-hover:scale-110 transition-transform" /> Rute Ke Kost
+                                                    </button>
 
-                                            {/* Beri / Edit Ulasan & Rating Kost */}
-                                            {isPaid && (
-                                                <button
-                                                    onClick={() => handleOpenPropertyReview(kost)}
-                                                    className="w-full bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 px-4 sm:px-5 py-2.5 sm:py-3 rounded-xl sm:rounded-2xl font-black flex items-center justify-center gap-2 transition-all text-[9px] uppercase tracking-widest active:scale-[0.98] cursor-pointer"
-                                                >
-                                                    <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-500" />
-                                                    {userReviewMap[kost.kostId || kost.property_id || kost.id] ? 'Edit Ulasan & Rating' : 'Beri Ulasan & Rating'}
-                                                </button>
-                                            )}
+                                                    {/* Hubungi Pengelola / Pemilik */}
+                                                    <button
+                                                        onClick={() => handleOpenChat(kost)}
+                                                        className="w-full bg-white hover:bg-emerald-50 text-emerald-600 border-2 border-emerald-100 px-4 sm:px-5 py-3 sm:py-3.5 rounded-xl sm:rounded-2xl font-black flex items-center justify-center gap-2 sm:gap-2.5 transition-all text-[9.5px] sm:text-[10px] uppercase tracking-widest active:scale-[0.98] cursor-pointer"
+                                                    >
+                                                        <Smartphone className="w-4 h-4" /> {kost.isManagedKost ? 'Bantuan KostManager' : 'Hubungi Pemilik'}
+                                                    </button>
 
-                                            {/* Pending & Awaiting Payment Actions: Batalkan Pengajuan */}
-                                            {['PENDING_APPROVAL', 'AWAITING_PAYMENT', 'PENDING'].includes((kost.status || '').toUpperCase()) && !isExpiredBooking && (
-                                                <button
-                                                    onClick={() => handleCancelBooking(kost)}
-                                                    className="w-full bg-white border-2 border-gray-100 hover:border-red-500 hover:bg-red-50 hover:text-red-600 text-gray-500 p-3 sm:p-3.5 rounded-xl sm:rounded-2xl font-black flex items-center justify-center gap-2 transition-all text-[9.5px] sm:text-[10px] uppercase tracking-widest active:scale-[0.98] group/cancel cursor-pointer"
-                                                >
-                                                    <XCircle className="w-4 h-4 group-hover/cancel:rotate-90 transition-transform" /> Batalkan Pengajuan
-                                                </button>
+                                                    {/* Lapor Kendala Fasilitas Kamar */}
+                                                    {isPaid && !kost.is_checked_out && (
+                                                        <button
+                                                            onClick={() => handleOpenComplaint(kost)}
+                                                            className="w-full bg-white hover:bg-rose-50 text-rose-600 border border-rose-200 px-4 sm:px-5 py-2.5 sm:py-3 rounded-xl sm:rounded-2xl font-black flex items-center justify-center gap-2 transition-all text-[9px] uppercase tracking-widest active:scale-[0.98] cursor-pointer"
+                                                        >
+                                                            <Wrench className="w-3.5 h-3.5 text-rose-500" /> Lapor Kendala Kamar
+                                                        </button>
+                                                    )}
+
+                                                    {/* Beri / Edit Ulasan & Rating Kost */}
+                                                    {isPaid && (
+                                                        <button
+                                                            onClick={() => handleOpenPropertyReview(kost)}
+                                                            className="w-full bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 px-4 sm:px-5 py-2.5 sm:py-3 rounded-xl sm:rounded-2xl font-black flex items-center justify-center gap-2 transition-all text-[9px] uppercase tracking-widest active:scale-[0.98] cursor-pointer"
+                                                        >
+                                                            <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-500" />
+                                                            {userReviewMap[kost.kostId || kost.property_id || kost.id] ? 'Edit Ulasan & Rating' : 'Beri Ulasan & Rating'}
+                                                        </button>
+                                                    )}
+
+                                                    {/* Awaiting Payment Actions: Batalkan Pengajuan */}
+                                                    {['AWAITING_PAYMENT', 'PENDING'].includes((kost.status || '').toUpperCase()) && !isExpiredBooking && (
+                                                        <button
+                                                            onClick={() => handleCancelBooking(kost)}
+                                                            className="w-full bg-white border-2 border-gray-100 hover:border-red-500 hover:bg-red-50 hover:text-red-600 text-gray-500 p-3 sm:p-3.5 rounded-xl sm:rounded-2xl font-black flex items-center justify-center gap-2 transition-all text-[9.5px] sm:text-[10px] uppercase tracking-widest active:scale-[0.98] group/cancel cursor-pointer"
+                                                        >
+                                                            <XCircle className="w-4 h-4 group-hover/cancel:rotate-90 transition-transform" /> Batalkan Pengajuan
+                                                        </button>
+                                                    )}
+                                                </>
                                             )}
                                         </div>
                                     </div>
