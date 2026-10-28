@@ -426,7 +426,9 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
     const handleReportIssueWhatsApp = (kost: any) => {
         const kMeta = kost.metadata || {};
         const tenantName = kMeta.tenantName || kMeta.userName || user?.displayName || user?.name || 'Penghuni';
-        const roomName = kost.roomNumber || kMeta.roomNumber || kost.roomType || 'Kamar';
+        const roomName = kost.roomNumber 
+            ? `Kamar ${kost.roomNumber.replace(/^kamar\s*/i, '').replace(/^unit\s*/i, '')} (${kost.roomType || 'Standard'})` 
+            : `Tipe ${kost.roomType || 'Standard'}`;
         const propertyTitle = kost.kostName || 'Kost';
         const adminWa = '6281527080656'; // Official KostManager / RuangSinggah Hotline
 
@@ -751,14 +753,19 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
                         }
 
                         const prop = propMap[doc.product_id || doc.kost_id];
-                        const targetRoomNum = (metadata.roomNumber || metadata.variantName || doc.room_number || '').trim();
+                        const isKm = prop?.is_managed === true || doc.is_managed_kost === true || metadata.is_managed_kost === true || metadata.isManaged === true || metadata.managed_by === 'kostmanager';
+                        const rawType = (doc.room_type || metadata.room_type || metadata.roomType || metadata.variantName || 'Standard').trim();
+                        const rawRoomNum = (metadata.assigned_room_number || metadata.roomNumber || (isKm ? doc.room_number : '') || '').trim();
+                        const cleanRoomNum = (rawRoomNum && rawRoomNum.toLowerCase() !== rawType.toLowerCase()) ? rawRoomNum : null;
+
                         const propRooms = prop?.room_types || [];
                         const currentRoom = propRooms.find((rm: any) => {
                             const rName = (rm.name || rm.roomNumber || '').trim();
-                            if (!rName && !targetRoomNum) return false;
-                            if (targetRoomNum && rName.toLowerCase() === targetRoomNum.toLowerCase()) return true;
+                            if (!rName) return false;
+                            if (cleanRoomNum && rName.toLowerCase() === cleanRoomNum.toLowerCase()) return true;
+                            if (rawType && rName.toLowerCase() === rawType.toLowerCase()) return true;
                             const rNumOnly = rName.replace(/^kamar\s*/i, '').trim().toLowerCase();
-                            const tNumOnly = targetRoomNum.replace(/^kamar\s*/i, '').trim().toLowerCase();
+                            const tNumOnly = (cleanRoomNum || '').replace(/^kamar\s*/i, '').trim().toLowerCase();
                             if (rNumOnly && tNumOnly && rNumOnly === tNumOnly) return true;
                             return false;
                         }) || (propRooms.length === 1 ? propRooms[0] : null);
@@ -804,8 +811,8 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
                             id: doc.id,
                             kostName: prop?.title || doc.properties?.title || doc.kost_name || metadata.kostName,
                             kostId: prop?.id || doc.properties?.id || doc.kost_id || doc.product_id,
-                            roomType: doc.room_type || metadata.roomType,
-                            roomNumber: targetRoomNum || currentRoom?.name || currentRoom?.roomNumber || doc.room_type || metadata.roomType || 'Kamar',
+                            roomType: rawType,
+                            roomNumber: cleanRoomNum,
                             roomFloor: currentRoom?.floor || null,
                             roomSize: currentRoom?.dimensions || currentRoom?.size || null,
                             roomFacilities: currentRoom?.roomFacilities || currentRoom?.facilities || [],
@@ -966,14 +973,19 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
                 const combinedMeta = { ...lastTrxMeta, ...rMeta };
 
                 // Extract room information and photos
-                const targetRoomNum = (rMeta.roomNumber || rMeta.variantName || r.room_number || combinedMeta.roomNumber || lastTrxMeta.roomNumber || '').trim();
+                const isKm = prop.is_managed === true || combinedMeta.is_managed_kost === true || combinedMeta.isManaged === true || combinedMeta.managed_by === 'kostmanager';
+                const rawType = (r.room_type || combinedMeta.room_type || combinedMeta.roomType || combinedMeta.variantName || 'Standard').trim();
+                const rawRoomNum = (rMeta.assigned_room_number || combinedMeta.assigned_room_number || rMeta.roomNumber || combinedMeta.roomNumber || (isKm ? r.room_number : '') || '').trim();
+                const cleanRoomNum = (rawRoomNum && rawRoomNum.toLowerCase() !== rawType.toLowerCase()) ? rawRoomNum : null;
+
                 const propRooms = prop.room_types || [];
                 const currentRoom = propRooms.find((rm: any) => {
                     const rName = (rm.name || rm.roomNumber || '').trim();
-                    if (!rName && !targetRoomNum) return false;
-                    if (targetRoomNum && rName.toLowerCase() === targetRoomNum.toLowerCase()) return true;
+                    if (!rName) return false;
+                    if (cleanRoomNum && rName.toLowerCase() === cleanRoomNum.toLowerCase()) return true;
+                    if (rawType && rName.toLowerCase() === rawType.toLowerCase()) return true;
                     const rNumOnly = rName.replace(/^kamar\s*/i, '').trim().toLowerCase();
-                    const tNumOnly = targetRoomNum.replace(/^kamar\s*/i, '').trim().toLowerCase();
+                    const tNumOnly = (cleanRoomNum || '').replace(/^kamar\s*/i, '').trim().toLowerCase();
                     if (rNumOnly && tNumOnly && rNumOnly === tNumOnly) return true;
                     return false;
                 }) || (propRooms.length === 1 ? propRooms[0] : null);
@@ -1076,13 +1088,7 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
                     residentStatusId: r.id,
                     kostName: prop.title || r.kost_name || combinedMeta.kostName || 'Kost Saya',
                     kostId: r.kost_id,
-                    roomType: (() => {
-                        const rt1 = r.room_type || '';
-                        const rt2 = lastTrx.room_type || '';
-                        if (rt1 && !rt1.toLowerCase().includes('sewa')) return rt1;
-                        if (rt2 && !rt2.toLowerCase().includes('sewa')) return rt2;
-                        return 'Kamar Standard';
-                    })(),
+                    roomType: rawType || 'Kamar Standard',
                     pendingBills: pendBills,
                     totalPendingBills: totalPend,
                     // PAKET SEWA = current active package (from last sync/extension metadata)
@@ -1122,7 +1128,7 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
                         return lastTrx.amount || prop.price || 0;
                     })(),
                     displayImage: displayImg,
-                    roomNumber: targetRoomNum || currentRoom?.name || currentRoom?.roomNumber || r.room_type || 'Kamar 3',
+                    roomNumber: cleanRoomNum,
                     roomFloor: currentRoom?.floor || null,
                     roomSize: currentRoom?.dimensions || currentRoom?.size || null,
                     roomFacilities: currentRoom?.roomFacilities || currentRoom?.facilities || [],
@@ -2457,15 +2463,24 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
                                                             </div>
                                                         )}
 
-                                                        {/* Specific Room Badge */}
-                                                        <span className="px-2.5 sm:px-3.5 py-0.5 sm:py-1 rounded-full text-[9px] sm:text-[10px] font-black text-white bg-orange-500 shadow-sm shadow-orange-200 uppercase tracking-wider flex items-center gap-1 sm:gap-1.5">
-                                                            <DoorClosed className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
-                                                            {kost.roomNumber ? `UNIT ${kost.roomNumber.toUpperCase()}` : 'KAMAR'}
-                                                        </span>
+                                                        {/* Specific Room Badge / Room Type Badge */}
+                                                        {kost.roomNumber ? (
+                                                            <span className="px-2.5 sm:px-3.5 py-0.5 sm:py-1 rounded-full text-[9px] sm:text-[10px] font-black text-white bg-orange-500 shadow-sm shadow-orange-200 uppercase tracking-wider flex items-center gap-1 sm:gap-1.5">
+                                                                <DoorClosed className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
+                                                                {`UNIT ${kost.roomNumber.replace(/^unit\s*/i, '').replace(/^kamar\s*/i, '').toUpperCase()}`}
+                                                            </span>
+                                                        ) : (
+                                                            <span className="px-2.5 sm:px-3.5 py-0.5 sm:py-1 rounded-full text-[9px] sm:text-[10px] font-black text-white bg-orange-500 shadow-sm shadow-orange-200 uppercase tracking-wider flex items-center gap-1 sm:gap-1.5">
+                                                                <DoorClosed className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
+                                                                TIPE {(kost.roomType || 'Standard').toUpperCase()}
+                                                            </span>
+                                                        )}
 
-                                                        <span className="px-2.5 sm:px-3 py-0.5 sm:py-1 rounded-full text-[8.5px] sm:text-[9px] font-bold text-slate-700 uppercase tracking-wider bg-slate-100 border border-slate-200">
-                                                            {kost.roomType || 'Standard'}
-                                                        </span>
+                                                        {kost.roomNumber && (
+                                                            <span className="px-2.5 sm:px-3 py-0.5 sm:py-1 rounded-full text-[8.5px] sm:text-[9px] font-bold text-slate-700 uppercase tracking-wider bg-slate-100 border border-slate-200">
+                                                                {kost.roomType || 'Standard'}
+                                                            </span>
+                                                        )}
 
                                                         {kost.roomFloor && (
                                                             <span className="px-2.5 sm:px-3 py-0.5 sm:py-1 rounded-full text-[8.5px] sm:text-[9px] font-bold text-slate-700 uppercase tracking-wider bg-slate-100 border border-slate-200 flex items-center gap-1">
@@ -2984,7 +2999,9 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
                                                         <Clock className="w-3.5 h-3.5" /> Masa Sewa Berjalan
                                                     </div>
                                                     <p className="text-sm font-extrabold text-white mt-0.5">
-                                                        {selectedKost.roomNumber || selectedKost.roomType || 'Kamar'} • {selectedKost.roomType || 'Standard'}
+                                                        {selectedKost.roomNumber 
+                                                            ? `Kamar ${selectedKost.roomNumber.replace(/^kamar\s*/i, '').replace(/^unit\s*/i, '')} • Tipe ${selectedKost.roomType || 'Standard'}`
+                                                            : `Tipe ${selectedKost.roomType || 'Standard'}`}
                                                     </p>
                                                 </div>
                                                 <span className="bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 text-[9px] font-extrabold px-2.5 py-1 rounded-full uppercase tracking-wider flex items-center gap-1">

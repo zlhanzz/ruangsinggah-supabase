@@ -1,59 +1,66 @@
-# Walkthrough - Progres #467: Penyempurnaan Mobile Bottom Sheet & Restorasi Alur Booking Proptech
+# Walkthrough: Perbaikan Error PostgREST PGRST204 & Standarisasi Tipe Kamar vs Nomor Kamar
 
-Dokumen ini merangkum penyempurnaan formulir pengajuan sewa ([BookingModal.tsx](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/components/BookingModal.tsx)) untuk mengatasi masalah tertutupnya tombol oleh bilah menu bawah pada perangkat mobile serta merestorasi visual alur transaksi 3-langkah (**Pengajuan Sewa > Konfirmasi Pemilik > Pembayaran**).
-
----
-
-## 🌟 Ringkasan Perbaikan yang Diterapkan
-
-### 1. Peningkatan Z-Index ke `z-[150]` (Bebas Halangan Menu Navigasi Bawah)
-- **Akar Masalah**: Bilah navigasi bawah (*Mobile Bottom Navigation Bar*) pada [Navbar.tsx](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/components/Navbar.tsx) memiliki level `z-[100]`. Ketika modal berada pada `z-[90]`, menu navigasi (`Home`, `Search`, `Chat`, `Orders`, `Profile`) tetap berada di lapisan terdepan dan menutupi tombol submit `[ Ajukan Sewa ]` serta ringkasan total harga.
-- **Solusi**: Kontainer modal dan backdrop dinaikkan ke **`z-[150]`**.
-  - Modal kini menutupi layar bagian bawah secara utuh layaknya *native bottom sheet* standar Airbnb / Traveloka.
-  - Sticky Footer Bar dan tombol aksi `[ Ajukan Sewa → ]` 100% muncul di lapisan terdepan dan bebas dari tumpukan elemen navigasi.
-
-### 2. Restorasi Alur Booking 3-Langkah (Ringkas & Proptech Grade)
-- Menampilkan visual tahapan 3 langkah yang bersih dan terstruktur rapi tepat di bawah header modal:
-  - **Tahap 1 (Aktif)**: `1. Pengajuan Sewa` (Badge lingkaran oranye `1` + teks tebal oranye).
-  - Pemisah: Ikon `ChevronRight` tipis netral.
-  - **Tahap 2**: `2. Konfirmasi Pemilik` (Badge lingkaran abu-abu `2` + teks netral).
-  - Pemisah: Ikon `ChevronRight` tipis netral.
-  - **Tahap 3**: `3. Pembayaran` (Badge lingkaran abu-abu `3` + teks netral).
-- **Tujuan**: Mengedukasi calon penyewa secara visual bahwa mereka **belum ditagih biaya sewa saat ini**, melainkan baru melakukan pembayaran setelah pemilik kost menyetujui ketersediaan kamar.
-
-### 3. Penataan Sticky Action Bar dengan Safe-Area Padding
-- Mengatur padding bawah pada sticky footer bar dengan formula `pb-[max(1.2rem,env(safe-area-inset-bottom))]`.
-- Tombol `[ Ajukan Sewa ]` memiliki jarak aman dari batas bawah layar ponsel maupun gesture bar iOS/Android sehingga nyaman disentuh oleh jempol.
-- Menghilangkan glitch border vertikal pada bar edukasi reasuransi.
+Dokumen ini merangkum perbaikan tuntas terhadap kendala pengajuan sewa, eliminasi error skema database PostgREST `PGRST204`, serta standarisasi model bisnis penyewaan kost antara **Mitra Biasa** dan **Mitra KostManager**.
 
 ---
 
-## 🔍 Hasil Pengujian & Verifikasi
+## 1. Analisis Akar Masalah (Root Cause)
+1. **Error PostgREST `PGRST204`**:
+   - Calon penyewa mengalami pesan error saat menekan tombol `[ Ajukan Sewa Sekarang ]`:
+     ```text
+     Gagal mengajukan sewa: Could not find the 'room_number' column of 'resident_status' in the schema cache
+     ```
+   - **Penyebab**: Kode pada `userService.ts` mengirimkan kolom fisik root `room_number` ke dalam tabel Supabase `resident_status`. Berdasarkan skema tabel PostgreSQL asli, kolom `room_number` **memang tidak ada** di tabel `resident_status`, melainkan berada di tabel relasional `rooms` (melalui relasi `room_id`).
 
-1. **Frontend Compilation Build**:
-   ```bash
-   npm --prefix functions/public run build
-   ```
-   - **Hasil**: `✓ built in 1m 19s` (Exit Code 0, 0 error).
-
-2. **Backend Compilation Build**:
-   ```bash
-   npm --prefix functions run build
-   ```
-   - **Hasil**: `tsc` selesai 100% tanpa error (Exit Code 0).
-
-3. **Kepatuhan Ikon**:
-   - 100% menggunakan bundled vector SVG dari `lucide-react` (`Home`, `MapPin`, `Calendar`, `Clock`, `ShieldCheck`, `CheckCircle2`, `Users`, `ArrowRight`, `ChevronRight`, `X`). Bebas kedipan font ligature (FOUT).
+2. **Perbedaan Model Bisnis Mitra Biasa vs KostManager**:
+   - **Mitra Biasa (Katalog Publik)**:
+     - Pemilik kost hanya mendaftarkan kuota umum berdasarkan kategori tipe kamar (misal: "Standard", "Deluxe", "VIP").
+     - Penyewa memilih tipe kamar, bukan nomor fisik kamar spesifik.
+     - Penomoran fisik diserahkan saat penyewa tiba di kost dan serah terima kunci.
+   - **Mitra KostManager (Sistem Manajemen PMS Lengkap)**:
+     - Properti memiliki data denah dan unit kamar fisik spesifik di tabel `rooms` (`room_id`, `name`, `roomNumber`).
+     - Penyewa atau pemilik dapat menetapkan kamar spesifik (misal: "Kamar 102").
+   - **Risiko Downgrade / Berhenti Berlangganan**:
+     - Jika sebuah kost KostManager berhenti berlangganan / *downgrade* ke Mitra Biasa, sistem tidak boleh crash atau gagal saat penyewa memesan. Sistem kini secara otomatis dan anggun memperlakukan pesanan sebagai sewa tipe kamar (*category-based booking*).
 
 ---
 
-## 🚀 Panduan Pengujian bagi Pengguna
+## 2. Rincian Perubahan Kode
 
-1. **Uji di Layar Ponsel**:
-   - Buka halaman Detail Kost, klik tombol **"Ajukan Sewa"**.
-   - **Perhatikan**:
-     1. Bilah menu navigasi bawah (`Home`, `Search`, dll.) kini tertutup sempurna di balik backdrop/modal.
-     2. Di bagian paling bawah layar ponsel, terdapat bilah sticky putih dengan **Total Tagihan** di kiri dan tombol oranye **`[ Ajukan Sewa ]`** di kanan yang siap ditekan.
-     3. Tepat di bawah nama kost terdapat alur transaksi **`1. Pengajuan Sewa > 2. Konfirmasi Pemilik > 3. Pembayaran`**.
-2. **Uji di Layar Desktop**:
-   - Modal tetap tampil sebagai dialog proporsional di tengah layar dengan alur 3-langkah yang elegan dan sticky action bar di bawahnya.
+### A. Backend Data Layer (`functions/public/userService.ts`)
+1. **Pembersihan Root Payload `resident_status`**:
+   - Menghapus kolom fisik `room_number` dari payload `resident_status.insert([...])`.
+   - Menjaga relasi yang valid:
+     - `room_type`: Nama tipe kamar murni (misal: "Standard").
+     - `room_id`: UUID dari tabel `rooms` (jika KostManager; bernilai `null` jika Mitra Biasa).
+     - Objek `metadata`: Menyimpan `room_assignment_type: isKm ? 'specific_unit' : 'category_only'` dan `assigned_room_number`.
+2. **Pembersihan Transaksi Finansial (`transactions`)**:
+   - Pada tabel `transactions`, `room_number` juga disimpan dengan aman dan modular tanpa menimbulkan konflik skema database.
+
+### B. Halaman Hunian Saya (`functions/public/pages/MyKost.tsx`)
+1. **Pembersihan Logika Pengenalan Kamar (`processedActive`)**:
+   - Menghilangkan fallback aneh yang memaksakan teks `'Kamar 3'` atau menduplikasi nama tipe kamar menjadi nomor kamar.
+   - Jika Mitra Biasa (`roomNumber == null`): Menampilkan badge oranye elegan `[ TIPE STANDARD ]`.
+   - Jika KostManager (`roomNumber != null`): Menampilkan badge unit spesifik `[ UNIT 102 ]` bersanding dengan badge tipe `[ STANDARD ]`.
+2. **Eliminasi Teks Duplikat**:
+   - Memperbaiki teks modal perpanjangan dari yang sebelumnya `Standard • Standard` menjadi:
+     - `Kamar 102 • Tipe Standard` (untuk KostManager).
+     - `Tipe Standard` (untuk Mitra Biasa).
+3. **Format Pelaporan WhatsApp Customer Service**:
+   - Pesan template WhatsApp kini secara otomatis menyesuaikan nama unit kamar yang relevan sesuai jenis propertinya.
+
+---
+
+## 3. Hasil Pengujian & Verifikasi
+
+| Komponen | Status | Hasil |
+|---|---|---|
+| Frontend Build (`functions/public`) | ✅ Lulus | `vite build` selesai dengan exit code 0 (0 error, 0 duplicate keys). |
+| Backend Build (`functions`) | ✅ Lulus | `tsc` selesai dengan exit code 0 (0 error). |
+| Pengajuan Sewa Mitra Biasa | ✅ Terverifikasi | Berhasil tersimpan ke Supabase tanpa error `PGRST204`. |
+| Pengajuan Sewa KostManager | ✅ Terverifikasi | `room_id` dan nomor unit fisik tersimpan rapi. |
+
+---
+
+## 4. Status Git & Repository
+- Seluruh modifikasi telah diuji dan siap di-commit ke branch `bukan-productions`.

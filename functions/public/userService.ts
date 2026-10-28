@@ -889,6 +889,11 @@ export async function createBookingRequest(bookingData: {
 
     const bookingSessionId = crypto.randomUUID();
     
+    const isKm = Boolean(bookingData.metadata?.is_managed_kost || bookingData.metadata?.isManaged);
+    const roomTypeName = bookingData.metadata?.roomType || bookingData.metadata?.variantName || '-';
+    const physicalRoomId = isKm ? (bookingData.metadata?.roomId || null) : null;
+    const physicalRoomNumber = isKm ? (bookingData.metadata?.roomNumber || null) : null;
+
     // 0. Create Resident Status record (Inactive/Pending until payment)
     const { data: resStatus, error: resError } = await supabase
       .from('resident_status')
@@ -898,12 +903,16 @@ export async function createBookingRequest(bookingData: {
         status: 'PENDING', // Will be activated on payment
         start_date: bookingData.metadata?.startDate || getCurrentDate().toISOString().split('T')[0],
         end_date: bookingData.metadata?.endDate || getCurrentDate().toISOString().split('T')[0],
-        room_type: bookingData.metadata?.roomType || '-',
-        room_number: bookingData.metadata?.roomNumber || bookingData.metadata?.variantName || null,
+        room_type: roomTypeName,
+        room_id: physicalRoomId,
         metadata: {
             ...bookingData.metadata,
             booking_session_id: bookingSessionId,
-            created_via: 'booking_request'
+            created_via: 'booking_request',
+            is_managed: isKm,
+            room_type: roomTypeName,
+            room_assignment_type: isKm ? 'specific_unit' : 'category_only',
+            assigned_room_number: physicalRoomNumber
         }
       }])
       .select()

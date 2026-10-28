@@ -2,6 +2,35 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 468. Standarisasi Arsitektur Tipe Kamar vs Nomor Kamar (Mitra Biasa vs KostManager) & Perbaikan Definitif Error PostgREST PGRST204 (`userService.ts`, `MyKost.tsx`) (Oktober 2026)
+- **Permintaan & Kebutuhan Pengguna**:
+  1. Penyelidikan dan perbaikan error `PGRST204: Could not find the 'room_number' column of 'resident_status' in the schema cache` yang terjadi saat calon penyewa mengajukan sewa kamar kost.
+  2. Audit komparatif standar industri mengenai relasi tipe kamar vs nomor kamar:
+     - Mitra Biasa: Calon penyewa menyewa berbasis kategori tipe kamar (`room_type`), tidak memilih nomor fisik spesifik saat booking. Nomor fisik dialokasikan manual oleh pemilik saat serah terima kunci.
+     - Mitra KostManager: Properti dikelola sistem PMS penuh (`rooms` table), memilih unit nomor fisik spesifik.
+  3. Kesiapan arsitektur jika properti KostManager berhenti berlangganan / *downgrade* ke Mitra Biasa: transisi otomatis kembali ke sewa tipe kamar tanpa merusak database dan tanpa error.
+- **Implementasi Solusi**:
+  1. **Pembersihan Root Kolom Database `resident_status`**:
+     - Menghapus kolom fisik `room_number` dari root payload `resident_status.insert([...])` di `userService.ts` (karena kolom ini memang tidak ada di skema tabel `resident_status`, melainkan berada di tabel `rooms` via `room_id`).
+     - Menyimpan informasi kamar secara rapi dan modular:
+       - `room_type`: Nama tipe kamar murni (misal: "Standard", "Deluxe").
+       - `room_id`: UUID dari tabel `rooms` (hanya terisi jika KostManager; `null` untuk Mitra Biasa).
+       - Objek `metadata`: Menyimpan `room_assignment_type: isKm ? 'specific_unit' : 'category_only'` dan `assigned_room_number`.
+  2. **Penyempurnaan Visual Penghuni di `MyKost.tsx`**:
+     - Mengeliminasi duplikasi kata *"Kamar Standard • Standard"* atau *"UNIT STANDARD"*.
+     - Jika Mitra Biasa (`roomNumber == null`): Menampilkan badge oranye elegan `[ TIPE STANDARD ]`.
+     - Jika KostManager (`roomNumber != null`): Menampilkan badge `[ UNIT 102 ]` bersanding dengan `[ STANDARD ]`.
+     - Modal perpanjangan sewa dan format pesan kendala WhatsApp otomatis menampilkan identitas unit yang ramah dan akurat.
+- **File Tersentuh**:
+  - `functions/public/userService.ts`
+  - `functions/public/pages/MyKost.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi frontend `npm --prefix functions/public run build` lulus 100% (code 0) tanpa warning.
+  - Kompilasi backend `npm --prefix functions run build` (`tsc`) lulus 100% (code 0).
+  - Skema database aman dan sinkron dengan standar industri proptech.
+
 ### 467. Penyempurnaan Tampilan Mobile & Restorasi Alur Booking 3-Langkah: z-[150] Overlay, Sticky Action Bar & Stepper Proptech (`BookingModal.tsx`) (Oktober 2026)
 - **Permintaan & Kebutuhan Pengguna**:
   1. Pada pengujian mobile, tampilan modal pengajuan sewa dinilai belum sepenuhnya mobile-friendly karena bagian bawahnya terhalang oleh Mobile Bottom Navigation Bar (`Home`, `Search`, `Chat`, `Orders`, `Profile`) yang memiliki `z-[100]`.
