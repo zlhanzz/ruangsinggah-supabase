@@ -1,49 +1,51 @@
-# WALKTHROUGH - Penyederhanaan Header Foto & Penyembunyian Logika Internal Validasi dari Permukaan UI
+# WALKTHROUGH - Optimalisasi Menu Peraturan Kost dengan Katalog Preset Aturan Populer & Input Manual
 
 ## 📌 Ringkasan Pekerjaan
-Pekerjaan ini merapikan antarmuka pengunggahan foto pada formulir pendaftaran/edit kost mitra (*Langkah 5: Foto Properti & Kamar* di [KostFormMitra.tsx](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/components/KostFormMitra.tsx)) dengan mematuhi prinsip arsitektur UI/UX yang bersih: **memisahkan logika verifikasi background proses dari tampilan permukaan antarmuka**.
+Pekerjaan ini memperkaya dan mengoptimalkan antarmuka **Langkah 6 dari 6 (Peraturan Kost)** pada formulir pendaftaran/edit kost mitra di [KostFormMitra.tsx](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/components/KostFormMitra.tsx).
 
-1. **Pembersihan Elemen Inspeksi Internal**:
-   - Menghapus sub-card "Syarat Kelayakan Listing", kotak checklist chips (`Bangunan Depan`, `Kamar`, `KM Dalam`), dan teks kuliah internal (*"Standar industri mewajibkan minimal 3 foto..."*, *"Caption foto terkunci secara otomatis..."*).
-   - Menghilangkan beban visual yang membuat formulir terasa rumit dan menggurui pengguna.
-2. **Desain Header Minimalis & Elegan**:
-   - Judul: **Dokumentasi Foto Properti & Kamar**
-   - Subjudul: *"Unggah foto properti dan kamar kost Anda untuk menarik minat calon penyewa."*
-   - Badge Counter: `📸 {totalAllPhotos} Foto Terunggah`
-3. **Background Logic Tetap Menjaga Integritas Data**:
-   - Syarat kelayakan (minimal 3 foto total, wajib Bangunan Depan, wajib Kamar Tidur, dan wajib Kamar Mandi Dalam jika tersedia) tetap bekerja secara presisi di balik layar pada fungsi `validateCurrentStep` dan `handleSubmit`.
-   - Setiap kategori di kartu foto tetap memiliki penanda alami (`Wajib` vs `Dianjurkan`).
+Sebelumnya, pemilik kost disajikan kolom input teks kosong tunggal sehingga harus mengetik setiap aturan satu per satu dari nol. Kini, sistem menyediakan katalog aturan standar yang populer di kost-kostan Indonesia lengkap dengan fitur aktivasi satu-klik (*one-click toggle*), manajemen aturan aktif yang transparan, serta opsi input kustom manual yang tetap fleksibel.
 
 ---
 
-## 🛠️ Detail Perubahan File
+## 🛠️ Detail Perubahan
 
-### 1. [functions/public/components/KostFormMitra.tsx](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/components/KostFormMitra.tsx)
-- Menghapus variabel kalkulasi inspeksi: `requiredCategories`, `missingRequiredList`, `isTotalMet`, `isAllRequiredMet`.
-- Mengganti seluruh sub-card checklist dan teks penjelasan panjang dengan satu baris kartu header yang bersih:
-  ```tsx
-  {/* Header Ringkasan Media */}
-  <div className="bg-gradient-to-br from-orange-50 via-amber-50/50 to-white p-4 sm:p-5 rounded-3xl border border-orange-200/80 shadow-xs">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-              <div className="flex items-center gap-2">
-                  <Camera className="w-5 h-5 text-orange-600" />
-                  <h3 className="text-sm font-black text-gray-900 uppercase tracking-wider">
-                      Dokumentasi Foto Properti &amp; Kamar
-                  </h3>
-              </div>
-              <p className="text-xs text-gray-600 mt-1">
-                  Unggah foto properti dan kamar kost Anda untuk menarik minat calon penyewa.
-              </p>
-          </div>
-          <div className="flex items-center gap-2">
-              <span className="px-3.5 py-1.5 bg-white border border-orange-200 text-orange-600 rounded-full text-xs font-black shadow-xs">
-                  📸 {totalAllPhotos} Foto Terunggah
-              </span>
-          </div>
-      </div>
-  </div>
-  ```
+### 1. Katalog Preset Standar Kost Indonesia (`KOST_RULE_CATEGORIES`)
+Dikelompokkan ke dalam 5 kategori esensial dengan ikon representatif:
+1. **🕒 Akses & Kunjungan Tamu**:
+   - *Akses gerbang 24 jam*
+   - *Jam malam tamu berkunjung maks. pukul 22.00*
+   - *Tamu lawan jenis dilarang masuk ke dalam kamar*
+   - *Tamu menginap wajib melapor ke pengelola kost*
+   - *Dilarang membawa tamu menginap*
+   - *Gerbang wajib selalu dikunci kembali setelah keluar/masuk*
+2. **👥 Kapasitas & Tipe Penghuni**:
+   - *Maksimal 1 orang per kamar*
+   - *Boleh sekamar berdua (dengan biaya tambahan)*
+   - *Khusus penghuni resmi (tidak boleh dipindahtangankan)*
+   - *Penghuni pasutri wajib melampirkan surat/buku nikah resmi*
+3. **🚭 Ketertiban & Kebersihan**:
+   - *Dilarang merokok di dalam kamar tidur*
+   - *Dilarang membawa atau mengonsumsi miras dan narkoba*
+   - *Dilarang membuat kegaduhan / jam tenang setelah pukul 22.00*
+   - *Wajib menjaga kebersihan dan kerapian area bersama*
+   - *Dilarang membuang sampah atau pembalut ke dalam kloset*
+4. **⚡ Listrik, Fasilitas & Keamanan**:
+   - *Wajib mematikan lampu, AC, dan keran air saat meninggalkan kamar*
+   - *Membawa alat elektronik tambahan dikenakan biaya tambahan*
+   - *Dilarang memasak di dalam kamar tidur*
+   - *Dilarang memaku atau merusak dinding kamar tanpa izin pengelola*
+5. **🐾 Hewan Peliharaan**:
+   - *Dilarang membawa hewan peliharaan*
+   - *Boleh membawa hewan peliharaan tertentu (kucing/hewan kecil)*
+
+### 2. Fitur Interaktif pada Antarmuka (UI/UX)
+- **One-Click Toggle**: Mengetuk tombol chip akan langsung menambahkan atau menghapus aturan dari daftar `form.rules`.
+- **Indikator Visual Tegas**: Chip aturan yang aktif disorot dengan warna oranye cerah (`bg-orange-500 text-white font-bold`) beserta ikon centang `Check`.
+- **Daftar Aturan yang Diterapkan**:
+  - Menyajikan counter total aturan (`📋 X Aturan Diterapkan`).
+  - Menampilkan daftar nomor urut aturan aktif dengan tombol hapus cepat `(X)` per item dan opsi `Hapus Semua`.
+- **Input Kustom Manual**:
+  - Kolom teks dengan tombol `+ Tambah` dan shortcut tombol `Enter` untuk mengetik aturan khusus yang tidak ada di daftar preset.
 
 ---
 
@@ -55,7 +57,7 @@ Pekerjaan ini merapikan antarmuka pengunggahan foto pada formulir pendaftaran/ed
    ```
    - **Hasil**: **Exit Code 0 (Sukses 100%)**.
    - `✓ 2512 modules transformed.`
-   - `✓ built in 39.34s`
+   - `✓ built in 1m 17s`
    - 0 error TypeScript (`tsc`) dan bundler Vite.
 2. **Uji Kompilasi Backend (`functions`)**:
    ```powershell
@@ -66,13 +68,16 @@ Pekerjaan ini merapikan antarmuka pengunggahan foto pada formulir pendaftaran/ed
 
 ---
 
-## 📋 Panduan Verifikasi Pengguna (User Testing Guide)
+## 📋 Panduan Pengujian Pengguna (User Testing Guide)
 
 1. **Buka Formulir Pendaftaran / Edit Kost Mitra**:
-   - Masuk ke Langkah 5 (Foto Properti & Kamar).
-2. **Perhatikan Tampilan Header**:
-   - Tampilan bagian atas kini sangat bersih, rapi, dan seimbang.
-   - Tidak ada lagi kotak "Syarat Kelayakan Listing", deretan chip checklist, atau teks justifikasi sistem.
-   - Hanya terdapat judul, deskripsi ramah, dan pill counter jumlah foto terunggah.
-3. **Verifikasi Background Validation Logic**:
-   - Coba kosongkan foto Bangunan Depan atau Kamar Tidur lalu klik **Lanjut**: sistem tetap secara cerdas mencegah navigasi dengan pesan validasi ramah di form.
+   - Masuk ke **Langkah 6 (Peraturan Kost)**.
+2. **Uji Pemilihan Preset**:
+   - Klik chip *"Akses gerbang 24 jam"* dan *"Dilarang merokok di dalam kamar tidur"*.
+   - Perhatikan chip berubah warna menjadi oranye dengan ikon centang `✓`.
+   - Perhatikan kedua aturan tersebut langsung masuk ke kartu **"Peraturan yang Diterapkan (2)"** di bagian bawah.
+3. **Uji Hapus / Toggle**:
+   - Klik kembali salah satu chip preset atau klik tombol `(X)` pada daftar di bawah. Aturan akan terhapus dengan mulus.
+4. **Uji Input Kustom**:
+   - Ketik aturan manual pada kolom *"Tambah Peraturan Khusus Lainnya"*, misalnya: *"Iuran sampah Rp 25.000 per bulan"*, lalu tekan **Enter** atau tombol **+ Tambah**.
+   - Aturan kustom berhasil masuk ke daftar aturan aktif.

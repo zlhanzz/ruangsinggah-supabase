@@ -14,7 +14,7 @@ import {
     Plus, Trash2, Check, AlertCircle, Loader2, Upload, Image as ImageIcon,
     Phone, BookOpen, DollarSign, Search, Navigation, ShieldCheck, User, Users, Maximize2,
     Crosshair, CheckCircle2, Sparkles, LocateFixed, FileText, RotateCcw, Save, Droplets, Bed, ShieldAlert,
-    Pencil, Layers, Info, Zap, CookingPot
+    Pencil, Layers, Info, Zap, CookingPot, Clock
 } from 'lucide-react';
 
 interface KostFormMitraProps {
@@ -76,6 +76,70 @@ const MONTH_BASED_CONFIG: { key: PricingPeriod; label: string; months: number }[
     { key: '3bulanan', label: '3 Bulan',  months: 3 },
     { key: '6bulanan', label: '6 Bulan',  months: 6 },
     { key: 'tahunan',  label: 'Tahunan',  months: 12 },
+];
+
+const KOST_RULE_CATEGORIES: {
+    id: string;
+    title: string;
+    icon: 'clock' | 'users' | 'shield' | 'zap' | 'info';
+    rules: string[];
+}[] = [
+    {
+        id: 'tamu_akses',
+        title: 'Akses & Kunjungan Tamu',
+        icon: 'clock',
+        rules: [
+            'Akses gerbang 24 jam',
+            'Jam malam tamu berkunjung maks. pukul 22.00',
+            'Tamu lawan jenis dilarang masuk ke dalam kamar',
+            'Tamu menginap wajib melapor ke pengelola kost',
+            'Dilarang membawa tamu menginap',
+            'Gerbang wajib selalu dikunci kembali setelah keluar/masuk'
+        ]
+    },
+    {
+        id: 'kapasitas_penghuni',
+        title: 'Kapasitas & Tipe Penghuni',
+        icon: 'users',
+        rules: [
+            'Maksimal 1 orang per kamar',
+            'Boleh sekamar berdua (dengan biaya tambahan)',
+            'Khusus penghuni resmi (tidak boleh dipindahtangankan)',
+            'Penghuni pasutri wajib melampirkan surat/buku nikah resmi'
+        ]
+    },
+    {
+        id: 'ketertiban_kebersihan',
+        title: 'Ketertiban & Kebersihan',
+        icon: 'shield',
+        rules: [
+            'Dilarang merokok di dalam kamar tidur',
+            'Dilarang membawa atau mengonsumsi miras dan narkoba',
+            'Dilarang membuat kegaduhan / jam tenang setelah pukul 22.00',
+            'Wajib menjaga kebersihan dan kerapian area bersama',
+            'Dilarang membuang sampah atau pembalut ke dalam kloset'
+        ]
+    },
+    {
+        id: 'listrik_fasilitas',
+        title: 'Listrik & Pemakaian Fasilitas',
+        icon: 'zap',
+        rules: [
+            'Wajib mematikan lampu, AC, dan keran air saat meninggalkan kamar',
+            'Membawa alat elektronik tambahan dikenakan biaya tambahan',
+            'Dilarang memasak di dalam kamar tidur',
+            'Dilarang memaku atau merusak dinding kamar tanpa izin pengelola'
+        ]
+    },
+    {
+        id: 'hewan',
+        title: 'Hewan Peliharaan',
+        icon: 'info',
+        rules: [
+            'Dilarang membawa hewan peliharaan',
+            'Boleh membawa hewan peliharaan tertentu (kucing/hewan kecil)'
+        ]
+    }
 ];
 
 interface PublicPhotoCategoryDef {
@@ -6538,30 +6602,186 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
             }
 
             // ── STEP 5: Peraturan Kost ─────────────────────────────────────────
-            case 5: return (
-                <div className="space-y-6">
-                    <Field label="Peraturan Kost" hint="Tambahkan aturan yang berlaku di kost Anda untuk calon penyewa">
-                        <div className="space-y-2">
-                            {(form.rules || []).map((r, i) => (
-                                <div key={i} className="flex items-center gap-2 p-3 bg-gray-50 rounded-xl border border-gray-100">
-                                    <span className="w-5 h-5 rounded-full bg-orange-100 text-orange-600 flex items-center justify-center text-[10px] font-black shrink-0">{i+1}</span>
-                                    <p className="text-xs font-medium text-gray-700 flex-1">{r}</p>
-                                    <button type="button" onClick={() => upd('rules',(form.rules||[]).filter((_,idx)=>idx!==i))} className="text-rose-400 shrink-0"><X size={14}/></button>
+            case 5: {
+                const currentRules = form.rules || [];
+                const toggleRule = (ruleText: string) => {
+                    if (currentRules.includes(ruleText)) {
+                        upd('rules', currentRules.filter(r => r !== ruleText));
+                    } else {
+                        upd('rules', [...currentRules, ruleText]);
+                    }
+                };
+
+                const handleAddCustomRule = () => {
+                    const text = tempRule.trim();
+                    if (!text) return;
+                    if (!currentRules.includes(text)) {
+                        upd('rules', [...currentRules, text]);
+                    }
+                    setTempRule('');
+                };
+
+                return (
+                    <div className="space-y-6">
+                        {/* Header Ringkasan Peraturan */}
+                        <div className="bg-gradient-to-br from-orange-50 via-amber-50/50 to-white p-4 sm:p-5 rounded-3xl border border-orange-200/80 shadow-xs">
+                            <div className="flex flex-wrap items-center justify-between gap-3">
+                                <div>
+                                    <div className="flex items-center gap-2">
+                                        <BookOpen className="w-5 h-5 text-orange-600" />
+                                        <h3 className="text-sm font-black text-gray-900 uppercase tracking-wider">
+                                            Peraturan &amp; Tata Tertib Kost
+                                        </h3>
+                                    </div>
+                                    <p className="text-xs text-gray-600 mt-1">
+                                        Pilih aturan umum yang berlaku di kost Anda dengan satu ketukan, atau tambahkan aturan khusus secara manual.
+                                    </p>
                                 </div>
-                            ))}
+                                <div className="flex items-center gap-2">
+                                    <span className="px-3.5 py-1.5 bg-white border border-orange-200 text-orange-600 rounded-full text-xs font-black shadow-xs">
+                                        📋 {currentRules.length} Aturan Diterapkan
+                                    </span>
+                                </div>
+                            </div>
                         </div>
-                        <div className="flex gap-2 mt-2">
-                            <Input placeholder="Contoh: Dilarang membawa tamu di atas jam 21.00"
-                                value={tempRule} onChange={e => setTempRule(e.target.value)}
-                                onKeyDown={e => { if (e.key==='Enter') { e.preventDefault(); if(tempRule.trim()){ upd('rules',[...(form.rules||[]),tempRule.trim()]); setTempRule(''); }} }} />
-                            <button type="button" onClick={() => { if(tempRule.trim()){ upd('rules',[...(form.rules||[]),tempRule.trim()]); setTempRule(''); }}}
-                                className="w-12 h-12 bg-orange-500 text-white rounded-2xl flex items-center justify-center shrink-0">
-                                <Plus size={18}/>
-                            </button>
+
+                        {/* Katalog Pilihan Rekomendasi Peraturan Standar Kost Indonesia */}
+                        <div className="space-y-4">
+                            <div className="flex items-center justify-between">
+                                <h4 className="text-xs font-black text-gray-800 uppercase tracking-wider">
+                                    Pilihan Peraturan Umum (Populer di Indonesia)
+                                </h4>
+                                <span className="text-[11px] text-gray-400 font-medium">
+                                    Klik untuk mengaktifkan / menonaktifkan
+                                </span>
+                            </div>
+
+                            <div className="space-y-3.5">
+                                {KOST_RULE_CATEGORIES.map(cat => {
+                                    const activeCountInCat = cat.rules.filter(r => currentRules.includes(r)).length;
+                                    return (
+                                        <div key={cat.id} className="bg-white p-3.5 sm:p-4 rounded-2xl border border-gray-200/90 shadow-2xs space-y-2.5">
+                                            <div className="flex items-center justify-between">
+                                                <div className="flex items-center gap-2 text-xs font-black text-gray-800">
+                                                    {cat.icon === 'clock' && <Clock size={15} className="text-orange-500" />}
+                                                    {cat.icon === 'users' && <Users size={15} className="text-orange-500" />}
+                                                    {cat.icon === 'shield' && <ShieldCheck size={15} className="text-orange-500" />}
+                                                    {cat.icon === 'zap' && <Zap size={15} className="text-orange-500" />}
+                                                    {cat.icon === 'info' && <AlertCircle size={15} className="text-orange-500" />}
+                                                    <span>{cat.title}</span>
+                                                </div>
+                                                {activeCountInCat > 0 && (
+                                                    <span className="text-[10px] font-bold text-orange-600 bg-orange-50 px-2 py-0.5 rounded-full border border-orange-200">
+                                                        {activeCountInCat} terpilih
+                                                    </span>
+                                                )}
+                                            </div>
+
+                                            <div className="flex flex-wrap gap-2">
+                                                {cat.rules.map(rule => {
+                                                    const isSelected = currentRules.includes(rule);
+                                                    return (
+                                                        <button
+                                                            key={rule}
+                                                            type="button"
+                                                            onClick={() => toggleRule(rule)}
+                                                            className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-all cursor-pointer flex items-center gap-1.5 text-left leading-snug ${
+                                                                isSelected
+                                                                    ? 'bg-orange-500 text-white font-bold shadow-xs hover:bg-orange-600 scale-[1.01]'
+                                                                    : 'bg-gray-50 hover:bg-orange-50/60 text-gray-700 border border-gray-200 hover:border-orange-300'
+                                                            }`}
+                                                        >
+                                                            {isSelected ? (
+                                                                <Check size={13} className="shrink-0 stroke-[3]" />
+                                                            ) : (
+                                                                <Plus size={13} className="shrink-0 text-gray-400" />
+                                                            )}
+                                                            <span>{rule}</span>
+                                                        </button>
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
                         </div>
-                    </Field>
-                </div>
-            );
+
+                        {/* Input Peraturan Kustom Manual */}
+                        <div className="bg-white p-4 rounded-2xl border border-gray-200/90 shadow-2xs space-y-2">
+                            <label className="block text-xs font-bold text-gray-800">
+                                Tambah Peraturan Khusus Lainnya (Manual):
+                            </label>
+                            <div className="flex gap-2">
+                                <Input 
+                                    placeholder="Tulis aturan khusus jika belum ada di atas (lalu tekan Enter atau klik +)..."
+                                    value={tempRule} 
+                                    onChange={e => setTempRule(e.target.value)}
+                                    maxLength={120}
+                                    onKeyDown={e => { 
+                                        if (e.key === 'Enter') { 
+                                            e.preventDefault(); 
+                                            handleAddCustomRule();
+                                        } 
+                                    }} 
+                                />
+                                <button 
+                                    type="button" 
+                                    onClick={handleAddCustomRule}
+                                    className="h-11 px-4 bg-orange-600 hover:bg-orange-700 text-white rounded-2xl flex items-center justify-center gap-1.5 shrink-0 text-xs font-bold shadow-xs transition-colors cursor-pointer"
+                                >
+                                    <Plus size={16}/>
+                                    <span className="hidden sm:inline">Tambah</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Daftar Peraturan yang Sedang Diterapkan */}
+                        {currentRules.length > 0 ? (
+                            <div className="bg-slate-50/80 p-4 rounded-2xl border border-slate-200/80 space-y-3">
+                                <div className="flex items-center justify-between">
+                                    <h4 className="text-xs font-black text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+                                        <CheckCircle2 size={14} className="text-emerald-600" />
+                                        <span>Peraturan yang Diterapkan ({currentRules.length}):</span>
+                                    </h4>
+                                    <button
+                                        type="button"
+                                        onClick={() => upd('rules', [])}
+                                        className="text-[11px] font-bold text-rose-600 hover:underline cursor-pointer"
+                                    >
+                                        Hapus Semua
+                                    </button>
+                                </div>
+                                <div className="space-y-2">
+                                    {currentRules.map((r, i) => (
+                                        <div key={i} className="flex items-center gap-2.5 p-2.5 bg-white rounded-xl border border-gray-200/80 shadow-2xs">
+                                            <span className="w-5 h-5 rounded-full bg-orange-100 text-orange-700 flex items-center justify-center text-[10px] font-black shrink-0">
+                                                {i + 1}
+                                            </span>
+                                            <p className="text-xs font-medium text-gray-800 flex-1 leading-snug">
+                                                {r}
+                                            </p>
+                                            <button 
+                                                type="button" 
+                                                onClick={() => upd('rules', currentRules.filter((_, idx) => idx !== i))} 
+                                                className="w-7 h-7 rounded-lg text-gray-400 hover:text-rose-600 hover:bg-rose-50 flex items-center justify-center shrink-0 transition-colors cursor-pointer"
+                                                title="Hapus peraturan ini"
+                                            >
+                                                <X size={14} />
+                                            </button>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="p-5 text-center bg-gray-50/60 rounded-2xl border border-dashed border-gray-200 text-gray-500 space-y-1">
+                                <p className="text-xs font-bold text-gray-600">Belum ada peraturan yang dipilih</p>
+                                <p className="text-[11px] text-gray-400">Silakan pilih rekomendasi peraturan di atas atau tulis peraturan khusus Anda.</p>
+                            </div>
+                        )}
+                    </div>
+                );
+            }
         }
     };
 

@@ -2,6 +2,37 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 458. Optimalisasi Menu Peraturan Kost dengan Katalog Preset Aturan Populer Indonesia & Input Kustom Manual (`KostFormMitra.tsx`) (Oktober 2026)
+- **Permintaan & Kebutuhan Pengguna**:
+  1. Mengoptimalkan menu *Peraturan Kost* (Langkah 6 dari 6) yang sebelumnya hanya berupa kolom input teks kosong manual.
+  2. Menyediakan pilihan preset peraturan yang lazim dan populer berlaku di berbagai kost di Indonesia, sehingga pemilik kost cukup mengeklik aturan yang relevan secara instan (*toggle on/off*).
+  3. Mempertahankan opsi penulisan aturan manual secara bebas jika ada aturan unik/spesifik pada properti terkait.
+- **Implementasi Detail**:
+  1. **Konstanta Katalog Aturan Populer Indonesia (`KOST_RULE_CATEGORIES`)**:
+     - Dikelompokkan ke dalam 5 kategori standar industri:
+       - 🕒 *Akses & Kunjungan Tamu*: Akses gerbang 24 jam, jam malam tamu maks 22.00, lawan jenis dilarang masuk kamar, tamu menginap wajib lapor, dilarang tamu menginap, gerbang wajib dikunci kembali.
+       - 👥 *Kapasitas & Tipe Penghuni*: Maksimal 1 orang per kamar, boleh sekamar berdua (biaya tambahan), khusus penghuni resmi, penghuni pasutri wajib surat nikah.
+       - 🚭 *Ketertiban & Kebersihan*: Dilarang merokok di kamar, dilarang miras/narkoba, dilarang kegaduhan/jam tenang setelah 22.00, wajib menjaga kebersihan area bersama, dilarang membuang sampah/pembalut ke kloset.
+       - ⚡ *Listrik & Pemakaian Fasilitas*: Wajib mematikan lampu/AC/keran air saat keluar, biaya tambahan barang elektronik, dilarang memasak di kamar tidur, dilarang memaku/merusak dinding.
+       - 🐾 *Hewan Peliharaan*: Dilarang membawa hewan peliharaan, boleh hewan tertentu (kucing/hewan kecil).
+  2. **Interaktivitas One-Click Toggle**:
+     - Chip preset dapat diklik untuk menambah/menghapus aturan secara instan dari `form.rules`.
+     - Chip aktif disorot dengan warna oranye elegan (`bg-orange-500 text-white font-bold`) beserta ikon centang `Check`.
+     - Chip non-aktif memiliki border lembut dengan ikon `Plus`.
+  3. **Manajemen Aturan Aktif yang Transparan**:
+     - Menampilkan counter total aturan diterapkan (`📋 X Aturan Diterapkan`).
+     - Menyajikan daftar nomor urut aturan aktif lengkap dengan tombol hapus cepat per item `(X)` dan tombol `Hapus Semua`.
+     - State kosong ramah (*empty state*) jika belum ada aturan yang dipilih.
+  4. **Input Manual Fleksibel**:
+     - Menyediakan input teks responsif dengan tombol `+ Tambah` dan dukungan tombol `Enter` untuk aturan khusus yang belum ada di katalog preset.
+- **File Tersentuh**:
+  - `functions/public/components/KostFormMitra.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi frontend `npm --prefix functions/public run build` lulus 100% 0 error (`✓ built in 1m 17s`, 2512 modules transformed).
+  - Kompilasi backend functions `npm --prefix functions run build` (`tsc`) lulus 100% 0 error.
+
 ### 457. Penyederhanaan Header Foto & Penyembunyian Logika Internal Validasi dari Permukaan UI (`KostFormMitra.tsx`) (Oktober 2026)
 - **Permintaan & Masalah**:
   1. Pengguna mengkritisi keberadaan card inspeksi "Syarat Kelayakan Listing", checklist chips kategori wajib, teks justifikasi internal standar industri, dan counter rasionalitas sistem di bagian atas Langkah 5.
