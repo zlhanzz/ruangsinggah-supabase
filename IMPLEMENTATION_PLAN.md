@@ -1,53 +1,65 @@
-# IMPLEMENTATION PLAN: Perbaikan Tampilan Default Tombol KostManager Menjadi "Silahkan Pilih Kamar Tersedia"
+# IMPLEMENTATION PLAN: Optimasi Transisi & Redesain UI/UX Tab Switcher Tipe Kamar
 
 ## 1. Analisis Masalah & Kebutuhan
 
 ### Masalah Saat Ini
-Pada properti yang dikelola melalui **KostManager** (`kost.isManaged = true`), saat calon penyewa membuka halaman detail kost untuk pertama kali (tampilan default):
-- Komponen menginisialisasi `selectedVariantIdx` ke indeks `0`.
-- Jika unit kamar pertama (`rooms[0]`) kebetulan sedang berstatus **Terisi** (`isAvailable: false`), sistem langsung menganggap kamar yang aktif adalah tidak tersedia.
-- Akibatnya, tombol utama di sidebar kanan langsung menampilkan status mati:
-  **`KAMAR PENUH`** (disabled abu-abu),
-  padahal pada tipe kamar tersebut **masih terdapat banyak unit kamar kosong/tersedia** (misal: 3 dari 4 kamar masih kosong).
-- Calon penyewa salah mengira bahwa kost sudah penuh total dan tidak dapat disewa.
+Pada halaman Detail Kost ([KostDetail.tsx](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/KostDetail.tsx)), calon penyewa merasa transisi dan peralihan saat mengeklik tab tipe kamar (misal: *Tipe Standard*, *Tipe Premium*) terasa **kurang smooth dan berat secara UI/UX**:
+1. **Jitter / Layout Shift**:
+   - Tab aktif menggunakan `ring-2 ring-orange-500 ring-offset-1` yang merubah ketebalan dan bounding box elemen secara dinamis.
+   - Badge ketersediaan di dalam tab memiliki border kondisional (`border border-emerald-200` saat tidak aktif, dan tanpa border saat aktif). Penambahan/penghapusan border ini memicu *micro layout shift* (pergeseran lebar tombol beberapa pixel).
+   - Penggunaan `transition-all` memaksa browser melakukan kalkulasi ulang box-sizing, border, dan layout secara menyeluruh (heavy reflow/repaint), bukan sekadar akselerasi GPU.
+2. **Estetika Visual Kaku (Clunky)**:
+   - Tombol-tombol tab tampil terpisah-pisah dengan kontras tebal yang kaku, belum menerapkan pola *Modern Segmented Pill Navigation* yang lazim pada aplikasi modern (seperti Airbnb/Apple).
+3. **Peralihan Konten Kasar**:
+   - Card fasilitas kamar di bawah tab berganti secara mendadak tanpa transisi crossfade yang lembut.
 
-### Kebutuhan Pengguna
-1. Pada listing yang terdaftar di KostManager, tampilan tombol default saat pertama kali dimuat **BUKAN "Kamar Penuh"**, melainkan **"Silahkan Pilih Kamar Tersedia"** (berwarna oranye aktif).
-2. Jika calon penyewa menekan tombol "Silahkan Pilih Kamar Tersedia", halaman akan mengarahkan / *smooth scroll* langsung ke bagian pilihan nomor kamar (*PILIH NOMOR KAMAR*) dengan sorotan visual.
-3. Begitu calon penyewa memilih salah satu nomor kamar yang tersedia di grid, tombol seketika berganti menjadi **"Ajukan Sewa [Nama/Nomor Kamar]"**.
-4. Tombol **"Kamar Penuh"** (disabled abu-abu) hanya boleh muncul jika seluruh kamar pada tipe tersebut **benar-benar 100% penuh** (`availableCount === 0` atau `isAvailable === false`).
+### Kebutuhan & Target Solusi
+1. **Zero Layout Shift (0px Pergeseran)**:
+   - Seluruh tab dan badge internal memiliki dimensi dan border metrics yang tetap dan konsisten dalam semua state (aktif, hover, maupun non-aktif).
+2. **Modern Segmented Pill Styling**:
+   - Membungkus switcher tipe kamar dalam wadah terintegrasi (*segmented control container*) yang elegan:
+     `bg-slate-100/90 p-1.5 rounded-2xl border border-slate-200/60 inline-flex flex-wrap gap-1.5`.
+   - **Tab Aktif**: Background putih bersih dengan teks oranye pekat bergradasi halus atau oranye solid modern, bayangan lembut (*soft elevation shadow*), tanpa flicker border.
+   - **Tab Non-Aktif**: Teks slate elegan, transisi hover lembut tanpa mengubah dimensi.
+3. **Hardware-Accelerated Smooth Transition**:
+   - Mengganti `transition-all` dengan `transition-colors transition-shadow duration-200 ease-out` untuk transisi super ringan (60fps).
+   - Menambahkan efek *tactile feedback* instan `active:scale-[0.98]` saat ditekan.
+4. **Smooth Content Fade Transition**:
+   - Memberikan transisi crossfade halus pada card rincian fasilitas di bawahnya dengan `key={selectedParentTypeIdx}` dan CSS keyframe transition yang mengalir alami tanpa lag.
 
 ---
 
 ## 2. Dampak Perubahan
 
-File yang akan dimodifikasi:
+File yang akan disentuh:
 - `functions/public/pages/KostDetail.tsx`:
-  1. Tambahkan state pelacak pilihan spesifik pengguna: `const [hasSelectedSpecificRoom, setHasSelectedSpecificRoom] = useState(false)`.
-  2. Perbarui penetapan `selectedChildRoom`: jika pengguna telah memilih kamar spesifik, ambil kamar tersebut; jika belum, biarkan `null` agar tidak memilih kamar terisi secara otomatis saat awal muat.
-  3. Beri penanda elemen `id="pilih-nomor-kamar-section"` pada kontainer interaktif nomor kamar.
-  4. Perbarui logika penentuan `isAvailable`, `buttonText`, dan handler klik tombol utama:
-     - Jika `isManaged` dan tipe kamar memiliki kamar tersedia (`currentParentGroup.isAvailable`):
-       - Jika belum memilih nomor kamar spesifik: tombol berstatus aktif oranye dengan teks **"Silahkan Pilih Kamar Tersedia"**, dan ketika diklik akan scroll halus ke blok pemilihan kamar.
-       - Jika sudah memilih nomor kamar: tombol bertuliskan **"Ajukan Sewa [Kamar]"** dan langsung membuka modal booking.
-     - Hanya jika seluruh kamar pada tipe tersebut penuh: tombol menampilkan **"Kamar Penuh"** (disabled abu-abu).
-  5. Saat pengguna berganti tipe kamar (`selectedParentTypeIdx`), reset `hasSelectedSpecificRoom` ke `false`.
-  6. Saat pengguna mengeklik chip nomor kamar di grid, set `hasSelectedSpecificRoom(true)`.
+  - Optimasi styling dan markup tab switcher tipe kamar pada bagian Fasilitas Kamar (baris 2033–2076).
+  - Optimasi wrapper rincian fasilitas kamar (baris 2080–2086) agar transisi konten mengalir mulus (*buttery smooth*).
 
 ---
 
 ## 3. Langkah-Langkah Eksekusi (Fase 2 Setelah di-ACC)
 
-1. **Modifikasi `KostDetail.tsx`**:
-   - Definisikan state `hasSelectedSpecificRoom`.
-   - Update logika `selectedChildRoom` dan reset saat pergantian tipe kamar.
-   - Update blok render tombol utama aksi (baris 2880-2915) dengan penanganan state KostManager yang baru.
-   - Tambahkan interaktivitas smooth scroll ke section nomor kamar saat tombol "Silahkan Pilih Kamar Tersedia" diklik.
-2. **Verifikasi Build**:
-   - Jalankan build frontend: `cmd.exe /c "npm --prefix functions/public run build"`
-   - Jalankan build backend: `cmd.exe /c "npm --prefix functions run build"`
-3. **Dokumentasi & Git Synchronization**:
-   - Catat entri progres baru **#461** di `functions/PROGRESS.md`.
+1. **Modifikasi Tab Switcher di `KostDetail.tsx`**:
+   - Terapkan kontainer segmented control modern:
+     ```tsx
+     <div className="inline-flex flex-wrap p-1.5 bg-slate-150/70 rounded-2xl border border-slate-200/80 gap-1.5 shadow-inner">
+     ```
+   - Standardisasi styling tombol tab:
+     - Gunakan fixed border profile (misal `border border-transparent` pada tab aktif dan `border border-transparent hover:border-slate-300/40` pada non-aktif) sehingga 0px perubahan ketebalan.
+     - Hilangkan `ring-offset-1` yang merusak rendering.
+     - Tambahkan `active:scale-[0.98] transition-all duration-200 ease-out`.
+   - Rapikan badge ukuran dan badge ketersediaan di dalam tab dengan fixed line-height dan padding stabil.
+2. **Optimasi Transisi Card Fasilitas**:
+   - Tambahkan animasi fade-slide lembut berbasis key:
+     ```tsx
+     <div key={selectedParentTypeIdx} className="bg-white p-5 sm:p-6 rounded-2xl sm:rounded-3xl border border-gray-100 shadow-sm shadow-gray-100/50 space-y-6 animate-in fade-in-50 duration-200">
+     ```
+3. **Verifikasi Build**:
+   - Uji build frontend: `cmd.exe /c "npm --prefix functions/public run build"`
+   - Uji build backend: `cmd.exe /c "npm --prefix functions run build"`
+4. **Dokumentasi & Git Synchronization**:
+   - Catat riwayat progres **#462** di `functions/PROGRESS.md`.
    - Terbitkan dokumen `WALKTHROUGH.md`.
    - Commit dan push ke branch GitHub `bukan-productions`.
 
@@ -55,13 +67,10 @@ File yang akan dimodifikasi:
 
 ## 4. Rencana Verifikasi
 
-1. **Uji Tampilan Default KostManager**:
-   - Buka halaman kost KostManager yang memiliki kamar terisi dan kamar kosong.
-   - Pastikan tombol tampil berwarna oranye bertuliskan **"Silahkan Pilih Kamar Tersedia"** (bukan "Kamar Penuh").
-2. **Uji Interaksi Pemilihan Kamar**:
-   - Klik tombol "Silahkan Pilih Kamar Tersedia" $\rightarrow$ layar scroll otomatis ke bagian nomor kamar.
-   - Klik salah satu nomor kamar kosong (misal: Kamar 102) $\rightarrow$ tombol berubah menjadi **"Ajukan Sewa Kamar 102"** dan chip kamar tercentang.
-3. **Uji Kondisi Benar-Benar Penuh**:
-   - Buka kamar/tipe yang seluruh kamarnya terisi $\rightarrow$ tombol tetap dengan benar menampilkan **"Kamar Penuh"** (disabled abu-abu).
-4. **Uji Kelulusan Build**:
-   - 0 error pada build TypeScript / Vite.
+1. **Uji Kecepatan & Kehalusan Klik**:
+   - Mengklik bolak-balik antara *Tipe Standard* dan *Tipe Premium* di desktop maupun mobile.
+   - Memastikan tidak ada lonjakan layout (*zero layout shift*), animasi terasa ringan, instan, dan memuaskan (*delightful tactile feel*).
+2. **Uji Keselarasan Data**:
+   - Memastikan rincian fasilitas, ukuran kamar, dan ketersediaan tetap sinkron 100% dengan tipe kamar yang dipilih.
+3. **Uji Kelulusan Build**:
+   - 0 error kompilasi pada frontend Vite dan backend TypeScript.

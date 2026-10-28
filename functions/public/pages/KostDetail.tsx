@@ -2031,7 +2031,7 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
                 <div className="space-y-4">
                   {/* Room Type Switcher Tabs (jika lebih dari 1 tipe kamar) */}
                   {parentRoomGroups.length > 1 && (
-                    <div className="flex flex-wrap gap-2 pb-1">
+                    <div className="inline-flex flex-wrap p-1.5 bg-slate-100/90 rounded-2xl border border-slate-200/70 gap-1.5 shadow-2xs">
                       {parentRoomGroups.map((grp, gIdx) => {
                         const isSelected = selectedParentTypeIdx === gIdx;
                         return (
@@ -2046,27 +2046,33 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
                                 setSelectedVariantIdx(firstChild.variantIdx);
                               }
                             }}
-                            className={`px-4 py-2.5 rounded-2xl text-xs font-black uppercase tracking-wider transition-all flex items-center gap-2 cursor-pointer ${
+                            className={`px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider flex items-center gap-2 cursor-pointer transition-colors duration-150 ease-out active:scale-[0.98] select-none border ${
                               isSelected
-                                ? 'bg-orange-500 text-white shadow-md shadow-orange-500/20 ring-2 ring-orange-500 ring-offset-1'
-                                : 'bg-white text-gray-700 border border-gray-200 hover:border-orange-300 hover:bg-orange-50/40 shadow-2xs'
+                                ? 'bg-orange-500 text-white border-orange-600 shadow-sm shadow-orange-500/25'
+                                : 'bg-white/80 hover:bg-white text-slate-700 border-slate-200/60 hover:border-slate-300'
                             }`}
                           >
-                            <Layers size={14} className={isSelected ? "text-white" : "text-orange-500"} />
-                            <span>{grp.typeName}</span>
+                            <Layers size={14} className={`shrink-0 transition-colors ${isSelected ? "text-white" : "text-orange-500"}`} />
+                            <span className="tracking-tight">{grp.typeName}</span>
                             {grp.size && (
-                              <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded-md ${isSelected ? 'bg-orange-600 text-orange-100' : 'bg-gray-100 text-gray-600'}`}>
+                              <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded-md transition-colors ${
+                                isSelected ? 'bg-orange-600/90 text-orange-50' : 'bg-slate-100 text-slate-600'
+                              }`}>
                                 {grp.size}
                               </span>
                             )}
-                            <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-md flex items-center gap-1 ${
+                            <span className={`text-[9px] font-bold px-2 py-0.5 rounded-md flex items-center gap-1.5 transition-colors border ${
                               isSelected
-                                ? 'bg-orange-600 text-white'
+                                ? 'bg-orange-600/90 text-white border-transparent'
                                 : grp.isAvailable
-                                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                                  : 'bg-rose-50 text-rose-700 border border-rose-200'
+                                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                  : 'bg-rose-50 text-rose-700 border-rose-200'
                             }`}>
-                              <span className={`w-1 h-1 rounded-full ${grp.isAvailable ? (isSelected ? 'bg-white' : 'bg-emerald-500') : (isSelected ? 'bg-white' : 'bg-rose-500')}`}></span>
+                              <span className={`w-1.5 h-1.5 rounded-full shrink-0 transition-colors ${
+                                isSelected 
+                                  ? 'bg-white' 
+                                  : (grp.isAvailable ? 'bg-emerald-500' : 'bg-rose-500')
+                              }`}></span>
                               <span>{grp.isAvailable ? `${grp.availableCount} Tersedia` : 'Penuh'}</span>
                             </span>
                           </button>
@@ -2082,7 +2088,10 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
                     const facData = getGroupStructuredFacilities(activeGroup);
 
                     return (
-                      <div className="bg-white p-5 sm:p-6 rounded-2xl sm:rounded-3xl border border-gray-100 shadow-sm shadow-gray-100/50 space-y-6 animate-in fade-in duration-200">
+                      <div 
+                        key={selectedParentTypeIdx}
+                        className="bg-white p-5 sm:p-6 rounded-2xl sm:rounded-3xl border border-gray-100 shadow-sm shadow-gray-100/50 space-y-6 animate-in fade-in duration-200"
+                      >
                         {/* Header Info Tipe Kamar */}
                         <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-gray-100 gap-3">
                           <div className="flex items-center gap-3">

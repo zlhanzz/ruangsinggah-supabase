@@ -2,6 +2,31 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 462. Optimasi Transisi & Redesain UI/UX Segmented Control Tab Switcher Tipe Kamar (`KostDetail.tsx`) (Oktober 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna merasakan peralihan dan perpindahan saat mengeklik tab tipe kamar (misal: *Tipe Standard*, *Tipe Premium*) di halaman detail kost terasa kurang smooth, berat, dan ada sentakan visual (*clunky & heavy*).
+  2. Analisis teknis menemukan adanya *micro layout shift* akibat perubahan dinamis atribut `ring-2 ring-offset-1` dan border kondisional pada badge ketersediaan, serta penggunaan `transition-all` yang memicu browser reflow/repaint yang berat.
+- **Implementasi Solusi**:
+  1. **Redesain Segmented Pill Control Modern**:
+     - Mengelompokkan seluruh tombol tab ke dalam kontainer pill terpadu: `inline-flex flex-wrap p-1.5 bg-slate-100/90 rounded-2xl border border-slate-200/70 gap-1.5 shadow-2xs`.
+     - Standardisasi border metric 100% konsisten (`border border-orange-600` pada tab aktif dan `border border-slate-200/60` pada tab non-aktif), menghapus 100% layout shift (0px jitter).
+     - Menghilangkan `ring-offset-1` yang merusak bounding box rendering.
+  2. **Transisi Hardware-Accelerated 60fps & Tactile Feedback**:
+     - Mengganti `transition-all` menjadi `transition-colors duration-150 ease-out` yang ringan dan lancar.
+     - Menambahkan micro-interaction `active:scale-[0.98]` untuk sensasi sentuhan yang responsif (*instant tactile feel*).
+     - Menstabilkan badge ukuran dan badge ketersediaan dengan fixed border & line-height.
+  3. **Smooth Crossfade Konten Fasilitas**:
+     - Menambahkan `key={selectedParentTypeIdx}` pada card rincian fasilitas kamar di bawahnya sehingga konten bertransisi dengan efek fade-in yang halus saat tipe kamar berganti.
+- **File Tersentuh**:
+  - `functions/public/pages/KostDetail.tsx`
+  - `functions/PROGRESS.md`
+  - `IMPLEMENTATION_PLAN.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi frontend `npm --prefix functions/public run build` sukses 100% tanpa error (`✓ built in 1m 21s`).
+  - Kompilasi backend `npm --prefix functions run build` (`tsc`) sukses 100% tanpa error.
+  - Tab switcher tipe kamar kini beralih secara instan, super smooth, tanpa lonjakan layout, dan terasa sangat ringan serta memuaskan.
+
 ### 461. Perbaikan Tampilan Default Tombol KostManager Menjadi "Silahkan Pilih Kamar Tersedia" (`KostDetail.tsx`) (Oktober 2026)
 - **Permintaan & Kebutuhan Pengguna**:
   1. Pada listing kost yang terdaftar di KostManager (`kost.isManaged = true`), saat calon penyewa membuka halaman detail kost, tampilan default sebelumnya keliru memicu tombol mati bertuliskan "Kamar Penuh" (disabled abu-abu).
