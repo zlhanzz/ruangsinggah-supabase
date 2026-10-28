@@ -10634,3 +10634,26 @@
 - **Verifikasi**:
   - Build Vite frontend `npm run build` di `functions/public/` sukses 100% dengan 0 error dalam 35.49s (✓ 2512 modules transformed).
 
+### 272. Pembersihan Total Teks & Alert Box "Cover Utama" dari Kartu Header Dokumentasi Foto (`KostFormMitra.tsx`) (Oktober 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna mengirim tangkapan layar kartu header "Dokumentasi Foto Properti & Kamar" yang memuat teks *"Foto kamar tidur utama akan otomatis dijadikan Foto Cover Utama pada preview pencarian..."* dan kotak alert kuning *"Perhatian: Mohon unggah minimal 1 foto pada kategori Kamar Tidur untuk dijadikan Cover Utama preview kost Anda."*.
+  2. Pengguna menegaskan bahwa seluruh bagian informasi "Cover Utama" tersebut adalah logika latar belakang (*background process*) yang tidak perlu ditampilkan sama sekali ke mitra.
+- **Implementasi & Solusi**:
+  1. **Penghapusan Total Alert Box Kuning / Amber**:
+     - Menghapus blok komponen `{!hasRoomCover && (...)}` serta ikon `AlertCircle` peringatan.
+     - Menghapus variabel `hasRoomCover` yang tidak lagi digunakan.
+  2. **Penyederhanaan Teks Deskripsi Header**:
+     - Paragraf deskripsi diubah menjadi kalimat panduan yang murni, bersih, dan ramah pengguna:
+       *"Unggah foto properti dan kamar kost Anda. Anda juga dapat memberi keterangan (caption) pada masing-masing foto."*
+  3. **Mempertahankan Indikator Jumlah Foto**:
+     - Badge counter `📸 {totalAllPhotos} Foto Terpilih` tetap dipertahankan untuk memberikan umpan balik jumlah foto yang sudah diunggah oleh mitra.
+  4. **Logika Latar Belakang Tetap Bekerja 100% (*Zero Regression*)**:
+     - Fungsi `getPhotoScore` saat simpan properti tetap otomatis menyusun foto kamar terbaik sebagai cover katalog pencarian di Supabase secara hening di background.
+- **File Tersentuh**:
+  - `functions/public/components/KostFormMitra.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Build Vite frontend `npm run build` di `functions/public/` sukses 100% dengan 0 error dalam 1m 1s (✓ 2512 modules transformed).
+
+

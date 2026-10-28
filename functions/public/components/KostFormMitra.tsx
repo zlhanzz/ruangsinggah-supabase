@@ -5807,7 +5807,6 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                 }).filter(p => !!p.src);
 
                 const totalAllPhotos = existingWithCats.length + newPhotoItems.length;
-                const hasRoomCover = existingWithCats.some(p => p.cat.startsWith('Kamar:')) || newPhotoItems.some(p => p.category.startsWith('Kamar:'));
 
                 return (
                     <div className="space-y-6">
@@ -5822,7 +5821,7 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                                         </h3>
                                     </div>
                                     <p className="text-xs text-gray-600 mt-1">
-                                        Foto kamar tidur utama akan otomatis dijadikan <strong>Foto Cover Utama</strong> pada preview pencarian. Anda juga dapat memberi keterangan (caption) pada masing-masing foto.
+                                        Unggah foto properti dan kamar kost Anda. Anda juga dapat memberi keterangan (caption) pada masing-masing foto.
                                     </p>
                                 </div>
                                 <div className="flex items-center gap-2">
@@ -5831,14 +5830,6 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                                     </span>
                                 </div>
                             </div>
-
-                            {/* Status Cover Alert */}
-                            {!hasRoomCover && (
-                                <div className="mt-3 flex items-center gap-2 bg-amber-100/70 border border-amber-300/80 text-amber-900 text-xs px-3 py-2 rounded-xl">
-                                    <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
-                                    <span><strong>Perhatian:</strong> Mohon unggah minimal 1 foto pada kategori <strong>Kamar Tidur</strong> untuk dijadikan Cover Utama preview kost Anda.</span>
-                                </div>
-                            )}
                         </div>
 
                         {/* Banner Deteksi & Penyamaran Kontak AI */}
