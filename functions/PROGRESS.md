@@ -27,6 +27,11 @@
   - `WALKTHROUGH.md`
 - **Verifikasi**:
   - Uji kelima API Key ke Google AI Studio: kelima kunci aktif 100% dengan akses ke 50 model.
+  - Deployment Supabase Edge Function `detect-contact-banner` sukses 100%.
+  - Uji live request ke endpoint Supabase Cloud membuktikan:
+    - Request #1 dilayani oleh `gemini-3.5-flash` dengan `keyIndexUsed: 5` (`triedErrors: []`, 0 error).
+    - Request #2 dilayani oleh `gemini-3.5-flash` dengan `keyIndexUsed: 1` (`triedErrors: []`, 0 error).
+    - Terbukti 100% True Random Load Balancing merata antar 5 akun Google tanpa hambatan.
   - Kompilasi frontend `npm --prefix functions/public run build` lulus 100% 0 error dalam **36.79s** (`✓ 2512 modules transformed`).
   - Kompilasi backend functions `npm --prefix functions run build` (`tsc`) lulus 100% 0 error.
 
