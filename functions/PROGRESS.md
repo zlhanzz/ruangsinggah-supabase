@@ -2,6 +2,31 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 453. Pencegahan Over-Blur Layar Penuh pada Fallback Heuristik Spanduk & Pemasangan Hard Safety Guardrails (`autoSensorService.ts`) (Oktober 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna melaporkan bahwa setelah pengetesan unggah foto, hasil sensor banner membuat foto menjadi hampir gelap gulita / hitam pekat dan merusak tampilan watermark foto.
+  2. Hasil investigasi menyeluruh:
+     - Edge Function AI terkena batas limit kuota Gemini API (HTTP 429), sehingga sistem beralih ke Fallback Heuristik Client-Side.
+     - Pada implementasi sebelumnya, terjadi efek penggabungan tak terkendali (*cascading snowball merging*): tekstur alami dinding/pagar/aspal memicu deteksi sel di hampir setiap baris dan digabungkan dengan toleransi padding horizontal-vertikal, sehingga kotak sensor membesar menyerap 80–90% foto menjadi satu kotak raksasa.
+     - Fungsi `applyPerspectivePolygonSensorToCanvas` menerapkan efek frosted glass gelap `rgba(15, 23, 42, 0.84)` di atas kotak raksasa tersebut dan menambahkan watermark capsule, lalu `drawRuangSinggahWatermarkPattern` menggambar watermark diagonal di atas foto yang sudah gelap gulita, menghasilkan efek "foto hitam berantakan".
+- **Implementasi Solusi**:
+  1. **Batas Geometris Keras pada Fallback Heuristik (`detectBannerRegionsClientSide`)**:
+     - Membatasi ukuran maksimal spanduk wajar: lebar maksimal <= 38% lebar foto (`MAX_ALLOWED_W = width * 0.38`), tinggi maksimal <= 28% tinggi foto (`MAX_ALLOWED_H = height * 0.28`), dan luas maksimal <= 8% total luas foto (`MAX_ALLOWED_AREA = (width * height) * 0.08`).
+     - Menghapus toleransi fusi longgar (`pad = 30px`) yang sebelumnya memicu efek domino fusi antar baris (snowball merging).
+     - Mengelompokkan segmen hanya jika baris bersebelahan (`rowDist <= 1`) dan overlap horizontal >= 40%.
+     - Menolak penggabungan jika ukuran gabungan melebihi batas spanduk wajar.
+     - Membatasi hasil maksimal 2 region spanduk terbaik (`slice(0, 2)`).
+  2. **Hard Safety Guardrail di Level Rendering (`applyPerspectivePolygonSensorToCanvas`)**:
+     - Menambahkan proteksi mutlak sebelum frosted glass digambar: jika `bW > width * 0.42 || bH > height * 0.32 || (bW * bH) > (width * height * 0.10)`, fungsi langsung `return;` dan mengabaikan kotak abnormal tersebut.
+     - Foto dijamin 100% tidak akan pernah bisa digelapkan lebih dari 10% luasnya dalam kondisi apapun.
+- **File Tersentuh**:
+  - `functions/public/autoSensorService.ts`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi frontend `npm --prefix functions/public run build` lulus 100% 0 error dalam **40.25s** (`✓ 2512 modules transformed`).
+  - Kompilasi backend functions `npm --prefix functions run build` (`tsc`) lulus 100% 0 error.
+
 ### 452. Perbaikan Penanganan Quota AI 429, Deteksi Validasi Respon Gagal, dan Penguatan Fallback Heuristik Client-Side (`autoSensorService.ts`, `detect-contact-banner/index.ts`) (Oktober 2026)
 - **Permintaan & Masalah**:
   1. Pengguna melaporkan bahwa saat pengujian unggah foto properti baru (kategori Bangunan Depan), sensor spanduk kontak tidak bekerja lagi (spanduk di pagar gerbang dan dinding tidak tersensor), padahal sebelumnya bekerja dengan sangat baik.
