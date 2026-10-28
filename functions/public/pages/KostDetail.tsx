@@ -3123,6 +3123,11 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
           (kost as any).kostManager?.status === 'ACTIVE' || 
           (kost as any).kostManager?.isActive
         );
+        const activePhoto = selectedChildRoom?.images?.[0] || selectedRoom?.images?.[0] || kost.images?.[0] || (kost as any).photos?.[0] || (kost as any).image_urls?.[0];
+        const activeRoomNumber = selectedChildRoom?.displayName || selectedChildRoom?.roomNumber || (kost.isManaged ? '' : (selectedRoom?.displayName || selectedRoom?.name));
+        const activeRoomType = currentParentGroup?.typeName || selectedRoom?.type || selectedRoom?.name;
+        const activeRoomPrice = activePrice || selectedRoom?.price || kost.price;
+
         return (
           <ChatWindow
             session={activeChatSession}
@@ -3131,6 +3136,15 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
             propertyName={kost.title || (kost as any).name || 'Kost'}
             contactName={isManagedProp ? 'Tim KostManager RuangSinggah' : (kost.omnichannelContactName || 'Pemilik Kost')}
             contactType={isManagedProp ? 'caretaker' : (kost.omnichannelContactType || 'owner')}
+            propertyPhoto={activePhoto}
+            roomNumber={activeRoomNumber}
+            roomType={activeRoomType}
+            roomPrice={activeRoomPrice}
+            propertyId={kost.id}
+            onRentClick={() => {
+              setShowChatWindow(false);
+              handleBookingClick();
+            }}
           />
         );
       })()}

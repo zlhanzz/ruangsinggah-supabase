@@ -2,6 +2,39 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 464. Peningkatan Sistem Chat Properti Standar Proptech: Pinned Room Card, Security Banner & Quick Reply Chips (`ChatWindow.tsx`, `KostDetail.tsx`) (Oktober 2026)
+- **Permintaan & Kebutuhan Pengguna**:
+  1. Audit komprehensif sistem obrolan properti terhadap standar industri proptech modern (Mamikos, Airbnb, Tokopedia).
+  2. Mengatasi kelemahan ruang obrolan: obrolan sebelumnya belum menyertakan konteks unit/tipe kamar yang ditanyakan (*room context blind*), empty state pasif tanpa pemantik tanya-jawab, serta minim edukasi proteksi transaksi.
+  3. Mengakomodasi kekhawatiran pengguna terhadap risiko transaksi liar di luar aplikasi (*leakage / bypass risk*) dengan pendekatan perisai keamanan: menyematkan **"Jaminan Keamanan Transaksi & Garansi Uang Kembali 100%"** dan menyalurkan tombol konversi resmi langsung dari dalam obrolan.
+- **Implementasi Solusi**:
+  1. **Kartu Konteks Kamar Tersemat (Pinned Room Card)**:
+     - Menambahkan header kamar tersemat di bagian atas chat berisi foto thumbnail unit (`propertyPhoto`), nama kost (`propertyName`), tipe kamar (`roomType`), nomor unit (`roomNumber`), dan tarif sewa per bulan (`roomPrice`).
+     - Tombol oranye interaktif `[ Ajukan Sewa ]` yang langsung memicu formulir sewa resmi (`onRentClick`), mengonversi minat obrolan menjadi transaksi resmi tanpa risiko disintermediasi.
+  2. **Banner Perlindungan Transaksi & Garansi Uang Kembali 100%**:
+     - Menyematkan badge keamanan di bawah header: `🛡️ Jaminan Keamanan Transaksi & Garansi Uang Kembali 100%: Bayar sewa resmi via sistem RuangSinggah.`
+     - Menanamkan rasa aman bagi calon penghuni serta mengeliminasi godaan transaksi tunai di luar platform tanpa jaminan perlindungan.
+  3. **Bilah Tanya Cepat (Quick Reply Chips Bar) & Empty State Interaktif**:
+     - Menyediakan tombol pemantik pertanyaan 1-klik (tanpa perlu mengetik manual):
+       - *"Apakah kamar ini masih tersedia?"*
+       - *"Berapa biaya listrik & airnya?"*
+       - *"Apakah ada jam malam atau aturan tamu?"*
+       - *"Apakah bisa survey lokasi resmi via RuangSinggah?"*
+     - Menampilkan chips di Empty State maupun di atas input teks obrolan khusus untuk calon penghuni (`currentSenderType === 'user'`).
+  4. **Pencegahan Disintermediasi & Kepatuhan Ikon**:
+     - Tetap mempertahankan deteksi regex nomor telepon/WhatsApp (`containsPhoneNumber`) dengan warning banner.
+     - 100% menggunakan pure vector bundled SVG dari `lucide-react` (`ShieldCheck`, `Home`, `Zap`, `Sparkles`, `Send`, `MessageSquare`) tanpa font ligature external.
+- **File Tersentuh**:
+  - `functions/public/components/ChatWindow.tsx`
+  - `functions/public/pages/KostDetail.tsx`
+  - `functions/PROGRESS.md`
+  - `IMPLEMENTATION_PLAN.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi frontend `npm --prefix functions/public run build` lulus 100% tanpa error (`✓ built in 49.84s`).
+  - Kompilasi backend `npm --prefix functions run build` (`tsc`) lulus 100% tanpa error.
+  - Kartu kamar, banner garansi keamanan transaksi 100%, dan quick reply chips berfungsi mulus dan responsif.
+
 ### 463. Redesain Kartu Minimalis Kampus & Fasilitas Publik Terdekat Tanpa Truncate (`KostDetail.tsx`) (Oktober 2026)
 - **Permintaan & Kebutuhan Pengguna**:
   1. Pada bagian Kampus Terdekat dan Fasilitas Publik di halaman Detail Kost, seluruh nama universitas/politeknik/fasilitas sebelumnya terpotong menjadi tanda elipsis `"..."` (misal: *Universitas Isla...*, *Politeknik Neg...*).
