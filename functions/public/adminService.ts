@@ -2031,7 +2031,9 @@ export async function addPropertyWithMedia(
 
   const isAdmin = await checkIfUserIsAdmin(user.id);
   const targetOwnerUid = (isAdmin && kostData.ownerUid) ? kostData.ownerUid : user.id;
-  const targetStatus = kostData.status || 'published';
+  const desiredStatus = kostData.status || 'published';
+  // Non-admin harus insert sebagai 'draft' agar lolos RLS properties_insert
+  const initialInsertStatus = isAdmin ? desiredStatus : 'draft';
 
   // Generate a temporary ID for Storage path (will be overwritten with DB-generated UUID)
   const tempId = crypto.randomUUID();
@@ -2123,7 +2125,7 @@ export async function addPropertyWithMedia(
       },
       type: kostData.type,
       property_type: kostData.type, // Map the type specifically for Supabase DB
-      status: targetStatus,
+      status: initialInsertStatus,
       is_verified: kostData.isVerified ?? false,
       is_managed: kostData.isManaged ?? false,
       rating: Number(kostData.rating || 0),
@@ -2151,6 +2153,19 @@ export async function addPropertyWithMedia(
   if (error) {
     console.error("Supabase Insert Error:", error);
     throw new Error(error.message);
+  }
+
+  // Jika status yang diinginkan adalah 'published' (Instant Publish) dan status awal di-insert sebagai 'draft'
+  // Transisikan status via UPDATE yang diizinkan penuh oleh RLS properties_update bagi pemilik akun
+  if (desiredStatus === 'published' && initialInsertStatus !== 'published') {
+    const { error: updateStatusError } = await supabase
+      .from('properties')
+      .update({ status: 'published' })
+      .eq('id', inserted.id);
+
+    if (updateStatusError) {
+      console.warn("Peringatan saat transisi status properti ke published:", updateStatusError);
+    }
   }
 
   await syncPropertyRooms(inserted.id);

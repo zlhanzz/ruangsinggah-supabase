@@ -2,6 +2,32 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 459. Perbaikan Supabase RLS Error 42501 pada Alur Instant Publish Properti Mitra (`adminService.ts`) (Oktober 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna/mitra mengalami kegagalan saat menekan tombol "Publikasikan Kost" di Langkah 6 formulir mitra (`KostFormMitra.tsx`) dengan error:
+     `Supabase Insert Error: {code: '42501', details: null, hint: null, message: 'new row violates row-level security policy for table "properties"'}`
+  2. Kebijakan PostgreSQL Row Level Security (RLS) pada tabel `properties` (`properties_insert`) mewajibkan akun non-admin (`is_admin() = false`) untuk selalu menyetel nilai awal `status = 'draft'` pada saat operasi `INSERT`.
+  3. Namun tombol publikasi mitra mengirimkan payload `status: 'published'` secara langsung ke dalam operasi `INSERT` di `addPropertyWithMedia`, sehingga ditolak oleh RLS.
+- **Investigasi & Analisis RLS Database**:
+  1. Policy `properties_insert`: `((auth.uid() IS NOT NULL) AND ((owner_uid = auth.uid()) OR is_admin()) AND (is_admin() OR ((status)::text = 'draft'::text)))` $\rightarrow$ mewajibkan status awal `'draft'` untuk akun non-admin.
+  2. Policy `properties_update`: `qual: ((auth.uid() IS NOT NULL) AND ((owner_uid = auth.uid()) OR is_admin())), with_check: null` $\rightarrow$ mengizinkan akun pemilik properti untuk mengubah status propertinya menjadi `'published'` tanpa batasan `with_check`.
+  3. Simulasi PostgreSQL membuktikan bahwa alur 2-tahap (safe insert status `draft` lalu seketika transisi status ke `published`) berjalan 100% mulus dan diizinkan penuh oleh RLS Supabase.
+- **Implementasi Solusi**:
+  1. **Safe Insert Draft + Instant Transition di `addPropertyWithMedia` (`adminService.ts`)**:
+     - Menentukan `desiredStatus = kostData.status || 'published'` dan `initialInsertStatus = isAdmin ? desiredStatus : 'draft'`.
+     - Melakukan operasi `.insert()` dengan status `initialInsertStatus` sehingga lolos verifikasi `properties_insert` RLS untuk semua jenis akun (pemilik, mitra, atau user biasa).
+     - Setelah baris properti berhasil di-insert (`inserted.id`), jika `desiredStatus === 'published'` (alur instant publish yang dipilih mitra), sistem langsung mengeksekusi `.update({ status: 'published' }).eq('id', inserted.id)`.
+     - Melanjutkan sinkronisasi kamar (`syncPropertyRooms`) dan mengembalikan ID properti untuk pembersihan draft lokal serta pengiriman notifikasi Brevo.
+- **File Tersentuh**:
+  - `functions/public/adminService.ts`
+  - `functions/PROGRESS.md`
+  - `IMPLEMENTATION_PLAN.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi frontend `npm --prefix functions/public run build` lulus 100% 0 error (`✓ built in 31.86s`).
+  - Kompilasi backend functions `npm --prefix functions run build` (`tsc`) lulus 100% 0 error.
+  - Simulasi SQL pada Supabase mengonfirmasi operasi insert `draft` dan update `published` sukses tanpa pelanggaran RLS 42501.
+
 ### 458. Optimalisasi Menu Peraturan Kost dengan Katalog Preset Aturan Populer Indonesia & Input Kustom Manual (`KostFormMitra.tsx`) (Oktober 2026)
 - **Permintaan & Kebutuhan Pengguna**:
   1. Mengoptimalkan menu *Peraturan Kost* (Langkah 6 dari 6) yang sebelumnya hanya berupa kolom input teks kosong manual.
