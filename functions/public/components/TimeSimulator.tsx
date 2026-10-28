@@ -27,13 +27,14 @@ const TimeSimulator: React.FC = () => {
     };
 
     return (
-        <div className={`fixed bottom-24 right-6 lg:bottom-8 lg:right-8 z-[9999] transition-all duration-500 ${isExpanded ? 'w-80' : 'w-14 h-14'}`}>
+        <div className={`fixed bottom-28 right-3.5 sm:bottom-24 sm:right-6 lg:bottom-8 lg:right-8 z-40 transition-all duration-500 ${isExpanded ? 'w-80' : 'w-11 h-11 sm:w-14 sm:h-14'}`}>
             {!isExpanded ? (
                 <button
                     onClick={() => setIsExpanded(true)}
-                    className={`w-14 h-14 rounded-full flex items-center justify-center shadow-2xl transition-all hover:scale-110 active:scale-95 ${isMocking ? 'bg-orange-600 text-white animate-pulse' : 'bg-gray-900 text-white'}`}
+                    className={`w-11 h-11 sm:w-14 sm:h-14 rounded-full flex items-center justify-center shadow-xl transition-all hover:scale-105 active:scale-95 ${isMocking ? 'bg-orange-600 text-white animate-pulse' : 'bg-gray-900/90 hover:bg-black text-white'}`}
+                    title="Simulasi Waktu Sistem"
                 >
-                    <Clock className="w-6 h-6" />
+                    <Clock className="w-5 h-5 sm:w-6 sm:h-6" />
                 </button>
             ) : (
                 <div className="bg-white rounded-[2.5rem] shadow-[0_20px_50px_rgba(0,0,0,0.2)] border border-gray-100 p-6 animate-in zoom-in-95 slide-in-from-bottom-10">

@@ -2,6 +2,46 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 470. Standarisasi Alur Pengajuan Sewa Proptech: Batas Booking Dinamis (H+5 Harian s/d H+45 Tahunan), Waktu & ETA Check-in, Sinkronisasi Early Check-in & Redesain On-Brand MyKost (Oktober 2026)
+- **Permintaan & Audit Kebutuhan Pengguna**:
+  1. Audit perhitungan masa sewa berdasarkan standar industri proptech (Mamikos, Rukita, Airbnb): Masa sewa dihitung sejak tanggal rencana masuk (*check-in date*), bukan tanggal pembayaran atau approval pemilik.
+  2. Penanganan ketidaksinkronan jadwal:
+     - Datang lebih lambat (*Late Check-in*): Masa sewa tetap berjalan sejak tanggal yang disepakati (karena kamar sudah di-*hold*).
+     - Datang lebih awal (*Early Check-in*): Memerlukan tombol konfirmasi / pengajuan persetujuan pemilik untuk memajukan tanggal mulai sewa tanpa merugikan pemilik kost.
+  3. Batas Pemesanan Dinamis (*Dynamic Advance Booking Window*): Durasi booking tidak boleh disamaratakan H-30 hari karena booking harian receh di jauh hari dapat menggagalkan booking bulanan (*yield management conflict*). Ditetapkan: Harian (max H+5), Mingguan (max H+14), Bulanan (max H+30), Tahunan (max H+45).
+  4. Jam Operasional & Dropdown Waktu Tiba (*ETA*): Khusus sewa harian, aturan check-in 14:00 dan check-out 12:00 ditampilkan eksplisit beserta pilihan perkiraan jam tiba untuk mengantisipasi kost tanpa resepsionis 24 jam.
+  5. Redesain Visual On-Brand RuangSinggah: Menghilangkan kesan "AI slop" (kartu 4 warna pastel acak, gradien pelangi, sudut membulat berlebihan) dan merapikan FAB TimeSimulator yang tumpang tindih di layar mobile.
+- **Implementasi Solusi**:
+  1. **Dynamic Advance Booking Window (`BookingModal.tsx`)**:
+     - Membatasi input tanggal mulai sewa secara dinamis sesuai paket sewa yang dipilih: Harian (max H+5), Mingguan (max H+14), Bulanan (max H+30), Tahunan (max H+45).
+     - Menampilkan badge edukasi batas booking transparan di sebelah pemilih tanggal.
+  2. **Aturan Waktu & Dropdown ETA Check-in Harian (`BookingModal.tsx`)**:
+     - Menampilkan banner waktu baku check-in 14:00 dan check-out 12:00 khusus paket sewa Harian.
+     - Menyediakan dropdown pilihan perkiraan jam tiba (*Estimated Time of Arrival / ETA*) dengan rentang 08:00 - 22:00 dan opsi > 22:00 (Malam).
+  3. **Kalkulator Otomatis Tanggal Check-out & Rincian Transparan**:
+     - Menghitung otomatis tanggal akhir sewa / check-out berdasarkan durasi dan paket yang dipilih.
+  4. **Fungsi Sinkronisasi Check-in & Early Check-in (`userService.ts`)**:
+     - `confirmCheckIn(bookingId)`: Konfirmasi serah terima kunci dan pencatatan `actual_check_in_date` saat penyewa tiba di lokasi.
+     - `requestEarlyCheckIn(bookingId, requestedDate, notes)`: Pengajuan penyewa jika ingin masuk lebih awal.
+     - `approveEarlyCheckIn(bookingId, newStartDate)`: Persetujuan pemilik kost untuk menyesuaikan tanggal sewa.
+  5. **Redesain Visual Kartu & Lembar Spesifikasi Sewa (`MyKost.tsx`)**:
+     - Menggantikan 4 kartu pastel acak dengan *Unified Booking Spec Sheet* monokromatik (`bg-slate-50/90 border-slate-200/80`) dengan tipografi proptech presisi.
+     - Menyeimbangkan sudut membulat kartu menjadi `rounded-2xl sm:rounded-[2rem]`.
+     - Menyederhanakan tombol aksi menjadi emerald solid proptech dan secondary outline bersih.
+     - Merampingkan notice bar SLA respon pemilik 1x24 jam.
+  6. **Reposisi FAB TimeSimulator (`TimeSimulator.tsx`)**:
+     - Mengubah ukuran FAB pada mobile menjadi `w-11 h-11` (44px) dan menaikkan posisinya ke `bottom-28 right-3.5` dengan `z-40` agar tidak menutupi tombol kartu sewa.
+- **File Tersentuh**:
+  - `functions/public/components/BookingModal.tsx`
+  - `functions/public/components/TimeSimulator.tsx`
+  - `functions/public/pages/MyKost.tsx`
+  - `functions/public/userService.ts`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi frontend Vite (`cmd.exe /c "npm --prefix functions/public run build"`) lulus 100% (2512 modul tertransformasi, code 0).
+  - Kompilasi backend Cloud Functions (`cmd.exe /c "npm --prefix functions run build"`) lulus 100% (code 0).
+
 ### 469. Standarisasi Menu Kost Saya (Tab Diajukan): Rating Riil vs Belum Ada Ulasan, Pembatasan Badge Verifikasi Khusus KostManager, Grid Parameter Sewa & Restrukturisasi Aksi Proptech (`MyKost.tsx`) (Oktober 2026)
 - **Permintaan & Masukan Pengguna**:
   1. Penyesuaian rating dummy: Kartu kost merender 5 bintang emas statis padahal properti baru di-upload dan belum memiliki ulasan sama sekali. Harus menampilkan kondisi riil.
