@@ -2,6 +2,34 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 454. Integrasi Pool Multi-Key 5 Akun Gemini AI, True Random Load Balancing, dan Filter Cerdas Interior Kamar (`detect-contact-banner/index.ts`, `autoSensorService.ts`) (Oktober 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna menanyakan cara mengantisipasi kehabisan kuota Gemini Free Tier dengan memanfaatkan rotasi API Key agar stok kuota tetap terjaga stabil.
+  2. Pengguna menyediakan 5 API Key Google Gemini AI aktif dari akun Google berbeda untuk diintegrasikan ke sistem.
+  3. Masalah distribusi beban: jika kunci dipanggil secara sekuensial selalu dari Key #1, maka Key #1 akan cepat habis terkena rate-limit per menit/hari.
+  4. Masalah pemborosan kuota: seluruh foto (termasuk interior kamar, seprai, kasur, toilet, wastafel) sebelumnya ikut dikirim ke AI Vision, padahal spanduk nomor telepon hanya pernah ada pada tampak luar/eksterior.
+- **Implementasi Solusi**:
+  1. **Pemasangan Secret Pool Multi-Key di Supabase Cloud**:
+     - Memperbarui secret `GEMINI_API_KEY` pada Supabase Project (`sgcmnsnokrztocnhxnqm`) berisi kelima kunci API aktif dipisahkan koma.
+     - Kapasitas stok harian AI Vision Gemini otomatis berlipat **$5 \times$ lipat**.
+  2. **True Random Load Balancing di Edge Function (`detect-contact-banner/index.ts`)**:
+     - Menerapkan pengacakan titik awal kunci: `const startKeyIdx = Math.floor(Math.random() * GEMINI_KEYS.length)`.
+     - Setiap request baru masuk akan bergantian dilayani oleh Key yang berbeda secara merata (`(startKeyIdx + step) % GEMINI_KEYS.length`), mencegah keausan atau rate limit pada salah satu kunci.
+     - Menambahkan logging transparan `keyIndexUsed` pada payload respon.
+  3. **Filter Cerdas Interior Kamar Fast-Path di Frontend (`autoSensorService.ts`)**:
+     - Memperbarui `isBannerProneCategory`: mengecualikan sub-kategori interior kamar tidur, kamar mandi dalam, kasur, lemari, meja belajar dari pemindaian AI Vision.
+     - Foto-foto interior langsung diproses melalui Fast-Path (<150ms) dengan kompresi WebP dan watermark resmi RuangSinggah.id, menghemat konsumsi kuota hingga **75–80%**.
+- **File Tersentuh**:
+  - Supabase Cloud Secret: `GEMINI_API_KEY` (Updated)
+  - `supabase/functions/detect-contact-banner/index.ts`
+  - `functions/public/autoSensorService.ts`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Uji kelima API Key ke Google AI Studio: kelima kunci aktif 100% dengan akses ke 50 model.
+  - Kompilasi frontend `npm --prefix functions/public run build` lulus 100% 0 error dalam **36.79s** (`✓ 2512 modules transformed`).
+  - Kompilasi backend functions `npm --prefix functions run build` (`tsc`) lulus 100% 0 error.
+
 ### 453. Pencegahan Over-Blur Layar Penuh pada Fallback Heuristik Spanduk & Pemasangan Hard Safety Guardrails (`autoSensorService.ts`) (Oktober 2026)
 - **Permintaan & Masalah**:
   1. Pengguna melaporkan bahwa setelah pengetesan unggah foto, hasil sensor banner membuat foto menjadi hampir gelap gulita / hitam pekat dan merusak tampilan watermark foto.

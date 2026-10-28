@@ -131,10 +131,13 @@ FORMAT OUTPUT (JSON MURNI SAJA, TANPA BACKTICKS/MARKDOWN):
     let successfulResult: any = null;
     const triedErrors: any[] = [];
 
-    // Model and Key cascade loop
+    // Model and Key cascade loop dengan True Load Balancing
     outerLoop:
     for (const model of CANDIDATE_MODELS) {
-      for (let kIdx = 0; kIdx < GEMINI_KEYS.length; kIdx++) {
+      // Acak titik awal key agar beban terdistribusi merata (100% Load-Balanced) ke seluruh akun Google
+      const startKeyIdx = Math.floor(Math.random() * GEMINI_KEYS.length);
+      for (let step = 0; step < GEMINI_KEYS.length; step++) {
+        const kIdx = (startKeyIdx + step) % GEMINI_KEYS.length;
         const apiKey = GEMINI_KEYS[kIdx];
         try {
           const genConfig: any = {
@@ -291,6 +294,7 @@ FORMAT OUTPUT (JSON MURNI SAJA, TANPA BACKTICKS/MARKDOWN):
           successfulResult = {
             success: true,
             modelUsed: model,
+            keyIndexUsed: kIdx + 1,
             data: resultData,
             triedErrors
           };

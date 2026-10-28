@@ -93,27 +93,64 @@ export interface SensorBoxPixel {
     source?: 'ai' | 'heuristic' | 'manual';
 }
 
+// Kata kunci interior kamar tidur/kamar mandi yang 100% bebas dari spanduk sewa properti
+const INTERIOR_ROOM_KEYWORDS = [
+    'kamar tidur',
+    'ranjang',
+    'kasur',
+    'bed',
+    'meja',
+    'lemari',
+    'wardrobe',
+    'jendela',
+    'kamar mandi',
+    'toilet',
+    'wc',
+    'shower',
+    'dapur dalam',
+    'colokan',
+    'ac',
+    'cermin',
+    'wastafel',
+    'sprei'
+];
+
 /**
  * Memeriksa apakah sebuah kategori foto rentan memiliki spanduk/nomor kontak
+ * Dioptimalkan untuk menghemat kuota AI hingga 80% dengan membedakan eksterior vs interior.
  * @param categoryName Nama kategori foto
  * @param isCustom Apakah kategori ini dibuat secara custom oleh mitra
  */
 export function isBannerProneCategory(categoryName: string, isCustom = false): boolean {
     if (!categoryName) return false;
     const trimmed = categoryName.trim();
-    // 1. Kategori custom yang dibuat oleh mitra selalu wajib melewati proses sensor
-    if (isCustom || trimmed.includes(' - ')) return true;
-    // 2. Cek kecocokan kaku dengan ID kategori baku fasilitas publik
+    const lower = trimmed.toLowerCase();
+
+    // 1. Cek kecocokan kaku dengan ID kategori baku fasilitas publik eksterior
     if (FIXED_BANNER_PRONE_CATEGORIES.has(trimmed)) return true;
 
-    const lower = trimmed.toLowerCase();
-    // 3. Kecualikan kamar tidur interior dan kamar mandi dalam (hemat kuota & fast-path)
-    if (lower.startsWith('kamar:') || lower.startsWith('kamar mandi:') || lower.startsWith('dapur dalam:')) {
+    // 2. Jika nama kategori mengandung kata kunci eksterior/spanduk (depan, gerbang, pagar, fasad, plang, spanduk, luar),
+    // selalu wajib scan AI
+    if (BANNER_PRONE_KEYWORDS.some(kw => lower.includes(kw))) {
+        return true;
+    }
+
+    // 3. Jika ini adalah kategori kamar interior / sub-kategori kustom unit kamar
+    // (misal: "Kamar Tidur Utama", "Kamar Mandi Dalam", "Tipe Deluxe - Meja Belajar", "Tipe A - Lemari"),
+    // kecualikan langsung dari AI scan untuk menghemat kuota
+    if (
+        lower.startsWith('kamar:') ||
+        lower.startsWith('kamar mandi:') ||
+        lower.startsWith('dapur dalam:') ||
+        INTERIOR_ROOM_KEYWORDS.some(kw => lower.includes(kw))
+    ) {
         return false;
     }
 
-    // 4. Cek kecocokan kata kunci untuk variasi nama di admin/agen/kustom
-    return BANNER_PRONE_KEYWORDS.some(kw => lower.includes(kw));
+    // 4. Kategori custom umum/publik lainnya (seperti "Rooftop", "Balkon", "Taman") tetap di-scan
+    if (isCustom) return true;
+
+    return false;
 }
 
 /**
