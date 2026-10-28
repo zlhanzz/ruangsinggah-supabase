@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Calendar, Clock, ShieldCheck, CheckCircle2, AlertCircle, 
-  Info, X, Users, ArrowRight, Sparkles, Home, MapPin 
+  Info, X, Users, ArrowRight, Sparkles, Home, MapPin, ChevronRight 
 } from 'lucide-react';
 import { Kost, RoomType, PricingPeriod } from '../types';
 import { FORMAT_CURRENCY } from '../constants';
@@ -215,7 +215,7 @@ const BookingModal: React.FC<BookingModalProps> = ({ kost, variant, initialPerio
   const locationSummary = kost.location?.city || (kost as any).city || (kost as any).district || (kost.address ? kost.address.split(',')[0] : '');
 
   return (
-    <div className="fixed inset-0 z-[90] flex flex-col justify-end sm:justify-center items-center overflow-hidden">
+    <div className="fixed inset-0 z-[150] flex flex-col justify-end sm:justify-center items-center overflow-hidden">
       {/* Backdrop */}
       <div 
         className="fixed inset-0 bg-black/60 backdrop-blur-sm transition-opacity" 
@@ -274,8 +274,41 @@ const BookingModal: React.FC<BookingModalProps> = ({ kost, variant, initialPerio
           </button>
         </div>
 
-        {/* Subtle Reassurance Bar (Pengganti Stepper Berat) */}
-        <div className="px-5 py-2.5 bg-orange-50/70 border-b border-orange-100/70 flex items-center justify-between text-[11px] text-orange-950 shrink-0">
+        {/* Stepper Alur Booking 3-Langkah (Ringkas, Modern, Proptech Grade) */}
+        <div className="px-4 sm:px-5 py-2.5 bg-gray-50/90 border-b border-gray-100 shrink-0">
+          <div className="flex items-center justify-between text-[10.5px] sm:text-xs">
+            {/* Step 1: Pengajuan Sewa */}
+            <div className="flex items-center gap-1.5 text-orange-600 font-extrabold">
+              <span className="w-4 h-4 rounded-full bg-orange-500 text-white flex items-center justify-center text-[9px] font-black shrink-0">
+                1
+              </span>
+              <span className="truncate">Pengajuan Sewa</span>
+            </div>
+
+            <ChevronRight className="w-3.5 h-3.5 text-gray-300 shrink-0" />
+
+            {/* Step 2: Konfirmasi Pemilik */}
+            <div className="flex items-center gap-1.5 text-gray-500 font-semibold">
+              <span className="w-4 h-4 rounded-full bg-gray-200 text-gray-600 flex items-center justify-center text-[9px] font-bold shrink-0">
+                2
+              </span>
+              <span className="truncate">Konfirmasi Pemilik</span>
+            </div>
+
+            <ChevronRight className="w-3.5 h-3.5 text-gray-300 shrink-0" />
+
+            {/* Step 3: Pembayaran */}
+            <div className="flex items-center gap-1.5 text-gray-500 font-semibold">
+              <span className="w-4 h-4 rounded-full bg-gray-200 text-gray-600 flex items-center justify-center text-[9px] font-bold shrink-0">
+                3
+              </span>
+              <span className="truncate">Pembayaran</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Reassurance Bar Mini */}
+        <div className="px-4 sm:px-5 py-2 bg-orange-50/60 border-b border-orange-100/60 flex items-center justify-between text-[10.5px] text-orange-950 shrink-0">
           <div className="flex items-center gap-1.5 font-bold">
             <ShieldCheck className="w-3.5 h-3.5 text-orange-600 shrink-0" />
             <span>Pengajuan Bebas Biaya</span>
@@ -472,7 +505,7 @@ const BookingModal: React.FC<BookingModalProps> = ({ kost, variant, initialPerio
         </div>
 
         {/* Sticky Bottom Action Bar (Solusi Anti-Cutoff & Mudah Ditekan) */}
-        <div className="p-4 sm:p-5 bg-white border-t border-gray-100 flex items-center justify-between gap-3 shrink-0 shadow-lg sm:shadow-none pb-safe sm:pb-5">
+        <div className="p-4 sm:p-5 bg-white border-t border-gray-100 flex items-center justify-between gap-3 shrink-0 shadow-[0_-4px_24px_rgba(0,0,0,0.08)] pb-[max(1.2rem,env(safe-area-inset-bottom))] sm:pb-5 z-20">
           <div>
             <span className="text-[9.5px] text-gray-400 font-bold block uppercase tracking-wider">
               Total Tagihan

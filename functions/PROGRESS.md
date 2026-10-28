@@ -2,6 +2,33 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 467. Penyempurnaan Tampilan Mobile & Restorasi Alur Booking 3-Langkah: z-[150] Overlay, Sticky Action Bar & Stepper Proptech (`BookingModal.tsx`) (Oktober 2026)
+- **Permintaan & Kebutuhan Pengguna**:
+  1. Pada pengujian mobile, tampilan modal pengajuan sewa dinilai belum sepenuhnya mobile-friendly karena bagian bawahnya terhalang oleh Mobile Bottom Navigation Bar (`Home`, `Search`, `Chat`, `Orders`, `Profile`) yang memiliki `z-[100]`.
+  2. Pengguna meminta agar visual alur pemesanan **`Pengajuan Sewa > Konfirmasi Pemilik > Pembayaran`** ditampilkan kembali karena sangat esensial untuk memberi kepastian bahwa calon penyewa tidak perlu membayar di awal sebelum pemilik meng-ACC pengajuan sewa.
+- **Implementasi Solusi**:
+  1. **Solusi Lapisan Tumpukan Layar (`z-[150]`)**:
+     - Mengubah z-index modal dan backdrop menjadi `z-[150]` (di atas Bottom Navigation Bar `z-[100]`).
+     - Modal kini menutupi penuh bagian bawah layar layaknya *native mobile bottom sheet* (Airbnb/Traveloka), dan tombol CTA `[ Ajukan Sewa ]` 100% muncul di baris paling depan tanpa terhalang menu navigasi.
+  2. **Restorasi Alur Booking 3-Langkah (Ringkas & Proptech Grade)**:
+     - Menyematkan Stepper 3-tahap ringkas di bawah header:
+       - **Tahap 1 (Aktif)**: `1. Pengajuan Sewa` (Badge oranye aktif + teks tebal).
+       - Pemisah: Ikon `ChevronRight` halus.
+       - **Tahap 2**: `2. Konfirmasi Pemilik` (Teks abu-abu netral).
+       - Pemisah: Ikon `ChevronRight` halus.
+       - **Tahap 3**: `3. Pembayaran` (Teks abu-abu netral).
+     - Menghilangkan glitch border vertikal pada bar edukasi reasuransi.
+  3. **Penyempurnaan Sticky Action Bar**:
+     - Menambahkan safe-area bottom padding (`pb-[max(1.2rem,env(safe-area-inset-bottom))]`) dan shadow elevasi `shadow-[0_-4px_24px_rgba(0,0,0,0.08)]` sehingga tombol aksi selalu nyaman ditekan oleh jempol di segala tipe smartphone.
+- **File Tersentuh**:
+  - `functions/public/components/BookingModal.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi frontend `npm --prefix functions/public run build` sukses 100% (code 0).
+  - Kompilasi backend `npm --prefix functions run build` (`tsc`) sukses 100% (code 0).
+  - Modal tampil di atas seluruh bilah navigasi dengan alur booking 3-langkah yang jelas.
+
 ### 466. Redesain UI/UX Modal Pengajuan Sewa: Tampilan Fit & Friendly, Mobile Bottom Sheet, Sticky Footer Bar, dan Anti-AI Slope (`BookingModal.tsx`) (Oktober 2026)
 - **Permintaan & Kebutuhan Pengguna**:
   1. Pengguna menilai tampilan modal pengajuan sewa sebelumnya kurang fit dan friendly, belum memenuhi standar industri proptech, dan terasa seperti *AI slope* (desain generik kaku dengan penomoran berlebih dan banner boros ruang).
