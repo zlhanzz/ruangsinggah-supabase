@@ -2073,4 +2073,251 @@ export async function getUserRentalHistory(userId: string): Promise<UserRentalHi
   }
 }
 
+/**
+ * Konfirmasi serah terima kamar & kunci (Handover Check-in)
+ * Dipanggil oleh Penyewa atau Pemilik Kost ketika penyewa tiba di lokasi
+ */
+export async function confirmCheckIn(
+  targetId: string, 
+  role: 'tenant' | 'owner' | 'system' = 'tenant', 
+  notes: string = ''
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const nowIso = new Date().toISOString();
+    
+    // 1. Coba perbarui di tabel resident_status
+    const { data: resRecord } = await supabase
+      .from('resident_status')
+      .select('id, metadata, status, start_date, end_date')
+      .or(`id.eq.${targetId},last_transaction_id.eq.${targetId}`)
+      .maybeSingle();
+
+    if (resRecord) {
+      const currentMeta = resRecord.metadata || {};
+      const updatedMeta = {
+        ...currentMeta,
+        actual_checkin_at: nowIso,
+        handover_confirmed: true,
+        checked_in_by: role,
+        checkin_notes: notes || currentMeta.checkin_notes || null
+      };
+
+      await supabase
+        .from('resident_status')
+        .update({
+          status: 'ACTIVE',
+          metadata: updatedMeta,
+          updated_at: nowIso
+        })
+        .eq('id', resRecord.id);
+    }
+
+    // 2. Coba perbarui di tabel transactions (jika targetId adalah transaksi booking)
+    const { data: trxRecord } = await supabase
+      .from('transactions')
+      .select('id, metadata, resident_status_id')
+      .or(`id.eq.${targetId},resident_status_id.eq.${targetId}`)
+      .maybeSingle();
+
+    if (trxRecord) {
+      const tMeta = trxRecord.metadata || {};
+      const updatedTMeta = {
+        ...tMeta,
+        actual_checkin_at: nowIso,
+        handover_confirmed: true,
+        checked_in_by: role,
+        checkin_notes: notes || tMeta.checkin_notes || null
+      };
+
+      await supabase
+        .from('transactions')
+        .update({
+          metadata: updatedTMeta,
+          updated_at: nowIso
+        })
+        .eq('id', trxRecord.id);
+
+      // Jika transaksi memiliki resident_status_id yang belum terupdate
+      if (trxRecord.resident_status_id && (!resRecord || resRecord.id !== trxRecord.resident_status_id)) {
+        await supabase
+          .from('resident_status')
+          .update({
+            status: 'ACTIVE',
+            updated_at: nowIso
+          })
+          .eq('id', trxRecord.resident_status_id);
+      }
+    }
+
+    return { success: true };
+  } catch (error: any) {
+    console.error('[userService] Error confirming check-in:', error);
+    return { success: false, error: error?.message || 'Gagal mengonfirmasi check-in' };
+  }
+}
+
+/**
+ * Mengajukan permintaan masuk lebih awal (Request Early Check-in)
+ * Dilakukan oleh penyewa yang tiba lebih cepat dari jadwal masuk awal
+ */
+export async function requestEarlyCheckIn(
+  targetId: string, 
+  proposedDate: string, 
+  reason: string = ''
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const nowIso = new Date().toISOString();
+
+    // Perbarui metadata di resident_status
+    const { data: resRecord } = await supabase
+      .from('resident_status')
+      .select('id, metadata')
+      .or(`id.eq.${targetId},last_transaction_id.eq.${targetId}`)
+      .maybeSingle();
+
+    if (resRecord) {
+      const currentMeta = resRecord.metadata || {};
+      await supabase
+        .from('resident_status')
+        .update({
+          metadata: {
+            ...currentMeta,
+            early_checkin_requested: true,
+            early_checkin_proposed_date: proposedDate,
+            early_checkin_reason: reason,
+            early_checkin_requested_at: nowIso
+          },
+          updated_at: nowIso
+        })
+        .eq('id', resRecord.id);
+    }
+
+    // Perbarui metadata di transactions jika terkait
+    const { data: trxRecord } = await supabase
+      .from('transactions')
+      .select('id, metadata')
+      .or(`id.eq.${targetId},resident_status_id.eq.${targetId}`)
+      .maybeSingle();
+
+    if (trxRecord) {
+      const tMeta = trxRecord.metadata || {};
+      await supabase
+        .from('transactions')
+        .update({
+          metadata: {
+            ...tMeta,
+            early_checkin_requested: true,
+            early_checkin_proposed_date: proposedDate,
+            early_checkin_reason: reason,
+            early_checkin_requested_at: nowIso
+          },
+          updated_at: nowIso
+        })
+        .eq('id', trxRecord.id);
+    }
+
+    return { success: true };
+  } catch (error: any) {
+    console.error('[userService] Error requesting early check-in:', error);
+    return { success: false, error: error?.message || 'Gagal mengajukan early check-in' };
+  }
+}
+
+/**
+ * Menyetujui permintaan masuk lebih awal (Approve Early Check-in)
+ * Dilakukan oleh Mitra / Pemilik Kost: memajukan tanggal mulai dan otomatis menghitung ulang tanggal akhir
+ */
+export async function approveEarlyCheckIn(
+  targetId: string, 
+  approvedDate: string
+): Promise<{ success: boolean; newStartDate?: string; newEndDate?: string; error?: string }> {
+  try {
+    const nowIso = new Date().toISOString();
+
+    // Ambil data resident_status
+    const { data: resRecord } = await supabase
+      .from('resident_status')
+      .select('id, start_date, end_date, metadata')
+      .or(`id.eq.${targetId},last_transaction_id.eq.${targetId}`)
+      .maybeSingle();
+
+    let newEndDate = '';
+    const oldStartDate = resRecord?.start_date ? new Date(resRecord.start_date) : null;
+    const oldEndDate = resRecord?.end_date ? new Date(resRecord.end_date) : null;
+    const newStart = new Date(approvedDate);
+
+    if (oldStartDate && oldEndDate && !isNaN(oldStartDate.getTime()) && !isNaN(oldEndDate.getTime())) {
+      // Hitung selisih durasi masa sewa asli dalam hari
+      const diffMs = oldEndDate.getTime() - oldStartDate.getTime();
+      const newEnd = new Date(newStart.getTime() + diffMs);
+      newEndDate = newEnd.toISOString().split('T')[0];
+    } else {
+      // Fallback: 1 bulan dari newStart
+      const fallbackEnd = new Date(newStart);
+      fallbackEnd.setMonth(fallbackEnd.getMonth() + 1);
+      newEndDate = fallbackEnd.toISOString().split('T')[0];
+    }
+
+    if (resRecord) {
+      const meta = resRecord.metadata || {};
+      await supabase
+        .from('resident_status')
+        .update({
+          start_date: approvedDate,
+          end_date: newEndDate,
+          status: 'ACTIVE',
+          metadata: {
+            ...meta,
+            startDate: approvedDate,
+            endDate: newEndDate,
+            early_checkin_approved: true,
+            early_checkin_approved_at: nowIso,
+            actual_checkin_at: nowIso,
+            handover_confirmed: true,
+            checked_in_by: 'owner'
+          },
+          updated_at: nowIso
+        })
+        .eq('id', resRecord.id);
+    }
+
+    // Update transactions jika ada
+    const { data: trxRecord } = await supabase
+      .from('transactions')
+      .select('id, metadata')
+      .or(`id.eq.${targetId},resident_status_id.eq.${targetId}`)
+      .maybeSingle();
+
+    if (trxRecord) {
+      const tMeta = trxRecord.metadata || {};
+      await supabase
+        .from('transactions')
+        .update({
+          metadata: {
+            ...tMeta,
+            startDate: approvedDate,
+            endDate: newEndDate,
+            early_checkin_approved: true,
+            early_checkin_approved_at: nowIso,
+            actual_checkin_at: nowIso,
+            handover_confirmed: true,
+            checked_in_by: 'owner'
+          },
+          updated_at: nowIso
+        })
+        .eq('id', trxRecord.id);
+    }
+
+    return { 
+      success: true, 
+      newStartDate: approvedDate, 
+      newEndDate 
+    };
+  } catch (error: any) {
+    console.error('[userService] Error approving early check-in:', error);
+    return { success: false, error: error?.message || 'Gagal menyetujui early check-in' };
+  }
+}
+
+
 

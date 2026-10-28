@@ -4,7 +4,7 @@ import { supabase } from '../supabase';
 import KostFormMitra from '../components/KostFormMitra';
 import { Kost, Page, MitraPromoPopupSetting, KostManagerFeeSettings } from '../types';
 import { FORMAT_CURRENCY, INDONESIAN_BANKS } from '../constants';
-import { getOwnerProperties, getOwnerBookings, updateBookingStatus } from '../userService';
+import { getOwnerProperties, getOwnerBookings, updateBookingStatus, confirmCheckIn, approveEarlyCheckIn } from '../userService';
 import { getResidentStatus, getMitraPromoPopupSetting, getKostManagerFeeSettings, DEFAULT_KOSTMANAGER_FEE_SETTINGS } from '../adminService';
 import { getMyChatSessions, ChatSession, getOrCreateChatSession, markMessagesAsRead } from '../chatService';
 import { getCurrentDate, setMockDate, getMockDateStr, parseDateSafely } from '../utils/timeUtils';
@@ -793,6 +793,49 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
             alert('Pengajuan sewa ditolak.');
         } catch (err: any) {
             alert('Gagal menolak: ' + err.message);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleOwnerConfirmHandover = async (booking: any) => {
+        if (!window.confirm(`Konfirmasi bahwa Anda telah menyerahkan kunci kamar fisik kepada calon penghuni (${booking.user?.name || 'Penghuni'})?`)) return;
+        try {
+            setLoading(true);
+            const targetId = booking.resident_status_id || booking.id;
+            const res = await confirmCheckIn(targetId, 'owner', 'Kunci diserahkan langsung oleh pemilik kost');
+            if (res.success) {
+                alert('Serah terima kunci kamar berhasil dicatat. Status sewa kini aktif.');
+                await loadData();
+            } else {
+                alert('Gagal serah terima: ' + (res.error || 'Terjadi kesalahan'));
+            }
+        } catch (err: any) {
+            alert('Terjadi kesalahan: ' + err.message);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleApproveEarlyCheckIn = async (booking: any) => {
+        const proposedDate = booking.metadata?.early_checkin_proposed_date;
+        if (!proposedDate) {
+            alert('Tanggal early check-in tidak valid.');
+            return;
+        }
+        if (!window.confirm(`Setujui pemajuan tanggal masuk menjadi ${proposedDate}? Tanggal selesai sewa akan otomatis dihitung ulang.`)) return;
+        try {
+            setLoading(true);
+            const targetId = booking.resident_status_id || booking.id;
+            const res = await approveEarlyCheckIn(targetId, proposedDate);
+            if (res.success) {
+                alert(`Permintaan masuk lebih awal disetujui! Tanggal sewa baru: ${res.newStartDate} s/d ${res.newEndDate}`);
+                await loadData();
+            } else {
+                alert('Gagal menyetujui: ' + (res.error || 'Terjadi kesalahan'));
+            }
+        } catch (err: any) {
+            alert('Terjadi kesalahan: ' + err.message);
         } finally {
             setLoading(false);
         }
@@ -2302,6 +2345,12 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                                                             <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Tgl Masuk</p>
                                                             <p className="text-xs font-black text-gray-700">{b.metadata?.startDate || '-'}</p>
                                                         </div>
+                                                        {b.metadata?.checkInEta && (
+                                                            <div>
+                                                                <p className="text-[9px] font-black text-orange-500 uppercase tracking-widest mb-1">ETA Tiba</p>
+                                                                <p className="text-xs font-black text-orange-700 truncate max-w-[120px]">{b.metadata.checkInEta}</p>
+                                                            </div>
+                                                        )}
                                                     </div>
                                                 </div>
 
@@ -2335,12 +2384,49 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                                                                 <span className="text-[10px] font-black uppercase tracking-widest">Tunggu Bayar</span>
                                                             </div>
                                                         )}
-                                                        {bookingTab === 'completed' && (
-                                                            <div className="flex items-center justify-center gap-2 h-11 px-4 rounded-xl bg-green-50 text-green-600 border border-green-100 w-full">
-                                                                <Check size={16} />
-                                                                <span className="text-[10px] font-black uppercase tracking-widest">Selesai</span>
-                                                            </div>
-                                                        )}
+                                                        {bookingTab === 'completed' && (() => {
+                                                            const isHandoverDone = Boolean(b.metadata?.actual_checkin_at || b.metadata?.handover_confirmed || b.actual_checkin_at);
+                                                            const isEarlyRequested = Boolean(b.metadata?.early_checkin_requested && !b.metadata?.early_checkin_approved);
+
+                                                            if (isEarlyRequested) {
+                                                                return (
+                                                                    <div className="flex flex-col gap-1.5 w-full">
+                                                                        <div className="p-2 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-[10px]">
+                                                                            <span className="font-black block uppercase text-[9px] text-amber-700">⚡ Permintaan Masuk Awal:</span>
+                                                                            <span className="font-bold text-xs">{b.metadata?.early_checkin_proposed_date}</span>
+                                                                            {b.metadata?.early_checkin_reason && (
+                                                                                <p className="italic text-gray-500 text-[9px] mt-0.5 line-clamp-2">"{b.metadata.early_checkin_reason}"</p>
+                                                                            )}
+                                                                        </div>
+                                                                        <button
+                                                                            onClick={() => handleApproveEarlyCheckIn(b)}
+                                                                            className="w-full py-2.5 bg-amber-500 hover:bg-amber-600 text-white rounded-xl font-black text-[9.5px] uppercase tracking-wider shadow-sm active:scale-95 transition-all cursor-pointer"
+                                                                        >
+                                                                            ACC Masuk Lebih Awal
+                                                                        </button>
+                                                                    </div>
+                                                                );
+                                                            }
+
+                                                            if (!isHandoverDone) {
+                                                                return (
+                                                                    <button
+                                                                        onClick={() => handleOwnerConfirmHandover(b)}
+                                                                        className="w-full py-2.5 px-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-black text-[9.5px] uppercase tracking-wider shadow-md shadow-emerald-600/20 active:scale-95 transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                                                                    >
+                                                                        <Check size={14} />
+                                                                        <span>Serah Terima Kunci</span>
+                                                                    </button>
+                                                                );
+                                                            }
+
+                                                            return (
+                                                                <div className="flex items-center justify-center gap-1.5 h-11 px-3 rounded-xl bg-emerald-50 text-emerald-700 border border-emerald-100 w-full text-[9px] font-black uppercase tracking-wider">
+                                                                    <Check size={14} className="text-emerald-600" />
+                                                                    <span>Kunci Diserahkan</span>
+                                                                </div>
+                                                            );
+                                                        })()}
                                                     </div>
                                                 </div>
                                             </div>

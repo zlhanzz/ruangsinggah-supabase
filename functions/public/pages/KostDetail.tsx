@@ -996,7 +996,7 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
             ? (selectedChildRoom?.id || selectedRoom.id || null)
             : null,
           startDate: data.startDate || new Date().toISOString().split('T')[0],
-          endDate: (() => {
+          endDate: data.endDate || (() => {
             const d = new Date(data.startDate || new Date());
             const p = data.period;
             if (p === 'harian') d.setDate(d.getDate() + 1);
@@ -1005,8 +1005,13 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
             else if (p === '3bulanan') d.setMonth(d.getMonth() + 3);
             else if (p === '6bulanan') d.setMonth(d.getMonth() + 6);
             else if (p === 'tahunan') d.setFullYear(d.getFullYear() + 1);
-            return d.toLocaleDateString('id-ID', { year: 'numeric', month: 'long', day: 'numeric' });
+            return d.toISOString().split('T')[0];
           })(),
+          formattedStartDate: data.formattedStartDate,
+          formattedEndDate: data.formattedEndDate,
+          checkInEta: data.checkInEta || null,
+          checkInTime: data.checkInTime || '14:00 WIB',
+          checkOutTime: data.checkOutTime || '12:00 WIB',
           ...data
         }
       });

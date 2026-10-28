@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { supabase } from '../supabase';
 import { ArrowLeft, Clock, MapPin, Receipt, Upload, Plus, MessageSquare, AlertCircle, FileText, X, Star, CheckCircle, CheckCircle2, Smartphone, Phone, Calendar, Search, Heart, ChevronRight, XCircle, Zap, Check, Activity, DoorClosed, ChevronDown, ChevronUp, Camera, ShieldCheck, Building, Bed, Bath, Wifi, Maximize2, Share2, PhoneCall, HelpCircle, Layers, Wrench, RotateCcw, ZoomIn, Eye } from 'lucide-react';
 import { Page } from '../types';
-import { addPropertyReview, getExtraBills, settlePendingBills, cancelBookingRequest, expireBookingTransaction, BOOKING_EXPIRY_HOURS } from '../userService';
+import { addPropertyReview, getExtraBills, settlePendingBills, cancelBookingRequest, expireBookingTransaction, BOOKING_EXPIRY_HOURS, confirmCheckIn, requestEarlyCheckIn } from '../userService';
 import PaymentGateway from '../components/PaymentGateway';
 import ChatWindow from '../components/ChatWindow';
 import { notifyAdminTransaction } from '../emailService';
@@ -324,6 +324,59 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
     const [galleryModalOpen, setGalleryModalOpen] = useState<boolean>(false);
     const [galleryPhotos, setGalleryPhotos] = useState<string[]>([]);
     const [galleryTitle, setGalleryTitle] = useState<string>('');
+
+    // Early Check-in & Handover states
+    const [showEarlyCheckInModal, setShowEarlyCheckInModal] = useState<boolean>(false);
+    const [earlyCheckInDate, setEarlyCheckInDate] = useState<string>('');
+    const [earlyCheckInReason, setEarlyCheckInReason] = useState<string>('');
+    const [earlyCheckInLoading, setEarlyCheckInLoading] = useState<boolean>(false);
+    const [isConfirmingCheckIn, setIsConfirmingCheckIn] = useState<boolean>(false);
+
+    const handleOpenEarlyCheckInModal = (kostItem: any) => {
+        setSelectedKost(kostItem);
+        setEarlyCheckInDate(new Date().toISOString().split('T')[0]);
+        setEarlyCheckInReason('');
+        setShowEarlyCheckInModal(true);
+    };
+
+    const handleConfirmTenantCheckIn = async (kostItem: any) => {
+        if (!window.confirm('Konfirmasi bahwa Anda sudah tiba di kost dan telah menerima kunci kamar fisik dari pemilik/penjaga?')) return;
+        try {
+            setIsConfirmingCheckIn(true);
+            const targetId = kostItem.resident_status_id || kostItem.id;
+            const res = await confirmCheckIn(targetId, 'tenant', 'Dikonfirmasi langsung oleh penyewa via aplikasi');
+            if (res.success) {
+                alert('Selamat! Status hunian Anda kini telah aktif. Selamat menempati kamar baru Anda!');
+                await fetchMyKosts();
+            } else {
+                alert('Gagal konfirmasi check-in: ' + (res.error || 'Terjadi kesalahan'));
+            }
+        } catch (err: any) {
+            alert('Terjadi kesalahan: ' + err.message);
+        } finally {
+            setIsConfirmingCheckIn(false);
+        }
+    };
+
+    const handleSubmitEarlyCheckIn = async () => {
+        if (!selectedKost || !earlyCheckInDate) return;
+        try {
+            setEarlyCheckInLoading(true);
+            const targetId = selectedKost.resident_status_id || selectedKost.id;
+            const res = await requestEarlyCheckIn(targetId, earlyCheckInDate, earlyCheckInReason);
+            if (res.success) {
+                alert('Permintaan check-in lebih awal telah dikirimkan ke pemilik kost. Mohon tunggu konfirmasi.');
+                setShowEarlyCheckInModal(false);
+                await fetchMyKosts();
+            } else {
+                alert('Gagal mengajukan: ' + (res.error || 'Terjadi kesalahan'));
+            }
+        } catch (err: any) {
+            alert('Terjadi kesalahan: ' + err.message);
+        } finally {
+            setEarlyCheckInLoading(false);
+        }
+    };
 
     const handleOpenActiveReceipt = (kost: any) => {
         const kMeta = kost.metadata || {};
@@ -2514,33 +2567,107 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
                                                 </div>
                                             )}
 
-                                            {/* Visual Progress Bar: Masa Sewa */}
-                                            {isPaid && !kost.is_checked_out && (
-                                                <div className="bg-gradient-to-r from-orange-50/70 via-amber-50/50 to-slate-50 p-3.5 sm:p-5 rounded-2xl border border-orange-100/80 shadow-sm flex flex-col gap-2 sm:gap-2.5">
-                                                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-xs">
-                                                        <div className="flex items-center gap-2">
-                                                            <div className="w-2 h-2 rounded-full bg-orange-500 animate-ping shrink-0" />
-                                                            <span className="font-black text-gray-800 uppercase tracking-wider text-[10px] sm:text-[11px]">Masa Sewa Berjalan</span>
+                                            {/* Visual Progress Bar / Handover Status */}
+                                            {isPaid && !kost.is_checked_out && (() => {
+                                                const isHandoverDone = Boolean(kMeta.actual_checkin_at || kMeta.handover_confirmed || kost.actual_checkin_at);
+                                                const isEarlyRequested = Boolean(kMeta.early_checkin_requested && !kMeta.early_checkin_approved);
+                                                const isUpcoming = Boolean(startDateObj && nowObj.getTime() < new Date(startDateObj.getFullYear(), startDateObj.getMonth(), startDateObj.getDate()).getTime());
+
+                                                if (!isHandoverDone && isUpcoming) {
+                                                    return (
+                                                        <div className="p-4 sm:p-5 rounded-2xl sm:rounded-3xl bg-blue-50/80 border border-blue-200 text-blue-900 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-sm">
+                                                            <div className="flex items-center gap-3">
+                                                                <div className="w-10 h-10 rounded-2xl bg-blue-500 text-white flex items-center justify-center shrink-0">
+                                                                    <Calendar className="w-5 h-5" />
+                                                                </div>
+                                                                <div>
+                                                                    <div className="flex items-center gap-2">
+                                                                        <span className="text-[10px] font-black uppercase tracking-wider text-blue-900">Menunggu Tanggal Masuk (Upcoming Stay)</span>
+                                                                        <span className="px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 text-[9px] font-bold">Lunas</span>
+                                                                    </div>
+                                                                    <p className="text-xs font-semibold text-blue-800 mt-0.5">
+                                                                        Jadwal Masuk: <strong>{FORMAT_DATE(kost.moveInDate)}</strong>
+                                                                        {kMeta.checkInTime ? ` (${kMeta.checkInTime})` : ''}
+                                                                        {kMeta.checkInEta ? ` • ETA: ${kMeta.checkInEta}` : ''}
+                                                                    </p>
+                                                                </div>
+                                                            </div>
+                                                            {isEarlyRequested ? (
+                                                                <span className="px-3 py-1.5 rounded-xl bg-amber-100 text-amber-800 text-[10px] font-black uppercase tracking-wider border border-amber-200 flex items-center gap-1.5 shrink-0">
+                                                                    <Clock className="w-3.5 h-3.5 text-amber-600" />
+                                                                    Menunggu ACC Masuk Tgl {FORMAT_DATE(kMeta.early_checkin_proposed_date)}
+                                                                </span>
+                                                            ) : (
+                                                                <button
+                                                                    onClick={() => handleOpenEarlyCheckInModal(kost)}
+                                                                    className="px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-black uppercase tracking-wider transition-all shadow-sm active:scale-95 shrink-0 cursor-pointer flex items-center gap-1.5"
+                                                                >
+                                                                    <Zap className="w-3.5 h-3.5" /> Masuk Lebih Cepat?
+                                                                </button>
+                                                            )}
                                                         </div>
-                                                        <span className="font-black text-orange-600 text-[11px] sm:text-xs">
-                                                            Hari ke-{daysElapsed} dari {totalLeaseDays} Hari ({progressPercent}%)
-                                                        </span>
-                                                    </div>
+                                                    );
+                                                }
 
-                                                    {/* Track & Filled Bar */}
-                                                    <div className="w-full h-2 sm:h-2.5 bg-gray-200/80 rounded-full overflow-hidden p-0.5 shadow-inner">
-                                                        <div 
-                                                            className="h-full bg-gradient-to-r from-orange-500 via-amber-500 to-emerald-500 rounded-full transition-all duration-1000 shadow-sm"
-                                                            style={{ width: `${Math.max(5, progressPercent)}%` }}
-                                                        />
-                                                    </div>
+                                                if (!isHandoverDone && !isUpcoming) {
+                                                    return (
+                                                        <div className="p-4 sm:p-5 rounded-2xl sm:rounded-3xl bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-200 text-emerald-950 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-sm">
+                                                            <div className="flex items-center gap-3">
+                                                                <div className="w-10 h-10 rounded-2xl bg-emerald-500 text-white flex items-center justify-center shrink-0 animate-bounce">
+                                                                    <CheckCircle2 className="w-5 h-5" />
+                                                                </div>
+                                                                <div>
+                                                                    <div className="flex items-center gap-2">
+                                                                        <span className="text-[10px] font-black uppercase tracking-wider text-emerald-900">Hari Masuk Kost Telah Tiba!</span>
+                                                                        <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[9px] font-black">Siap Check-in</span>
+                                                                    </div>
+                                                                    <p className="text-xs font-semibold text-emerald-800 mt-0.5">
+                                                                        Silakan serah terima kunci fisik dengan pemilik/penjaga kost dan konfirmasi di bawah.
+                                                                    </p>
+                                                                </div>
+                                                            </div>
+                                                            <button
+                                                                onClick={() => handleConfirmTenantCheckIn(kost)}
+                                                                disabled={isConfirmingCheckIn}
+                                                                className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-black uppercase tracking-wider transition-all shadow-md active:scale-95 shrink-0 cursor-pointer flex items-center justify-center gap-1.5"
+                                                            >
+                                                                <CheckCircle2 className="w-3.5 h-3.5" />
+                                                                {isConfirmingCheckIn ? 'Memproses...' : 'Sudah Tiba & Terima Kunci'}
+                                                            </button>
+                                                        </div>
+                                                    );
+                                                }
 
-                                                    <div className="flex items-center justify-between text-[9px] sm:text-[10px] font-bold text-gray-500 pt-0.5">
-                                                        <span>Mulai: <strong className="text-gray-800">{FORMAT_DATE(kost.moveInDate)}</strong></span>
-                                                        <span>Berakhir: <strong className="text-gray-800">{FORMAT_DATE(kost.endDate)}</strong></span>
+                                                return (
+                                                    <div className="bg-gradient-to-r from-orange-50/70 via-amber-50/50 to-slate-50 p-3.5 sm:p-5 rounded-2xl border border-orange-100/80 shadow-sm flex flex-col gap-2 sm:gap-2.5">
+                                                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-xs">
+                                                            <div className="flex items-center gap-2">
+                                                                <div className="w-2 h-2 rounded-full bg-orange-500 animate-ping shrink-0" />
+                                                                <span className="font-black text-gray-800 uppercase tracking-wider text-[10px] sm:text-[11px]">Masa Sewa Berjalan</span>
+                                                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[8.5px] font-black uppercase tracking-wider">
+                                                                    <CheckCircle2 className="w-2.5 h-2.5" /> Kunci Diterima
+                                                                </span>
+                                                            </div>
+                                                            <span className="font-black text-orange-600 text-[11px] sm:text-xs">
+                                                                Hari ke-{daysElapsed} dari {totalLeaseDays} Hari ({progressPercent}%)
+                                                            </span>
+                                                        </div>
+
+                                                        {/* Track & Filled Bar */}
+                                                        <div className="w-full h-2 sm:h-2.5 bg-gray-200/80 rounded-full overflow-hidden p-0.5 shadow-inner">
+                                                            <div 
+                                                                className="h-full bg-gradient-to-r from-orange-500 via-amber-500 to-emerald-500 rounded-full transition-all duration-1000 shadow-sm"
+                                                                style={{ width: `${Math.max(5, progressPercent)}%` }}
+                                                            />
+                                                        </div>
+
+                                                        <div className="flex items-center justify-between text-[9px] sm:text-[10px] font-bold text-gray-500 pt-0.5">
+                                                            <span>Mulai: <strong className="text-gray-800">{FORMAT_DATE(kost.moveInDate)}</strong></span>
+                                                            <span>Berakhir: <strong className="text-gray-800">{FORMAT_DATE(kost.endDate)}</strong></span>
+                                                        </div>
                                                     </div>
-                                                </div>
-                                            )}
+                                                );
+                                            })()}
 
                                             {/* Info Grid - Modern Minimalist Cards (Anti-Truncate) */}
                                             {isPaid && (
@@ -2639,6 +2766,18 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
                                                     className="w-full bg-gray-900 hover:bg-black text-white px-4 sm:px-5 py-3 sm:py-3.5 rounded-xl sm:rounded-2xl font-black flex items-center justify-center gap-2 sm:gap-2.5 transition-all text-[9.5px] sm:text-[10px] uppercase tracking-widest shadow-md active:scale-[0.98] cursor-pointer"
                                                 >
                                                     <RotateCcw className="w-4 h-4 text-orange-400" /> Sewa Lagi
+                                                </button>
+                                            )}
+
+                                            {/* Tombol Konfirmasi Terima Kunci (Jika belum handover) */}
+                                            {isPaid && !kost.is_checked_out && !Boolean(kMeta.actual_checkin_at || kMeta.handover_confirmed || kost.actual_checkin_at) && (
+                                                <button
+                                                    onClick={() => handleConfirmTenantCheckIn(kost)}
+                                                    disabled={isConfirmingCheckIn}
+                                                    className="w-full bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white px-4 sm:px-5 py-3 sm:py-3.5 rounded-xl sm:rounded-2xl font-black flex items-center justify-center gap-2 sm:gap-2.5 transition-all text-[9.5px] sm:text-[10px] uppercase tracking-widest shadow-md shadow-emerald-500/20 active:scale-[0.98] cursor-pointer"
+                                                >
+                                                    <CheckCircle2 className="w-4 h-4 text-emerald-200" />
+                                                    <span>{isConfirmingCheckIn ? 'Memproses...' : 'Terima Kunci & Masuk'}</span>
                                                 </button>
                                             )}
 
@@ -5402,6 +5541,80 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
                                 className="px-7 py-3 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white rounded-xl font-black text-xs uppercase tracking-wider transition-all shadow-md active:scale-95 disabled:opacity-50 cursor-pointer flex items-center gap-2"
                             >
                                 {isSubmittingPropertyReview ? 'Mengirim...' : 'Kirim Ulasan ✓'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* 10. Modal Ajukan Check-in Lebih Awal (Early Check-in) */}
+            {showEarlyCheckInModal && selectedKost && (
+                <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-sm animate-in fade-in duration-200">
+                    <div className="bg-white w-full max-w-md rounded-3xl shadow-2xl overflow-hidden border border-gray-100 animate-in zoom-in-95 duration-200">
+                        <div className="p-6 border-b border-gray-100 flex items-center justify-between bg-gradient-to-r from-amber-50 to-orange-50">
+                            <div className="flex items-center gap-2.5">
+                                <div className="w-8 h-8 rounded-xl bg-amber-500 text-white flex items-center justify-center">
+                                    <Zap className="w-4 h-4" />
+                                </div>
+                                <div>
+                                    <h3 className="font-black text-sm text-gray-900 uppercase tracking-tight">Ajukan Check-in Lebih Awal</h3>
+                                    <p className="text-[10px] text-gray-500 font-bold uppercase tracking-wider mt-0.5">{selectedKost.kostName}</p>
+                                </div>
+                            </div>
+                            <button onClick={() => setShowEarlyCheckInModal(false)} className="p-1.5 text-gray-400 hover:text-gray-700 rounded-full hover:bg-white/60">
+                                <X className="w-5 h-5" />
+                            </button>
+                        </div>
+
+                        <div className="p-6 space-y-4">
+                            <div className="p-3.5 bg-amber-50/70 border border-amber-200/80 rounded-2xl text-[11px] text-amber-900 leading-relaxed">
+                                <p className="font-bold">Informasi Jadwal Awal:</p>
+                                <p className="mt-0.5">Tanggal masuk awal Anda adalah <strong>{FORMAT_DATE(selectedKost.moveInDate)}</strong>. Jika Anda tiba lebih cepat, sistem akan mengajukan penyesuaian tanggal masuk resmi kepada pemilik kost.</p>
+                            </div>
+
+                            <div className="space-y-1.5">
+                                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest">
+                                    Rencana Tanggal Masuk Baru (Lebih Awal)
+                                </label>
+                                <input
+                                    type="date"
+                                    value={earlyCheckInDate}
+                                    onChange={(e) => setEarlyCheckInDate(e.target.value)}
+                                    min={new Date().toISOString().split('T')[0]}
+                                    max={selectedKost.moveInDate ? new Date(selectedKost.moveInDate).toISOString().split('T')[0] : undefined}
+                                    className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-xs font-bold text-gray-900 focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500"
+                                />
+                            </div>
+
+                            <div className="space-y-1.5">
+                                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest">
+                                    Alasan / Keterangan (Opsional)
+                                </label>
+                                <textarea
+                                    value={earlyCheckInReason}
+                                    onChange={(e) => setEarlyCheckInReason(e.target.value)}
+                                    placeholder="Contoh: Tiket perjalanan maju, sudah tiba di kota kost lebih cepat."
+                                    rows={3}
+                                    className="w-full bg-gray-50 border border-gray-200 rounded-xl p-3 text-xs font-medium text-gray-900 focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 resize-none"
+                                />
+                            </div>
+                        </div>
+
+                        <div className="p-5 bg-gray-50 border-t border-gray-100 flex items-center justify-end gap-2.5">
+                            <button
+                                type="button"
+                                onClick={() => setShowEarlyCheckInModal(false)}
+                                className="px-4 py-2.5 text-xs font-black uppercase tracking-wider text-gray-600 hover:bg-gray-100 rounded-xl transition-colors cursor-pointer"
+                            >
+                                Batal
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handleSubmitEarlyCheckIn}
+                                disabled={earlyCheckInLoading || !earlyCheckInDate}
+                                className="px-6 py-2.5 text-xs font-black uppercase tracking-wider bg-amber-500 hover:bg-amber-600 text-white rounded-xl shadow-md active:scale-95 disabled:opacity-50 transition-all cursor-pointer flex items-center gap-1.5"
+                            >
+                                {earlyCheckInLoading ? 'Mengirim...' : 'Kirim Permintaan'}
                             </button>
                         </div>
                     </div>

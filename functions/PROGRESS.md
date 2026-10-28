@@ -2,6 +2,64 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 465. Standarisasi Siklus Sewa & Booking Proptech: Batas Booking Dinamis, Jam Check-in/ETA, dan Handover Serah Terima Kunci (`BookingModal.tsx`, `KostDetail.tsx`, `userService.ts`, `MyKost.tsx`, `MitraDashboard.tsx`) (Oktober 2026)
+- **Permintaan & Kebutuhan Pengguna**:
+  1. Audit komprehensif alur pengajuan sewa (*rental booking flow*) berdasarkan standar industri proptech (Mamikos, Rukita, Airbnb):
+     - Klarifikasi masa sewa: Dihitung berdasarkan tanggal masuk (*check-in date*) yang disepakati, bukan tanggal bayar atau approve.
+     - Penanganan datang terlambat (*Late Check-in*): Masa sewa tetap berjalan sejak hari-H (tidak bergeser), karena kamar sudah di-*hold*.
+     - Penanganan datang lebih cepat (*Early Check-in*): Butuh tombol konfirmasi check-in fisik / request persetujuan pemilik untuk memajukan tanggal sewa.
+     - Penanganan sewa harian vs bulanan:
+       - **Batas Booking Dinamis (*Dynamic Advance Booking Window*)**: Jangan samaratakan H-30 untuk semua paket! Harian dibatasi H+3 s/d H+5 hari agar tidak memblokir kalender sewa bulanan (*yield protection*), mingguan H+14 hari, bulanan H+30 hari, tahunan H+45 hari.
+       - **Input Jam & Waktu Check-in**: Khusus sewa harian, wajib ada aturan check-in 14.00 WIB, check-out 12.00 WIB, serta dropdown estimasi jam tiba (*ETA*) karena kost tidak memiliki resepsionis 24 jam.
+- **Implementasi Solusi**:
+  1. **Batas Booking Dinamis (*Dynamic Advance Booking Window*)**:
+     - `getAdvanceBookingLimitDays(period)` di `BookingModal.tsx`:
+       - Harian: Maksimal H+5 hari.
+       - Mingguan: Maksimal H+14 hari.
+       - Bulanan / 3 Bulanan / 6 Bulanan: Maksimal H+30 hari.
+       - Tahunan: Maksimal H+45 hari.
+     - Input tanggal masuk memiliki batas `min={today}` dan `max={today + advanceLimitDays}`. Otomatis menyesuaikan (*auto-clamp*) tanggal jika pengguna berganti paket sewa.
+  2. **Standarisasi Jam Check-in/Check-out & Dropdown ETA Khusus Harian**:
+     - Kotak informasi operasional check-in: Mulai `14:00 WIB`, Check-out: Maksimal `12:00 WIB`.
+     - Dropdown estimasi jam kedatangan (*ETA*):
+       - `14:00 - 16:00 WIB (Normal Siang)`
+       - `16:00 - 18:00 WIB (Sore Hari)`
+       - `18:00 - 20:00 WIB (Malam Hari)`
+       - `Di atas 20:00 WIB (Konfirmasi Khusus Penjaga Kost)`
+     - Nilai ETA tersimpan di metadata transaksi dan tampil di dashboard pemilik dan kartu sewa penghuni.
+  3. **Kalkulasi Otomatis Tanggal Selesai (*Check-out Date*) & 3-Step Alur Transaksi**:
+     - Kalkulasi reaktif tanggal keluar: Harian (+1 hari), Mingguan (+7 hari), Bulanan (+1 bulan), 3 Bulanan (+3 bulan), 6 Bulanan (+6 bulan), Tahunan (+1 tahun).
+     - Menampilkan "Ringkasan Masa Sewa" (Tanggal Mulai, Jam Masuk, Tanggal Selesai, Jam Keluar) dan progress bar 3 langkah (1. Ajukan Sewa -> 2. Persetujuan Pemilik -> 3. Bayar Resmi).
+  4. **Fungsi Layanan Database (`userService.ts`)**:
+     - `confirmCheckIn(targetId, role, notes)`: Mencatat serah terima kunci fisik (`actual_checkin_at`, `handover_confirmed: true`, `checked_in_by`), mengaktifkan status hunian ke `ACTIVE`.
+     - `requestEarlyCheckIn(targetId, proposedDate, reason)`: Menyimpan permintaan masuk lebih cepat dari penyewa ke metadata.
+     - `approveEarlyCheckIn(targetId, approvedDate)`: Memajukan tanggal sewa, otomatis menghitung ulang `end_date`, mengaktifkan status hunian.
+  5. **Antarmuka Check-in Penyewa (`MyKost.tsx`)**:
+     - Menampilkan banner jadwal sewa:
+       - *Upcoming Stay* (Belum Hari-H): Menampilkan jadwal masuk, ETA, dan tombol `[ ⚡ Masuk Lebih Cepat? (Early Check-in) ]`.
+       - *Hari-H Masuk*: Menampilkan banner notifikasi siap masuk dan tombol utama `[ 🔑 Sudah Tiba & Terima Kunci ]`.
+       - *Sudah Serah Terima*: Menampilkan progress bar masa sewa berjalan dan badge `✔️ Kunci Diterima`.
+     - Modal interaktif "Ajukan Check-in Lebih Awal" dengan input tanggal baru dan alasan.
+  6. **Antarmuka Pemilik Kost (`MitraDashboard.tsx`)**:
+     - Menampilkan info ETA jam kedatangan calon penghuni di kartu pesanan.
+     - Tombol `[ Serah Terima Kunci ]` untuk mencatat penyerahan kunci fisik.
+     - Badge & tombol `[ ACC Masuk Lebih Awal ]` jika penyewa mengajukan perubahan tanggal masuk.
+  7. **Kepatuhan Ikon & Standar UI**:
+     - 100% menggunakan pure vector bundled SVG dari `lucide-react` (`Calendar`, `Clock`, `ShieldCheck`, `CheckCircle2`, `Zap`, dll.), 0% Google Fonts ligature.
+- **File Tersentuh**:
+  - `functions/public/components/BookingModal.tsx`
+  - `functions/public/pages/KostDetail.tsx`
+  - `functions/public/userService.ts`
+  - `functions/public/pages/MyKost.tsx`
+  - `functions/public/pages/MitraDashboard.tsx`
+  - `functions/PROGRESS.md`
+  - `IMPLEMENTATION_PLAN.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi frontend `npm --prefix functions/public run build` sukses 100% (code 0).
+  - Kompilasi backend `npm --prefix functions run build` (`tsc`) sukses 100% (code 0).
+  - Sinkronisasi masa sewa, dynamic advance limit, dan konfirmasi serah terima kunci berjalan optimal.
+
 ### 464. Peningkatan Sistem Chat Properti Standar Proptech: Pinned Room Card, Security Banner & Quick Reply Chips (`ChatWindow.tsx`, `KostDetail.tsx`) (Oktober 2026)
 - **Permintaan & Kebutuhan Pengguna**:
   1. Audit komprehensif sistem obrolan properti terhadap standar industri proptech modern (Mamikos, Airbnb, Tokopedia).
