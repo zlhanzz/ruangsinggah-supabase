@@ -2,6 +2,37 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 466. Redesain UI/UX Modal Pengajuan Sewa: Tampilan Fit & Friendly, Mobile Bottom Sheet, Sticky Footer Bar, dan Anti-AI Slope (`BookingModal.tsx`) (Oktober 2026)
+- **Permintaan & Kebutuhan Pengguna**:
+  1. Pengguna menilai tampilan modal pengajuan sewa sebelumnya kurang fit dan friendly, belum memenuhi standar industri proptech, dan terasa seperti *AI slope* (desain generik kaku dengan penomoran berlebih dan banner boros ruang).
+  2. Pada tampilan mobile, modal sebelumnya melayang di tengah dan bagian bawahnya terpotong/tertutup oleh Bottom Navigation Bar aplikasi (`Home`, `Search`, `Chat`, `Orders`, `Profile`), sehingga pengguna tidak dapat melihat rincian harga dan tombol aksi *submit* tersembunyi.
+- **Implementasi Solusi**:
+  1. **Arsitektur Responsif Mobile Bottom Sheet & Anti-Cutoff**:
+     - Mengubah wrapper modal menjadi `z-[90]` (di atas bilah navigasi bawah `z-50`).
+     - Di layar mobile (`< sm`), modal tampil sebagai **Bottom Sheet Drawer** (`rounded-t-[2rem] max-h-[92vh]`) dengan pegangan geser (*drag indicator*) di bagian atas.
+     - Di layar desktop (`sm:`), modal tampil sebagai dialog elegan yang proporsional di tengah layar (`sm:max-w-lg sm:rounded-3xl max-h-[88vh]`).
+  2. **Sticky Bottom Action Bar (Solusi Bebas Potong)**:
+     - Mengubah tombol submit menjadi bilah bawah yang melekat (*sticky footer*):
+       - Sisi Kiri: Ringkasan Total Tagihan (`Rp 1.000.000 / bln`) dengan tipografi presisi.
+       - Sisi Kanan: Tombol CTA Utama `[ Ajukan Sewa → ]` yang selalu terlihat dan mudah ditekan oleh jempol pengguna.
+  3. **Menghapus Kesan "AI Slope" & Menyempurnakan Visual**:
+     - Menghapus penomoran kaku (`1. PILIH PAKET SEWA`, `2. JUMLAH PENGHUNI...`, `3. TANGGAL MASUK...`) menjadi label humanis natural (`Pilih Durasi Sewa`, `Tanggal Masuk`, `Jumlah Tamu`).
+     - Menghilangkan badge generik `✨ PENGAJUAN SEWA RESMI` dan banner stepper 3-tahap yang boros 55px vertikal.
+     - Menyematkan **Header Properti Personal**: Thumbnail foto asli kamar/kost (`w-12 h-12 rounded-xl object-cover`), nama properti *Title Case*, badge tipe kamar, dan ringkasan kota/area.
+     - Menyematkan reasuransi tenang: `🛡️ Pengajuan Bebas Biaya • Bisa bayar setelah di-ACC pemilik`.
+  4. **Penyusunan Kontrol yang Rapi**:
+     - *Segmented Duration Control*: Kartu durasi sewa kompak dengan active state oranye lembut.
+     - *Grid Reservasi Terpadu*: Menggabungkan Tanggal Masuk dan Jumlah Tamu berdampingan secara proporsional.
+     - *Khusus Harian*: Kotak aturan check-in 14:00 & out 12:00 serta dropdown ETA disajikan rapi tanpa kontras berlebih.
+- **File Tersentuh**:
+  - `functions/public/components/BookingModal.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi frontend `npm --prefix functions/public run build` lulus 100% (code 0).
+  - Kompilasi backend `npm --prefix functions run build` (`tsc`) lulus 100% (code 0).
+  - Tampilan mobile bebas cut-off dari bottom navigation bar, tombol sticky footer selalu dapat diakses.
+
 ### 465. Standarisasi Siklus Sewa & Booking Proptech: Batas Booking Dinamis, Jam Check-in/ETA, dan Handover Serah Terima Kunci (`BookingModal.tsx`, `KostDetail.tsx`, `userService.ts`, `MyKost.tsx`, `MitraDashboard.tsx`) (Oktober 2026)
 - **Permintaan & Kebutuhan Pengguna**:
   1. Audit komprehensif alur pengajuan sewa (*rental booking flow*) berdasarkan standar industri proptech (Mamikos, Rukita, Airbnb):

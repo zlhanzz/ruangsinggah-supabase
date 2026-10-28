@@ -1,50 +1,39 @@
-# Walkthrough - Progres #465: Standarisasi Siklus Sewa & Booking Proptech
+# Walkthrough - Progres #466: Redesain UI/UX Modal Pengajuan Sewa (Fit, Friendly & Anti-AI Slope)
 
-Dokumen ini merangkum hasil implementasi audit dan standarisasi siklus sewa (*rental booking lifecycle*) berdasarkan standar industri proptech (Mamikos, Rukita, Airbnb) pada sistem RuangSinggah.
+Dokumen ini merangkum hasil implementasi redesain tampilan formulir pengajuan sewa ([BookingModal.tsx](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/components/BookingModal.tsx)) agar tampil pas di layar (*fit*), ramah pengguna (*friendly*), berstandar industri proptech terkemuka (Mamikos, Airbnb), dan terbebas dari kesan *AI slope*.
 
 ---
 
-## 🌟 Ringkasan Perubahan
+## 🌟 Ringkasan Perubahan UI/UX
 
-### 1. Batas Booking Dinamis (*Dynamic Advance Booking Window*)
-- **Masalah Sebelumnya**: Tanggal masuk dipukul rata dapat dipesan hingga H+30 hari untuk semua paket sewa. Akibatnya, pemesanan sewa harian receh (misal Rp 100.000) yang dipesan 3 minggu ke depan berisiko memblokir kamar dari penyewa bulanan bernilai tinggi (konflik *yield management*).
-- **Solusi**: Diterapkan fungsi dinamis `getAdvanceBookingLimitDays(period)` di [BookingModal.tsx](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/components/BookingModal.tsx):
-  - **Harian**: Maksimal **H+5 hari** ke depan.
-  - **Mingguan**: Maksimal **H+14 hari** ke depan.
-  - **Bulanan / 3 Bulanan / 6 Bulanan**: Maksimal **H+30 hari** ke depan.
-  - **Tahunan**: Maksimal **H+45 hari** ke depan.
-  - Form tanggal masuk otomatis menyesuaikan (*auto-clamp*) rentang min-max ketika pengguna memilih/mengganti paket sewa.
-
-### 2. Standarisasi Jam Check-in/Check-out & Estimasi Jam Kedatangan (ETA)
-- **Realitas Operasional**: Kost harian tidak memiliki staf resepsionis 24 jam seperti hotel bintang 5.
+### 1. Arsitektur Responsif Mobile Bottom Sheet & Anti-Cutoff
+- **Masalah Sebelumnya**: Pada tampilan mobile, modal melayang di tengah dan bagian bawahnya terpotong oleh bilah menu navigasi bawah (*Bottom Navigation Bar*). Tombol CTA dan ringkasan harga tidak dapat diakses.
 - **Solusi**:
-  - Ditetapkan aturan operasional baku untuk sewa harian: **Check-in mulai 14:00 WIB**, **Check-out maksimal 12:00 WIB**.
-  - Dropdown **Estimasi Waktu Kedatangan (ETA)**:
-    - `14:00 - 16:00 WIB (Normal Siang)`
-    - `16:00 - 18:00 WIB (Sore Hari)`
-    - `18:00 - 20:00 WIB (Malam Hari)`
-    - `Di atas 20:00 WIB (Konfirmasi Khusus Penjaga Kost)`
-  - Data ETA tersimpan di metadata pesanan dan diteruskan ke dashboard pemilik serta kartu hunian penyewa.
+  - Wrapper modal kini menggunakan `z-[90]` sehingga berada di atas Bottom Navigation Bar aplikasi.
+  - Pada layar ponsel (`< sm`), modal tampil sebagai **Bottom Sheet Drawer** (`rounded-t-[2rem] max-h-[92vh]`) dengan pegangan geser (*drag handle*) di bagian atas.
+  - Pada layar desktop (`sm:`), modal tampil sebagai dialog proporsional yang rapi di tengah layar (`sm:max-w-lg sm:rounded-3xl max-h-[88vh]`).
 
-### 3. Kalkulasi Otomatis Tanggal Selesai (*Check-out Date*) & Progress 3 Langkah
-- Menghitung secara otomatis tanggal keluar berdasarkan durasi paket sewa yang dipilih (Harian +1 hari, Mingguan +7 hari, Bulanan +1 bulan, dst.).
-- Menampilkan kartu "Ringkasan Masa Sewa" (Tanggal Mulai, Jam Masuk, Tanggal Selesai, Jam Keluar).
-- Menampilkan visual progress bar 3 langkah transaksi proptech:
-  `1. Ajukan Sewa` $\rightarrow$ `2. Persetujuan Pemilik` $\rightarrow$ `3. Bayar Resmi`.
+### 2. Sticky Bottom Action Bar (Solusi Bebas Potong & Mudah Ditekan)
+- Ringkasan Total Tagihan dan Tombol Ajukan Sewa kini melekat di bagian paling bawah (*sticky footer*):
+  - **Sisi Kiri**: Total Tagihan (`Rp 1.000.000 / bln`) yang jelas terbaca.
+  - **Sisi Kanan**: Tombol CTA `[ Ajukan Sewa → ]` dengan ukuran pas untuk dijangkau jempol pengguna.
+  - Dilengkapi safe-area padding (`pb-safe`) agar tidak bertabrakan dengan navigasi sistem ponsel.
 
-### 4. Siklus Sinkronisasi Sewa & Handover Kunci Fisik
-- **Layanan Database ([userService.ts](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/userService.ts))**:
-  - `confirmCheckIn(targetId, role, notes)`: Mencatat serah terima kunci fisik (`actual_checkin_at`, `handover_confirmed: true`, `checked_in_by`), mengaktifkan status hunian ke `ACTIVE`.
-  - `requestEarlyCheckIn(targetId, proposedDate, reason)`: Menyimpan pengajuan masuk lebih cepat oleh penyewa ke metadata.
-  - `approveEarlyCheckIn(targetId, approvedDate)`: Memajukan tanggal masuk, otomatis menghitung ulang tanggal keluar (`end_date`), dan mengaktifkan status hunian.
-- **Antarmuka Penyewa ([MyKost.tsx](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/MyKost.tsx))**:
-  - *Upcoming Stay* (Belum Hari-H): Menampilkan jadwal masuk, ETA, dan tombol `[ ⚡ Masuk Lebih Cepat? ]` untuk mengajukan Early Check-in.
-  - *Hari-H Masuk*: Menampilkan banner kesiapan dan tombol `[ 🔑 Sudah Tiba & Terima Kunci ]`.
-  - *Sudah Serah Terima*: Menampilkan progress bar masa sewa aktif dan badge `✔️ Kunci Diterima`.
-- **Antarmuka Pemilik Kost ([MitraDashboard.tsx](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/MitraDashboard.tsx))**:
-  - Menampilkan badge ETA jam kedatangan calon penghuni di kartu pesanan.
-  - Tombol `[ Serah Terima Kunci ]` untuk mencatat penyerahan kunci kamar fisik.
-  - Tombol `[ ACC Masuk Lebih Awal ]` saat penyewa mengajukan perubahan tanggal masuk.
+### 3. Pembersihan Kesan "AI Slope" Menjadi Humanis & Bersahabat
+- **Menghapus Penomoran Kaku**: Menghapus judul numbered list kaku (`1. PILIH PAKET SEWA`, `2. JUMLAH PENGHUNI...`, `3. TANGGAL MASUK...`) menjadi label humanis natural: **"Pilih Durasi Sewa"**, **"Tanggal Masuk"**, dan **"Jumlah Tamu"**.
+- **Menghapus Stepper Boros Ruang**: Menghilangkan banner 3-tahap yang memakan 55px vertikal dan badge generik `✨ PENGAJUAN SEWA RESMI`.
+- **Header Properti Personal**:
+  - Dilengkapi foto thumbnail asli kamar/kost (`w-12 h-12 rounded-xl object-cover`).
+  - Judul nama kost *Title Case* yang bersih.
+  - Badge tipe kamar dan nama kota/area kost.
+- **Reasuransi Tenang**:
+  - `🛡️ Pengajuan Bebas Biaya • Bisa bayar setelah di-ACC pemilik`.
+
+### 4. Penyusunan Kontrol yang Rapi & Kompak
+- **Segmented Duration Control**: Kartu opsi durasi sewa yang ringkas dengan active state oranye lembut khas RuangSinggah.
+- **Grid Reservasi Terpadu**: Menggabungkan input Tanggal Masuk dan Jumlah Tamu dalam baris berdampingan yang rapi.
+- **Aturan Sewa Harian**: Kotak informasi check-in 14:00 & check-out 12:00 serta dropdown ETA disajikan bersih tanpa kontras berlebih.
+- **Transparansi Masa Sewa & Harga**: Ringkasan jadwal sewa (Check-in s/d Check-out) dan rincian harga sewa dasar serta biaya tambahan.
 
 ---
 
@@ -54,7 +43,7 @@ Dokumen ini merangkum hasil implementasi audit dan standarisasi siklus sewa (*re
    ```bash
    npm --prefix functions/public run build
    ```
-   - **Hasil**: `✓ built in 36.31s` (Exit Code 0, 0 error).
+   - **Hasil**: `✓ built in 34.39s` (Exit Code 0, 0 error).
 
 2. **Backend Compilation Build**:
    ```bash
@@ -63,21 +52,19 @@ Dokumen ini merangkum hasil implementasi audit dan standarisasi siklus sewa (*re
    - **Hasil**: `tsc` selesai 100% tanpa error (Exit Code 0).
 
 3. **Kepatuhan Ikon**:
-   - 100% menggunakan SVG murni dari `lucide-react` (`Calendar`, `Clock`, `Zap`, `CheckCircle2`, `Check`, `FileText`, dll.). 0% Google Fonts ligature.
+   - 100% menggunakan pure vector bundled SVG dari `lucide-react` (`Home`, `MapPin`, `Calendar`, `Clock`, `ShieldCheck`, `CheckCircle2`, `Users`, `ArrowRight`, `X`). Bebas kedipan font / FOUT.
 
 ---
 
 ## 🚀 Panduan Pengujian bagi Pengguna
 
-1. **Uji Batas Booking Dinamis**:
-   - Buka halaman Detail Kost, klik **"Ajukan Sewa"**.
-   - Pilih paket **"Harian"**: Perhatikan bahwa kalender tanggal masuk dibatasi maksimal 5 hari ke depan (H+5), serta muncul info Check-in 14:00, Check-out 12:00, dan dropdown ETA.
-   - Ganti paket ke **"Bulanan"**: Kalender otomatis membuka pilihan hingga 30 hari ke depan (H+30).
-2. **Uji Konfirmasi Handover Kunci**:
-   - Buka halaman **Kost Saya** (`/my-kost`).
-   - Pada kartu kost yang sudah lunas:
-     - Jika belum mencapai hari masuk: Muncul banner *Upcoming Stay* beserta tombol *Masuk Lebih Cepat?*.
-     - Jika sudah hari masuk: Muncul banner *Hari Masuk Kost Telah Tiba!* dan tombol *Sudah Tiba & Terima Kunci*.
-3. **Uji Pemilik Kost**:
-   - Buka **Dashboard Mitra** tab Pesanan / Penghuni.
-   - Perhatikan info ETA kedatangan serta tombol *Serah Terima Kunci* dan *ACC Masuk Lebih Awal*.
+1. **Uji di Layar Ponsel (Mobile Viewport)**:
+   - Buka halaman Detail Kost di ponsel atau gunakan mode responsive inspect tool browser (misal 375px atau 414px lebar).
+   - Klik tombol **"Ajukan Sewa"**.
+   - Perhatikan modal sekarang meluncur mulus dari bawah (*Bottom Sheet*), tidak tertutup oleh Bottom Navigation Bar, dan tombol oranye `[ Ajukan Sewa ]` selalu berada di kanan bawah siap ditekan.
+2. **Uji di Layar Desktop**:
+   - Buka halaman Detail Kost di desktop, klik **"Ajukan Sewa"**.
+   - Perhatikan header properti menyertakan foto kamar, nama kost, tipe unit, serta form yang ringkas tanpa scroll berlebih.
+3. **Uji Penggantian Paket Sewa**:
+   - Pilih paket **"Harian"**: Muncul aturan Check-in 14:00, Out 12:00, batas H+5, dan dropdown ETA.
+   - Ganti ke **"Bulanan"**: Kalender otomatis menyesuaikan hingga batas H+30 hari.
