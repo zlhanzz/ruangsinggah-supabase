@@ -1,23 +1,28 @@
-# IMPLEMENTATION PLAN: Penghapusan Badge Overlay Floating "RUANGSINGGAH.ID" pada Preview Foto
+# IMPLEMENTATION PLAN: Penyederhanaan Header Foto & Penyembunyian Logika Internal Validasi dari Permukaan UI
 
 ## 1. Analisis Masalah & Kebutuhan
 
-### A. Konteks & Pertanyaan Pengguna
-Pengguna mempertanyakan fungsi dari badge / banner teks mengambang bertuliskan `[ 🟠 RUANGSINGGAH.ID ℹ️ ]` yang muncul di pojok kiri atas thumbnail foto yang telah diunggah:
-- Pengguna menilai elemen ini kurang berguna, tidak memiliki fungsi teknis penting, dan bukan merupakan bagian dari watermark asli maupun fungsi pemrosesan sensor foto.
-- Pengguna meminta agar elemen ini dihapus jika memang tidak berguna.
+### A. Konteks & Masukan Pengguna
+Pengguna mengamati card indikator kelayakan listing di header Langkah 5:
+- *"menurut saya bagian ini tidak harus ada, lagi lagi ini adalah background logic atau backgroun prosess yang tidak harus muncul di permukaan"*
+- Bagian tersebut menampilkan informasi internal:
+  - "Syarat Kelayakan Listing: Lengkap & Siap Lanjut"
+  - "Standar industri mewajibkan minimal 3 foto total..."
+  - Checklist chips kategori wajib (`Bangunan Depan`, `Kamar: Standard`, `KM Dalam: Standard`)
+  - "Caption foto terkunci secara otomatis..."
+  - Counter `Total: 10 / 3 Foto Minimal`
 
-### B. Temuan & Evaluasi Teknis
-1. **Bukan Bagian dari File Foto (Hanya Elemen DOM Front-End)**:
-   - Badge gelap lonjong `[ 🟠 RUANGSINGGAH.ID ℹ️ ]` tersebut adalah elemen HTML `<span className="absolute top-1.5 left-1.5 bg-slate-900/90 ...">` yang dirender di atas thumbnail React ketika flag `item.isBlurred` bernilai `true`.
-   - File foto sebenarnya yang dikompresi dan dikirim ke Supabase Storage **sudah memiliki stempel sensor kanvas fisik dan watermark diagonal resmi secara permanen di dalam gambar WebP**.
-2. **Kelemahan & Dampak Negatif Badge Overlay**:
-   - **Menutupi Visual Foto**: Pada thumbnail berukuran kecil/sedang di layar HP maupun laptop, badge ini memakan porsi 40–50% lebar foto di bagian atas.
-   - **Tumpang Tindih UI**: Badge ini menabrak tombol hapus foto merah `(X)` di kanan atas thumbnail.
-   - **Beban Kognitif & Ambiguitas**: Teks badge `ruangsinggah.id` identik dengan teks watermark, membuat mitra bingung apakah itu watermark yang salah tempat atau ada error pada foto.
-3. **Kesimpulan**:
-   - Badge overlay floating ini **100% aman dan sangat direkomendasikan untuk dihapus**.
-   - Menghapus badge overlay ini membuat thumbnail preview foto menjadi bersih, jernih, dan profesional, tanpa mengurangi fungsi keamanan auto-sensor kanvas yang sudah tertanam di file aslinya.
+### B. Evaluasi UX & Arsitektur Sistem
+1. **Pemisahan Logika Bisnis (Background) vs Tampilan Pengguna (Surface UX)**:
+   - Aturan validasi (Bangunan Depan wajib, Kamar wajib, KM Dalam wajib, dan minimal total 3 foto) adalah **background logic (business rule)** yang seharusnya bekerja di balik layar, bukan diekspos sebagai dashboard inspeksi yang membebani antarmuka pengguna.
+   - Menggurui pengguna dengan teks justifikasi ("Standar industri mewajibkan...", "Caption terkunci otomatis...") justru menambah kebisingan visual (*visual noise*) dan mengaburkan esensi form pengunggahan foto.
+2. **Desain Bersih & Elegan yang Lebih Tepat**:
+   - Kembalikan header Langkah 5 ke bentuk ringkas, ramah, dan profesional:
+     - Judul: **Dokumentasi Foto Properti & Kamar**
+     - Deskripsi: *"Unggah foto properti dan kamar kost Anda untuk menarik minat calon penyewa."*
+     - Counter sederhana: `📸 {totalAllPhotos} Foto Terunggah`
+   - Kategori yang wajib diunggah sudah secara natural memiliki badge `Wajib` pada kartu masing-masing kategori (misal: *Bangunan Depan*, *Kamar*, *Kamar Mandi Dalam*), sementara fasilitas pendukung berbadge `Dianjurkan`.
+   - Jika mitra mencoba menekan tombol "Lanjut" sebelum syarat wajib terpenuhi, notifikasi validasi form yang ramah akan memandu secara otomatis.
 
 ---
 
@@ -25,27 +30,27 @@ Pengguna mempertanyakan fungsi dari badge / banner teks mengambang bertuliskan `
 
 File yang akan disentuh:
 - [functions/public/components/KostFormMitra.tsx](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/components/KostFormMitra.tsx):
-  - Menghapus blok `{/* Status Badges */}` pada Section A (Foto Fasilitas Umum).
-  - Menghapus blok `{/* Status Badges */}` pada Section B (Foto Tipe Kamar).
-  - Merapikan posisi action button pojok kanan atas agar tetap presisi dan bersih.
+  - Membersihkan sub-card "Syarat Kelayakan Listing", teks justifikasi standar industri, checklist chips, dan variabel kalkulasi header yang tidak terpakai.
+  - Mengembalikan header Langkah 5 ke tampilan bersih, elegan, dan proporsional.
 
 ---
 
 ## 3. Langkah-Langkah Eksekusi (Fase 2 Setelah di-ACC)
 
-1. **Pembersihan Section A (Foto Fasilitas Umum)**:
-   - Menghapus elemen kondisional `item.isBlurred ? (...) : (...)` di bawah baris pemrosesan overlay.
-2. **Pembersihan Section B (Foto Khusus Tipe Kamar)**:
-   - Menghapus elemen kondisional `item.isBlurred ? (...) : (...)` yang sama pada daftar foto tipe kamar.
-3. **Kompilasi & Build Frontend**:
+1. **Modifikasi Header Langkah 5 di `KostFormMitra.tsx`**:
+   - Menghapus blok sub-card checklist kelayakan listing (lines ~5994-6036).
+   - Menyederhanakan deskripsi header menjadi ringkas dan bersahabat.
+   - Menampilkan counter foto yang bersih (`📸 {totalAllPhotos} Foto Terunggah`).
+   - Membersihkan variabel kalkulasi lokal yang tidak terpakai (`requiredCategories`, `missingRequiredList`, `isTotalMet`, `isAllRequiredMet`).
+2. **Kompilasi & Build Frontend**:
    - Menjalankan `npm --prefix functions/public run build` untuk memverifikasi 0 error TypeScript dan bundler Vite.
-4. **Kompilasi & Build Backend**:
-   - Menjalankan `npm --prefix functions run build` untuk memverifikasi `tsc` backend.
-5. **Pencatatan Progres Anti-Amnesia**:
-   - Mencatat ke [functions/PROGRESS.md](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/PROGRESS.md) (entri **#456**).
-6. **Penerbitan Dokumen Walkthrough**:
+3. **Kompilasi & Build Backend**:
+   - Menjalankan `npm --prefix functions run build` untuk memastikan kelulusan `tsc`.
+4. **Pencatatan Progres Anti-Amnesia**:
+   - Mencatat ke [functions/PROGRESS.md](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/PROGRESS.md) (entri **#457**).
+5. **Penerbitan Dokumen Walkthrough**:
    - Memperbarui [WALKTHROUGH.md](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/WALKTHROUGH.md).
-7. **Git Commit & Push**:
+6. **Git Commit & Push**:
    - Melakukan commit dan push ke branch `bukan-productions`.
 
 ---
@@ -53,8 +58,8 @@ File yang akan disentuh:
 ## 4. Rencana Verifikasi
 
 - **Verifikasi Visual**:
-  - Foto yang terdeteksi spanduk tetap memiliki sensor fisik kanvas dan watermark asli di dalam gambarnya.
-  - Di atas thumbnail tidak ada lagi pil hitam `[ 🟠 RUANGSINGGAH.ID ]` maupun badge `Baru`.
-  - Tombol hapus foto `(X)` dan tombol pemindaian ulang AI tetap berfungsi normal dan tidak lagi terhalang.
+  - Header Langkah 5 tampil minimalis, bersih, dan konsisten dengan langkah-langkah lainnya tanpa ada kotak checklist atau pesan kuliah sistem.
+  - Setiap kategori tetap memiliki penanda jelas (`Wajib` vs `Dianjurkan`).
+  - Logika validasi background (minimal 3 foto & kelengkapan foto pokok) tetap aktif bekerja melindungi kualitas data saat tombol "Lanjut" diklik.
 - **Verifikasi Build**:
-  - `npm --prefix functions/public run build` harus exit code 0 tanpa error kompilasi.
+  - `npm --prefix functions/public run build` lulus 100% dengan exit code 0.

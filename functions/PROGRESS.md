@@ -2,6 +2,29 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 457. Penyederhanaan Header Foto & Penyembunyian Logika Internal Validasi dari Permukaan UI (`KostFormMitra.tsx`) (Oktober 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna mengkritisi keberadaan card inspeksi "Syarat Kelayakan Listing", checklist chips kategori wajib, teks justifikasi internal standar industri, dan counter rasionalitas sistem di bagian atas Langkah 5.
+  2. Pengguna menegaskan prinsip arsitektur UI/UX bahwa ini adalah *background logic* / proses verifikasi sistem yang semestinya bekerja di balik layar dan tidak perlu diekspos secara berlebihan ke permukaan antarmuka pengguna.
+- **Investigasi & Analisis Masalah**:
+  1. Menampilkan teks justifikasi internal (*"Standar industri mewajibkan minimal 3 foto..."*, *"Syarat Kelayakan Listing: Lengkap & Siap Lanjut"*, *"Caption terkunci otomatis..."*) dan deretan chips kategori wajib menimbulkan kebisingan visual (*visual clutter*) dan menggurui pengguna.
+  2. Setiap kategori kartu foto di bawahnya sudah memiliki penanda natural yang sangat jelas (`Wajib` pada kategori pokok dan `Dianjurkan` pada fasilitas umum).
+  3. Validasi form saat tombol "Lanjut" diklik sudah cukup menjadi penjaga pintu gerbang integritas data tanpa perlu dashboard inspeksi tambahan di header.
+- **Implementasi Solusi**:
+  1. Menghapus sub-card checklist syarat kelayakan listing, seluruh chips kategori, teks kuliah standar industri, dan variabel kalkulasi lokal yang tidak terpakai dari `KostFormMitra.tsx`.
+  2. Mengembalikan header Langkah 5 ke tampilan minimalis, bersih, dan konsisten:
+     - Judul: **Dokumentasi Foto Properti & Kamar**
+     - Subjudul: *"Unggah foto properti dan kamar kost Anda untuk menarik minat calon penyewa."*
+     - Counter ringkas: `📸 {totalAllPhotos} Foto Terunggah`
+  3. Memastikan background validation logic (minimal 3 foto total & kelengkapan kategori pokok wajib) tetap berjalan presisi di balik layar saat mitra menekan tombol "Lanjut" atau submit.
+- **File Tersentuh**:
+  - `functions/public/components/KostFormMitra.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi frontend `npm --prefix functions/public run build` lulus 100% 0 error (`✓ built in 39.34s`, 2512 modules transformed).
+  - Kompilasi backend functions `npm --prefix functions run build` (`tsc`) lulus 100% 0 error.
+
 ### 456. Pembersihan Badge Overlay Floating "RUANGSINGGAH.ID" pada Preview Foto Listing Mitra (`KostFormMitra.tsx`) (Oktober 2026)
 - **Permintaan & Masalah**:
   1. Pengguna mempertanyakan fungsi dari badge / banner lonjong hitam mengambang bertuliskan `[ 🟠 RUANGSINGGAH.ID ℹ️ ]` yang muncul di pojok kiri atas thumbnail foto yang telah diunggah pada formulir pendaftaran/edit kost mitra.

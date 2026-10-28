@@ -1,30 +1,49 @@
-# WALKTHROUGH - Pembersihan Badge Overlay Floating "RUANGSINGGAH.ID" pada Preview Foto
+# WALKTHROUGH - Penyederhanaan Header Foto & Penyembunyian Logika Internal Validasi dari Permukaan UI
 
 ## 📌 Ringkasan Pekerjaan
-Pekerjaan ini merapikan tampilan thumbnail preview foto pada formulir pendaftaran/edit kost mitra (*Langkah 5: Foto Properti & Kamar* di [KostFormMitra.tsx](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/components/KostFormMitra.tsx)):
+Pekerjaan ini merapikan antarmuka pengunggahan foto pada formulir pendaftaran/edit kost mitra (*Langkah 5: Foto Properti & Kamar* di [KostFormMitra.tsx](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/components/KostFormMitra.tsx)) dengan mematuhi prinsip arsitektur UI/UX yang bersih: **memisahkan logika verifikasi background proses dari tampilan permukaan antarmuka**.
 
-1. **Penghapusan Badge Lonjong Gelap Mengambang**:
-   - Menghapus badge HTML overlay `<span className="absolute top-1.5 left-1.5 bg-slate-900/90 ...">` bertuliskan `[ 🟠 RUANGSINGGAH.ID ℹ️ ]` yang sebelumnya menempel di pojok kiri atas thumbnail foto yang disensor.
-   - Menghapus badge `Baru` yang tidak perlu.
-2. **Klarifikasi Pemrosesan & Keamanan Foto**:
-   - Badge HTML tersebut bukan bagian dari file foto fisik dan tidak memiliki fungsi pemrosesan teknis.
-   - Foto asli yang dikompresi ke WebP dan disimpan ke Supabase Storage **tetap 100% memiliki stempel sensor kanvas fisik dan watermark resmi diagonal di dalam file fotonya**.
-3. **Pengalaman Visual yang Bersih & Rapi**:
-   - Tampilan thumbnail foto menjadi jernih tanpa teks yang menutupi objek foto.
-   - Tombol hapus foto merah `(X)` dan tombol pemindaian ulang AI di pojok kanan atas kini leluasa dan tidak lagi bertabrakan.
+1. **Pembersihan Elemen Inspeksi Internal**:
+   - Menghapus sub-card "Syarat Kelayakan Listing", kotak checklist chips (`Bangunan Depan`, `Kamar`, `KM Dalam`), dan teks kuliah internal (*"Standar industri mewajibkan minimal 3 foto..."*, *"Caption foto terkunci secara otomatis..."*).
+   - Menghilangkan beban visual yang membuat formulir terasa rumit dan menggurui pengguna.
+2. **Desain Header Minimalis & Elegan**:
+   - Judul: **Dokumentasi Foto Properti & Kamar**
+   - Subjudul: *"Unggah foto properti dan kamar kost Anda untuk menarik minat calon penyewa."*
+   - Badge Counter: `📸 {totalAllPhotos} Foto Terunggah`
+3. **Background Logic Tetap Menjaga Integritas Data**:
+   - Syarat kelayakan (minimal 3 foto total, wajib Bangunan Depan, wajib Kamar Tidur, dan wajib Kamar Mandi Dalam jika tersedia) tetap bekerja secara presisi di balik layar pada fungsi `validateCurrentStep` dan `handleSubmit`.
+   - Setiap kategori di kartu foto tetap memiliki penanda alami (`Wajib` vs `Dianjurkan`).
 
 ---
 
-## 🛠️ Detail Perubahan
+## 🛠️ Detail Perubahan File
 
 ### 1. [functions/public/components/KostFormMitra.tsx](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/components/KostFormMitra.tsx)
-- Menghapus blok `{/* Status Badges */}` pada **Section A (Area Gedung & Fasilitas Umum)**.
-- Menghapus blok `{/* Status Badges */}` pada **Section B (Tipe Kamar)**.
-- Tata letak thumbnail kini hanya menyisakan:
-  - Foto utama (cover object-fit).
-  - Overlay loading saat gambar sedang diproses kompresi WebP / AI (`item.isProcessing`).
-  - Action buttons di pojok kanan atas (tombol hapus foto `&times;` dan tombol rescan AI jika diperlukan).
-  - Bar keterangan pakem di bagian bawah thumbnail (`cat.label`).
+- Menghapus variabel kalkulasi inspeksi: `requiredCategories`, `missingRequiredList`, `isTotalMet`, `isAllRequiredMet`.
+- Mengganti seluruh sub-card checklist dan teks penjelasan panjang dengan satu baris kartu header yang bersih:
+  ```tsx
+  {/* Header Ringkasan Media */}
+  <div className="bg-gradient-to-br from-orange-50 via-amber-50/50 to-white p-4 sm:p-5 rounded-3xl border border-orange-200/80 shadow-xs">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+              <div className="flex items-center gap-2">
+                  <Camera className="w-5 h-5 text-orange-600" />
+                  <h3 className="text-sm font-black text-gray-900 uppercase tracking-wider">
+                      Dokumentasi Foto Properti &amp; Kamar
+                  </h3>
+              </div>
+              <p className="text-xs text-gray-600 mt-1">
+                  Unggah foto properti dan kamar kost Anda untuk menarik minat calon penyewa.
+              </p>
+          </div>
+          <div className="flex items-center gap-2">
+              <span className="px-3.5 py-1.5 bg-white border border-orange-200 text-orange-600 rounded-full text-xs font-black shadow-xs">
+                  📸 {totalAllPhotos} Foto Terunggah
+              </span>
+          </div>
+      </div>
+  </div>
+  ```
 
 ---
 
@@ -36,7 +55,7 @@ Pekerjaan ini merapikan tampilan thumbnail preview foto pada formulir pendaftara
    ```
    - **Hasil**: **Exit Code 0 (Sukses 100%)**.
    - `✓ 2512 modules transformed.`
-   - `✓ built in 41.22s`
+   - `✓ built in 39.34s`
    - 0 error TypeScript (`tsc`) dan bundler Vite.
 2. **Uji Kompilasi Backend (`functions`)**:
    ```powershell
@@ -51,10 +70,9 @@ Pekerjaan ini merapikan tampilan thumbnail preview foto pada formulir pendaftara
 
 1. **Buka Formulir Pendaftaran / Edit Kost Mitra**:
    - Masuk ke Langkah 5 (Foto Properti & Kamar).
-2. **Unggah Foto (Misal Foto Bangunan Depan / Fasad)**:
-   - Tunggu beberapa saat hingga proses kompresi WebP & sensor selesai.
-   - Amati thumbnail foto yang muncul:
-     - **TIDAK ADA LAGI** badge pil hitam `[ 🟠 RUANGSINGGAH.ID ℹ️ ]` maupun badge `Baru` yang menutupi bagian atas foto.
-     - Foto terlihat jernih dan leluasa.
-     - Stempel sensor fisik di foto (jika ada spanduk nomor kontak) tetap ada di dalam kanvas foto asli.
-     - Tombol hapus merah `(X)` di pojok kanan atas terlihat rapi dan mudah diklik.
+2. **Perhatikan Tampilan Header**:
+   - Tampilan bagian atas kini sangat bersih, rapi, dan seimbang.
+   - Tidak ada lagi kotak "Syarat Kelayakan Listing", deretan chip checklist, atau teks justifikasi sistem.
+   - Hanya terdapat judul, deskripsi ramah, dan pill counter jumlah foto terunggah.
+3. **Verifikasi Background Validation Logic**:
+   - Coba kosongkan foto Bangunan Depan atau Kamar Tidur lalu klik **Lanjut**: sistem tetap secara cerdas mencegah navigasi dengan pesan validasi ramah di form.

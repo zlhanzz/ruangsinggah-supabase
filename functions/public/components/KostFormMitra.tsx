@@ -5954,19 +5954,11 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                 }).filter(p => !!p.src);
 
                 const totalAllPhotos = existingWithCats.length + newPhotoItems.length;
-                const requiredCategories = allActiveCategories.filter(c => c.required);
-                const missingRequiredList = requiredCategories.filter(cat => {
-                    const count = existingWithCats.filter(p => p.cat === cat.id).length + 
-                                  newPhotoItems.filter(p => p.category === cat.id).length;
-                    return count === 0;
-                });
-                const isTotalMet = totalAllPhotos >= 3;
-                const isAllRequiredMet = missingRequiredList.length === 0;
 
                 return (
                     <div className="space-y-6">
-                        {/* Header Ringkasan Media & Standar Kelayakan Industri */}
-                        <div className="bg-gradient-to-br from-orange-50 via-amber-50/40 to-white p-4 sm:p-5 rounded-3xl border border-orange-200/90 shadow-xs space-y-3.5">
+                        {/* Header Ringkasan Media */}
+                        <div className="bg-gradient-to-br from-orange-50 via-amber-50/50 to-white p-4 sm:p-5 rounded-3xl border border-orange-200/80 shadow-xs">
                             <div className="flex flex-wrap items-center justify-between gap-3">
                                 <div>
                                     <div className="flex items-center gap-2">
@@ -5976,62 +5968,13 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                                         </h3>
                                     </div>
                                     <p className="text-xs text-gray-600 mt-1">
-                                        Unggah dokumentasi foto sesuai standar industri listing properti. Caption foto terkunci secara otomatis sesuai kategori untuk memastikan konsistensi pencarian penyewa.
+                                        Unggah foto properti dan kamar kost Anda untuk menarik minat calon penyewa.
                                     </p>
                                 </div>
-                                <div className="flex flex-wrap items-center gap-2">
-                                    <span className={`px-3 py-1.5 rounded-full text-xs font-black shadow-xs flex items-center gap-1.5 ${
-                                        isTotalMet 
-                                            ? 'bg-emerald-50 text-emerald-800 border border-emerald-300' 
-                                            : 'bg-amber-100 text-amber-900 border border-amber-300'
-                                    }`}>
-                                        <span>📸 Total: {totalAllPhotos} / 3 Foto Minimal</span>
-                                        {isTotalMet && <CheckCircle2 size={13} className="text-emerald-600" />}
+                                <div className="flex items-center gap-2">
+                                    <span className="px-3.5 py-1.5 bg-white border border-orange-200 text-orange-600 rounded-full text-xs font-black shadow-xs">
+                                        📸 {totalAllPhotos} Foto Terunggah
                                     </span>
-                                </div>
-                            </div>
-
-                            {/* Checklist Kelayakan Listing Standar Industri */}
-                            <div className="bg-white/80 backdrop-blur-xs p-3 sm:p-3.5 rounded-2xl border border-orange-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                                <div className="space-y-1">
-                                    <span className="text-[11px] font-bold text-gray-700 flex items-center gap-1.5">
-                                        <span>Syarat Kelayakan Listing:</span>
-                                        {isTotalMet && isAllRequiredMet ? (
-                                            <span className="text-emerald-600 font-black text-[10px] bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200 flex items-center gap-1">
-                                                <CheckCircle2 size={11} /> Lengkap &amp; Siap Lanjut
-                                            </span>
-                                        ) : (
-                                            <span className="text-amber-700 font-bold text-[10px] bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
-                                                Belum Lengkap ({!isTotalMet ? `Kurang ${3 - totalAllPhotos} foto lagi` : `${missingRequiredList.length} kategori wajib belum diisi`})
-                                            </span>
-                                        )}
-                                    </span>
-                                    <p className="text-[10px] text-gray-500">
-                                        Standar industri mewajibkan minimal 3 foto total, termasuk Bangunan Depan, Kamar Tidur, dan Kamar Mandi Dalam (bila tersedia).
-                                    </p>
-                                </div>
-
-                                {/* Checklist Chips */}
-                                <div className="flex flex-wrap items-center gap-1.5 shrink-0">
-                                    {requiredCategories.map(cat => {
-                                        const count = existingWithCats.filter(p => p.cat === cat.id).length + 
-                                                      newPhotoItems.filter(p => p.category === cat.id).length;
-                                        const isFilled = count > 0;
-                                        return (
-                                            <span 
-                                                key={cat.id} 
-                                                className={`text-[10px] font-bold px-2.5 py-1 rounded-xl flex items-center gap-1 transition-all ${
-                                                    isFilled 
-                                                        ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' 
-                                                        : 'bg-rose-50 text-rose-700 border border-rose-200'
-                                                }`}
-                                                title={isFilled ? `${cat.label}: ${count} foto terunggah` : `${cat.label}: Wajib diisi`}
-                                            >
-                                                {isFilled ? <Check size={11} className="text-emerald-600 stroke-[3]" /> : <AlertCircle size={11} className="text-rose-500" />}
-                                                <span className="truncate max-w-[130px]">{cat.label}</span>
-                                            </span>
-                                        );
-                                    })}
                                 </div>
                             </div>
                         </div>
