@@ -1273,6 +1273,15 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
     'tahunan': 'Per Tahun'
   };
 
+  const periodWeights: Record<string, number> = {
+    'harian': 1,
+    'mingguan': 7,
+    'bulanan': 30,
+    '3bulanan': 90,
+    '6bulanan': 180,
+    'tahunan': 365
+  };
+
   // --- STRUCTURED PUBLIC & ROOM FACILITIES PARSER ---
   interface StructuredFacilityGroup {
     id: string;
@@ -2832,7 +2841,9 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
                   <div className="mb-6">
                     <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">Pilih Durasi Sewa</label>
                     <div className="flex flex-wrap gap-2">
-                      {selectedRoom.pricing.map((scheme) => {
+                      {[...selectedRoom.pricing]
+                        .sort((a, b) => (periodWeights[a.period] || 999) - (periodWeights[b.period] || 999))
+                        .map((scheme) => {
                         const discount = calculateDiscount(scheme);
                         return (
                           <button

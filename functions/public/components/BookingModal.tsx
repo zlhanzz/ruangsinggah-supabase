@@ -31,10 +31,11 @@ const BookingModal: React.FC<BookingModalProps> = ({ kost, variant, initialPerio
       'tahunan': 360,
   };
 
-  // Determine available options
-  const availableOptions = hasFlexiblePricing 
+  // Determine available options (sorted from shortest to longest)
+  const availableOptions = (hasFlexiblePricing 
     ? variant.pricing!.map(p => p.period)
-    : ['bulanan', '3bulanan', '6bulanan', 'tahunan'];
+    : ['bulanan', '3bulanan', '6bulanan', 'tahunan']
+  ).sort((a, b) => (periodWeights[a] || 999) - (periodWeights[b] || 999));
 
   // Find lowest active period
   const lowestPeriod = availableOptions.reduce((min, p) => 

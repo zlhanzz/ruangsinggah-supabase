@@ -2,6 +2,29 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 460. Pengurutan Komposisi Durasi Sewa dari yang Tersingkat ke yang Terlama (`KostDetail.tsx` & `BookingModal.tsx`) (Oktober 2026)
+- **Permintaan & Kebutuhan Pengguna**:
+  1. Pada tampilan pengguna calon penyewa di halaman Detail Kost, urutan tombol pilihan durasi sewa sebelumnya tidak berurutan secara kronologis (misal: Per Bulan mendahului Per Hari, lalu lompat ke Per 6 Bulan dan Per Tahun).
+  2. Pengguna meminta komposisi urutan durasi sewa ditata secara konsisten dan sistematis dari rentang waktu yang tersingkat hingga yang terlama.
+- **Implementasi Solusi**:
+  1. **Standardisasi Bobot Durasi Waktu (`periodWeights`)**:
+     - Menetapkan bobot durasi hari: `harian` (1 hari), `mingguan` (7 hari), `bulanan` (30 hari), `3bulanan` (90 hari), `6bulanan` (180 hari), dan `tahunan` (365 hari).
+  2. **Pengurutan Tombol "Pilih Durasi Sewa" (`KostDetail.tsx`)**:
+     - Mengurutkan `[...selectedRoom.pricing].sort((a, b) => (periodWeights[a.period] || 999) - (periodWeights[b.period] || 999))` sebelum me-render tombol pilihan durasi sewa di sidebar booking.
+     - Opsi durasi sewa kini tampil rapi: **Per Hari $\rightarrow$ Per Minggu $\rightarrow$ Per Bulan $\rightarrow$ Per 3 Bulan $\rightarrow$ Per 6 Bulan $\rightarrow$ Per Tahun**.
+  3. **Konsistensi pada Modal Pemesanan (`BookingModal.tsx`)**:
+     - Menerapkan pengurutan yang sama pada `availableOptions` di modal booking agar kartu durasi sewa tersusun seragam dari yang tersingkat ke yang terlama.
+- **File Tersentuh**:
+  - `functions/public/pages/KostDetail.tsx`
+  - `functions/public/components/BookingModal.tsx`
+  - `functions/PROGRESS.md`
+  - `IMPLEMENTATION_PLAN.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi frontend `npm --prefix functions/public run build` sukses 100% tanpa error (`✓ built in 53.74s`).
+  - Kompilasi backend `npm --prefix functions run build` (`tsc`) sukses 100% tanpa error.
+  - Urutan tombol durasi sewa terkonfirmasi berurutan kronologis dari harian hingga tahunan.
+
 ### 459. Perbaikan Supabase RLS Error 42501 pada Alur Instant Publish Properti Mitra (`adminService.ts`) (Oktober 2026)
 - **Permintaan & Masalah**:
   1. Pengguna/mitra mengalami kegagalan saat menekan tombol "Publikasikan Kost" di Langkah 6 formulir mitra (`KostFormMitra.tsx`) dengan error:
