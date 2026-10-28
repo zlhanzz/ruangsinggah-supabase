@@ -2,6 +2,44 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 455. Standarisasi Syarat Foto Minimum Sesuai Standar Industri & Penguncian Caption Pakem Kausalitas (`KostFormMitra.tsx`) (Oktober 2026)
+- **Permintaan & Kebutuhan Pengguna**:
+  1. Melakukan evaluasi mendalam terkait jumlah foto yang menjadi syarat kelayakan sebelum mitra kost dapat melangkah ke langkah berikutnya pada wizard pendaftaran kost (*Langkah 5: Foto Properti & Kamar*), selaras dengan standar industri properti (Mamikos, Cove, Airbnb) dan rasionalitas sistem RuangSinggah.
+  2. Mengunci caption foto kategori tetap (template dasar umum, tipe kamar, serta yang muncul berdasarkan fasilitas yang dipilih sebelumnya) agar bersifat pakem (*read-only* / permanen), tidak dapat diubah bebas secara sembarangan oleh mitra karena secara kausalitas asal-usul kategorinya sudah jelas dan pasti.
+- **Rasionalitas & Standar Industri yang Ditetapkan**:
+  1. **Minimal Total 3 Foto Listing**: Properti dengan < 3 foto tidak memenuhi standar kelayakan industri listing sewa dan berisiko ditolak calon penyewa.
+  2. **Kategori Pokok Wajib (Required)**:
+     - Minimal 1 Foto Bangunan Depan (Fasad).
+     - Minimal 1 Foto Kamar Tidur per masing-masing tipe kamar kost.
+     - Minimal 1 Foto Kamar Mandi Dalam jika tipe kamar memiliki kamar mandi dalam (`hasInsideBath`).
+  3. **Kategori Fasilitas Dinamis (Dianjurkan / Recommended)**:
+     - Kategori fasilitas yang dicentang di Langkah 3 (seperti Dapur Bersama, Ruang Tamu, Area Parkir, WC Umum) berstatus *Dianjurkan*, bukan pemblokir wajib, untuk mencegah *onboarding drop-off* bagi mitra baru yang belum sempat memotret seluruh sudut fasilitas umum saat pendaftaran pertama.
+  4. **Kausalitas Caption Pakem**:
+     - Caption foto otomatis 100% terkunci sesuai nama kategori pakem slot foto (`cat.label`).
+     - Menghilangkan tombol edit pensil `<Edit3 />` dan modal edit caption teks bebas guna mencegah inkonsistensi metadata pencarian, mengurangi beban kognitif mitra, dan mempercepat alur pendaftaran.
+- **Implementasi Detail**:
+  1. **Kategori Foto Dinamis (`computeActivePhotoCategories`)**:
+     - Slot kategori `Kamar Mandi: ${roomName}` kini otomatis berstatus `required: true` jika tipe kamar memiliki kamar mandi dalam.
+  2. **Validasi Wizard Langkah 5 & Validasi Submit (`validateCurrentStep`, `handleSubmit`)**:
+     - Memeriksa kelengkapan seluruh kategori pokok wajib (`cat.required`). Jika belum ada foto, menampilkan pesan validasi spesifik: *"Kategori foto '[Nama Kategori]' wajib diunggah minimal 1 foto sebelum melanjutkan."*
+     - Menambahkan validasi akumulasi total foto kumulatif: `if (totalPhotosCount < 3)`, menampilkan pesan edukasi: *"Total foto properti saat ini baru [X] foto. Wajib mengunggah minimal 3 foto secara keseluruhan untuk memenuhi standar kelayakan listing properti."*
+  3. **Header Card Indikator Standar Industri di Langkah 5**:
+     - Menampilkan visual counter interaktif: `📸 Total: [X] / 3 Foto Minimal` (hijau jika $\ge 3$, oranye jika $< 3$).
+     - Menampilkan checklist chips status kategori wajib (Bangunan Depan, Kamar Tidur, KM Dalam) dengan ikon centang hijau jika terpenuhi atau ikon peringatan merah jika belum.
+     - Memberikan badge status ringkas: `Lengkap & Siap Lanjut` vs `Belum Lengkap (Kurang X foto lagi)`.
+  4. **Pemberian Badge Kategori & Penguncian Caption**:
+     - Memberikan badge `Wajib` pada kategori pokok (`cat.required === true`) dan badge `Dianjurkan` pada kategori fasilitas non-wajib.
+     - Mengunci teks caption di baris bawah thumbnail foto murni menampilkan `{cat.label}`.
+     - Menghapus tombol pensil `<Edit3 />` pada existing photos dan new photos di Section A (Umum) dan Section B (Tipe Kamar).
+     - Menghapus modal dialog `editingCaptionTarget`, state `editingCaptionTarget`, helper functions `updateNewPhotoCaption`/`updateExistingPhotoCaption`, dan import `Edit3` dari `lucide-react`.
+- **File Tersentuh**:
+  - `functions/public/components/KostFormMitra.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi frontend `npm --prefix functions/public run build` lulus 100% 0 error (`✓ built in 37.98s`, 2512 modules transformed).
+  - Kompilasi backend functions `npm --prefix functions run build` (`tsc`) lulus 100% 0 error.
+
 ### 454. Integrasi Pool Multi-Key 5 Akun Gemini AI, True Random Load Balancing, dan Filter Cerdas Interior Kamar (`detect-contact-banner/index.ts`, `autoSensorService.ts`) (Oktober 2026)
 - **Permintaan & Masalah**:
   1. Pengguna menanyakan cara mengantisipasi kehabisan kuota Gemini Free Tier dengan memanfaatkan rotasi API Key agar stok kuota tetap terjaga stabil.

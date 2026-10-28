@@ -13,7 +13,7 @@ import {
     X, ChevronRight, ChevronLeft, Camera, Video, MapPin, Home, Wifi,
     Plus, Trash2, Check, AlertCircle, Loader2, Upload, Image as ImageIcon,
     Phone, BookOpen, DollarSign, Search, Navigation, ShieldCheck, User, Users, Maximize2,
-    Crosshair, CheckCircle2, Sparkles, LocateFixed, FileText, RotateCcw, Save, Droplets, Bed, Edit3, ShieldAlert,
+    Crosshair, CheckCircle2, Sparkles, LocateFixed, FileText, RotateCcw, Save, Droplets, Bed, ShieldAlert,
     Pencil, Layers, Info, Zap, CookingPot
 } from 'lucide-react';
 
@@ -2166,13 +2166,14 @@ const computeActivePhotoCategories = (
             roomName: roomName
         });
 
-        // Cek jika tipe kamar ini punya kamar mandi dalam
+        // Cek jika tipe kamar ini punya kamar mandi dalam (Wajib foto sesuai standar industri)
         const hasInsideBath = (room.bathroomFacilities || []).some((f: string) => /dalam/i.test(f)) || (room.roomFacilities || []).some((f: string) => /kamar mandi dalam/i.test(f));
         if (hasInsideBath) {
             categories.push({
                 id: `Kamar Mandi: ${roomName}`,
                 label: `KM Dalam: ${roomName}`,
                 desc: `Foto kamar mandi dalam untuk ${roomName}`,
+                required: true,
                 isRoom: true,
                 roomName: roomName
             });
@@ -2499,7 +2500,6 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
     const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState('');
     const [tempRule, setTempRule] = useState('');
-    const [editingCaptionTarget, setEditingCaptionTarget] = useState<{ id: string; isNew: boolean; caption: string; catLabel: string; raw?: any } | null>(null);
     const [reScanningId, setReScanningId] = useState<string | null>(null);
 
     // ── Concurrency Queue Runner (Standar Industri: Max 2 Pemrosesan Paralel) ──
@@ -3783,33 +3783,6 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
         }
     };
 
-    const updateNewPhotoCaption = (id: string, caption: string) => {
-        setNewPhotoItems(prev => prev.map(p => p.id === id ? { ...p, caption } : p));
-    };
-
-    const updateExistingPhotoCaption = (targetRaw: any, caption: string) => {
-        const cur = form.imageUrls || [];
-        const targetSrc = typeof targetRaw === 'string' ? targetRaw : (targetRaw?.original || targetRaw?.url);
-        const updated = cur.map((u: any) => {
-            const src = typeof u === 'string' ? u : (u?.original || u?.url);
-            if (src === targetSrc) {
-                if (typeof u === 'string') {
-                    return { original: u, url: u, caption };
-                }
-                return { ...u, caption };
-            }
-            return u;
-        });
-        const updatedMeta = (form.photosMeta || []).map((m: any) => {
-            const src = m?.original || m?.url;
-            if (src === targetSrc) {
-                return { ...m, caption };
-            }
-            return m;
-        });
-        setForm(prev => ({ ...prev, imageUrls: updated, photosMeta: updatedMeta }));
-    };
-
     const removeNewPhotoItem = (id: string) => {
         setNewPhotoItems(prev => {
             const target = prev.find(p => p.id === id);
@@ -4290,6 +4263,12 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                 }
             }
 
+            // Syarat Standar Kualitas Industri: Total foto kumulatif minimal 3 foto
+            const totalPhotosCount = existingWithCats.length + newPhotoItems.length;
+            if (totalPhotosCount < 3) {
+                return `Total foto properti saat ini baru ${totalPhotosCount} foto. Wajib mengunggah minimal 3 foto secara keseluruhan untuk memenuhi standar kelayakan listing properti.`;
+            }
+
             return null;
         }
 
@@ -4460,8 +4439,8 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
             });
 
             const totalPhotos = allImagesList.length + pendingUploadPayload.length;
-            if (totalPhotos < 1) {
-                setError('Mohon unggah minimal 1 foto kost (terutama Foto Kamar Tidur).');
+            if (totalPhotos < 3) {
+                setError(`Total foto properti saat ini baru ${totalPhotos} foto. Wajib mengunggah minimal 3 foto secara keseluruhan untuk memenuhi standar kelayakan listing properti.`);
                 setStep(4);
                 setSubmitting(false);
                 return;
@@ -5975,11 +5954,19 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                 }).filter(p => !!p.src);
 
                 const totalAllPhotos = existingWithCats.length + newPhotoItems.length;
+                const requiredCategories = allActiveCategories.filter(c => c.required);
+                const missingRequiredList = requiredCategories.filter(cat => {
+                    const count = existingWithCats.filter(p => p.cat === cat.id).length + 
+                                  newPhotoItems.filter(p => p.category === cat.id).length;
+                    return count === 0;
+                });
+                const isTotalMet = totalAllPhotos >= 3;
+                const isAllRequiredMet = missingRequiredList.length === 0;
 
                 return (
                     <div className="space-y-6">
-                        {/* Header Ringkasan Media */}
-                        <div className="bg-gradient-to-br from-orange-50 via-amber-50/50 to-white p-4 sm:p-5 rounded-3xl border border-orange-200/80 shadow-xs">
+                        {/* Header Ringkasan Media & Standar Kelayakan Industri */}
+                        <div className="bg-gradient-to-br from-orange-50 via-amber-50/40 to-white p-4 sm:p-5 rounded-3xl border border-orange-200/90 shadow-xs space-y-3.5">
                             <div className="flex flex-wrap items-center justify-between gap-3">
                                 <div>
                                     <div className="flex items-center gap-2">
@@ -5989,13 +5976,62 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                                         </h3>
                                     </div>
                                     <p className="text-xs text-gray-600 mt-1">
-                                        Unggah foto properti dan kamar kost Anda. Anda juga dapat memberi keterangan (caption) pada masing-masing foto.
+                                        Unggah dokumentasi foto sesuai standar industri listing properti. Caption foto terkunci secara otomatis sesuai kategori untuk memastikan konsistensi pencarian penyewa.
                                     </p>
                                 </div>
-                                <div className="flex items-center gap-2">
-                                    <span className="px-3 py-1 bg-white border border-orange-200 text-orange-600 rounded-full text-xs font-black shadow-xs">
-                                        📸 {totalAllPhotos} Foto Terpilih
+                                <div className="flex flex-wrap items-center gap-2">
+                                    <span className={`px-3 py-1.5 rounded-full text-xs font-black shadow-xs flex items-center gap-1.5 ${
+                                        isTotalMet 
+                                            ? 'bg-emerald-50 text-emerald-800 border border-emerald-300' 
+                                            : 'bg-amber-100 text-amber-900 border border-amber-300'
+                                    }`}>
+                                        <span>📸 Total: {totalAllPhotos} / 3 Foto Minimal</span>
+                                        {isTotalMet && <CheckCircle2 size={13} className="text-emerald-600" />}
                                     </span>
+                                </div>
+                            </div>
+
+                            {/* Checklist Kelayakan Listing Standar Industri */}
+                            <div className="bg-white/80 backdrop-blur-xs p-3 sm:p-3.5 rounded-2xl border border-orange-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                                <div className="space-y-1">
+                                    <span className="text-[11px] font-bold text-gray-700 flex items-center gap-1.5">
+                                        <span>Syarat Kelayakan Listing:</span>
+                                        {isTotalMet && isAllRequiredMet ? (
+                                            <span className="text-emerald-600 font-black text-[10px] bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200 flex items-center gap-1">
+                                                <CheckCircle2 size={11} /> Lengkap &amp; Siap Lanjut
+                                            </span>
+                                        ) : (
+                                            <span className="text-amber-700 font-bold text-[10px] bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
+                                                Belum Lengkap ({!isTotalMet ? `Kurang ${3 - totalAllPhotos} foto lagi` : `${missingRequiredList.length} kategori wajib belum diisi`})
+                                            </span>
+                                        )}
+                                    </span>
+                                    <p className="text-[10px] text-gray-500">
+                                        Standar industri mewajibkan minimal 3 foto total, termasuk Bangunan Depan, Kamar Tidur, dan Kamar Mandi Dalam (bila tersedia).
+                                    </p>
+                                </div>
+
+                                {/* Checklist Chips */}
+                                <div className="flex flex-wrap items-center gap-1.5 shrink-0">
+                                    {requiredCategories.map(cat => {
+                                        const count = existingWithCats.filter(p => p.cat === cat.id).length + 
+                                                      newPhotoItems.filter(p => p.category === cat.id).length;
+                                        const isFilled = count > 0;
+                                        return (
+                                            <span 
+                                                key={cat.id} 
+                                                className={`text-[10px] font-bold px-2.5 py-1 rounded-xl flex items-center gap-1 transition-all ${
+                                                    isFilled 
+                                                        ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' 
+                                                        : 'bg-rose-50 text-rose-700 border border-rose-200'
+                                                }`}
+                                                title={isFilled ? `${cat.label}: ${count} foto terunggah` : `${cat.label}: Wajib diisi`}
+                                            >
+                                                {isFilled ? <Check size={11} className="text-emerald-600 stroke-[3]" /> : <AlertCircle size={11} className="text-rose-500" />}
+                                                <span className="truncate max-w-[130px]">{cat.label}</span>
+                                            </span>
+                                        );
+                                    })}
                                 </div>
                             </div>
                         </div>
@@ -6052,7 +6088,7 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                                         className={`p-4 sm:p-5 rounded-3xl border transition-all ${
                                             catPhotosCount > 0 
                                                 ? 'bg-white border-orange-200 shadow-xs' 
-                                                : isFront 
+                                                : cat.required 
                                                     ? 'bg-orange-50/20 border-dashed border-orange-300' 
                                                     : 'bg-white border-gray-200/80'
                                         }`}
@@ -6060,7 +6096,7 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                                         <div className="flex flex-wrap items-start justify-between gap-2 mb-3">
                                             <div className="flex items-start gap-2.5">
                                                 <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${
-                                                    isFront ? 'bg-orange-500 text-white' : 'bg-orange-100 text-orange-600'
+                                                    cat.required ? 'bg-orange-500 text-white' : 'bg-orange-100 text-orange-600'
                                                 }`}>
                                                     {isFront ? <Home size={16} /> :
                                                      cat.id === 'Koridor' ? <Navigation size={16} /> :
@@ -6074,6 +6110,15 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                                                         <span className="text-xs sm:text-sm font-black text-gray-900">
                                                             {cat.label}
                                                         </span>
+                                                        {cat.required ? (
+                                                            <span className="text-[9px] font-black text-rose-700 bg-rose-50 px-2 py-0.5 rounded-md border border-rose-200 uppercase tracking-wider">
+                                                                Wajib
+                                                            </span>
+                                                        ) : (
+                                                            <span className="text-[9px] font-medium text-slate-600 bg-slate-100 px-2 py-0.5 rounded-md">
+                                                                Dianjurkan
+                                                            </span>
+                                                        )}
                                                     </div>
                                                     <p className="text-[11px] text-gray-500 mt-0.5">
                                                         {cat.desc}
@@ -6085,7 +6130,7 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                                                 <span className={`text-[10px] font-black px-2.5 py-1 rounded-full uppercase tracking-wider ${
                                                     catPhotosCount > 0 
                                                         ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' 
-                                                        : isFront 
+                                                        : cat.required 
                                                             ? 'bg-amber-100 text-amber-800' 
                                                             : 'bg-gray-100 text-gray-400'
                                                 }`}>
@@ -6109,21 +6154,7 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                                             {currentCatExisting.map((p, idx) => (
                                                 <div key={`existing-${idx}`} className="aspect-square rounded-2xl overflow-hidden border border-gray-200 relative group bg-gray-50">
                                                     <img src={p.src} alt={cat.label} className="w-full h-full object-cover" />
-                                                    <div className="absolute top-1.5 right-1.5 flex items-center gap-1">
-                                                        <button 
-                                                            type="button" 
-                                                            onClick={() => setEditingCaptionTarget({
-                                                                id: `existing-${idx}`,
-                                                                isNew: false,
-                                                                caption: p.caption || cat.label,
-                                                                catLabel: cat.label,
-                                                                raw: p.raw
-                                                            })}
-                                                            className="bg-gray-900/80 hover:bg-orange-600 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs shadow-md transition-all active:scale-90"
-                                                            title="Beri Keterangan / Caption Foto"
-                                                        >
-                                                            <Edit3 size={11} />
-                                                        </button>
+                                                    <div className="absolute top-1.5 right-1.5 flex items-center gap-1 z-10">
                                                         <button 
                                                             type="button" 
                                                             onClick={() => removeExistingImage(p.raw)}
@@ -6134,7 +6165,7 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                                                         </button>
                                                     </div>
                                                     <div className="absolute bottom-0 inset-x-0 bg-black/75 backdrop-blur-xs py-1 px-1.5 text-[9px] text-white text-center">
-                                                        <p className="font-bold truncate">{p.caption || cat.label}</p>
+                                                        <p className="font-bold truncate">{cat.label}</p>
                                                     </div>
                                                 </div>
                                             ))}
@@ -6198,19 +6229,6 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                                                         )}
                                                         <button 
                                                             type="button" 
-                                                            onClick={() => setEditingCaptionTarget({
-                                                                id: item.id,
-                                                                isNew: true,
-                                                                caption: item.caption || cat.label,
-                                                                catLabel: cat.label
-                                                            })}
-                                                            className="bg-gray-900/80 hover:bg-orange-600 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs shadow-md transition-all active:scale-90"
-                                                            title="Beri Keterangan / Caption Foto"
-                                                        >
-                                                            <Edit3 size={11} />
-                                                        </button>
-                                                        <button 
-                                                            type="button" 
                                                             onClick={() => removeNewPhotoItem(item.id)}
                                                             className="bg-red-600/90 hover:bg-red-700 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs font-black shadow-md transition-all active:scale-90"
                                                             title="Hapus foto ini"
@@ -6219,7 +6237,7 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                                                         </button>
                                                     </div>
                                                     <div className="absolute bottom-0 inset-x-0 bg-black/75 backdrop-blur-xs py-1 px-1.5 text-[9px] text-white text-center">
-                                                        <p className="font-bold truncate">{item.caption || cat.label}</p>
+                                                        <p className="font-bold truncate">{cat.label}</p>
                                                     </div>
                                                 </div>
                                             ))}
@@ -6357,9 +6375,13 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                                                                             <span className="text-xs sm:text-sm font-black text-gray-900">
                                                                                 {cat.label}
                                                                             </span>
-                                                                            {cat.required && (
-                                                                                <span className="text-[9px] font-black text-orange-600 bg-orange-50 px-1.5 py-0.5 rounded border border-orange-200 uppercase">
+                                                                            {cat.required ? (
+                                                                                <span className="text-[9px] font-black text-rose-700 bg-rose-50 px-2 py-0.5 rounded-md border border-rose-200 uppercase tracking-wider">
                                                                                     Wajib
+                                                                                </span>
+                                                                            ) : (
+                                                                                <span className="text-[9px] font-medium text-slate-600 bg-slate-100 px-2 py-0.5 rounded-md">
+                                                                                    Dianjurkan
                                                                                 </span>
                                                                             )}
                                                                         </div>
@@ -6397,32 +6419,18 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                                                                 {currentCatExisting.map((p, idx) => (
                                                                     <div key={`existing-${idx}`} className="aspect-square rounded-2xl overflow-hidden border border-gray-200 relative group bg-gray-50">
                                                                         <img src={p.src} alt={cat.label} className="w-full h-full object-cover" />
-                                                                        <div className="absolute top-1.5 right-1.5 flex items-center gap-1">
-                                                                            <button 
-                                                                                type="button" 
-                                                                                onClick={() => setEditingCaptionTarget({
-                                                                                    id: `existing-${idx}`,
-                                                                                    isNew: false,
-                                                                                    caption: p.caption || cat.label,
-                                                                                    catLabel: cat.label,
-                                                                                    raw: p.raw
-                                                                                })}
-                                                                                className="bg-gray-900/80 hover:bg-orange-600 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs shadow-md transition-all active:scale-90"
-                                                                                title="Beri Keterangan / Caption Foto"
-                                                                            >
-                                                                                <Edit3 size={11} />
-                                                                            </button>
+                                                                        <div className="absolute top-1.5 right-1.5 flex items-center gap-1 z-10">
                                                                             <button 
                                                                                 type="button" 
                                                                                 onClick={() => removeExistingImage(p.raw)}
-                                                                                className="absolute top-1.5 right-1.5 bg-red-600/90 hover:bg-red-700 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs font-black shadow-md transition-all active:scale-90"
+                                                                                className="bg-red-600/90 hover:bg-red-700 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs font-black shadow-md transition-all active:scale-90"
                                                                                 title="Hapus foto ini"
                                                                             >
                                                                                 &times;
                                                                             </button>
                                                                         </div>
                                                                         <div className="absolute bottom-0 inset-x-0 bg-black/75 backdrop-blur-xs py-1 px-1.5 text-[9px] text-white text-center">
-                                                                            <p className="font-bold truncate">{p.caption || cat.label}</p>
+                                                                            <p className="font-bold truncate">{cat.label}</p>
                                                                         </div>
                                                                     </div>
                                                                 ))}
@@ -6486,19 +6494,6 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                                                                             )}
                                                                             <button 
                                                                                 type="button" 
-                                                                                onClick={() => setEditingCaptionTarget({
-                                                                                    id: item.id,
-                                                                                    isNew: true,
-                                                                                    caption: item.caption || cat.label,
-                                                                                    catLabel: cat.label
-                                                                                })}
-                                                                                className="bg-gray-900/80 hover:bg-orange-600 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs shadow-md transition-all active:scale-90"
-                                                                                title="Beri Keterangan / Caption Foto"
-                                                                            >
-                                                                                <Edit3 size={11} />
-                                                                            </button>
-                                                                            <button 
-                                                                                type="button" 
                                                                                 onClick={() => removeNewPhotoItem(item.id)}
                                                                                 className="bg-red-600/90 hover:bg-red-700 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs font-black shadow-md transition-all active:scale-90"
                                                                                 title="Hapus foto ini"
@@ -6507,7 +6502,7 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                                                                             </button>
                                                                         </div>
                                                                         <div className="absolute bottom-0 inset-x-0 bg-black/75 backdrop-blur-xs py-1 px-1.5 text-[9px] text-white text-center">
-                                                                            <p className="font-bold truncate">{item.caption || cat.label}</p>
+                                                                            <p className="font-bold truncate">{cat.label}</p>
                                                                         </div>
                                                                     </div>
                                                                 ))}
@@ -6566,70 +6561,7 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                             </div>
                         )}
 
-                        {/* Modal Dialog Edit Caption Foto */}
-                        {editingCaptionTarget && (
-                            <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
-                                <div className="bg-white rounded-3xl p-5 max-w-sm w-full shadow-2xl border border-gray-100 animate-in zoom-in-95 duration-200">
-                                    <div className="flex items-center justify-between pb-3 border-b border-gray-100">
-                                        <div className="flex items-center gap-2">
-                                            <Edit3 className="w-4 h-4 text-orange-600" />
-                                            <h5 className="text-xs font-black text-gray-900 uppercase tracking-wider">Keterangan / Caption Foto</h5>
-                                        </div>
-                                        <button 
-                                            type="button" 
-                                            onClick={() => setEditingCaptionTarget(null)}
-                                            className="text-gray-400 hover:text-gray-600 text-lg leading-none font-bold"
-                                        >
-                                            &times;
-                                        </button>
-                                    </div>
-                                    <div className="py-4 space-y-3">
-                                        <div className="bg-orange-50 text-orange-800 text-[11px] p-2.5 rounded-xl border border-orange-200/60">
-                                            <span className="font-bold">Kategori: </span>{editingCaptionTarget.catLabel}
-                                        </div>
-                                        <div>
-                                            <label className="block text-xs font-bold text-gray-700 mb-1">
-                                                Caption / Keterangan Tambahan:
-                                            </label>
-                                            <input 
-                                                type="text"
-                                                value={editingCaptionTarget.caption}
-                                                onChange={(e) => setEditingCaptionTarget(prev => prev ? { ...prev, caption: e.target.value } : null)}
-                                                placeholder="Contoh: Tampak depan dari gerbang utama"
-                                                className="w-full text-xs px-3 py-2.5 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-orange-500 font-medium"
-                                                maxLength={80}
-                                                autoFocus
-                                            />
-                                            <span className="text-[10px] text-gray-400 mt-1 block text-right">Maks. 80 karakter</span>
-                                        </div>
-                                    </div>
-                                    <div className="flex items-center justify-end gap-2 pt-2 border-t border-gray-100">
-                                        <button
-                                            type="button"
-                                            onClick={() => setEditingCaptionTarget(null)}
-                                            className="px-3.5 py-1.5 rounded-xl text-xs font-bold text-gray-600 hover:bg-gray-100 transition-colors"
-                                        >
-                                            Batal
-                                        </button>
-                                        <button
-                                            type="button"
-                                            onClick={() => {
-                                                const finalCap = editingCaptionTarget.caption.trim() || editingCaptionTarget.catLabel;
-                                                if (editingCaptionTarget.isNew) {
-                                                    updateNewPhotoCaption(editingCaptionTarget.id, finalCap);
-                                                } else if (editingCaptionTarget.raw) {
-                                                    updateExistingPhotoCaption(editingCaptionTarget.raw, finalCap);
-                                                }
-                                                setEditingCaptionTarget(null);
-                                            }}
-                                            className="px-4 py-1.5 rounded-xl text-xs font-bold bg-orange-600 hover:bg-orange-700 text-white transition-colors shadow-xs"
-                                        >
-                                            Simpan Keterangan
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
-                        )}
+
 
                         {/* Modal Edukasi Alasan Keamanan Penyamaran Spanduk */}
                         {showSecurityExplanationModal && (
