@@ -6,16 +6,15 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-// Model priority cascade: multi-family Gemini models dengan kuota terpisah
+// Model priority cascade: mengutamakan model aktif tercepat dan stabil di Google AI Studio
 const CANDIDATE_MODELS = [
+  "gemini-3.5-flash",
+  "gemini-3.5-flash-lite",
+  "gemini-3.8-flash",
+  "gemini-3.7-flash",
   "gemini-2.5-flash",
   "gemini-2.0-flash",
-  "gemini-1.5-flash",
-  "gemini-2.0-flash-lite",
-  "gemini-3.5-flash",
-  "gemini-3.8-flash",
-  "gemini-3.5-flash-lite",
-  "gemini-3.7-flash"
+  "gemini-1.5-flash"
 ];
 
 serve(async (req) => {
