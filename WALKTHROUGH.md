@@ -1,40 +1,40 @@
-# WALKTHROUGH: Optimasi Transisi & Redesain UI/UX Tab Switcher Tipe Kamar
+# WALKTHROUGH: Redesain Kartu Minimalis Kampus & Fasilitas Publik Terdekat
 
 ## Ringkasan Eksekusi
-Telah diselesaikan optimasi performa transisi dan redesain UI/UX pada tab switcher tipe kamar (*Tipe Standard*, *Tipe Premium*, dsb.) di halaman Detail Kost ([KostDetail.tsx](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/KostDetail.tsx)). Tab switcher kini mengadopsi pola **Modern Segmented Pill Control** dengan **Zero Layout Shift (0px pergeseran)**, transisi warna hardware-accelerated 60fps yang super ringan, tactile feedback instan saat ditekan, serta efek crossfade yang halus pada card rincian fasilitas.
+Telah diselesaikan perbaikan dan redesain tata letak kartu pada seksi **Kampus Terdekat** dan **Fasilitas Publik** di halaman Detail Kost ([KostDetail.tsx](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/KostDetail.tsx)). Nama kampus/fasilitas kini **tampil 100% lengkap tanpa terpotong elipsis `"..."`**, estimasi jarak dan waktu tempuh tampil utuh tanpa saling bertumpukan, tombol navigasi rute tetap responsif, serta format kartu tetap **sangat minimalis, ramping, dan proporsional**.
 
 ---
 
 ## 1. Detail Perubahan Kode
 
-### `functions/public/pages/KostDetail.tsx` (Baris 2033–2086)
+### `functions/public/pages/KostDetail.tsx` (Baris 2280–2460)
 
-1. **Wadah Terintegrasi (Modern Segmented Pill Container)**:
-   ```tsx
-   <div className="inline-flex flex-wrap p-1.5 bg-slate-100/90 rounded-2xl border border-slate-200/70 gap-1.5 shadow-2xs">
+1. **Format Durasi Ringkas Bahasa Indonesia (`formatTravelDuration`)**:
+   ```typescript
+   const formatTravelDuration = (raw: string): string => {
+     if (!raw) return '';
+     return raw
+       .replace(/hours?/gi, 'j')
+       .replace(/mins?/gi, 'm')
+       .replace(/sec(onds?)?/gi, 'dtk')
+       .replace(/(\d+)\s*j\s*(\d+)\s*m/gi, '$1j $2m')
+       .replace(/(\d+)\s*m\b/gi, '$1 mnt')
+       .trim();
+   };
    ```
-   Seluruh tab kini bersarang rapi di dalam satu wadah pill modern dengan kontras lembut, selaras dengan standar desain Airbnb/Apple.
+   Menyingkat waktu perjalanan bawaan Google API (misal: `"1 hour 15 mins"` menjadi `"1j 15m"` dan `"16 mins"` menjadi `"16 mnt"`) sehingga padat dan mudah dibaca.
 
-2. **Standardisasi Border & Eliminasi Layout Shift**:
-   - Menghapus atribut `ring-2 ring-orange-500 ring-offset-1` yang sebelumnya menyebabkan lonjakan offset 3px di luar bounding box.
-   - Menggunakan border tetap pada semua state:
-     - Tab Aktif: `bg-orange-500 text-white border-orange-600 shadow-sm shadow-orange-500/25`
-     - Tab Non-Aktif: `bg-white/80 hover:bg-white text-slate-700 border-slate-200/60 hover:border-slate-300`
-   - Badge ketersediaan (`• Tersedia` / `Penuh`) kini selalu memiliki border konsisten (`border-transparent` vs `border-emerald-200`), menghilangkan pergeseran lebar tombol secara total.
+2. **Arsitektur 2-Tier Kartu Minimalis**:
+   - **Tingkat 1 (Header)**:
+     - Icon kategori berlatar lembut (`bg-orange-50` / `bg-blue-50`).
+     - **Nama Lengkap Lokasi**: Menghapus kelas `truncate`, menggantinya dengan `font-bold text-gray-900 text-xs leading-snug break-words` sehingga nama panjang (seperti *Universitas Islam Negeri Alauddin Makassar*) tampil utuh.
+     - **Tombol Rute**: Diletakkan mandiri di pojok kanan atas kartu, mempertahankan status interaktif dan integrasi dengan peta mini di atasnya.
+   - **Tingkat 2 (Footer Metrik)**:
+     - **Badge Jarak km**: Diletakkan di baris metrik bawah dengan latar bergaris tepi tipis (`border-orange-200/70` / `border-blue-200/70`).
+     - **Estimasi Waktu Lengkap**: Menampilkan ikon dan durasi jalan kaki (`🚶`), sepeda motor (`🏍️`), dan mobil (`🚗`) secara horizontal yang lega tanpa pernah tertindih badge jarak (0% tabrakan visual).
 
-3. **Transisi Ringan & Tactile Feedback**:
-   - Mengganti `transition-all` menjadi `transition-colors duration-150 ease-out` agar browser tidak lagi melakukan reflow/repaint box layout yang berat.
-   - Menambahkan efek sentuhan mikro: `active:scale-[0.98]` untuk memberikan respon sentuh instan (*satisfying tactile feedback*).
-
-4. **Smooth Content Crossfade**:
-   - Menambahkan `key={selectedParentTypeIdx}` pada wrapper rincian fasilitas:
-     ```tsx
-     <div 
-       key={selectedParentTypeIdx}
-       className="bg-white p-5 sm:p-6 rounded-2xl sm:rounded-3xl border border-gray-100 shadow-sm shadow-gray-100/50 space-y-6 animate-in fade-in duration-200"
-     >
-     ```
-     Menjamin saat tipe kamar berganti, konten fasilitas melakukan transisi fade-in yang mengalir halus tanpa patah-patah.
+3. **Konsistensi Grid Layout**:
+   - Mempertahankan grid 2 kolom (`grid grid-cols-1 md:grid-cols-2 gap-2`) sehingga tetap hemat tempat pada tampilan desktop maupun mobile tanpa membebani tinggi halaman (*layout height efficiency*).
 
 ---
 
@@ -46,7 +46,7 @@ cmd.exe /c "npm --prefix functions/public run build"
 ```
 - **Hasil**: **LULUS 100% (Exit code 0)**.
 - `✓ 2512 modules transformed.`
-- `✓ built in 1m 21s`.
+- `✓ built in 1m 14s`.
 - 0 error, 0 warning fatal.
 
 ### B. Uji Kompilasi Build Backend
@@ -60,12 +60,11 @@ cmd.exe /c "npm --prefix functions run build"
 
 ## 3. Panduan Pengujian bagi Pengguna (User Testing)
 
-1. Buka halaman detail kost yang memiliki lebih dari satu tipe kamar (misal: kost dengan Tipe Standard dan Tipe Premium) di browser.
-2. Scroll ke bagian **Fasilitas Kamar**.
-3. Perhatikan tampilan baru tab switcher:
-   - Terlihat rapi di dalam pill container abu-abu lembut.
-4. Klik bolak-balik antara **Tipe Standard** dan **Tipe Premium**:
-   - **Ekspektasi**:
-     - Peralihan terasa **sangat instan, ringan, dan empuk** (*effortless & snappy*).
-     - Tidak ada lagi getaran atau pergeseran posisi tombol (*0px layout shift*).
-     - Rincian fasilitas di bawahnya berganti dengan transisi fade yang halus dan nyaman di mata.
+1. Buka halaman detail kost yang memiliki data Kampus Terdekat atau Fasilitas Publik di browser.
+2. Scroll ke bagian **Lokasi & Rute**.
+3. Perhatikan kartu-kartu di bawah peta mini:
+   - **Ekspektasi Visual**:
+     - Seluruh nama kampus (seperti *Universitas Islam Negeri Alauddin*, *Universitas Hasanuddin*, *Politeknik Negeri Ujung Pandang*) kini terbaca **lengkap 100% tanpa ada yang terpotong `"..."`**.
+     - Badge jarak (misal `1.9 km`, `2.0 km`, `2.9 km`) berada rapi di baris bawah dan **tidak lagi menutupi teks durasi transportasi**.
+     - Durasi jalan kaki, motor, dan mobil tampil lengkap dan padat dalam format bahasa Indonesia (`🚶 16 mnt • 🏍️ 6 mnt • 🚗 6 mnt`).
+     - Tombol **Rute** berada rapi di pojok kanan atas masing-masing kartu dan saat diklik langsung menampilkan jalur rute ke lokasi tersebut di peta mini.

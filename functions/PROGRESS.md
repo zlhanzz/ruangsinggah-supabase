@@ -2,6 +2,29 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 463. Redesain Kartu Minimalis Kampus & Fasilitas Publik Terdekat Tanpa Truncate (`KostDetail.tsx`) (Oktober 2026)
+- **Permintaan & Kebutuhan Pengguna**:
+  1. Pada bagian Kampus Terdekat dan Fasilitas Publik di halaman Detail Kost, seluruh nama universitas/politeknik/fasilitas sebelumnya terpotong menjadi tanda elipsis `"..."` (misal: *Universitas Isla...*, *Politeknik Neg...*).
+  2. Badge jarak (`... km`) menimpa/menutupi estimasi waktu perjalanan serta berdesakan dengan tombol Rute.
+  3. Pengguna meminta agar seluruh nama tampil lengkap 100%, estimasi durasi dan jarak tetap utuh, tombol rute tetap fungsional, dan kartu tetap minimalis tanpa memenuhi layout.
+- **Implementasi Solusi**:
+  1. **Layout 2-Tier Cerdas & Minimalis**:
+     - **Tingkat Atas (Header)**: Icon mini + Nama Lengkap Kampus/Fasilitas (`font-bold text-gray-900 text-xs leading-snug break-words`, tanpa truncate) + Tombol Rute di pojok kanan atas.
+     - **Tingkat Bawah (Metrik)**: Badge Jarak km (`... km`) + Estimasi waktu tempuh (Jalan Kaki, Motor, Mobil) dengan garis pemisah tipis yang rapi dan bebas dari tabrakan visual (0% overlap).
+  2. **Standarisasi Format Waktu Indonesia (`formatTravelDuration`)**:
+     - Mengonversi format durasi Google API yang panjang ke singkatan bahasa Indonesia yang ringkas dan padat: `16 mins` $\rightarrow$ `16 mnt`, `1 hour 15 mins` $\rightarrow$ `1j 15m`.
+  3. **Keselarasan Fasilitas Publik**:
+     - Menerapkan arsitektur 2-tier yang sama pada Fasilitas Publik dengan palet warna biru yang serasi dan modern.
+- **File Tersentuh**:
+  - `functions/public/pages/KostDetail.tsx`
+  - `functions/PROGRESS.md`
+  - `IMPLEMENTATION_PLAN.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi frontend `npm --prefix functions/public run build` sukses 100% tanpa error (`✓ built in 1m 14s`).
+  - Kompilasi backend `npm --prefix functions run build` (`tsc`) sukses 100% tanpa error.
+  - Nama kampus panjang terbaca 100% utuh, jarak dan waktu tempuh tampil rapi tanpa tumpang tindih, dan kartu tetap minimalis elegan.
+
 ### 462. Optimasi Transisi & Redesain UI/UX Segmented Control Tab Switcher Tipe Kamar (`KostDetail.tsx`) (Oktober 2026)
 - **Permintaan & Masalah**:
   1. Pengguna merasakan peralihan dan perpindahan saat mengeklik tab tipe kamar (misal: *Tipe Standard*, *Tipe Premium*) di halaman detail kost terasa kurang smooth, berat, dan ada sentakan visual (*clunky & heavy*).

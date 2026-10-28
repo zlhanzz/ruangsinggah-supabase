@@ -2278,177 +2278,202 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
                     </div>
                   )}
 
-                  {hasCampuses && (
-                    <div className="space-y-1.5 pt-1">
-                      <div className="flex items-center justify-between pl-1">
-                        <div className="flex items-center gap-1.5">
-                          <GraduationCap size={14} className="text-orange-600" />
-                          <h4 className="font-bold text-gray-900 text-xs uppercase tracking-wider">Kampus Terdekat</h4>
-                        </div>
-                        <span className="text-[10px] font-bold text-gray-400">
-                          {campusList.length} Lokasi
-                        </span>
-                      </div>
-                      
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-1.5">
-                        {campusList.map((campus, idx) => {
-                          const kmMatch = campus.distance?.match(/[\d.]+/);
-                          const km = kmMatch ? parseFloat(kmMatch[0]) : 1;
-                          const walkText = campus.walkDuration || `${Math.ceil((km / 4.2) * 60)}m`;
-                          const motoText = campus.motoDuration || `${Math.ceil((km / 28) * 60) + 1}m`;
-                          const carText = campus.carDuration || `${Math.ceil((km / 18) * 60) + 2}m`;
+                  {(() => {
+                    const formatTravelDuration = (raw: string): string => {
+                      if (!raw) return '';
+                      return raw
+                        .replace(/hours?/gi, 'j')
+                        .replace(/mins?/gi, 'm')
+                        .replace(/sec(onds?)?/gi, 'dtk')
+                        .replace(/(\d+)\s*j\s*(\d+)\s*m/gi, '$1j $2m')
+                        .replace(/(\d+)\s*m\b/gi, '$1 mnt')
+                        .trim();
+                    };
 
-                          const isRouteActive = activeRoute?.name === campus.name && activeRoute?.lat === campus.lat && activeRoute?.lng === campus.lng;
-
-                          return (
-                            <div 
-                              key={idx} 
-                              className={`bg-white border rounded-xl p-2 px-2.5 flex items-center justify-between gap-2.5 transition-all group shadow-2xs ${
-                                isRouteActive ? 'border-orange-500 bg-orange-50/40 ring-1 ring-orange-400' : 'border-gray-100 hover:border-orange-200 hover:bg-orange-50/20'
-                              }`}
-                            >
-                              <div className="flex items-center gap-2 min-w-0 flex-1">
-                                <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform ${
-                                  isRouteActive ? 'bg-orange-500 text-white' : 'bg-orange-50 text-orange-600'
-                                }`}>
-                                  <GraduationCap size={14} />
-                                </div>
-                                <div className="min-w-0 flex-1">
-                                  <div className="font-bold text-gray-900 text-xs truncate leading-tight" title={campus.name}>
-                                    {campus.name}
-                                  </div>
-                                  <div className="flex items-center gap-1.5 text-[10px] font-medium text-gray-500 mt-0.5 whitespace-nowrap">
-                                    <span title="Jalan Kaki">🚶 {walkText}</span>
-                                    <span className="text-gray-300">•</span>
-                                    <span title="Sepeda Motor">🏍️ {motoText}</span>
-                                    <span className="text-gray-300">•</span>
-                                    <span title="Mobil">🚗 {carText}</span>
-                                  </div>
-                                </div>
+                    return (
+                      <>
+                        {hasCampuses && (
+                          <div className="space-y-2 pt-1">
+                            <div className="flex items-center justify-between pl-1">
+                              <div className="flex items-center gap-1.5">
+                                <GraduationCap size={15} className="text-orange-600" />
+                                <h4 className="font-bold text-gray-900 text-xs uppercase tracking-wider">Kampus Terdekat</h4>
                               </div>
-
-                              <div className="flex items-center gap-1.5 shrink-0">
-                                <span className="font-bold text-orange-600 bg-orange-50 border border-orange-100/80 px-2 py-0.5 rounded-lg text-[10px] whitespace-nowrap">
-                                  {campus.distance}
-                                </span>
-
-                                {campus.lat && campus.lng ? (
-                                  <button
-                                    type="button"
-                                    onClick={() => handleSelectRoute({
-                                      name: campus.name,
-                                      lat: campus.lat,
-                                      lng: campus.lng,
-                                      type: 'campus',
-                                      distance: campus.distance,
-                                      walkDuration: walkText,
-                                      motoDuration: motoText,
-                                      carDuration: carText
-                                    })}
-                                    className={`flex items-center gap-1 text-[10px] font-bold px-2.5 py-1 rounded-lg transition-all active:scale-95 shadow-2xs cursor-pointer ${
-                                      isRouteActive 
-                                        ? 'bg-orange-500 text-white border border-orange-500 shadow-sm' 
-                                        : 'text-orange-600 hover:text-white bg-orange-50 hover:bg-orange-500 border border-orange-100/60 hover:border-orange-500'
-                                    }`}
-                                    title={isRouteActive ? 'Klik untuk sembunyikan rute' : 'Tampilkan rute pada peta mini di atas'}
-                                  >
-                                    <Navigation size={10} className={`shrink-0 ${isRouteActive ? 'rotate-45' : ''}`} />
-                                    <span>{isRouteActive ? 'Aktif ✓' : 'Rute'}</span>
-                                  </button>
-                                ) : null}
-                              </div>
+                              <span className="text-[10px] font-bold text-gray-400">
+                                {campusList.length} Lokasi
+                              </span>
                             </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
+                            
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                              {campusList.map((campus, idx) => {
+                                const kmMatch = campus.distance?.match(/[\d.]+/);
+                                const km = kmMatch ? parseFloat(kmMatch[0]) : 1;
+                                const walkText = campus.walkDuration || `${Math.ceil((km / 4.2) * 60)}m`;
+                                const motoText = campus.motoDuration || `${Math.ceil((km / 28) * 60) + 1}m`;
+                                const carText = campus.carDuration || `${Math.ceil((km / 18) * 60) + 2}m`;
 
-                  {hasPublicFacilities && (
-                    <div className="space-y-1.5 pt-1">
-                      <div className="flex items-center justify-between pl-1">
-                        <div className="flex items-center gap-1.5">
-                          <Building2 size={14} className="text-blue-600" />
-                          <h4 className="font-bold text-gray-900 text-xs uppercase tracking-wider">Fasilitas Publik</h4>
-                        </div>
-                        <span className="text-[10px] font-bold text-gray-400">
-                          {publicFacilitiesList.length} Lokasi
-                        </span>
-                      </div>
+                                const isRouteActive = activeRoute?.name === campus.name && activeRoute?.lat === campus.lat && activeRoute?.lng === campus.lng;
 
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-1.5">
-                        {publicFacilitiesList.map((fac, idx) => {
-                          const kmMatch = fac.distance?.match(/[\d.]+/);
-                          const km = kmMatch ? parseFloat(kmMatch[0]) : 1;
-                          const walkText = fac.walkDuration || `${Math.ceil((km / 4.2) * 60)}m`;
-                          const motoText = fac.motoDuration || `${Math.ceil((km / 28) * 60) + 1}m`;
-                          const carText = fac.carDuration || `${Math.ceil((km / 18) * 60) + 2}m`;
-
-                          const isRouteActive = activeRoute?.name === fac.name && activeRoute?.lat === fac.lat && activeRoute?.lng === fac.lng;
-
-                          return (
-                            <div 
-                              key={idx} 
-                              className={`bg-white border rounded-xl p-2 px-2.5 flex items-center justify-between gap-2.5 transition-all group shadow-2xs ${
-                                isRouteActive ? 'border-blue-500 bg-blue-50/40 ring-1 ring-blue-400' : 'border-gray-100 hover:border-blue-200 hover:bg-blue-50/20'
-                              }`}
-                            >
-                              <div className="flex items-center gap-2 min-w-0 flex-1">
-                                <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform ${
-                                  isRouteActive ? 'bg-blue-600 text-white' : 'bg-blue-50 text-blue-600'
-                                }`}>
-                                  <Building2 size={14} />
-                                </div>
-                                <div className="min-w-0 flex-1">
-                                  <div className="font-bold text-gray-900 text-xs truncate leading-tight" title={fac.name}>
-                                    {fac.name}
-                                  </div>
-                                  <div className="flex items-center gap-1.5 text-[10px] font-medium text-gray-500 mt-0.5 whitespace-nowrap">
-                                    <span title="Jalan Kaki">🚶 {walkText}</span>
-                                    <span className="text-gray-300">•</span>
-                                    <span title="Sepeda Motor">🏍️ {motoText}</span>
-                                    <span className="text-gray-300">•</span>
-                                    <span title="Mobil">🚗 {carText}</span>
-                                  </div>
-                                </div>
-                              </div>
-
-                              <div className="flex items-center gap-1.5 shrink-0">
-                                <span className="font-bold text-blue-600 bg-blue-50 border border-blue-100/80 px-2 py-0.5 rounded-lg text-[10px] whitespace-nowrap">
-                                  {fac.distance}
-                                </span>
-
-                                {fac.lat && fac.lng ? (
-                                  <button
-                                    type="button"
-                                    onClick={() => handleSelectRoute({
-                                      name: fac.name,
-                                      lat: fac.lat,
-                                      lng: fac.lng,
-                                      type: 'facility',
-                                      distance: fac.distance,
-                                      walkDuration: walkText,
-                                      motoDuration: motoText,
-                                      carDuration: carText
-                                    })}
-                                    className={`flex items-center gap-1 text-[10px] font-bold px-2.5 py-1 rounded-lg transition-all active:scale-95 shadow-2xs cursor-pointer ${
+                                return (
+                                  <div 
+                                    key={idx} 
+                                    className={`bg-white border rounded-2xl p-2.5 sm:p-3 flex flex-col justify-between gap-2 transition-all group shadow-2xs ${
                                       isRouteActive 
-                                        ? 'bg-blue-600 text-white border border-blue-600 shadow-sm' 
-                                        : 'text-blue-600 hover:text-white bg-blue-50 hover:bg-blue-600 border border-blue-100/60 hover:border-blue-600'
+                                        ? 'border-orange-500 bg-orange-50/40 ring-1 ring-orange-400' 
+                                        : 'border-gray-150 hover:border-orange-200 hover:bg-orange-50/20'
                                     }`}
-                                    title={isRouteActive ? 'Klik untuk sembunyikan rute' : 'Tampilkan rute pada peta mini di atas'}
                                   >
-                                    <Navigation size={10} className={`shrink-0 ${isRouteActive ? 'rotate-45' : ''}`} />
-                                    <span>{isRouteActive ? 'Aktif ✓' : 'Rute'}</span>
-                                  </button>
-                                ) : null}
-                              </div>
+                                    {/* Baris 1: Icon + Nama Lengkap Kampus + Tombol Rute */}
+                                    <div className="flex items-start justify-between gap-2">
+                                      <div className="flex items-start gap-2 flex-1 min-w-0">
+                                        <div className={`w-6 h-6 rounded-lg flex items-center justify-center shrink-0 mt-0.5 group-hover:scale-105 transition-transform ${
+                                          isRouteActive ? 'bg-orange-500 text-white' : 'bg-orange-50 text-orange-600'
+                                        }`}>
+                                          <GraduationCap size={13} />
+                                        </div>
+                                        <h5 className="font-bold text-gray-900 text-xs leading-snug break-words">
+                                          {campus.name}
+                                        </h5>
+                                      </div>
+
+                                      {campus.lat && campus.lng ? (
+                                        <button
+                                          type="button"
+                                          onClick={() => handleSelectRoute({
+                                            name: campus.name,
+                                            lat: campus.lat,
+                                            lng: campus.lng,
+                                            type: 'campus',
+                                            distance: campus.distance,
+                                            walkDuration: walkText,
+                                            motoDuration: motoText,
+                                            carDuration: carText
+                                          })}
+                                          className={`flex items-center gap-1 text-[10px] font-bold px-2.5 py-1 rounded-lg transition-all active:scale-95 shrink-0 cursor-pointer shadow-2xs ${
+                                            isRouteActive 
+                                              ? 'bg-orange-500 text-white border border-orange-500 shadow-xs' 
+                                              : 'text-orange-600 hover:text-white bg-orange-50 hover:bg-orange-500 border border-orange-100/80 hover:border-orange-500'
+                                          }`}
+                                          title={isRouteActive ? 'Klik untuk sembunyikan rute' : 'Tampilkan rute pada peta mini di atas'}
+                                        >
+                                          <Navigation size={10} className={`shrink-0 ${isRouteActive ? 'rotate-45' : ''}`} />
+                                          <span>{isRouteActive ? 'Aktif ✓' : 'Rute'}</span>
+                                        </button>
+                                      ) : null}
+                                    </div>
+
+                                    {/* Baris 2: Badge Jarak km + Estimasi Durasi Tempuh */}
+                                    <div className="flex items-center flex-wrap gap-x-2 gap-y-1 text-[10px] font-medium text-gray-500 pt-1.5 border-t border-gray-100">
+                                      <span className="font-bold text-orange-600 bg-orange-50 border border-orange-200/70 px-1.5 py-0.5 rounded-md text-[10px] shrink-0">
+                                        {campus.distance}
+                                      </span>
+                                      <div className="flex items-center gap-1.5 flex-wrap">
+                                        <span title="Jalan Kaki" className="flex items-center gap-0.5">🚶 {formatTravelDuration(walkText)}</span>
+                                        <span className="text-gray-300">•</span>
+                                        <span title="Sepeda Motor" className="flex items-center gap-0.5">🏍️ {formatTravelDuration(motoText)}</span>
+                                        <span className="text-gray-300">•</span>
+                                        <span title="Mobil" className="flex items-center gap-0.5">🚗 {formatTravelDuration(carText)}</span>
+                                      </div>
+                                    </div>
+                                  </div>
+                                );
+                              })}
                             </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
+                          </div>
+                        )}
+
+                        {hasPublicFacilities && (
+                          <div className="space-y-2 pt-1">
+                            <div className="flex items-center justify-between pl-1">
+                              <div className="flex items-center gap-1.5">
+                                <Building2 size={15} className="text-blue-600" />
+                                <h4 className="font-bold text-gray-900 text-xs uppercase tracking-wider">Fasilitas Publik</h4>
+                              </div>
+                              <span className="text-[10px] font-bold text-gray-400">
+                                {publicFacilitiesList.length} Lokasi
+                              </span>
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                              {publicFacilitiesList.map((fac, idx) => {
+                                const kmMatch = fac.distance?.match(/[\d.]+/);
+                                const km = kmMatch ? parseFloat(kmMatch[0]) : 1;
+                                const walkText = fac.walkDuration || `${Math.ceil((km / 4.2) * 60)}m`;
+                                const motoText = fac.motoDuration || `${Math.ceil((km / 28) * 60) + 1}m`;
+                                const carText = fac.carDuration || `${Math.ceil((km / 18) * 60) + 2}m`;
+
+                                const isRouteActive = activeRoute?.name === fac.name && activeRoute?.lat === fac.lat && activeRoute?.lng === fac.lng;
+
+                                return (
+                                  <div 
+                                    key={idx} 
+                                    className={`bg-white border rounded-2xl p-2.5 sm:p-3 flex flex-col justify-between gap-2 transition-all group shadow-2xs ${
+                                      isRouteActive 
+                                        ? 'border-blue-500 bg-blue-50/40 ring-1 ring-blue-400' 
+                                        : 'border-gray-150 hover:border-blue-200 hover:bg-blue-50/20'
+                                    }`}
+                                  >
+                                    {/* Baris 1: Icon + Nama Lengkap Fasilitas + Tombol Rute */}
+                                    <div className="flex items-start justify-between gap-2">
+                                      <div className="flex items-start gap-2 flex-1 min-w-0">
+                                        <div className={`w-6 h-6 rounded-lg flex items-center justify-center shrink-0 mt-0.5 group-hover:scale-105 transition-transform ${
+                                          isRouteActive ? 'bg-blue-600 text-white' : 'bg-blue-50 text-blue-600'
+                                        }`}>
+                                          <Building2 size={13} />
+                                        </div>
+                                        <h5 className="font-bold text-gray-900 text-xs leading-snug break-words">
+                                          {fac.name}
+                                        </h5>
+                                      </div>
+
+                                      {fac.lat && fac.lng ? (
+                                        <button
+                                          type="button"
+                                          onClick={() => handleSelectRoute({
+                                            name: fac.name,
+                                            lat: fac.lat,
+                                            lng: fac.lng,
+                                            type: 'facility',
+                                            distance: fac.distance,
+                                            walkDuration: walkText,
+                                            motoDuration: motoText,
+                                            carDuration: carText
+                                          })}
+                                          className={`flex items-center gap-1 text-[10px] font-bold px-2.5 py-1 rounded-lg transition-all active:scale-95 shrink-0 cursor-pointer shadow-2xs ${
+                                            isRouteActive 
+                                              ? 'bg-blue-600 text-white border border-blue-600 shadow-sm' 
+                                              : 'text-blue-600 hover:text-white bg-blue-50 hover:bg-blue-600 border border-blue-100/80 hover:border-blue-600'
+                                          }`}
+                                          title={isRouteActive ? 'Klik untuk sembunyikan rute' : 'Tampilkan rute pada peta mini di atas'}
+                                        >
+                                          <Navigation size={10} className={`shrink-0 ${isRouteActive ? 'rotate-45' : ''}`} />
+                                          <span>{isRouteActive ? 'Aktif ✓' : 'Rute'}</span>
+                                        </button>
+                                      ) : null}
+                                    </div>
+
+                                    {/* Baris 2: Badge Jarak km + Estimasi Durasi Tempuh */}
+                                    <div className="flex items-center flex-wrap gap-x-2 gap-y-1 text-[10px] font-medium text-gray-500 pt-1.5 border-t border-gray-100">
+                                      <span className="font-bold text-blue-600 bg-blue-50 border border-blue-200/70 px-1.5 py-0.5 rounded-md text-[10px] shrink-0">
+                                        {fac.distance}
+                                      </span>
+                                      <div className="flex items-center gap-1.5 flex-wrap">
+                                        <span title="Jalan Kaki" className="flex items-center gap-0.5">🚶 {formatTravelDuration(walkText)}</span>
+                                        <span className="text-gray-300">•</span>
+                                        <span title="Sepeda Motor" className="flex items-center gap-0.5">🏍️ {formatTravelDuration(motoText)}</span>
+                                        <span className="text-gray-300">•</span>
+                                        <span title="Mobil" className="flex items-center gap-0.5">🚗 {formatTravelDuration(carText)}</span>
+                                      </div>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
+                      </>
+                    );
+                  })()}
                 </div>
               </InfoSection>
             )}
