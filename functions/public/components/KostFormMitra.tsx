@@ -6185,30 +6185,7 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                                                         </div>
                                                     )}
 
-                                                    {/* Status Badges */}
-                                                    {!item.isProcessing && (
-                                                        item.isBlurred ? (
-                                                            <span className="absolute top-1.5 left-1.5 bg-slate-900/90 border border-orange-500/50 text-white text-[9px] font-black px-2 py-0.5 rounded-full shadow-md uppercase tracking-wider flex items-center gap-1 backdrop-blur-xs" title="Spanduk kontak telah disamarkan secara otomatis demi alasan keamanan. Klik info untuk penjelasan lengkap.">
-                                                                <span className="w-1.5 h-1.5 rounded-full bg-orange-500 animate-pulse"></span>
-                                                                <span>ruangsinggah.id</span>
-                                                                <button
-                                                                    type="button"
-                                                                    onClick={(e) => {
-                                                                        e.stopPropagation();
-                                                                        setShowSecurityExplanationModal(true);
-                                                                    }}
-                                                                    className="ml-0.5 text-orange-300 hover:text-white transition-colors cursor-pointer"
-                                                                    title="Kenapa foto ini disensor? Klik untuk membaca alasan keamanan"
-                                                                >
-                                                                    <Info size={10} />
-                                                                </button>
-                                                            </span>
-                                                        ) : (
-                                                            <span className="absolute top-1.5 left-1.5 bg-emerald-600 text-white text-[8px] font-black px-1.5 py-0.5 rounded-md shadow-xs uppercase tracking-wider">
-                                                                Baru
-                                                            </span>
-                                                        )
-                                                    )}
+
 
                                                     {/* Action Buttons */}
                                                     <div className="absolute top-1.5 right-1.5 flex items-center gap-1 z-10">
@@ -6450,30 +6427,7 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                                                                             </div>
                                                                         )}
 
-                                                                        {/* Status Badges */}
-                                                                        {!item.isProcessing && (
-                                                                            item.isBlurred ? (
-                                                                                <span className="absolute top-1.5 left-1.5 bg-slate-900/90 border border-orange-500/50 text-white text-[9px] font-black px-2 py-0.5 rounded-full shadow-md uppercase tracking-wider flex items-center gap-1 backdrop-blur-xs" title="Spanduk kontak telah disamarkan secara otomatis demi alasan keamanan. Klik info untuk penjelasan lengkap.">
-                                                                                    <span className="w-1.5 h-1.5 rounded-full bg-orange-500 animate-pulse"></span>
-                                                                                    <span>ruangsinggah.id</span>
-                                                                                    <button
-                                                                                        type="button"
-                                                                                        onClick={(e) => {
-                                                                                            e.stopPropagation();
-                                                                                            setShowSecurityExplanationModal(true);
-                                                                                        }}
-                                                                                        className="ml-0.5 text-orange-300 hover:text-white transition-colors cursor-pointer"
-                                                                                        title="Kenapa foto ini disensor? Klik untuk membaca alasan keamanan"
-                                                                                    >
-                                                                                        <Info size={10} />
-                                                                                    </button>
-                                                                                </span>
-                                                                            ) : (
-                                                                                <span className="absolute top-1.5 left-1.5 bg-emerald-600 text-white text-[8px] font-black px-1.5 py-0.5 rounded-md shadow-xs uppercase tracking-wider">
-                                                                                    Baru
-                                                                                </span>
-                                                                            )
-                                                                        )}
+
 
                                                                         {/* Action Buttons */}
                                                                         <div className="absolute top-1.5 right-1.5 flex items-center gap-1 z-10">

@@ -2,6 +2,26 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 456. Pembersihan Badge Overlay Floating "RUANGSINGGAH.ID" pada Preview Foto Listing Mitra (`KostFormMitra.tsx`) (Oktober 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna mempertanyakan fungsi dari badge / banner lonjong hitam mengambang bertuliskan `[ 🟠 RUANGSINGGAH.ID ℹ️ ]` yang muncul di pojok kiri atas thumbnail foto yang telah diunggah pada formulir pendaftaran/edit kost mitra.
+  2. Pengguna meminta elemen tersebut dihapus jika memang tidak berguna dan bukan bagian dari watermark atau sensor fisik foto.
+- **Investigasi & Analisis Masalah**:
+  1. Elemen tersebut hanyalah DOM overlay front-end berupa CSS `<span className="absolute top-1.5 left-1.5 bg-slate-900/90 ...">` yang dipasang di atas thumbnail ketika flag `item.isBlurred` bernilai true.
+  2. Elemen ini **bukan bagian dari file foto fisik**; foto WebP asli yang diunggah ke Supabase Storage sudah memiliki stempel sensor kanvas resmi dan watermark diagonal di dalamnya.
+  3. Keberadaan badge overlay ini menutupi separuh foto pada preview thumbnail, bertabrakan dengan tombol hapus foto `(X)`, dan menimbulkan ambiguitas bagi mitra seolah-olah ada watermark yang salah cetak.
+- **Implementasi Solusi**:
+  1. Menghapus seluruh blok status badges floating (`item.isBlurred ? (...) : (...)`) pada Section A (Foto Fasilitas Umum) dan Section B (Foto Tipe Kamar) di `KostFormMitra.tsx`.
+  2. Menjadikan thumbnail preview foto bersih, jernih, dan tidak lagi terhalang oleh teks overlay atau badge "Baru".
+  3. Mempertahankan tombol action pojok kanan atas (tombol hapus foto dan tombol rescan AI jika kategori rentan spanduk) dalam tata letak yang rapi dan presisi.
+- **File Tersentuh**:
+  - `functions/public/components/KostFormMitra.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi frontend `npm --prefix functions/public run build` lulus 100% 0 error (`✓ built in 41.22s`, 2512 modules transformed).
+  - Kompilasi backend `npm --prefix functions run build` (`tsc`) lulus 100% 0 error.
+
 ### 455. Standarisasi Syarat Foto Minimum Sesuai Standar Industri & Penguncian Caption Pakem Kausalitas (`KostFormMitra.tsx`) (Oktober 2026)
 - **Permintaan & Kebutuhan Pengguna**:
   1. Melakukan evaluasi mendalam terkait jumlah foto yang menjadi syarat kelayakan sebelum mitra kost dapat melangkah ke langkah berikutnya pada wizard pendaftaran kost (*Langkah 5: Foto Properti & Kamar*), selaras dengan standar industri properti (Mamikos, Cove, Airbnb) dan rasionalitas sistem RuangSinggah.

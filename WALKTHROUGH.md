@@ -1,74 +1,34 @@
-# WALKTHROUGH - Standarisasi Syarat Foto Minimum Sesuai Standar Industri & Penguncian Caption Pakem Kausalitas
+# WALKTHROUGH - Pembersihan Badge Overlay Floating "RUANGSINGGAH.ID" pada Preview Foto
 
 ## 📌 Ringkasan Pekerjaan
-Pekerjaan ini menstandarisasi alur unggah foto pada formulir pendaftaran/edit kost mitra (*Wizard Langkah 5: Foto Properti & Kamar* di [KostFormMitra.tsx](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/components/KostFormMitra.tsx)) agar selaras dengan praktik terbaik industri platform listing properti (Mamikos, Cove, Airbnb) dan rasionalitas sistem RuangSinggah:
+Pekerjaan ini merapikan tampilan thumbnail preview foto pada formulir pendaftaran/edit kost mitra (*Langkah 5: Foto Properti & Kamar* di [KostFormMitra.tsx](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/components/KostFormMitra.tsx)):
 
-1. **Standarisasi Syarat Foto Minimum Kelayakan Industri**:
-   - **Minimal 3 Foto Kumulatif Listing**: Sebuah properti wajib memiliki minimal 3 foto total agar layak tampil di pencarian dan menarik minat calon penyewa.
-   - **Kategori Pokok Wajib (`required: true`)**:
-     - Minimal 1 Foto **Bangunan Depan (Fasad)**.
-     - Minimal 1 Foto **Kamar Tidur** per masing-masing tipe kamar.
-     - Minimal 1 Foto **Kamar Mandi Dalam** (apabila tipe kamar memiliki fasilitas kamar mandi dalam / `hasInsideBath`).
-   - **Kategori Fasilitas Dinamis (`Dianjurkan` / Recommended)**:
-     - Kategori yang muncul dari fasilitas umum (Dapur Bersama, Ruang Tamu, Area Parkir, WC Umum) berstatus *Dianjurkan* agar tidak memblokir mitra yang belum sempat memotret seluruh sudut fasilitas saat pendaftaran awal.
-2. **Penguncian Caption Pakem Kausalitas (Read-Only / Fixed)**:
-   - Menghapus tombol pensil `<Edit3 />` dan modal dialog edit caption teks bebas.
-   - Caption foto kini 100% terkunci secara otomatis mengikuti nama kategori pakem slot foto (`cat.label`). Kausalitas asal-usul foto menjadi jelas, data pencarian penyewa menjadi konsisten, dan beban kognitif mitra berkurang.
-3. **UI/UX Header Card Indikator Standar Industri**:
-   - Menghadirkan widget indikator di bagian atas Langkah 5 dengan:
-     - Counter total foto: `📸 Total: X / 3 Foto Minimal` (hijau jika $\ge 3$, oranye jika $< 3$).
-     - Checklist chips interaktif status kategori pokok (Bangunan Depan, Kamar Tidur, KM Dalam) dengan ikon centang hijau jika terunggah atau ikon peringatan merah jika belum.
-     - Status kelayakan: `Lengkap & Siap Lanjut` vs `Belum Lengkap (Kurang X foto lagi / X kategori wajib belum diisi)`.
-   - Menampilkan badge visual `Wajib` (merah/rose) pada kategori pokok dan `Dianjurkan` (slate/abu-abu) pada kategori pendukung.
+1. **Penghapusan Badge Lonjong Gelap Mengambang**:
+   - Menghapus badge HTML overlay `<span className="absolute top-1.5 left-1.5 bg-slate-900/90 ...">` bertuliskan `[ 🟠 RUANGSINGGAH.ID ℹ️ ]` yang sebelumnya menempel di pojok kiri atas thumbnail foto yang disensor.
+   - Menghapus badge `Baru` yang tidak perlu.
+2. **Klarifikasi Pemrosesan & Keamanan Foto**:
+   - Badge HTML tersebut bukan bagian dari file foto fisik dan tidak memiliki fungsi pemrosesan teknis.
+   - Foto asli yang dikompresi ke WebP dan disimpan ke Supabase Storage **tetap 100% memiliki stempel sensor kanvas fisik dan watermark resmi diagonal di dalam file fotonya**.
+3. **Pengalaman Visual yang Bersih & Rapi**:
+   - Tampilan thumbnail foto menjadi jernih tanpa teks yang menutupi objek foto.
+   - Tombol hapus foto merah `(X)` dan tombol pemindaian ulang AI di pojok kanan atas kini leluasa dan tidak lagi bertabrakan.
 
 ---
 
-## 🛠️ Detail Perubahan File
+## 🛠️ Detail Perubahan
 
 ### 1. [functions/public/components/KostFormMitra.tsx](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/components/KostFormMitra.tsx)
-- **Kategori Dinamis Kamar Mandi Dalam Wajib**:
-  ```typescript
-  // Pada computeActivePhotoCategories:
-  if (hasInsideBath) {
-      categories.push({
-          id: `Kamar Mandi: ${roomName}`,
-          label: `Kamar Mandi: ${roomName}`,
-          desc: `Foto kamar mandi dalam untuk tipe ${roomName}. Wajib diunggah bila tipe kamar memiliki kamar mandi dalam.`,
-          required: true,
-          roomName
-      });
-  }
-  ```
-- **Validasi Langkah 5 & Validasi Submit (`validateCurrentStep` & `handleSubmit`)**:
-  ```typescript
-  for (const cat of activeCategories) {
-      if (cat.required) {
-          const existingCount = existingWithCats.filter(p => p.cat === cat.id).length;
-          const newCount = newPhotoItems.filter(p => p.category === cat.id).length;
-          if (existingCount + newCount < 1) {
-              return `Kategori foto '${cat.label}' wajib diunggah minimal 1 foto sebelum melanjutkan.`;
-          }
-      }
-  }
-
-  // Syarat Standar Kualitas Industri: Total foto kumulatif minimal 3 foto
-  const totalPhotosCount = existingWithCats.length + newPhotoItems.length;
-  if (totalPhotosCount < 3) {
-      return `Total foto properti saat ini baru ${totalPhotosCount} foto. Wajib mengunggah minimal 3 foto secara keseluruhan untuk memenuhi standar kelayakan listing properti.`;
-  }
-  ```
-- **Header Card & Checklist Kelayakan Listing**:
-  - Menyajikan ringkasan kelayakan dengan chip checklist real-time untuk setiap kategori wajib.
-- **Pembersihan Modal Caption & Ikon Pensil**:
-  - Menghapus tombol pensil `<button onClick={() => setEditingCaptionTarget(...)}><Edit3 ... /></button>` pada Section A dan Section B.
-  - Menghapus modal dialog `editingCaptionTarget` (60+ baris kode JSX).
-  - Menghapus state `editingCaptionTarget`, helper functions `updateNewPhotoCaption` dan `updateExistingPhotoCaption`.
-  - Menghapus import `Edit3` dari `lucide-react`.
-  - Memastikan thumbnail bottom-bar menampilkan label kategori pakem: `<p className="font-bold truncate">{cat.label}</p>`.
+- Menghapus blok `{/* Status Badges */}` pada **Section A (Area Gedung & Fasilitas Umum)**.
+- Menghapus blok `{/* Status Badges */}` pada **Section B (Tipe Kamar)**.
+- Tata letak thumbnail kini hanya menyisakan:
+  - Foto utama (cover object-fit).
+  - Overlay loading saat gambar sedang diproses kompresi WebP / AI (`item.isProcessing`).
+  - Action buttons di pojok kanan atas (tombol hapus foto `&times;` dan tombol rescan AI jika diperlukan).
+  - Bar keterangan pakem di bagian bawah thumbnail (`cat.label`).
 
 ---
 
-## 🧪 Hasil Verifikasi & Pengujian Build
+## 🧪 Hasil Verifikasi & Uji Build
 
 1. **Uji Kompilasi Frontend (`functions/public`)**:
    ```powershell
@@ -76,8 +36,8 @@ Pekerjaan ini menstandarisasi alur unggah foto pada formulir pendaftaran/edit ko
    ```
    - **Hasil**: **Exit Code 0 (Sukses 100%)**.
    - `✓ 2512 modules transformed.`
-   - `✓ built in 37.98s`
-   - Tidak ada error TypeScript (`tsc`) atau bundler Vite.
+   - `✓ built in 41.22s`
+   - 0 error TypeScript (`tsc`) dan bundler Vite.
 2. **Uji Kompilasi Backend (`functions`)**:
    ```powershell
    cmd.exe /c "npm --prefix functions run build"
@@ -89,20 +49,12 @@ Pekerjaan ini menstandarisasi alur unggah foto pada formulir pendaftaran/edit ko
 
 ## 📋 Panduan Verifikasi Pengguna (User Testing Guide)
 
-1. **Buka Dashboard Mitra & Klik Tambah / Edit Kost**:
-   - Buka formulir `KostFormMitra`.
-   - Isi Langkah 1 (Info), Langkah 2 (Lokasi), Langkah 3 (Fasilitas), Langkah 4 (Tipe Kamar).
-   - Pastikan pada salah satu tipe kamar dicentang opsi `Kamar Mandi Dalam`.
-2. **Uji Langkah 5 (Foto Properti & Kamar)**:
-   - Perhatikan **Header Card**:
-     - Tertera counter: `📸 Total: 0 / 3 Foto Minimal`.
-     - Terdapat checklist chip: `Bangunan Depan`, `Kamar: [Nama Tipe]`, dan `Kamar Mandi: [Nama Tipe]` berstatus merah/belum lengkap.
-     - Terdapat status `Belum Lengkap (Kurang 3 foto lagi)`.
-   - Coba klik **Lanjut**: sistem menolak dengan pesan validasi edukatif bahwa Bangunan Depan wajib diunggah.
-   - Unggah 1 foto Bangunan Depan: chip `Bangunan Depan` otomatis berubah menjadi hijau dengan ikon centang.
-   - Coba klik **Lanjut**: sistem menolak karena foto Kamar Tidur wajib diunggah.
-   - Unggah foto Kamar Tidur dan Kamar Mandi Dalam: total foto menjadi $\ge 3$. Status berubah menjadi hijau `Lengkap & Siap Lanjut`.
-   - Tombol **Lanjut** kini berhasil membawa mitra ke langkah berikutnya (*Peraturan Kost*).
-3. **Uji Ketiadaan Edit Caption (Pakem)**:
-   - Arahkan kursor ke foto yang telah diunggah: tombol pensil edit caption sudah tidak ada lagi.
-   - Baris teks di bagian bawah foto secara konsisten menampilkan nama kategori pakemnya (misal: *Bangunan Depan*, *Kamar: Standard*, dll.).
+1. **Buka Formulir Pendaftaran / Edit Kost Mitra**:
+   - Masuk ke Langkah 5 (Foto Properti & Kamar).
+2. **Unggah Foto (Misal Foto Bangunan Depan / Fasad)**:
+   - Tunggu beberapa saat hingga proses kompresi WebP & sensor selesai.
+   - Amati thumbnail foto yang muncul:
+     - **TIDAK ADA LAGI** badge pil hitam `[ 🟠 RUANGSINGGAH.ID ℹ️ ]` maupun badge `Baru` yang menutupi bagian atas foto.
+     - Foto terlihat jernih dan leluasa.
+     - Stempel sensor fisik di foto (jika ada spanduk nomor kontak) tetap ada di dalam kanvas foto asli.
+     - Tombol hapus merah `(X)` di pojok kanan atas terlihat rapi dan mudah diklik.
