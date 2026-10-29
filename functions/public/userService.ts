@@ -1023,17 +1023,61 @@ export async function createBookingRequest(bookingData: {
   }
 }
 
-export async function updateBookingStatus(transactionId: string, status: 'PAID' | 'REJECTED' | 'CANCELLED' | string): Promise<void> {
+export async function updateBookingStatus(
+  transactionId: string, 
+  status: 'PAID' | 'REJECTED' | 'CANCELLED' | string,
+  extra?: { rejection_reason?: string; [key: string]: any } | string
+): Promise<void> {
   try {
+    const rejectionReason = typeof extra === 'string' ? extra : extra?.rejection_reason;
+    const nowIso = getCurrentDate().toISOString();
+
+    // Ambil transaksi saat ini untuk merge metadata & resident_status_id
+    const { data: currentTrx } = await supabase
+      .from('transactions')
+      .select('id, metadata, resident_status_id')
+      .eq('id', transactionId)
+      .maybeSingle();
+
+    const existingMeta = typeof currentTrx?.metadata === 'string' 
+      ? JSON.parse(currentTrx.metadata) 
+      : (currentTrx?.metadata || {});
+
+    const updatedMeta = {
+      ...existingMeta,
+      ...(typeof extra === 'object' && extra !== null ? extra : {}),
+      ...(rejectionReason ? { rejection_reason: rejectionReason, rejected_at: nowIso } : {})
+    };
+
+    const updatePayload: Record<string, any> = {
+      status,
+      updated_at: nowIso,
+      metadata: updatedMeta
+    };
+
     const { error } = await supabase
       .from('transactions')
-      .update({ 
-        status, 
-        updated_at: getCurrentDate().toISOString() 
-      })
+      .update(updatePayload)
       .eq('id', transactionId);
 
     if (error) throw error;
+
+    // Sinkronkan status penolakan / pembatalan ke resident_status agar tidak menggantung
+    const resId = currentTrx?.resident_status_id || existingMeta.resident_status_id;
+    if (resId && (status === 'REJECTED' || status === 'CANCELLED')) {
+      await supabase
+        .from('resident_status')
+        .update({
+          status: status,
+          updated_at: nowIso,
+          metadata: {
+            ...existingMeta,
+            rejection_reason: rejectionReason || 'Ditolak pemilik kost',
+            rejected_at: nowIso
+          }
+        })
+        .eq('id', resId);
+    }
 
     // If Payment is PAID (Verified), notify Owner
     if (status === 'PAID') {
@@ -1486,6 +1530,8 @@ export async function getOwnerBookings(ownerId: string): Promise<any[]> {
         *,
         user:user_id (
           name,
+          email,
+          phone,
           photo_url,
           occupation,
           institution,

@@ -2,6 +2,42 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 472. Standarisasi Industri Alur Peninjauan & Konfirmasi Pengajuan Sewa Pemilik Kost: Tombol Khusus Profil Calon Penghuni, Pre-Approval Chat, Dynamic SLA Timer 24 Jam, Polite Rejection Modal, dan CTA Proptech (`MitraDashboard.tsx`, `userService.ts`) (Oktober 2026)
+- **Permintaan & Masukan Pengguna**:
+  1. Audit komprehensif kartu peninjauan dan konfirmasi pesanan di Dashboard Mitra (`/dashboard-mitra/bookings`) agar selaras dengan standar proptech industri (Airbnb Host, Mamikos Owner, Rukita Partner).
+  2. Permintaan eksplisit pengguna: Menambahkan tombol khusus untuk melihat seluruh informasi profil calon penghuni (`Lihat Profil`) sehingga mitra dapat melihat profil lengkap (pekerjaan, instansi, jenis kelamin, status, nomor WhatsApp/kontak, email, dan alamat) dalam satu kali klik.
+  3. Membuka obrolan pra-konfirmasi (`Pre-Approval Inquiry`) yang sebelumnya diblokir saat pesanan berstatus `PENDING_APPROVAL`.
+  4. Menggantikan teks statis `SLA KONFIRMASI 1X24 JAM` dengan hitung mundur waktu riil dinamis (jam & menit tersisa) dilengkapi warna indikator urgensi.
+  5. Mengganti alert browser `window.confirm` dengan Modal Alasan Penolakan yang sopan & edukatif.
+  6. Mengoreksi hierarki tombol aksi: Tombol `SETUJUI` warna Emerald Green solid yang tegas, tombol `TOLAK` outline sekunder yang bersih, dan tombol `TANYA CALON` outline biru/teal.
+- **Implementasi Solusi**:
+  1. **Tombol Khusus Lihat Profil Calon Penghuni (`MitraDashboard.tsx`)**:
+     - Menambahkan tombol dedicated `[ 👤 Lihat Profil ]` di header kartu pengajuan sewa yang langsung membuka modal profil lengkap calon penghuni.
+     - Memperluas modal profil calon penghuni dengan data kontak lengkap: Nomor WhatsApp/HP (`Phone`) dan Email (`Mail`) di samping profesi, instansi, jenis kelamin, status, dan alamat asal.
+  2. **Pre-Approval Inquiry / Chat Langsung (`MitraDashboard.tsx`)**:
+     - Menambahkan tombol `[ 💬 Tanya Calon ]` pada kartu `PENDING_APPROVAL` yang memicu `handleStartChat(b.user_id, b.product_id)` secara instan, membuka ruang diskusi sebelum pemilik kost mengambil keputusan ACC atau tolak.
+  3. **Dynamic Real-time SLA Countdown (`MitraDashboard.tsx`)**:
+     - Mengembangkan helper `getBookingSlaInfo` yang menghitung mundur sisa jam dan menit dari `b.created_at + 24 jam`.
+     - Menyajikan badge responsif: Kuning/Amber jika sisa waktu > 6 jam (`Sisa Respon: X Jam Y Menit`), dan Merah berkedip (*pulsing*) jika sisa waktu $\le 6$ jam (`Sisa Respon: Y Menit (Mendesak)`).
+  4. **Modal Alasan Penolakan Sopan (*Polite Rejection Modal*) (`MitraDashboard.tsx`, `userService.ts`)**:
+     - Membuat dialog modal dengan pilihan alasan penolakan ramah (*Kamar sudah terisi offline*, *Jadwal tanggal masuk bentrok*, *Kriteria belum sesuai*, atau alasan khusus via textarea).
+     - Memperbarui fungsi `updateBookingStatus` di `userService.ts` untuk menerima `rejection_reason` dan menyinkronkannya ke tabel `transactions` dan `resident_status` agar status penyewa ditolak secara konsisten.
+  5. **Restrukturisasi Tombol Aksi Proptech (`MitraDashboard.tsx`)**:
+     - Primary CTA: `[ ✔️ Setujui ]` menggunakan warna Emerald Green solid (`bg-emerald-600 hover:bg-emerald-700`) dengan icon `CheckCircle2`.
+     - Secondary CTA: `[ ✖️ Tolak ]` menggunakan outline abu-abu bersih dengan transisi hover rose lembut.
+     - Header Mini Profile: Dilengkapi badge `Terverifikasi` (`ShieldCheck`), profesi (`Briefcase`), instansi (`GraduationCap`), dan jenis kelamin.
+  6. **Penyempurnaan Query Data Penyewa (`userService.ts`)**:
+     - Menambahkan field `phone, email` pada join `user:user_id` di `getOwnerBookings` agar seluruh kontak calon penghuni tersedia untuk pemilik kost.
+- **File Tersentuh**:
+  - `functions/public/pages/MitraDashboard.tsx`
+  - `functions/public/userService.ts`
+  - `functions/PROGRESS.md`
+  - `IMPLEMENTATION_PLAN.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi frontend Vite (`npm --prefix functions/public run build`): Lulus 100% (2512 modul tertransformasi, code 0).
+  - Kompilasi backend Cloud Functions (`npm --prefix functions run build`): Lulus 100% (tsc, code 0).
+
 ### 471. Audit Masif & Standarisasi Dashboard Mitra: Eliminasi Total Kebocoran Calon Penyewa, Metrik Kamar Siap Sewa, dan Alur Pesanan Proptech (`MitraDashboard.tsx`, `MitraTenantManagement.tsx`, `adminService.ts`) (Oktober 2026)
 - **Permintaan & Masukan Pengguna**:
   1. Penyelidikan dan perbaikan kebocoran calon penyewa: Calon penyewa yang baru mengajukan sewa (status `PENDING_APPROVAL`, belum di-ACC dan belum membayar) sudah terdata di Database Penghuni dengan status `AKTIF`, badge sidebar `Penghuni Aktif (1)`, total Rp 0, dan tombol Tagih.

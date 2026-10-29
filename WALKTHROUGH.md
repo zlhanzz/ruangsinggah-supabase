@@ -1,88 +1,91 @@
-# Walkthrough: Audit Masif & Standarisasi Dashboard Mitra Sesuai Realita Operasional
+# WALKTHROUGH: Standarisasi Alur Peninjauan & Konfirmasi Pengajuan Sewa (Dashboard Mitra)
 
-**ID Progres**: #471  
-**Status**: Selesai & Lulus Uji Kompilasi 100% (Frontend & Backend)  
+**ID Progres**: #472  
 **Tanggal**: 29 Oktober 2026  
+**Status**: Selesai & Lulus Uji Kompilasi 100%  
 
 ---
 
-## 📌 Ringkasan Pekerjaan
+## 1. Ringkasan Perubahan
 
-Pembaruan ini menuntaskan penyelidikan dan perbaikan menyeluruh terhadap sistem **Dashboard Mitra**, menyelesaikan masalah kebocoran data calon penyewa (*active tenant leakage*), serta menyelaraskan metrik KPI bisnis dengan model operasional Mitra Biasa:
+Sesuai arahan dan persetujuan pengguna, alur peninjauan dan konfirmasi pengajuan sewa oleh pemilik kost pada Dashboard Mitra (`/dashboard-mitra/bookings`) telah diaudit dan distandarisasi mengikuti praktik terbaik industri proptech (Airbnb Host, Mamikos Owner, dan Rukita Partner).
 
-1. **Eliminasi Total Kebocoran Calon Penyewa ke Database Penghuni**:
-   - Memperbaiki query dan filter di `adminService.ts`, `MitraDashboard.tsx`, dan `MitraTenantManagement.tsx` sehingga calon penyewa yang baru mengajukan sewa (`PENDING_APPROVAL` / belum bayar) **TIDAK AKAN PERNAH** masuk ke Database Penghuni.
-   - Badge counter di sidebar **Penghuni Aktif** kini akurat dan menampilkan angka `0` (atau jumlah riil penyewa yang kontraknya telah lunas & berjalan).
-2. **Koreksi Metrik KPI Beranda (Kamar Siap Sewa)**:
-   - Menggantikan metrik digital marketing CTR yang abstrak dan membingungkan dengan **Kamar Siap Sewa** (`availableRooms`), yang mencerminkan total kuota kamar kosong yang sedang dipasarkan oleh pemilik di RuangSinggah.
-   - Menghindari penggunaan okupansi semu untuk Mitra Biasa karena Mitra Biasa hanya mendaftarkan kamar kosong dan tidak mendata penghuni lama yang sudah menetap secara offline.
-3. **Penyempurnaan Alur Pesanan (Booking Management)**:
-   - Menambahkan tab **Batal / Kadaluarsa** pada menu Pesanan untuk melacak riwayat pengajuan sewa yang ditolak atau dibatalkan.
-   - Menambahkan badge pengingat **SLA Konfirmasi 1x24 Jam** pada kartu pengajuan baru agar pemilik segera merespon calon penyewa.
-4. **Penyelarasan Tipe Kamar vs Nomor Kamar**:
-   - Memastikan tampilan kartu sewa Mitra Biasa berbasis **Tipe Kamar** (misal: `Kamar Standard • 1 Orang`) secara rapi dan stabil.
-
----
-
-## 🛠️ Daftar Perubahan File
-
-### 1. [adminService.ts](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/adminService.ts)
-- Menambahkan filter pada `getResidentStatus`:
-  ```typescript
-  if (ownerUid || !userId) {
-      query = query.neq('status', 'PENDING').neq('status', 'CANCELLED').neq('status', 'REJECTED');
-  }
-  ```
-- Mengetatkan ekstraksi penghuni offline: hanya mengekstrak jika benar-benar ada nama penghuni tercatat (`rt.residentName || rt.tenantName || rt.occupant_name`), bukan semata-mata karena kuota kamar bernilai 0.
-
-### 2. [MitraDashboard.tsx](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/MitraDashboard.tsx)
-- **Kalkulasi Penghuni Aktif**: Memvalidasi `isStatusActive = (r.status || '').toUpperCase() === 'ACTIVE'` dan sisa hari `daysLeft >= 0`. Badge sidebar kini menampilkan angka riil (tidak bocor).
-- **Metrik Kamar Siap Sewa**: Menghitung akumulasi kuota `availableRoomCount` seluruh tipe kamar properti yang dipasarkan.
-- **Pembaruan Kartu KPI Beranda**: Mengganti kartu CTR dengan kartu **Kamar Siap Sewa** berikon `<Bed />`.
-- **Tab Pesanan Baru**: Menambahkan tab `cancelled` (*Batal / Kadaluarsa*) dan banner *SLA Konfirmasi 1x24 Jam* pada pesanan pending.
-
-### 3. [MitraTenantManagement.tsx](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/components/mitra/MitraTenantManagement.tsx)
-- Menambahkan filter pengaman pada `processedResidents` untuk mengeluarkan baris berstatus `PENDING`, `CANCELLED`, atau `REJECTED`.
-- Menjamin calon penyewa yang belum lunas tidak akan pernah terdaftar dengan tag hijau `AKTIF` atau total tagihan Rp 0.
-
-### 4. [PROGRESS.md](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/PROGRESS.md)
-- Mencatat riwayat entri progres #471.
+### 🎯 Fitur & Peningkatan Baru:
+1. **Tombol Khusus "Lihat Profil" Calon Penghuni**:
+   - Di samping nama calon penyewa, kini tersedia tombol eksplisit `[ 👤 Lihat Profil ]`.
+   - Mengklik tombol ini langsung membuka modal komprehensif yang memuat seluruh informasi calon penghuni:
+     - Foto profil/avatar & inisial
+     - Nama lengkap & badge status *Calon Penghuni*
+     - Profesi / Pekerjaan & Instansi / Kampus
+     - Jenis Kelamin & Status Hubungan
+     - Kontak: Nomor WhatsApp / HP & Alamat Email
+     - Alamat Asal
+2. **Pre-Approval Inquiry / Obrolan Pra-Konfirmasi (`[ 💬 Tanya Calon ]`)**:
+   - Pemilik kost kini dapat langsung mengklik tombol `[ 💬 Tanya Calon ]` pada kartu pengajuan sewa yang masih berstatus `PENDING_APPROVAL`.
+   - Tombol ini langsung membuka sesi chat internal RuangSinggah dengan calon penyewa, memungkinkan pemilik berdiskusi (menanyakan kendaraan yang dibawa, jam tiba, dll.) sebelum mengambil keputusan.
+3. **Dynamic Real-Time SLA Countdown (Batas Waktu Respon 24 Jam)**:
+   - Menggantikan teks statis `⏰ SLA KONFIRMASI 1X24 JAM` dengan timer dinamis yang menghitung mundur sisa waktu secara riil:
+     - **Kondisi Normal (> 6 Jam)**: Tampilan badge amber bersahabat bertuliskan *"Sisa Respon: X Jam Y Menit"*.
+     - **Kondisi Mendesak ($\le$ 6 Jam)**: Tampilan badge merah dengan animasi pulse berkedip lembut bertuliskan *"Sisa Respon: Y Menit (Mendesak)"*.
+     - **Kedaluwarsa**: Bertuliskan *"Waktu Respon Berakhir (24 Jam)"*.
+4. **Modal Alasan Penolakan Sopan (*Polite Rejection Modal*)**:
+   - Menggantikan dialog native browser `window.confirm` yang kaku dengan modal interaktif yang menyediakan opsi alasan penolakan ramah:
+     1. *Kamar sudah terisi oleh penyewa offline*
+     2. *Jadwal tanggal masuk bentrok atau belum sesuai*
+     3. *Kriteria calon penghuni belum sesuai ketentuan kost*
+     4. *Lainnya (masukkan alasan khusus via textarea)*
+   - Alasan penolakan otomatis tersimpan ke metadata transaksi dan disinkronkan ke tabel `resident_status`.
+5. **Hierarki Tombol Aksi Proptech (CTA)**:
+   - **Primary Action (Setujui)**: Warna Emerald Green solid yang tegas (`bg-emerald-600 hover:bg-emerald-700`) dengan icon `CheckCircle2`.
+   - **Secondary Action (Tolak)**: Tombol outline netral (`border-slate-200 text-slate-600 hover:text-rose-600 hover:bg-rose-50`).
+   - **Mini Profile Header**: Dilengkapi badge verifikasi hijau (`ShieldCheck`), subtitle profesi (`Briefcase`), instansi (`GraduationCap`), dan jenis kelamin.
 
 ---
 
-## 🧪 Hasil Verifikasi Kompilasi
+## 2. File yang Dimodifikasi
 
-1. **Frontend Production Build (`functions/public`)**:
-   ```
-   ✓ 2512 modules transformed.
-   ✓ built in 53.40s
-   Exit Code: 0 (Sukses tanpa error)
-   ```
-2. **Backend Cloud Functions Build (`functions`)**:
-   ```
-   > tsc
-   Exit Code: 0 (Sukses tanpa error)
-   ```
+1. **`functions/public/pages/MitraDashboard.tsx`**:
+   - Menambahkan helper `getBookingSlaInfo` untuk kalkulasi hitung mundur sisa jam dan menit SLA 24 jam.
+   - Menambahkan state dan modal dialog `rejectingBooking` (*Polite Rejection Modal*).
+   - Menambahkan tombol khusus `[ 👤 Lihat Profil ]` dan `[ 💬 Tanya Calon ]` di header kartu pemesanan.
+   - Mengintegrasikan rincian kontak (Nomor WhatsApp & Email) pada modal profil penghuni.
+   - Memperbarui gaya tombol aksi (Emerald Green untuk Setujui, Clean secondary untuk Tolak).
+2. **`functions/public/userService.ts`**:
+   - Memperluas query `getOwnerBookings` agar menyertakan data kontak lengkap penyewa (`phone, email`).
+   - Memperbarui fungsi `updateBookingStatus` agar menerima parameter `extraMetadata` (alasan penolakan) dan menyinkronkan status penolakan ke `resident_status`.
+3. **`functions/PROGRESS.md`**:
+   - Mencatat riwayat progres fitur #472.
 
 ---
 
-## 📋 Panduan Verifikasi Pengguna di UI
+## 3. Hasil Pengujian & Kompilasi (Build Verification)
 
-1. **Verifikasi Database Penghuni (`/dashboard-mitra/tenants`)**:
-   - Refresh halaman `localhost:5173/dashboard-mitra/tenants`.
-   - Perhatikan bahwa calon penyewa (**"PENYEWA"**) yang berstatus `PENDING_APPROVAL` **sudah tidak lagi muncul** di Database Penghuni.
-   - Layar akan menampilkan empty state yang bersih: *"Belum ada penghuni aktif. Data akan muncul setelah pesanan diselesaikan (PAID)"*.
-2. **Verifikasi Badge Sidebar**:
-   - Periksa menu **Penghuni Aktif** di sidebar kiri: Badge counter sekarang menunjukkan **0** (tidak ada lagi angka 1 palsu).
-   - Menu **Pesanan** tetap menampilkan badge **1** (karena ada 1 pengajuan sewa masuk).
-3. **Verifikasi Tab Beranda (`/dashboard-mitra`)**:
-   - Buka tab Beranda.
-   - Periksa 4 kartu KPI utama:
-     - **Kunjungan**: Total views.
-     - **Kamar Siap Sewa**: Total unit kamar kosong yang diiklankan.
-     - **Pendapatan**: Total sewa lunas via aplikasi.
-     - **Permintaan**: 1 pesanan butuh persetujuan.
-4. **Verifikasi Tab Pesanan (`/dashboard-mitra/bookings`)**:
-   - Buka menu Pesanan.
-   - Calon penyewa berada di tab **Permintaan** lengkap dengan peringatan *SLA Konfirmasi 1x24 Jam*.
-   - Tersedia tab baru: **Batal / Kadaluarsa** untuk mengarsipkan riwayat pengajuan yang tidak jadi.
+| Pengujian | Perintah | Status | Keterangan |
+|---|---|---|---|
+| **Frontend Build** | `npm --prefix functions/public run build` | **LULUS (Code 0)** | 2.512 modul tertransformasi tanpa error Vite/TypeScript. |
+| **Backend Functions Build** | `npm --prefix functions run build` | **LULUS (Code 0)** | Kompilasi TypeScript (`tsc`) backend sukses dengan 0 error. |
+
+---
+
+## 4. Panduan Verifikasi Pengguna (User Testing Guide)
+
+Untuk menguji fitur ini langsung di layar:
+
+1. **Buka Halaman Pesanan Mitra**:
+   - Masuk ke dashboard mitra di browser: `http://localhost:5173/dashboard-mitra/bookings` (atau via menu navigasi **Pesanan**).
+2. **Uji Tombol Khusus "Lihat Profil"**:
+   - Temukan kartu pengajuan sewa (misal: dari `userbiasa1`).
+   - Klik tombol **[ 👤 Lihat Profil ]** di bagian kanan atas kartu.
+   - Pastikan modal profil terbuka menampilkan data lengkap: Nama, Profesi, Instansi, Jenis Kelamin, No. HP/WhatsApp, Email, dan Alamat Asal.
+3. **Uji Tombol "Tanya Calon" (Pre-Approval Chat)**:
+   - Klik tombol **[ 💬 Tanya Calon ]**.
+   - Pastikan Anda langsung diarahkan ke tab **Pesan & Diskusi** untuk mulai mengobrol langsung dengan calon penyewa.
+4. **Uji Dynamic SLA Countdown**:
+   - Perhatikan badge waktu di atas tombol aksi kartu pesanan. Badge menampilkan sisa waktu riil (misal: *Sisa Respon: 20 Jam 15 Menit*).
+5. **Uji Alur Penolakan (Reject Flow)**:
+   - Klik tombol **[ ✖️ Tolak ]**.
+   - Pastikan modal pilihan alasan penolakan muncul (bukan alert browser).
+   - Pilih salah satu alasan atau ketik alasan kustom, lalu konfirmasi penolakan.
+6. **Uji Alur Persetujuan (Approve Flow)**:
+   - Klik tombol **[ ✔️ Setujui ]** (berwarna hijau emerald).
+   - Pastikan konfirmasi muncul dan status pesanan berpindah ke tab *Menunggu Pembayaran*.

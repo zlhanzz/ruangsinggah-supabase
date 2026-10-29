@@ -19,7 +19,7 @@ import {
     Plus, Edit, Eye, Check, MessageSquare, Search, Filter, MoreHorizontal, ArrowUpRight, ArrowDownRight, ArrowRight,
     Clock, LogOut, Bell, ChevronRight, TrendingUp, Menu, X, Landmark, CreditCard, Save,
     Briefcase, GraduationCap, Heart, MapPin, Trash2, FileText,
-    Bed, Lock, Send, ShieldCheck, Sparkles, CheckCircle2, AlertCircle, Phone, Building2, Receipt,
+    Bed, Lock, Send, ShieldCheck, Sparkles, CheckCircle2, AlertCircle, Phone, Mail, Building2, Receipt,
     Printer, Share2, Download, Calendar
 } from 'lucide-react';
 import MitraProfile from './MitraProfile';
@@ -369,6 +369,10 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
     const [testWaPhone, setTestWaPhone] = useState('');
     const [selectedBookingForProfile, setSelectedBookingForProfile] = useState<any | null>(null);
     const [selectedUserForProfile, setSelectedUserForProfile] = useState<any | null>(null);
+    const [rejectingBooking, setRejectingBooking] = useState<any | null>(null);
+    const [selectedRejectReason, setSelectedRejectReason] = useState<string>('Kamar sudah terisi oleh penyewa offline');
+    const [customRejectReason, setCustomRejectReason] = useState<string>('');
+    const [isSubmittingReject, setIsSubmittingReject] = useState<boolean>(false);
     const [selectedWithdrawalDetail, setSelectedWithdrawalDetail] = useState<any | null>(null);
 
     // --- KOSTMANAGER SMART AUTO-PILOT STATE ---
@@ -783,14 +787,34 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
         }
     }, [uid, user]);
 
+    const getBookingSlaInfo = (createdAtStr?: string) => {
+        if (!createdAtStr) return { label: 'Batas Konfirmasi: 24 Jam', isUrgent: false, isExpired: false };
+        const createdTime = new Date(createdAtStr).getTime();
+        if (isNaN(createdTime)) return { label: 'Batas Konfirmasi: 24 Jam', isUrgent: false, isExpired: false };
+        const expiryTime = createdTime + (24 * 60 * 60 * 1000);
+        const now = getCurrentDate().getTime();
+        const diffMs = expiryTime - now;
+        
+        if (diffMs <= 0) {
+            return { label: 'Waktu Respon Berakhir (24 Jam)', isUrgent: true, isExpired: true };
+        }
+        const hours = Math.floor(diffMs / (1000 * 60 * 60));
+        const minutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+        const isUrgent = hours < 6;
+        const label = hours > 0 
+            ? `Sisa Respon: ${hours} Jam ${minutes} Menit` 
+            : `Sisa Respon: ${minutes} Menit (Mendesak)`;
+        return { label, isUrgent, isExpired: false, hours, minutes };
+    };
+
     const handleApprove = async (group: any) => {
-        if (!window.confirm('Setujui pesanan ini? Calon penghuni akan diminta melakukan pembayaran.')) return;
+        if (!window.confirm('Setujui pesanan ini? Calon penghuni akan menerima notifikasi untuk segera melakukan pembayaran.')) return;
         try {
             setLoading(true);
             const transactions = group.all_transactions || [group];
             await Promise.all(transactions.map((t: any) => updateBookingStatus(t.id, 'AWAITING_PAYMENT')));
             await loadData();
-            alert('Pengajuan sewa disetujui.');
+            alert('Pengajuan sewa berhasil disetujui! Status pesanan kini Menunggu Pembayaran dari calon penghuni.');
         } catch (err: any) {
             alert('Gagal menyetujui: ' + err.message);
         } finally {
@@ -798,18 +822,31 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
         }
     };
 
-    const handleReject = async (group: any) => {
-        if (!window.confirm('Tolak pengajuan sewa ini?')) return;
+    const openRejectModal = (group: any) => {
+        setRejectingBooking(group);
+        setSelectedRejectReason('Kamar sudah terisi oleh penyewa offline');
+        setCustomRejectReason('');
+    };
+
+    const handleConfirmReject = async () => {
+        if (!rejectingBooking) return;
+        const finalReason = selectedRejectReason === 'Lainnya' 
+            ? (customRejectReason.trim() || 'Alasan penolakan tidak dicantumkan') 
+            : selectedRejectReason;
+
         try {
-            setLoading(true);
-            const transactions = group.all_transactions || [group];
-            await Promise.all(transactions.map((t: any) => updateBookingStatus(t.id, 'REJECTED')));
+            setIsSubmittingReject(true);
+            const transactions = rejectingBooking.all_transactions || [rejectingBooking];
+            await Promise.all(transactions.map((t: any) => 
+                updateBookingStatus(t.id, 'REJECTED', { rejection_reason: finalReason })
+            ));
             await loadData();
-            alert('Pengajuan sewa ditolak.');
+            setRejectingBooking(null);
+            alert('Pengajuan sewa telah ditolak dengan alasan: ' + finalReason);
         } catch (err: any) {
-            alert('Gagal menolak: ' + err.message);
+            alert('Gagal menolak pesanan: ' + err.message);
         } finally {
-            setLoading(false);
+            setIsSubmittingReject(false);
         }
     };
 
@@ -2282,66 +2319,120 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
 
                                             <div className="flex-1 flex flex-col sm:flex-row justify-between gap-6">
                                                 <div className="flex-1 space-y-4">
-                                                    {/* Applicant Info Header - PRIORITIZED */}
-                                                    <div className="flex items-center gap-5">
-                                                        <button
-                                                            onClick={(e) => { e.stopPropagation(); setSelectedBookingForProfile(b); }}
-                                                            className="w-16 h-16 rounded-[1.5rem] bg-orange-500 flex items-center justify-center text-white font-black text-2xl shadow-xl shadow-orange-100 hover:scale-110 active:scale-95 transition-all overflow-hidden shrink-0 border-4 border-white relative"
-                                                        >
-                                                            {/* Layer 1: Initials (Always present in background) */}
-                                                            <span className="absolute inset-0 flex items-center justify-center drop-shadow-sm pointer-events-none">
-                                                                {b.user?.name?.charAt(0) || 'U'}
-                                                            </span>
+                                                    {/* Applicant Info Header - PRIORITIZED WITH PROFILE BUTTON & PRE-APPROVAL CHAT */}
+                                                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-3 border-b border-gray-100">
+                                                        <div className="flex items-center gap-4">
+                                                            <button
+                                                                type="button"
+                                                                onClick={(e) => { e.stopPropagation(); setSelectedBookingForProfile(b); }}
+                                                                className="w-14 h-14 sm:w-16 sm:h-16 rounded-[1.25rem] bg-orange-500 flex items-center justify-center text-white font-black text-2xl shadow-lg shadow-orange-500/20 hover:scale-105 active:scale-95 transition-all overflow-hidden shrink-0 border-2 border-white relative group cursor-pointer"
+                                                                title="Klik untuk melihat profil lengkap calon penghuni"
+                                                            >
+                                                                {/* Layer 1: Initials */}
+                                                                <span className="absolute inset-0 flex items-center justify-center drop-shadow-sm pointer-events-none">
+                                                                    {b.user?.name?.charAt(0) || 'U'}
+                                                                </span>
 
-                                                            {/* Layer 2: Image (On top) */}
-                                                            {b.user?.photo_url && (
-                                                                <img
-                                                                    src={b.user.photo_url}
-                                                                    className="absolute inset-0 w-full h-full object-cover z-10 transition-opacity duration-300"
-                                                                    alt="" // Empty alt to prevent text-over-image on error
-                                                                    onError={(e) => {
-                                                                        e.currentTarget.style.display = 'none';
-                                                                    }}
-                                                                />
-                                                            )}
-                                                        </button>
-                                                        <div className="min-w-0">
-                                                            <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-2">
-                                                                <button
-                                                                    onClick={(e) => { e.stopPropagation(); setSelectedBookingForProfile(b); }}
-                                                                    className="font-black text-gray-900 text-2xl lg:text-3xl tracking-tight hover:text-orange-500 transition-colors text-left block truncate max-w-full leading-none"
-                                                                >
-                                                                    {b.user?.name}
-                                                                </button>
-
-                                                                {/* CHAT BUTTON - ONLY FOR APPROVED BOOKINGS */}
-                                                                {b.status !== 'PENDING_APPROVAL' && (
-                                                                    <button
-                                                                        onClick={(e) => {
-                                                                            e.stopPropagation();
-                                                                            handleMenuChange('chat');
-                                                                            // Logic to select this specific chat will be handled by chatService/state
+                                                                {/* Layer 2: Image */}
+                                                                {b.user?.photo_url && (
+                                                                    <img
+                                                                        src={b.user.photo_url}
+                                                                        className="absolute inset-0 w-full h-full object-cover z-10 transition-opacity duration-300"
+                                                                        alt=""
+                                                                        onError={(e) => {
+                                                                            e.currentTarget.style.display = 'none';
                                                                         }}
-                                                                        className="flex items-center gap-2 px-3 py-1.5 bg-blue-50 text-blue-600 rounded-full border border-blue-100 hover:bg-blue-100 transition-all active:scale-95 group shrink-0 w-fit"
+                                                                    />
+                                                                )}
+                                                            </button>
+                                                            <div className="min-w-0">
+                                                                <div className="flex items-center gap-2 flex-wrap">
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={(e) => { e.stopPropagation(); setSelectedBookingForProfile(b); }}
+                                                                        className="font-black text-gray-900 text-xl sm:text-2xl tracking-tight hover:text-orange-500 transition-colors text-left truncate max-w-full leading-tight cursor-pointer"
                                                                     >
-                                                                        <MessageSquare size={12} className="group-hover:rotate-12 transition-transform" />
-                                                                        <span className="text-[9px] font-black uppercase tracking-widest text-center">Kirim Pesan</span>
+                                                                        {b.user?.name || b.metadata?.tenantName || 'Calon Penyewa'}
                                                                     </button>
-                                                                )}
-                                                            </div>
-                                                            <div className="flex flex-wrap items-center gap-2">
-                                                                <span className="px-3 py-1 bg-orange-50 text-orange-600 rounded-lg text-[9px] font-black uppercase tracking-widest border border-orange-100">
-                                                                    {b.property?.title}
-                                                                </span>
-                                                                {kmPropIds.has(b.product_id) && (
-                                                                    <span className="px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-orange-100 text-orange-700 border border-orange-200">
-                                                                        ⚡ Dikelola KostManager
+                                                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                                                        <ShieldCheck size={11} className="text-emerald-600" />
+                                                                        Terverifikasi
                                                                     </span>
-                                                                )}
-                                                                <span className="text-[10px] font-bold text-gray-300 uppercase tracking-widest text-center">
-                                                                    #{b.id.substring(0, 6)}
-                                                                </span>
+                                                                </div>
+
+                                                                {/* Subtitle Info Calon (Pekerjaan / Instansi / Gender) */}
+                                                                <div className="flex items-center gap-2 mt-1 flex-wrap text-gray-500 text-[11px] font-medium">
+                                                                    {b.user?.occupation && (
+                                                                        <span className="flex items-center gap-1 font-semibold text-gray-700">
+                                                                            <Briefcase size={12} className="text-gray-400" />
+                                                                            {b.user.occupation}
+                                                                        </span>
+                                                                    )}
+                                                                    {b.user?.institution && (
+                                                                        <>
+                                                                            <span className="text-gray-300">•</span>
+                                                                            <span className="flex items-center gap-1">
+                                                                                <GraduationCap size={12} className="text-gray-400" />
+                                                                                {b.user.institution}
+                                                                            </span>
+                                                                        </>
+                                                                    )}
+                                                                    {b.user?.gender && (
+                                                                        <>
+                                                                            <span className="text-gray-300">•</span>
+                                                                            <span className="text-gray-600 font-semibold">{b.user.gender}</span>
+                                                                        </>
+                                                                    )}
+                                                                </div>
+
+                                                                {/* Property & Code Tag */}
+                                                                <div className="flex flex-wrap items-center gap-2 mt-2">
+                                                                    <span className="px-2.5 py-0.5 bg-orange-50 text-orange-600 rounded-lg text-[9px] font-black uppercase tracking-widest border border-orange-100">
+                                                                        {b.property?.title}
+                                                                    </span>
+                                                                    {kmPropIds.has(b.product_id) && (
+                                                                        <span className="px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-orange-100 text-orange-700 border border-orange-200">
+                                                                            ⚡ Dikelola KostManager
+                                                                        </span>
+                                                                    )}
+                                                                    <span className="text-[10px] font-bold text-gray-300 uppercase tracking-widest">
+                                                                        #{b.id.substring(0, 6)}
+                                                                    </span>
+                                                                </div>
                                                             </div>
+                                                        </div>
+
+                                                        {/* Action Button Row: DEDICATED PROFILE BUTTON & PRE-APPROVAL CHAT */}
+                                                        <div className="flex items-center gap-2 shrink-0">
+                                                            {/* TOMBOL KHUSUS LIHAT PROFIL (Sesuai Permintaan User) */}
+                                                            <button
+                                                                type="button"
+                                                                onClick={(e) => { e.stopPropagation(); setSelectedBookingForProfile(b); }}
+                                                                className="flex items-center gap-1.5 px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold text-[11px] transition-all active:scale-95 border border-slate-200/80 cursor-pointer shadow-sm"
+                                                                title="Buka profil lengkap calon penghuni"
+                                                            >
+                                                                <User size={13} className="text-slate-600" />
+                                                                <span>Lihat Profil</span>
+                                                            </button>
+
+                                                            {/* TOMBOL CHAT / TANYA CALON PENGHUNI (Pre-approval inquiry & standard chat) */}
+                                                            <button
+                                                                type="button"
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    const targetUserId = b.user_id || b.user?.id;
+                                                                    if (targetUserId) {
+                                                                        handleStartChat(targetUserId, b.product_id);
+                                                                    } else {
+                                                                        handleMenuChange('chat');
+                                                                    }
+                                                                }}
+                                                                className="flex items-center gap-1.5 px-3.5 py-2 bg-blue-50 hover:bg-blue-100 text-blue-600 rounded-xl font-bold text-[11px] border border-blue-200/70 transition-all active:scale-95 cursor-pointer shadow-sm group"
+                                                                title="Kirim pesan langsung ke calon penghuni"
+                                                            >
+                                                                <MessageSquare size={13} className="group-hover:rotate-12 transition-transform" />
+                                                                <span>Tanya Calon</span>
+                                                            </button>
                                                         </div>
                                                     </div>
 
@@ -2380,26 +2471,42 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                                                     </div>
 
                                                     <div className="w-full mt-4">
-                                                        {bookingTab === 'pending' && (
-                                                            <div className="flex flex-col gap-2">
-                                                                <div className="flex items-center gap-1.5 px-2.5 py-1 bg-amber-50 text-amber-800 rounded-lg border border-amber-200/70 mb-1">
-                                                                    <Clock size={11} className="text-amber-600 shrink-0" />
-                                                                    <span className="text-[9px] font-black uppercase tracking-wider">SLA Konfirmasi 1x24 Jam</span>
+                                                        {bookingTab === 'pending' && (() => {
+                                                            const sla = getBookingSlaInfo(b.created_at);
+                                                            return (
+                                                                <div className="flex flex-col gap-2.5 w-full">
+                                                                    {/* Dynamic SLA Countdown Badge */}
+                                                                    <div className={`flex items-center gap-2 px-3 py-2 rounded-xl border text-[10px] font-bold ${
+                                                                        sla.isUrgent 
+                                                                            ? 'bg-rose-50 text-rose-700 border-rose-200 animate-pulse' 
+                                                                            : 'bg-amber-50 text-amber-900 border-amber-200'
+                                                                    }`}>
+                                                                        <Clock size={13} className={sla.isUrgent ? 'text-rose-600 shrink-0' : 'text-amber-600 shrink-0'} />
+                                                                        <span className="tracking-wide">{sla.label}</span>
+                                                                    </div>
+
+                                                                    {/* Action Buttons: Setujui (Emerald) & Tolak (Slate outline) */}
+                                                                    <div className="grid grid-cols-2 gap-2 mt-1">
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() => openRejectModal(b)}
+                                                                            className="h-11 rounded-xl border border-slate-200 bg-white text-slate-600 font-bold text-xs uppercase tracking-wider hover:text-rose-600 hover:border-rose-200 hover:bg-rose-50/70 transition-all active:scale-95 flex items-center justify-center gap-1.5 cursor-pointer"
+                                                                        >
+                                                                            <X size={14} />
+                                                                            <span>Tolak</span>
+                                                                        </button>
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() => handleApprove(b)}
+                                                                            className="h-11 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-black text-xs uppercase tracking-wider shadow-lg shadow-emerald-600/20 transition-all active:scale-95 flex items-center justify-center gap-1.5 cursor-pointer"
+                                                                        >
+                                                                            <CheckCircle2 size={15} />
+                                                                            <span>Setujui</span>
+                                                                        </button>
+                                                                    </div>
                                                                 </div>
-                                                                <button
-                                                                    onClick={() => handleReject(b)}
-                                                                    className="w-full h-10 rounded-xl border border-rose-200 text-rose-500 font-black text-[10px] uppercase hover:bg-rose-50 transition-colors"
-                                                                >
-                                                                    Tolak
-                                                                </button>
-                                                                <button
-                                                                    onClick={() => handleApprove(b)}
-                                                                    className="w-full h-10 bg-gray-900 text-white rounded-xl font-black text-[10px] uppercase shadow-lg shadow-gray-200 hover:bg-orange-500 transition-all active:scale-95"
-                                                                >
-                                                                    Setujui
-                                                                </button>
-                                                            </div>
-                                                        )}
+                                                            );
+                                                        })()}
                                                         {bookingTab === 'awaiting_payment' && (
                                                             <div className="flex items-center justify-center gap-2 h-11 px-4 rounded-xl bg-orange-50 text-orange-600 border border-orange-100 w-full animate-pulse">
                                                                 <Clock size={16} />
@@ -3277,6 +3384,104 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                 </div>
             )}
 
+            {/* MODAL ALASAN PENOLAKAN PESANAN (PROPTECH REJECTION MODAL) */}
+            {rejectingBooking && (
+                <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
+                    <div 
+                        className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm animate-in fade-in duration-200"
+                        onClick={() => !isSubmittingReject && setRejectingBooking(null)}
+                    />
+                    <div className="relative bg-white w-full max-w-md rounded-3xl p-6 sm:p-8 shadow-2xl animate-in zoom-in-95 duration-200 border border-gray-100">
+                        <div className="flex items-center justify-between pb-4 border-b border-gray-100">
+                            <div className="flex items-center gap-2.5">
+                                <div className="w-10 h-10 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center">
+                                    <AlertCircle size={20} />
+                                </div>
+                                <div>
+                                    <h4 className="font-black text-gray-900 text-base">Tolak Pengajuan Sewa</h4>
+                                    <p className="text-xs text-gray-400 font-medium">Beri tahu calon penyewa alasan penolakan</p>
+                                </div>
+                            </div>
+                            <button
+                                type="button"
+                                disabled={isSubmittingReject}
+                                onClick={() => setRejectingBooking(null)}
+                                className="w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center text-gray-500 cursor-pointer transition-colors"
+                            >
+                                <X size={16} />
+                            </button>
+                        </div>
+
+                        <div className="mt-5 space-y-3">
+                            <p className="text-xs font-bold text-gray-700">Pilih Alasan Penolakan:</p>
+                            {[
+                                'Kamar sudah terisi oleh penyewa offline',
+                                'Jadwal tanggal masuk bentrok atau belum sesuai',
+                                'Kriteria calon penghuni belum sesuai ketentuan kost',
+                                'Lainnya'
+                            ].map((reason) => (
+                                <label 
+                                    key={reason}
+                                    className={`flex items-start gap-3 p-3.5 rounded-2xl border cursor-pointer transition-all ${
+                                        selectedRejectReason === reason 
+                                            ? 'bg-orange-50/60 border-orange-400 text-orange-900 shadow-sm' 
+                                            : 'bg-gray-50/50 border-gray-200 hover:bg-gray-100/60 text-gray-700'
+                                    }`}
+                                >
+                                    <input
+                                        type="radio"
+                                        name="rejectReason"
+                                        value={reason}
+                                        checked={selectedRejectReason === reason}
+                                        onChange={(e) => setSelectedRejectReason(e.target.value)}
+                                        className="mt-0.5 text-orange-600 focus:ring-orange-500"
+                                    />
+                                    <span className="text-xs font-semibold leading-relaxed">{reason}</span>
+                                </label>
+                            ))}
+
+                            {selectedRejectReason === 'Lainnya' && (
+                                <div className="mt-3">
+                                    <textarea
+                                        rows={3}
+                                        placeholder="Tuliskan alasan penolakan secara sopan..."
+                                        value={customRejectReason}
+                                        onChange={(e) => setCustomRejectReason(e.target.value)}
+                                        className="w-full text-xs p-3.5 rounded-2xl border border-gray-300 focus:border-orange-500 focus:ring-2 focus:ring-orange-200 outline-none resize-none"
+                                    />
+                                </div>
+                            )}
+                        </div>
+
+                        <div className="mt-6 flex items-center justify-end gap-3 pt-4 border-t border-gray-100">
+                            <button
+                                type="button"
+                                disabled={isSubmittingReject}
+                                onClick={() => setRejectingBooking(null)}
+                                className="px-5 py-2.5 rounded-xl border border-gray-200 text-gray-600 font-bold text-xs hover:bg-gray-50 cursor-pointer transition-all"
+                            >
+                                Batal
+                            </button>
+                            <button
+                                type="button"
+                                disabled={isSubmittingReject}
+                                onClick={handleConfirmReject}
+                                className="px-6 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-black text-xs shadow-lg shadow-rose-600/20 active:scale-95 cursor-pointer transition-all flex items-center gap-1.5 disabled:opacity-50"
+                            >
+                                {isSubmittingReject ? (
+                                    <span>Memproses...</span>
+                                ) : (
+                                    <>
+                                        <X size={14} />
+                                        <span>Konfirmasi Tolak</span>
+                                    </>
+                                )}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* APPLICANT PROFILE MODAL - COMPREHENSIVE & SECURE */}
             {(selectedBookingForProfile || selectedUserForProfile) && (
                 <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
@@ -3363,6 +3568,24 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                                             <span className="text-[9px] font-black uppercase tracking-widest text-gray-400">Status</span>
                                         </div>
                                         <p className="text-xs font-black text-gray-900">{selectedUserForProfile?.relationship_status || selectedBookingForProfile?.user?.relationship_status || '-'}</p>
+                                    </div>
+                                </div>
+
+                                {/* Contact Info Grid */}
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="bg-gray-50/80 p-5 rounded-3xl border border-gray-100/50">
+                                        <div className="flex items-center gap-3 text-emerald-600 mb-3">
+                                            <Phone size={16} />
+                                            <span className="text-[9px] font-black uppercase tracking-widest text-gray-400">No. WhatsApp / HP</span>
+                                        </div>
+                                        <p className="text-xs font-black text-gray-900 truncate">{selectedUserForProfile?.phone || selectedBookingForProfile?.user?.phone || 'Tidak dicantumkan'}</p>
+                                    </div>
+                                    <div className="bg-gray-50/80 p-5 rounded-3xl border border-gray-100/50">
+                                        <div className="flex items-center gap-3 text-sky-600 mb-3">
+                                            <Mail size={16} />
+                                            <span className="text-[9px] font-black uppercase tracking-widest text-gray-400">Email</span>
+                                        </div>
+                                        <p className="text-xs font-black text-gray-900 truncate">{selectedUserForProfile?.email || selectedBookingForProfile?.user?.email || 'Tidak dicantumkan'}</p>
                                     </div>
                                 </div>
 
