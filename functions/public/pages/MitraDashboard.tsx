@@ -3497,15 +3497,11 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                 const targetUser = selectedUserForProfile || selectedBookingForProfile?.user || {};
                 const name = targetUser.name || targetUser.full_name || selectedBookingForProfile?.metadata?.tenantName || 'Calon Penghuni';
                 const photo = targetUser.photo_url;
-                const phone = targetUser.phone || selectedBookingForProfile?.metadata?.phone || selectedBookingForProfile?.metadata?.tenantPhone;
-                const email = targetUser.email || selectedBookingForProfile?.metadata?.email;
                 const occupation = targetUser.occupation && targetUser.occupation !== '-' ? targetUser.occupation : 'Penyewa';
                 const institution = targetUser.institution && targetUser.institution !== '-' ? targetUser.institution : 'Tidak dicantumkan';
                 const gender = targetUser.gender && targetUser.gender !== '-' ? targetUser.gender : 'Tidak dicantumkan';
                 const statusRel = targetUser.relationship_status && targetUser.relationship_status !== '-' ? targetUser.relationship_status : 'Lajang / Single';
                 const address = targetUser.address && targetUser.address !== '-' ? targetUser.address : (targetUser.city || 'Tidak dicantumkan');
-                const cleanPhoneNum = phone ? String(phone).replace(/[^0-9]/g, '') : '';
-                const waUrl = cleanPhoneNum ? (cleanPhoneNum.startsWith('0') ? '62' + cleanPhoneNum.slice(1) : cleanPhoneNum) : '';
 
                 return (
                     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
@@ -3562,49 +3558,6 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                                         <p className="text-xs font-semibold text-slate-600 mt-0.5 truncate capitalize">
                                             {occupation} {institution !== 'Tidak dicantumkan' ? `• ${institution}` : ''}
                                         </p>
-                                    </div>
-                                </div>
-
-                                {/* Kontak Section (Full Width - Anti Potong!) */}
-                                <div className="space-y-2.5">
-                                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Kontak & Komunikasi</p>
-                                    
-                                    {/* WhatsApp Row */}
-                                    <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200/70 flex items-center justify-between gap-3">
-                                        <div className="flex items-center gap-3 min-w-0 flex-1">
-                                            <div className="w-9 h-9 rounded-xl bg-emerald-100/80 text-emerald-600 flex items-center justify-center shrink-0">
-                                                <Phone size={17} />
-                                            </div>
-                                            <div className="min-w-0 flex-1">
-                                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">WhatsApp / No. HP</p>
-                                                <p className="text-xs sm:text-sm font-bold text-slate-900 select-all font-mono">
-                                                    {phone || 'Tidak dicantumkan'}
-                                                </p>
-                                            </div>
-                                        </div>
-                                        {waUrl && (
-                                            <a
-                                                href={`https://wa.me/${waUrl}`}
-                                                target="_blank"
-                                                rel="noopener noreferrer"
-                                                className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold shrink-0 flex items-center gap-1 shadow-xs active:scale-95 transition-all cursor-pointer"
-                                            >
-                                                <span>Chat WA</span>
-                                            </a>
-                                        )}
-                                    </div>
-
-                                    {/* Email Row */}
-                                    <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200/70 flex items-center gap-3">
-                                        <div className="w-9 h-9 rounded-xl bg-sky-100/80 text-sky-600 flex items-center justify-center shrink-0">
-                                            <Mail size={17} />
-                                        </div>
-                                        <div className="min-w-0 flex-1">
-                                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Alamat Email</p>
-                                            <p className="text-xs sm:text-sm font-bold text-slate-900 select-all break-all">
-                                                {email || 'Tidak dicantumkan'}
-                                            </p>
-                                        </div>
                                     </div>
                                 </div>
 

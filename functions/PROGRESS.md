@@ -2,6 +2,28 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 474. Proteksi Transaksi Platform & Eliminasi Total Kontak Pribadi (Anti-Bypass) (`MitraDashboard.tsx`, `userService.ts`) (Oktober 2026)
+- **Permintaan & Masukan Pengguna**:
+  1. Larangan keras mencantumkan nomor WhatsApp dan email calon penyewa kepada mitra pemilik kost pada tahap pengajuan sewa (*pre-approval*).
+  2. Alasan bisnis: Mencantumkan nomor WA dan email membiarkan mitra membypass sistem RuangSinggah dan mengajak transaksi tunai/offline di luar platform (*platform disintermediation / leakage*).
+  3. Instruksi spesifik pengguna: Tidak perlu ada substitusi klarifikasi/banner apapun, cukup nomor WA dan email dihilangkan 100% dari modal profil calon penghuni.
+- **Implementasi Solusi**:
+  1. **Penghapusan Total Kontak Pribadi di Modal Profil Calon Penghuni (`MitraDashboard.tsx`)**:
+     - Menghapus blok `Kontak & Komunikasi` (Nomor WhatsApp, link/tombol `[ Chat WA ]`, dan Alamat Email) dari `APPLICANT PROFILE MODAL`.
+     - Variabel `phone`, `email`, `cleanPhoneNum`, dan `waUrl` dihapus dari state modal calon penghuni.
+     - Modal kini hanya menyajikan data identitas relevan untuk verifikasi pemilik: Avatar, Nama Lengkap, Badge Terverifikasi, Pekerjaan, Instansi/Kampus, Jenis Kelamin, Status Hubungan, dan Alamat Asal, serta tombol aksi `[ Tutup ]` dan `[ 💬 Tanya Calon ]` (in-app chat RuangSinggah).
+  2. **Pembersihan Data Sensitif di Query Service (`userService.ts`)**:
+     - Menghapus `phone` dan `email` dari join query `user:user_id` pada `getOwnerBookings` agar kontak mentah penyewa pra-pembayaran tidak terekspos ke state peramban pemilik kost.
+- **File Tersentuh**:
+  - `functions/public/pages/MitraDashboard.tsx`
+  - `functions/public/userService.ts`
+  - `functions/PROGRESS.md`
+  - `IMPLEMENTATION_PLAN.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi frontend Vite (`npm --prefix functions/public run build`): Lulus 100% (2512 modul, code 0).
+  - Kompilasi backend Cloud Functions (`npm --prefix functions run build`): Lulus 100% (tsc, code 0).
+
 ### 473. Redesain Total UI/UX Modal Profil Calon Penghuni & Tab Navigasi Pesanan Anti-Patah (Dashboard Mitra) (`MitraDashboard.tsx`) (Oktober 2026)
 - **Permintaan & Masukan Pengguna**:
   1. Perbaikan visual komprehensif pada dua area antarmuka Dashboard Mitra yang terlihat jelek, kaku, dan tidak proporsional:

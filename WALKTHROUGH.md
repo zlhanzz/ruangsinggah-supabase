@@ -1,52 +1,40 @@
-# WALKTHROUGH: Redesain Total UI/UX Modal Profil Calon Penghuni & Tab Navigasi Pesanan
+# WALKTHROUGH: Proteksi Transaksi Platform & Eliminasi Kontak Pribadi Calon Penghuni (Anti-Bypass)
 
-**ID Progres**: #473  
+**ID Progres**: #474  
 **Tanggal**: 29 Oktober 2026  
 **Status**: Selesai & Lulus Uji Kompilasi 100%  
 
 ---
 
-## 1. Ringkasan Perubahan UI/UX
+## 1. Ringkasan Perubahan
 
-Menindaklanjuti masukan visual pengguna mengenai dua komponen antarmuka yang kurang proporsional dan terpotong:
+Untuk menjaga integritas bisnis platform RuangSinggah dan mencegah risiko kebocoran transaksi di luar sistem (*platform disintermediation / leakage*):
 
-### A. Redesain Total Modal Detail Profil Calon Penghuni
-1. **Proporsi Dialog Elegan & Nyaman di Mobile**:
-   - Mengganti modal lama yang kaku (`rounded-[3.5rem]` dengan padding 40px) menjadi dialog proptech modern berukuran proporsional (`max-w-md rounded-3xl p-5 sm:p-6 shadow-2xl`).
-   - Header dialog yang bersih dilengkapi judul *Detail Profil Calon*, deskripsi ringkas, dan tombol close `X` bulat yang intuitif.
-2. **Hero Card Profil Seimbang**:
-   - Avatar proporsional `w-16 h-16 rounded-2xl` dengan inisial atau foto asli.
-   - Nama lengkap calon penyewa dengan badge `✓ Terverifikasi` dan ringkasan pekerjaan & kampus.
-3. **Baris Kontak Lebar Penuh (100% Bebas Elipsis)**:
-   - **Nomor WhatsApp**: Ditampilkan utuh tanpa terpotong (`+62 815-27xx-xxxx`), lengkap dengan tombol aksi cepat **[ Chat WA ]** yang membuka tautan WhatsApp langsung (`wa.me`).
-   - **Alamat Email**: Ditampilkan pada baris horizontal lebar penuh dengan kemampuan *text-selection* mudah untuk disalin.
-4. **Grid Informasi Latar Belakang Rapi**:
-   - Kartu bersih untuk *Pekerjaan*, *Instansi/Kampus*, *Jenis Kelamin*, *Status Hubungan*, dan *Alamat Asal*.
-5. **Footer Aksi Proptech**:
-   - Tombol sekunder **[ Tutup ]** setinggi 44px standar mobile.
-   - Tombol primer **[ 💬 Tanya Calon ]** untuk langsung membuka sesi chat internal RuangSinggah dengan calon penyewa.
-
----
-
-### B. Segmented Pill Tab Navigasi Pesanan (Anti-Patah / Anti-Wrap)
-1. **Anti-Text Wrapping Glitch**:
-   - Menerapkan `whitespace-nowrap shrink-0` sehingga label tab tidak akan pernah patah menjadi 2 baris canggung (`TUNGGU \n BAYAR` atau `BATAL / \n KADALUARSA 2`).
-2. **Tipografi Title Case Nyaman Dibaca**:
-   - Mengganti font all-caps kaku menjadi Title Case yang elegan: `Permintaan`, `Tunggu Bayar`, `Selesai`, `Batal / Kadaluarsa`.
-3. **Smooth Scrollable Pill Tabs**:
-   - Kontainer tab dapat digeser horizontal dengan mulus pada layar handphone kecil tanpa scrollbar kasar (`no-scrollbar`).
-   - Active state tab berupa pill putih dengan border halus dan bayangan lembut, kontras sempurna dengan background abu-abu slate.
-   - Badge jumlah pesanan oranye solid pada tab aktif dan abu-abu slate pada tab non-aktif.
+### 🛡️ Proteksi yang Diterapkan:
+1. **Penghapusan Total Nomor WhatsApp & Email Calon Penghuni**:
+   - Menghapus 100% blok kontak (Nomor WhatsApp, tombol `Chat WA`, dan Alamat Email) dari Modal Detail Profil Calon Penghuni di `MitraDashboard.tsx`.
+   - Tidak ada kontak langsung yang ditampilkan kepada mitra pemilik kost saat pengajuan sewa berlangsung.
+2. **Tanpa Banner Tambahan (Clean UI Sesuai Instruksi User)**:
+   - Sesuai arahan spesifik pengguna, tidak ada teks klarifikasi/banner substitusi yang mengganggu. Modal langsung menampilkan data profil esensial:
+     - Avatar & Inisial
+     - Nama Lengkap & Badge *Terverifikasi*
+     - Pekerjaan & Instansi / Kampus
+     - Jenis Kelamin & Status Hubungan
+     - Alamat Asal
+     - Tombol Aksi: **[ Tutup ]** dan **[ 💬 Tanya Calon ]** (In-App Chat RuangSinggah).
+3. **Pembersihan Data Sensitif di Query Backend Service**:
+   - Menghapus field `phone` dan `email` pada join query `getOwnerBookings` di `userService.ts`, menjamin tidak ada data kontak mentah calon penyewa yang bocor ke browser pemilik kost sebelum transaksi sah.
 
 ---
 
 ## 2. File yang Dimodifikasi
 
 1. **`functions/public/pages/MitraDashboard.tsx`**:
-   - Redesain segmented pill tab navigasi pesanan (`bookingTab`).
-   - Redesain total modal dialog profil calon penghuni (`APPLICANT PROFILE MODAL`).
-2. **`functions/PROGRESS.md`**:
-   - Pencatatan progres #473.
+   - Menghapus blok kontak WhatsApp dan Email serta variabel pendukungnya pada modal profil calon penghuni.
+2. **`functions/public/userService.ts`**:
+   - Menghapus `phone` dan `email` calon penyewa dari query `getOwnerBookings`.
+3. **`functions/PROGRESS.md`**:
+   - Pencatatan progres #474.
 
 ---
 
@@ -54,7 +42,7 @@ Menindaklanjuti masukan visual pengguna mengenai dua komponen antarmuka yang kur
 
 | Pengujian | Perintah | Status | Keterangan |
 |---|---|---|---|
-| **Frontend Build** | `npm --prefix functions/public run build` | **LULUS (Code 0)** | 2.512 modul tertransformasi, aset minified bersih tanpa error Vite. |
+| **Frontend Build** | `npm --prefix functions/public run build` | **LULUS (Code 0)** | 2.512 modul tertransformasi, minified bundle bersih. |
 | **Backend Functions Build** | `npm --prefix functions run build` | **LULUS (Code 0)** | Kompilasi TypeScript (`tsc`) backend lulus 100%. |
 
 ---
@@ -62,13 +50,10 @@ Menindaklanjuti masukan visual pengguna mengenai dua komponen antarmuka yang kur
 ## 4. Panduan Verifikasi Pengguna (User Testing Guide)
 
 1. **Buka Halaman Pesanan Mitra**:
-   - Akses: `http://localhost:5173/dashboard-mitra/bookings` pada browser handphone atau mode responsive mobile di desktop browser (lebar 360px–390px).
-2. **Periksa Tab Navigasi Pesanan**:
-   - Perhatikan baris tab: `Permintaan`, `Tunggu Bayar`, `Selesai`, `Batal / Kadaluarsa`.
-   - Pastikan seluruh tulisan berada rapi dalam satu baris (tidak ada teks patah 2 baris).
-   - Geser tab ke kiri dan kanan untuk memastikan scroll horizontal berjalan mulus.
-3. **Buka Modal Profil Calon Penghuni**:
-   - Klik tombol **[ 👤 Lihat Profil ]** pada kartu pengajuan sewa.
-   - Pastikan modal tampil proporsional, rapi, dan modern.
-   - Periksa bagian nomor WhatsApp dan email: pastikan teks terbaca utuh 100% tanpa elipsis `...`.
-   - Coba tombol **[ Chat WA ]** atau **[ Tanya Calon ]**.
+   - Akses: `http://localhost:5173/dashboard-mitra/bookings`.
+2. **Buka Modal Profil Calon Penghuni**:
+   - Klik tombol **[ 👤 Lihat Profil ]** pada salah satu pengajuan sewa calon penghuni.
+   - **Hasil yang Diharapkan**:
+     - ✅ **Sama sekali TIDAK ADA** nomor WhatsApp, tombol `Chat WA`, maupun alamat email.
+     - ✅ Tampilan modal tetap rapi, bersih, dan langsung menyajikan informasi esensial (Nama, Pekerjaan, Kampus/Instansi, Gender, Status, Alamat).
+     - ✅ Komunikasi tetap dapat dilakukan secara aman dan terkontrol melalui tombol **[ 💬 Tanya Calon ]** via In-App Chat RuangSinggah.

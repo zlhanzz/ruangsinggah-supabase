@@ -1530,8 +1530,6 @@ export async function getOwnerBookings(ownerId: string): Promise<any[]> {
         *,
         user:user_id (
           name,
-          email,
-          phone,
           photo_url,
           occupation,
           institution,
