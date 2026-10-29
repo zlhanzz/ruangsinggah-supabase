@@ -1,58 +1,52 @@
-# Walkthrough: Standarisasi Alur Pengajuan Sewa Proptech & Redesain On-Brand
+# Walkthrough: Audit Masif & Standarisasi Dashboard Mitra Sesuai Realita Operasional
 
-**ID Progres**: #470  
+**ID Progres**: #471  
 **Status**: Selesai & Lulus Uji Kompilasi 100% (Frontend & Backend)  
-**Tanggal**: 28 Oktober 2026  
+**Tanggal**: 29 Oktober 2026  
 
 ---
 
 ## 📌 Ringkasan Pekerjaan
 
-Sesuai audit menyeluruh terhadap praktik terbaik proptech modern (Mamikos, Rukita, Airbnb) serta masukan dari User mengenai perbaikan tampilan yang bebas dari kesan *"AI slop"*, pembaruan ini menyempurnakan:
-1. **Dynamic Advance Booking Window**: Batas reservasi dinamis berdasarkan durasi sewa untuk mencegah konflik *yield management* (booking harian receh memblokir sewa bulanan).
-2. **Aturan Waktu & Dropdown ETA Check-in Harian**: Ketentuan baku check-in 14:00 & check-out 12:00 serta input estimasi jam tiba (*ETA*) karena kost tidak memiliki resepsionis 24 jam.
-3. **Kalkulasi Otomatis Tanggal Check-out**: Perhitungan transparan tanggal keluar hunian secara real-time.
-4. **Sinkronisasi Check-in Fisik & Early Check-in**: Fungsi pencatatan tanggal kedatangan riil penyewa di database dan alur pengajuan jika datang lebih awal.
-5. **Redesain Visual On-Brand RuangSinggah**: Menggantikan 4 kartu pastel acak dengan *Unified Booking Spec Sheet* monokromatik, merapikan tombol aksi, menyeimbangkan radius kartu, dan memperbaiki posisi FAB TimeSimulator agar tidak menutupi tombol sewa di layar ponsel.
+Pembaruan ini menuntaskan penyelidikan dan perbaikan menyeluruh terhadap sistem **Dashboard Mitra**, menyelesaikan masalah kebocoran data calon penyewa (*active tenant leakage*), serta menyelaraskan metrik KPI bisnis dengan model operasional Mitra Biasa:
+
+1. **Eliminasi Total Kebocoran Calon Penyewa ke Database Penghuni**:
+   - Memperbaiki query dan filter di `adminService.ts`, `MitraDashboard.tsx`, dan `MitraTenantManagement.tsx` sehingga calon penyewa yang baru mengajukan sewa (`PENDING_APPROVAL` / belum bayar) **TIDAK AKAN PERNAH** masuk ke Database Penghuni.
+   - Badge counter di sidebar **Penghuni Aktif** kini akurat dan menampilkan angka `0` (atau jumlah riil penyewa yang kontraknya telah lunas & berjalan).
+2. **Koreksi Metrik KPI Beranda (Kamar Siap Sewa)**:
+   - Menggantikan metrik digital marketing CTR yang abstrak dan membingungkan dengan **Kamar Siap Sewa** (`availableRooms`), yang mencerminkan total kuota kamar kosong yang sedang dipasarkan oleh pemilik di RuangSinggah.
+   - Menghindari penggunaan okupansi semu untuk Mitra Biasa karena Mitra Biasa hanya mendaftarkan kamar kosong dan tidak mendata penghuni lama yang sudah menetap secara offline.
+3. **Penyempurnaan Alur Pesanan (Booking Management)**:
+   - Menambahkan tab **Batal / Kadaluarsa** pada menu Pesanan untuk melacak riwayat pengajuan sewa yang ditolak atau dibatalkan.
+   - Menambahkan badge pengingat **SLA Konfirmasi 1x24 Jam** pada kartu pengajuan baru agar pemilik segera merespon calon penyewa.
+4. **Penyelarasan Tipe Kamar vs Nomor Kamar**:
+   - Memastikan tampilan kartu sewa Mitra Biasa berbasis **Tipe Kamar** (misal: `Kamar Standard • 1 Orang`) secara rapi dan stabil.
 
 ---
 
 ## 🛠️ Daftar Perubahan File
 
-### 1. [BookingModal.tsx](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/components/BookingModal.tsx)
-- **Dynamic Max Booking Date**:
-  - Harian: Maksimal H+5 hari ke depan.
-  - Mingguan: Maksimal H+14 hari ke depan.
-  - Bulanan: Maksimal H+30 hari ke depan.
-  - Tahunan: Maksimal H+45 hari ke depan.
-- **Badge Edukasi Batas Booking**: Ditampilkan berdampingan dengan pemilih tanggal masuk (*"Maks. booking H+5 hari untuk sewa harian"*).
-- **Banner Check-in 14:00 & Check-out 12:00**: Muncul otomatis khusus sewa harian.
-- **Dropdown Perkiraan Jam Tiba (ETA)**:
-  - Pilihan jam 08:00 s/d 22:00 WIB serta opsi `> 22:00 (Malam / Butuh Koordinasi Khusus)`.
-- **Kalkulator Tanggal Check-out**: Menghitung tanggal selesai sewa otomatis berdasarkan paket & durasi yang dipilih.
+### 1. [adminService.ts](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/adminService.ts)
+- Menambahkan filter pada `getResidentStatus`:
+  ```typescript
+  if (ownerUid || !userId) {
+      query = query.neq('status', 'PENDING').neq('status', 'CANCELLED').neq('status', 'REJECTED');
+  }
+  ```
+- Mengetatkan ekstraksi penghuni offline: hanya mengekstrak jika benar-benar ada nama penghuni tercatat (`rt.residentName || rt.tenantName || rt.occupant_name`), bukan semata-mata karena kuota kamar bernilai 0.
 
-### 2. [userService.ts](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/userService.ts)
-- `confirmCheckIn(bookingId)`: Konfirmasi kedatangan penyewa & serah terima kunci, mencatat `actual_check_in_date` dan `key_handed_over: true` di database Supabase.
-- `requestEarlyCheckIn(bookingId, requestedDate, notes)`: Pengajuan penyewa untuk mempercepat tanggal masuk.
-- `approveEarlyCheckIn(bookingId, newStartDate)`: Persetujuan mitra/pemilik kost untuk memajukan tanggal sewa dan menyesuaikan tanggal berakhir sewa secara otomatis.
+### 2. [MitraDashboard.tsx](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/MitraDashboard.tsx)
+- **Kalkulasi Penghuni Aktif**: Memvalidasi `isStatusActive = (r.status || '').toUpperCase() === 'ACTIVE'` dan sisa hari `daysLeft >= 0`. Badge sidebar kini menampilkan angka riil (tidak bocor).
+- **Metrik Kamar Siap Sewa**: Menghitung akumulasi kuota `availableRoomCount` seluruh tipe kamar properti yang dipasarkan.
+- **Pembaruan Kartu KPI Beranda**: Mengganti kartu CTR dengan kartu **Kamar Siap Sewa** berikon `<Bed />`.
+- **Tab Pesanan Baru**: Menambahkan tab `cancelled` (*Batal / Kadaluarsa*) dan banner *SLA Konfirmasi 1x24 Jam* pada pesanan pending.
 
-### 3. [MyKost.tsx](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/MyKost.tsx)
-- **Unified Booking Spec Sheet**:
-  - Menghapus 4 kartu pastel acak (oranye, biru, ungu, kuning) yang terkesan *"AI slop"*.
-  - Menggantinya dengan satu kontainer spesifikasi sewa monokromatik on-brand (`bg-slate-50/90 border-slate-200/80`) dengan grid 4 parameter (Paket Sewa, Rencana Masuk, Penghuni, dan Estimasi Tagihan).
-- **Redesain Tombol Aksi**:
-  - Tombol chat diubah dari gradien pelangi `from-emerald-600 to-teal-600` menjadi **solid emerald proptech** (`bg-emerald-600 hover:bg-emerald-700`) yang tegas dan bersih.
-  - Tombol `Detail Kost` dan `Rute Lokasi` menggunakan secondary outline terstandar.
-  - Tombol `Batalkan Pengajuan` dirapikan dengan padding presisi tanpa visual agresif.
-- **Penyelarasan Notice Bar SLA**:
-  - Banner edukasi respon pemilik 1x24 jam disederhanakan dengan border halus dan teks ringkas.
-- **Keseimbangan Corner Radius**:
-  - Mengubah radius kartu dari `rounded-3xl sm:rounded-[3rem]` menjadi `rounded-2xl sm:rounded-[2rem]` yang proporsional.
+### 3. [MitraTenantManagement.tsx](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/components/mitra/MitraTenantManagement.tsx)
+- Menambahkan filter pengaman pada `processedResidents` untuk mengeluarkan baris berstatus `PENDING`, `CANCELLED`, atau `REJECTED`.
+- Menjamin calon penyewa yang belum lunas tidak akan pernah terdaftar dengan tag hijau `AKTIF` atau total tagihan Rp 0.
 
-### 4. [TimeSimulator.tsx](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/components/TimeSimulator.tsx)
-- **Eliminasi Tumpang Tindih Tombol di Mobile**:
-  - Mengubah ukuran FAB pada mobile dari 56px menjadi **44px** (`w-11 h-11 sm:w-14 sm:h-14`).
-  - Menggeser posisi FAB ke `bottom-28 right-3.5` dengan lapisan `z-40` agar tidak menutupi tombol kartu sewa di bawahnya.
+### 4. [PROGRESS.md](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/PROGRESS.md)
+- Mencatat riwayat entri progres #471.
 
 ---
 
@@ -61,7 +55,7 @@ Sesuai audit menyeluruh terhadap praktik terbaik proptech modern (Mamikos, Rukit
 1. **Frontend Production Build (`functions/public`)**:
    ```
    ✓ 2512 modules transformed.
-   ✓ built in 44.01s
+   ✓ built in 53.40s
    Exit Code: 0 (Sukses tanpa error)
    ```
 2. **Backend Cloud Functions Build (`functions`)**:
@@ -74,17 +68,21 @@ Sesuai audit menyeluruh terhadap praktik terbaik proptech modern (Mamikos, Rukit
 
 ## 📋 Panduan Verifikasi Pengguna di UI
 
-1. **Uji Batas Booking Dinamis (*Dynamic Advance Window*)**:
-   - Buka halaman detail kost apa saja dan klik tombol **Ajukan Sewa**.
-   - Pilih paket **Harian**: Perhatikan kalender pemilih tanggal dibatasi maksimal H+5 dari hari ini, dengan badge *"Maks. booking H+5 hari"*.
-   - Ubah ke paket **Bulanan**: Kalender pemilih tanggal otomatis memperluas batas hingga H+30 hari.
-2. **Uji Info Jam Check-in & Dropdown ETA**:
-   - Pada paket **Harian**, lihat banner ketentuan waktu check-in (14:00) dan check-out (12:00).
-   - Pilih dropdown **Perkiraan Jam Tiba** (misal: `14:00 - 16:00 (Sore)`).
-   - Perhatikan rincian kalkulasi tanggal check-out yang dihitung transparan.
-3. **Uji Tampilan Menu Kost Saya (Tab Diajukan)**:
-   - Kunjungi menu **Kost Saya** pada tab **Diajukan**.
-   - Lihat kartu pengajuan:
-     - Tidak ada lagi kartu kotak-kotak pastel 4 warna acak; digantikan oleh **Unified Booking Spec Sheet** yang bersih dan on-brand.
-     - Tombol aksi chat kini berwarna hijau emerald solid yang konsisten dengan identitas RuangSinggah.
-     - Perhatikan posisi tombol bulat TimeSimulator di pojok kanan bawah yang kini rapi dan tidak menghalangi tombol sewa di layar ponsel.
+1. **Verifikasi Database Penghuni (`/dashboard-mitra/tenants`)**:
+   - Refresh halaman `localhost:5173/dashboard-mitra/tenants`.
+   - Perhatikan bahwa calon penyewa (**"PENYEWA"**) yang berstatus `PENDING_APPROVAL` **sudah tidak lagi muncul** di Database Penghuni.
+   - Layar akan menampilkan empty state yang bersih: *"Belum ada penghuni aktif. Data akan muncul setelah pesanan diselesaikan (PAID)"*.
+2. **Verifikasi Badge Sidebar**:
+   - Periksa menu **Penghuni Aktif** di sidebar kiri: Badge counter sekarang menunjukkan **0** (tidak ada lagi angka 1 palsu).
+   - Menu **Pesanan** tetap menampilkan badge **1** (karena ada 1 pengajuan sewa masuk).
+3. **Verifikasi Tab Beranda (`/dashboard-mitra`)**:
+   - Buka tab Beranda.
+   - Periksa 4 kartu KPI utama:
+     - **Kunjungan**: Total views.
+     - **Kamar Siap Sewa**: Total unit kamar kosong yang diiklankan.
+     - **Pendapatan**: Total sewa lunas via aplikasi.
+     - **Permintaan**: 1 pesanan butuh persetujuan.
+4. **Verifikasi Tab Pesanan (`/dashboard-mitra/bookings`)**:
+   - Buka menu Pesanan.
+   - Calon penyewa berada di tab **Permintaan** lengkap dengan peringatan *SLA Konfirmasi 1x24 Jam*.
+   - Tersedia tab baru: **Batal / Kadaluarsa** untuk mengarsipkan riwayat pengajuan yang tidak jadi.

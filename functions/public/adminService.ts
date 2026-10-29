@@ -651,6 +651,10 @@ export async function getResidentStatus(filters?: { ownerUid?: string; userId?: 
     if (userId) {
         query = query.eq('user_id', userId);
     }
+    // Filter out unconfirmed / pending booking applications from resident database
+    if (ownerUid || !userId) {
+        query = query.neq('status', 'PENDING').neq('status', 'CANCELLED').neq('status', 'REJECTED');
+    }
     
     const { data: residents, error: resError } = await query.order('created_at', { ascending: false });
     
@@ -702,7 +706,8 @@ export async function getResidentStatus(filters?: { ownerUid?: string; userId?: 
         propsToCheck.forEach(p => {
             const roomList = Array.isArray(p.room_types) ? p.room_types : [];
             roomList.forEach((rt: any, rIdx: number) => {
-                const isOccupied = rt.isAvailable === false || rt.status === 'Terisi' || Boolean(rt.residentName || rt.tenantName || rt.occupant_name);
+                const hasExplicitTenantName = Boolean(rt.residentName || rt.tenantName || rt.occupant_name);
+                const isOccupied = hasExplicitTenantName || (p.is_managed === true && (rt.isAvailable === false || rt.status === 'Terisi'));
                 if (isOccupied) {
                     const cleanRoomName = rt.name ? (String(rt.name).trim().toLowerCase().startsWith('kamar') ? rt.name : `Kamar ${rt.name}`) : `Kamar ${rIdx + 1}`;
                     const roomKey = `${p.id}_${cleanRoomName.toLowerCase().trim()}`;

@@ -1,82 +1,125 @@
-# IMPLEMENTATION PLAN - Pembersihan Elemen "AI Slop" & Penyelarasan Branding RuangSinggah pada Kartu Pengajuan Sewa (`MyKost.tsx`)
+# IMPLEMENTATION PLAN: Audit Masif & Standarisasi Dashboard Mitra Sesuai Realita Operasional
 
-## 1. Analisis Masalah & Kebutuhan
-Berdasarkan tinjauan tangkapan layar (screenshot) antarmuka mobile kartu pengajuan sewa pada tab **Diajukan**, tampilan saat ini memperlihatkan sejumlah karakteristik visual yang terkesan "AI slop" (desain template generik AI) yang tidak selaras dengan identitas branding asli **RuangSinggah**:
-
-1. **Palet Warna "Rainbow Pastel" Acak pada Grid Parameter**:
-   - Grid 4 parameter sewa menggunakan warna pastel terpisah di setiap kartu (oranye, biru muda, ungu muda, kuning amber) lengkap dengan kotak squircle masing-masing. Ini adalah gaya khas template dashboard AI generik yang membuat kartu terlihat ramai, tidak profesional, dan menyimpang dari palet brand RuangSinggah (Warm Orange & Sleek Slate/Charcoal).
-2. **Banner Edukasi Menunggu Persetujuan Terlalu Dominan & Kaku**:
-   - Banner berlatar gradien kuning-oranye tebal dengan sudut sangat melengkung (*heavy rounded corners*) dan ikon lingkaran jam raksasa terasa seperti kotak peringatan darurat/billboard, bukan kartu status proptech yang tenang dan elegan.
-3. **Ornamen & Elemen Acak (Emoji ⚡ & Tumpukan Badge)**:
-   - Terdapat ornamen badge emoji `⚡` mengambang acak di pojok bawah thumbnail foto tanpa tujuan fungsional yang jelas.
-   - Badge status `MENUNGGU PERSETUJUAN` dan `TIPE STANDARD` bertumpuk dengan border pill tebal di bagian atas, membuat visual terfragmentasi.
-4. **Tombol CTA Tidak Senada dengan Identitas Brand**:
-   - Tombol utama `HUBUNGI PEMILIK KOST` memakai gradien emerald-teal yang terlalu mencolok dan bertabrakan dengan aksen oranye website.
-   - Tombol penunjang `DETAIL KOST` dan `RUTE LOKASI` berhimpitan, dan pada tampilan mobile tertutup oleh tombol mengambang (*FAB*) `TimeSimulator` di pojok kanan bawah.
-   - Tombol `Batalkan Pengajuan` mengambang canggung di bawah tanpa ritme visual yang terstruktur.
+**ID Rencana**: PLAN-MITRA-001  
+**Tanggal Pengajuan**: 29 Oktober 2026 (Revisi Tajam Berdasarkan Model Operasional Mitra Biasa vs KostManager)  
+**Status**: Menunggu Persetujuan Pengguna (Waiting for User Approval)  
 
 ---
 
-## 2. Arah Solusi Desain (Clean, Modern & On-Brand RuangSinggah)
+## 1. Analisis Masalah & Validasi Model Bisnis
 
-### A. Palet & Identitas Brand RuangSinggah
-- **Warna Utama**: RuangSinggah Orange (`#f97316` / `orange-500`) untuk aksen penting dan fokus utama.
-- **Warna Netral & Tipografi**: Slate/Charcoal (`slate-900`, `slate-700`, `slate-500`) dengan font Plus Jakarta Sans yang tegas dan bersih.
-- **Surfaces**: Kartu berlatar putih bersih dengan border halus `border-slate-100` atau `border-slate-200/80` tanpa bayangan berlebihan (*clean flat/subtle float proptech style*).
+### A. Validasi Analisis Pengguna: Mengapa "Tingkat Okupansi" Tidak Berlaku untuk Mitra Biasa
+Analisis pengguna 100% tepat dan mencerminkan realita operasional:
+1. **Mitra Biasa (Marketplace Listing)**:
+   - Berfungsi sebagai **saluran pemasaran kamar kosong (*lead generation*)**.
+   - Pemilik mendaftarkan kost untuk mencari penghuni baru bagi kamar yang sedang kosong.
+   - Pemilik **TIDAK mendata penghuni lama yang sudah menetap secara offline** (yang bayar cash/transfer langsung ke pemilik).
+   - Menghitung "Tingkat Okupansi" dari data transaksi aplikasi akan menghasilkan angka semu/menyesatkan (misal: kos punya 20 kamar di mana 18 kamar sudah terisi offline, lalu sistem menampilkan okupansi "5%" hanya karena baru 1 orang yang booking via RuangSinggah).
+   - **Metrik Relevan untuk Mitra Biasa**:
+     - **Kamar Kosong Dipasarkan (*Active Vacancies*)**: Jumlah unit kamar kosong yang saat ini sedang aktif dicari penyewanya di RuangSinggah (`availableRoomCount`).
+     - **Penghuni via RuangSinggah**: Jumlah penyewa aktif yang berhasil didatangkan melalui aplikasi.
+     - **Pendapatan Bersih via Aplikasi**: Total sewa yang diterima melalui RuangSinggah.
+     - **Permintaan Masuk**: Pengajuan sewa baru yang butuh persetujuan.
 
-### B. Perubahan Spesifik pada Antarmuka
-
-| Komponen Saat Ini ("AI Slop") | Desain Baru (On-Brand RuangSinggah) |
-| :--- | :--- |
-| **Grid Parameter 2x2 Warna-Warni**<br>(4 kartu pastel acak: oranye, biru, ungu, kuning) | **Satu Kontainer Rincian Terpadu (*Spec Sheet Box*)**<br>Latar `bg-slate-50/70 border border-slate-100/90 rounded-2xl p-4`. Seluruh ikon bernuansa monokromatik slate elegan dengan aksen angka tegas, rapi, dan mudah dipindai mata layaknya aplikasi Traveloka / Airbnb. |
-| **Banner Kuning Raksasa & Ikon Jam Besar**<br>(Gradien tebal, rounded masif, visual darurat) | **Notice Bar Elegan & Ramping**<br>Card minimalis `bg-amber-50/60 border border-amber-200/70 rounded-xl p-3.5` dengan ikon jam proporsional (w-4 h-4), teks tenang menegaskan bahwa pembayaran dilakukan setelah pemilik meng-ACC. |
-| **Ornamen Emoji ⚡ Mengambang**<br>(Mengambang di sudut foto thumbnail) | **Dihapus Sepenuhnya**<br>Menghilangkan emoji ⚡ acak; thumbnail foto tampil bersih, profesional, dan fokus pada dokumentasi kamar. |
-| **Tumpukan Badge Berantakan**<br>(Badge status + tipe kamar saling berebut) | **Hirarki Badge Terstruktur**<br>Badge status `MENUNGGU PERSETUJUAN` tampil rapi dan tegas, didampingi tipe kamar dengan visual yang seimbang dan tidak tumpang tindih. |
-| **Tombol CTA Gradien Emerald-Teal Menyilaukan** | **Tombol Komunikasi Proptech Elegan**<br>Menggunakan styling solid proptech yang serasi (`bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold py-3.5`), bersih tanpa gradien pelangi. |
-| **FAB TimeSimulator Menutupi Tombol Aksi** | **Penyelarasan Spacing & Safe-Area**<br>Memberikan bottom spacing yang cukup pada kartu sewa dan memastikan letak FAB pengujian waktu tidak menghalangi tombol interaktif pengguna. |
-
----
-
-## 3. Dampak Perubahan (Files to Touch)
-- [functions/public/pages/MyKost.tsx](file:///C:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/MyKost.tsx) (Modifikasi styling kartu sewa, parameter grid, banner info, action buttons, dan thumbnail).
-- [functions/PROGRESS.md](file:///C:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/PROGRESS.md) (Pencatatan riwayat Progres #470 setelah ACC dan eksekusi).
-- [WALKTHROUGH.md](file:///C:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/WALKTHROUGH.md) (Dokumentasi walkthrough hasil perubahan setelah ACC dan eksekusi).
+2. **Mitra KostManager (Full Management)**:
+   - Dikelola penuh oleh tim RuangSinggah. Seluruh kamar (penghuni lama maupun baru) di-onboard dan ditagih otomatis oleh sistem.
+   - Pada model ini, metrik **Tingkat Okupansi Properti (%)** baru memiliki basis data riil dan akurat.
 
 ---
 
-## 4. Langkah-Langkah Eksekusi (Hanya Setelah di-ACC)
-1. **Pembersihan Elemen Visual AI Slop pada Thumbnail**:
-   - Menghapus elemen emoji `⚡` di lines 2413-2415 `MyKost.tsx`.
-   - Merapikan badge `Foto` dan rasio thumbnail.
-2. **Penyempurnaan Header & Badge Status**:
-   - Menyelaraskan status `MENUNGGU PERSETUJUAN` dan `TIPE STANDARD` agar proporsional dan tidak kaku.
-3. **Penyederhanaan Banner SLA Respon 1x24 Jam**:
-   - Mengubah card gradien kuning tebal menjadi notice card yang ramping, bersih, beraksen amber lembut khas proptech terpercaya.
-4. **Transformasi Grid Parameter Menjadi 'Unified Booking Spec Sheet'**:
-   - Mengganti 4 kartu pastel acak menjadi satu blok rincian pemesanan yang monokromatik dan kohesif:
-     - Check-in: Tanggal rencana masuk
-     - Durasi: Paket durasi
-     - Penghuni: Jumlah kapasitas
-     - Tagihan: Estimasi total sewa + badge netral "Belum Bayar"
-5. **Penyelarasan Tombol Aksi & Spacing Mobile**:
-   - Menjadikan tombol `Hubungi Pemilik Kost` bersahaja dan profesional.
-   - Menata tombol `Detail Kost`, `Rute Lokasi`, dan `Batalkan Pengajuan` dengan grid yang kokoh dan bottom margin yang aman dari FAB simulator.
-6. **Kompilasi & Verifikasi Build**:
-   - Menjalankan `cmd.exe /c "npm --prefix functions/public run build"` (memastikan 0 error).
-   - Menjalankan `cmd.exe /c "npm --prefix functions run build"` (`tsc`).
-7. **Pencatatan & Git Push**:
-   - Mencatat progres #470 di `functions/PROGRESS.md`.
-   - Menerbitkan `WALKTHROUGH.md`.
-   - Melakukan commit dan push ke branch `bukan-productions`.
+### B. Temuan Fatal: Kebocoran Data Penghuni Aktif (*Active Tenant Leakage*)
+Calon penyewa yang baru berada pada tahap pengajuan sewa (**`PENDING_APPROVAL`**, belum di-ACC dan belum membayar) sudah tercatat di **Database Penghuni** dengan badge **"AKTIF"**, badge sidebar **Penghuni Aktif (1)**, Total Tagihan **Rp 0**, dan tombol **"TAGIH"** serta **"SELESAI"**.
+
+#### Titik Kebocoran di Kode:
+1. **Pencatatan Preemptif di `userService.ts` (`createBooking`)**:
+   - `createBooking` langsung melakukan insert ke `resident_status` dengan status `'PENDING'`.
+2. **Ketiadaan Filter di `adminService.ts` (`getResidentStatus`)**:
+   - `getResidentStatus` mengambil semua baris tanpa menyaring status `ACTIVE`, sehingga baris `PENDING` ikut terbawa ke frontend.
+3. **Kalkulasi Counter di `MitraDashboard.tsx`**:
+   - `activeCount` menghitung setiap baris yang memiliki `daysLeft >= 0` tanpa memverifikasi status `r.status === 'ACTIVE'` dan status transaksi `PAID`.
+4. **Fallback Label "AKTIF" di `MitraTenantManagement.tsx`**:
+   - Komponen merender badge `AKTIF` dan total Rp 0 secara default jika bukan masa tenggang.
 
 ---
 
-## 5. Rencana Verifikasi
-1. **Verifikasi Visual**:
-   - Meninjau tampilan mobile kartu pengajuan sewa: warna-warni pastel hilang, digantikan oleh kartu ringkasan monokromatik slate-orange yang bersih.
-   - Tidak ada lagi emoji `⚡` acak di thumbnail.
-   - Banner edukasi tampil ramping dan elegan, tidak menyerupai popup AI generic.
-   - Tombol aksi tidak bertabrakan dengan FAB `TimeSimulator`.
-2. **Verifikasi Build**:
-   - Kompilasi Vite frontend lulus 100% (code 0).
-   - Kompilasi TypeScript backend functions lulus 100% (code 0).
+### C. Ringkasan Solusi Modul Dashboard Mitra
+
+| Modul Dashboard | Kondisi Saat Ini | Solusi Baru Berdasarkan Realita Operasional |
+|---|---|---|
+| **1. Database Penghuni (*Tenants*)** | Calon penyewa belum bayar bocor ke penghuni aktif. Nilai total Rp 0. | **Hanya Menampilkan Penyewa Lunas**: Calon penyewa `PENDING_APPROVAL` atau `AWAITING_PAYMENT` **dilarang masuk** ke Database Penghuni. Counter badge sidebar hanya menghitung penghuni yang kontraknya berjalan dan transaksinya `PAID`. |
+| **2. Klasifikasi Kamar** | Rancu antara nomor kamar fisik vs kategori tipe kamar. | **Mitra Biasa**: Menggunakan **Tipe Kamar** (misal: *Kamar Standard • 1 Orang*). <br>**KostManager**: Menggunakan **Nomor Kamar Fisik** (misal: *Kamar A-02*). |
+| **3. Kartu Metrik Beranda (*Overview KPI*)** | Menampilkan CTR (metrik digital marketing abstrak). | Mengganti CTR dengan **Kamar Siap Sewa (*Kamar Kosong Dipasarkan*)** yang dihitung dari total kuota `availableRoomCount` tipe kamar yang dipasarkan. |
+| **4. Manajemen Pesanan (*Bookings*)** | Pesanan ditolak/kadaluarsa tidak terlacak. | Menambahkan **Countdown SLA Respon Pemilik (1x24 Jam)** dan filter riwayat **Dibatalkan / Kadaluarsa**. |
+| **5. Tombol Aksi Penghuni** | Tombol Tagih dan Selesai muncul keliru pada sewa Rp 0. | Tombol disesuaikan hanya untuk penghuni aktif riil yang memiliki transaksi lunas. |
+
+---
+
+## 2. Dampak Perubahan File
+
+1. **`functions/public/services/userService.ts` (atau `functions/public/userService.ts`)**:
+   - Memastikan `createBooking` tidak mengizinkan calon penyewa dihitung sebagai penghuni aktif sebelum pembayaran lunas.
+2. **`functions/public/adminService.ts`**:
+   - Memperbaiki `getResidentStatus` agar memfilter `status = 'ACTIVE'` secara default untuk view database penghuni, dan mengecualikan baris `PENDING`.
+3. **`functions/public/pages/MitraDashboard.tsx`**:
+   - Memperbaiki kalkulasi `stats.activeTenants`: hanya menghitung `r.status === 'ACTIVE' && daysLeft >= 0`.
+   - Mengganti kartu stat **CTR** dengan **Kamar Siap Sewa** (Total kamar kosong yang dipasarkan mitra).
+   - Menambahkan tab atau filter **Dibatalkan / Kadaluarsa** di menu Pesanan.
+4. **`functions/public/components/mitra/MitraTenantManagement.tsx`**:
+   - Menghapus kebocoran calon penyewa: Data pengajuan sewa belum lunas tidak akan tampil di daftar ini.
+   - Menampilkan label **Tipe Kamar** yang bersih untuk Mitra Biasa tanpa error nomor kamar.
+5. **`functions/PROGRESS.md` & `WALKTHROUGH.md`**:
+   - Dokumentasi progres #471 dan laporan hasil pengujian.
+
+---
+
+## 3. Langkah-Langkah Eksekusi (Secara Bertahap)
+
+### Tahap 1: Eliminasi Total Kebocoran Calon Penyewa ke Database Penghuni
+1. Perbaiki query `getResidentStatus` di `adminService.ts` agar menyaring baris `resident_status` yang berstatus `ACTIVE` atau `EXPIRING`, dan mengecualikan baris `PENDING`, `REJECTED`, `EXPIRED`, `CANCELLED`.
+2. Perbaiki fungsi penghitungan `activeCount` di `MitraDashboard.tsx`:
+   - Validasi: `r.status === 'ACTIVE' && daysLeft >= 0`.
+   - Menjamin angka badge di sidebar **Penghuni Aktif** menjadi `0` jika belum ada transaksi sewa yang lunas.
+3. Di `MitraTenantManagement.tsx`:
+   - Tambahkan guard: jika data memiliki status `PENDING` atau belum ada transaksi sewa lunas, jangan masukkan ke daftar `processedResidents`.
+
+### Tahap 2: Tampilan Tipe Kamar Proporsional untuk Mitra Biasa
+1. Untuk Mitra Biasa: Kartu penghuni merender nama **Tipe Kamar** (misal: `Kamar Standard • 1 Orang`).
+2. Untuk KostManager: Kartu penghuni merender nomor kamar spesifik (misal: `Kamar 02 (Standard) • 1 Orang`).
+
+### Tahap 3: Pembaruan Kartu KPI Beranda (Kamar Siap Sewa)
+1. Ganti kartu stat **CTR** di Beranda Mitra dengan **Kamar Siap Sewa**:
+   - Nilai: Jumlah total kamar kosong yang sedang dipasarkan mitra (`totalAvailableRooms`).
+   - Subtext: "Kamar kosong dipasarkan".
+   - Ikon: `<Bed />` atau `<Home />` dari `lucide-react`.
+2. Kartu KPI Beranda menjadi:
+   - **Kunjungan**: Total views listing kost.
+   - **Kamar Siap Sewa**: Total unit kamar kosong yang sedang dicari penyewanya.
+   - **Pendapatan**: Total pendapatan lunas via RuangSinggah.
+   - **Permintaan**: Jumlah pesanan pending yang butuh persetujuan.
+
+### Tahap 4: Penyempurnaan Tab Pesanan (*Booking Management*)
+1. Tambahkan badge peringatan SLA konfirmasi 1x24 jam pada kartu pesanan `PENDING_APPROVAL` agar pemilik segera merespon.
+2. Tambahkan tab riwayat **Batal / Kadaluarsa** agar pemilik dapat melihat pengajuan sewa yang tidak jadi atau ditolak.
+
+---
+
+## 4. Rencana Verifikasi
+
+1. **Uji Verifikasi Kebocoran Penghuni**:
+   - Buka `localhost:5173/dashboard-mitra/tenants`.
+   - Pastikan calon penyewa yang masih berstatus `PENDING_APPROVAL` **TIDAK MUNCUL** di Database Penghuni.
+   - Pastikan badge di sidebar pada menu **Penghuni Aktif** berubah dari `1` menjadi `0`.
+   - Pastikan pesanan tersebut tetap muncul di menu **Pesanan** pada tab **Permintaan**.
+2. **Uji KPI Beranda**:
+   - Pastikan kartu CTR digantikan dengan **Kamar Siap Sewa** yang menghitung kuota riil kamar kosong dari tipe kamar mitra.
+3. **Uji Kompilasi & Build**:
+   - Frontend: `cmd.exe /c "npm --prefix functions/public run build"` (Wajib 0 error).
+   - Backend: `cmd.exe /c "npm --prefix functions run build"` (Wajib 0 error).
+4. **Pencatatan & Git Push**:
+   - Catat di `functions/PROGRESS.md` (#471).
+   - Buat `WALKTHROUGH.md`.
+   - Commit dan push ke branch `bukan-productions`.
+
+---
+> [!IMPORTANT]
+> **Menunggu Persetujuan Pengguna (ACC)**: Sesuai protokol siklus 2-fase, AI Agent tidak akan melakukan modifikasi file kode apapun sebelum pengguna meninjau dokumen rencana ini dan memberikan persetujuan ("ACC" / "Proceed").

@@ -120,7 +120,14 @@ const MitraTenantManagement: React.FC<MitraTenantManagementProps> = ({
     const processedResidents = useMemo(() => {
         if (!residentStatus) return [];
 
-        return residentStatus.map(r => {
+        // Filter ketat: Calon penyewa berstatus PENDING (belum ACC/bayar), CANCELLED, atau REJECTED dilarang masuk database penghuni
+        const confirmedResidents = residentStatus.filter(r => {
+            const s = (r.status || '').toUpperCase();
+            if (['PENDING', 'CANCELLED', 'REJECTED'].includes(s)) return false;
+            return true;
+        });
+
+        return confirmedResidents.map(r => {
             const u = r.user || {};
             const p = r.property || {};
             const t = r.last_transaction || {};

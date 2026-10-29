@@ -2,6 +2,37 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 471. Audit Masif & Standarisasi Dashboard Mitra: Eliminasi Total Kebocoran Calon Penyewa, Metrik Kamar Siap Sewa, dan Alur Pesanan Proptech (`MitraDashboard.tsx`, `MitraTenantManagement.tsx`, `adminService.ts`) (Oktober 2026)
+- **Permintaan & Masukan Pengguna**:
+  1. Penyelidikan dan perbaikan kebocoran calon penyewa: Calon penyewa yang baru mengajukan sewa (status `PENDING_APPROVAL`, belum di-ACC dan belum membayar) sudah terdata di Database Penghuni dengan status `AKTIF`, badge sidebar `Penghuni Aktif (1)`, total Rp 0, dan tombol Tagih.
+  2. Audit menyeluruh Dashboard Mitra sesuai standar industri proptech (Mamikos, Rukita, Airbnb, Cove).
+  3. Klarifikasi arsitektur inventaris: Mitra Biasa mengelola kategori/tipe kamar dan kuota kamar kosong, bukan denah nomor kamar fisik (khusus KostManager).
+  4. Koreksi metrik okupansi: Menolak penggunaan okupansi semu untuk Mitra Biasa karena Mitra Biasa hanya memasarkan kamar kosong dan tidak mendata penghuni lama yang sudah menetap secara offline.
+- **Implementasi Solusi**:
+  1. **Eliminasi Total Kebocoran Calon Penyewa (`adminService.ts`)**:
+     - Memperbaiki query `getResidentStatus` dengan menambahkan filter `.neq('status', 'PENDING').neq('status', 'CANCELLED').neq('status', 'REJECTED')` untuk akses pemilik kost.
+     - Memperketat ekstraksi penghuni offline: hanya mengekstrak penghuni jika benar-benar ada nama penghuni tercatat (`rt.residentName || rt.tenantName || rt.occupant_name`), bukan semata-mata karena kuota kamar kosong bernilai 0.
+  2. **Validasi Status Penghuni Aktif & Counter Badge Sidebar (`MitraDashboard.tsx`)**:
+     - Mengubah filter `activeCount` agar memvalidasi `isStatusActive = (r.status || '').toUpperCase() === 'ACTIVE'` selain mengecek tanggal berlaku (`daysLeft >= 0`).
+     - Badge sidebar `Penghuni Aktif` kini akurat dan menampilkan `0` jika belum ada transaksi sewa yang lunas.
+  3. **Penggantian Metrik CTR dengan Kamar Siap Sewa (`MitraDashboard.tsx`)**:
+     - Menggantikan metrik digital marketing CTR yang abstrak dengan metrik operasional riil: **Kamar Siap Sewa** (`availableRooms`), dihitung dari akumulasi kuota kamar kosong (`availableRoomCount`) pada seluruh tipe kamar properti yang dipasarkan.
+  4. **Penyempurnaan Tab Pesanan Proptech (`MitraDashboard.tsx`)**:
+     - Menambahkan tab riwayat **Batal / Kadaluarsa** (`cancelled`) untuk melacak pesanan yang ditolak, dibatalkan, atau expired.
+     - Menambahkan badge pengingat **SLA Konfirmasi 1x24 Jam** pada kartu pesanan baru yang membutuhkan persetujuan pemilik.
+  5. **Pembersihan Tampilan Database Penghuni (`MitraTenantManagement.tsx`)**:
+     - Menambahkan guard filter pada `processedResidents`: mengeluarkan data berstatus `PENDING`, `CANCELLED`, atau `REJECTED`.
+     - Memastikan tampilan tipe kamar untuk Mitra Biasa rapi tanpa glitch nomor kamar.
+- **File Tersentuh**:
+  - `functions/public/adminService.ts`
+  - `functions/public/pages/MitraDashboard.tsx`
+  - `functions/public/components/mitra/MitraTenantManagement.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi frontend Vite (`cmd.exe /c "npm --prefix functions/public run build"`) lulus 100% (2512 modul tertransformasi, code 0).
+  - Kompilasi backend Cloud Functions (`cmd.exe /c "npm --prefix functions run build"`) lulus 100% (code 0).
+
 ### 470. Standarisasi Alur Pengajuan Sewa Proptech: Batas Booking Dinamis (H+5 Harian s/d H+45 Tahunan), Waktu & ETA Check-in, Sinkronisasi Early Check-in & Redesain On-Brand MyKost (Oktober 2026)
 - **Permintaan & Audit Kebutuhan Pengguna**:
   1. Audit perhitungan masa sewa berdasarkan standar industri proptech (Mamikos, Rukita, Airbnb): Masa sewa dihitung sejak tanggal rencana masuk (*check-in date*), bukan tanggal pembayaran atau approval pemilik.

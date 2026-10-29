@@ -160,7 +160,7 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
         }
     }, [tab]);
 
-    const [bookingTab, setBookingTab] = useState<'pending' | 'awaiting_payment' | 'completed'>('pending');
+    const [bookingTab, setBookingTab] = useState<'pending' | 'awaiting_payment' | 'completed' | 'cancelled'>('pending');
     const [loading, setLoading] = useState(true);
     const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
     const [properties, setProperties] = useState<Kost[]>([]);
@@ -170,7 +170,7 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
     const [activeChat, setActiveChat] = useState<ChatSession | null>(null);
     const [chatSearchQuery, setChatSearchQuery] = useState('');
     const [searchTerm, setSearchTerm] = useState('');
-    const [stats, setStats] = useState({ totalRevenue: 0, availableBalance: 0, pendingApprovals: 0, totalViews: 1240, ctr: 4.2, activeTenants: 0 });
+    const [stats, setStats] = useState({ totalRevenue: 0, availableBalance: 0, pendingApprovals: 0, totalViews: 1240, ctr: 4.2, activeTenants: 0, availableRooms: 0 });
     const [showKostForm, setShowKostForm] = useState(false);
     const [editingKost, setEditingKost] = useState<Partial<Kost> | null>(null);
     const [previewingKost, setPreviewingKost] = useState<Kost | null>(null);
@@ -672,11 +672,25 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                 return a + pViews;
             }, 0);
 
-            // 5. Active Tenants (Direct from Resident Status Table)
+            // 5. Active Tenants (Direct from Resident Status Table - Validated Active & Paid only)
             const activeCount = statusRecords.filter(r => {
+                const isStatusActive = (r.status || '').toUpperCase() === 'ACTIVE';
                 const daysLeft = r.end_date ? Math.ceil((new Date(r.end_date).getTime() - now.getTime()) / (1000 * 60 * 60 * 24)) : 0;
-                return daysLeft >= 0;
+                return isStatusActive && daysLeft >= 0;
             }).length;
+
+            // 6. Available Rooms Listed by Owner (Across all properties and room types)
+            const totalAvailableRooms = propsData.reduce((total: number, p: any) => {
+                const roomTypes = p.roomTypes || p.room_types || [];
+                if (Array.isArray(roomTypes) && roomTypes.length > 0) {
+                    const pAvail = roomTypes.reduce((sum: number, rt: any) => {
+                        const count = rt.availableRoomCount ?? rt.available_rooms ?? (rt.isAvailable !== false ? 1 : 0);
+                        return sum + Math.max(0, Number(count) || 0);
+                    }, 0);
+                    return total + pAvail;
+                }
+                return total + Math.max(0, Number(p.availableRooms || p.available_rooms || 0));
+            }, 0);
 
             // 6. Dynamic Chart Data (Last 7 Days Views Trend)
             const days = ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'];
@@ -710,6 +724,7 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                 pendingApprovals: bookingsData.filter(b => (b.status || '').toUpperCase() === 'PENDING_APPROVAL' && !kmPropIds.has(b.product_id)).length,
                 totalViews: totalViews,
                 activeTenants: activeCount,
+                availableRooms: totalAvailableRooms,
                 ctr: computedCtr
             });
         } catch (e) {
@@ -922,7 +937,9 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
         const isKm = kmPropIds.has(b.product_id);
         if (bookingTab === 'pending') return s === 'PENDING_APPROVAL' && !isKm;
         if (bookingTab === 'awaiting_payment') return s === 'AWAITING_PAYMENT';
-        return s === 'PAID' || s === 'COMPLETED';
+        if (bookingTab === 'completed') return s === 'PAID' || s === 'COMPLETED';
+        if (bookingTab === 'cancelled') return ['CANCELLED', 'REJECTED', 'EXPIRED'].includes(s);
+        return false;
     });
 
     const pendingCount = bookings.filter(b => (b.status || '').toUpperCase() === 'PENDING_APPROVAL' && !kmPropIds.has(b.product_id)).length;
@@ -1623,7 +1640,7 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 lg:gap-5">
 
                                 <StatCard label="Kunjungan" value={`${stats.totalViews.toLocaleString()}`} sub="Total views kost" icon={<Eye size={18} className="text-blue-500" />} color="blue" />
-                                <StatCard label="CTR" value={`${stats.ctr}%`} sub="Click-through rate" icon={<TrendingUp size={18} className="text-purple-500" />} color="purple" />
+                                <StatCard label="Kamar Siap Sewa" value={`${stats.availableRooms || 0}`} sub="Kamar kosong dipasarkan" icon={<Bed size={18} className="text-indigo-500" />} color="indigo" />
                                 <StatCard label="Pendapatan" value={FORMAT_CURRENCY(stats.totalRevenue)} sub="Total diterima" icon={<Wallet size={18} className="text-green-500" />} color="green" />
                                 <StatCard label="Permintaan" value={`${pendingCount}`} sub="Butuh persetujuan" icon={<ClipboardList size={18} className="text-orange-500" />} color="orange" alert={pendingCount > 0} />
                             </div>
@@ -2213,11 +2230,12 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                             </div>
 
                             {/* Tabs */}
-                            <div className="flex bg-gray-100/60 p-1 rounded-2xl gap-1">
+                            <div className="flex bg-gray-100/60 p-1 rounded-2xl gap-1 overflow-x-auto">
                                 {[
                                     { key: 'pending', label: 'Permintaan', count: bookings.filter(b => (b.status || '').toUpperCase() === 'PENDING_APPROVAL').length },
                                     { key: 'awaiting_payment', label: 'Tunggu Bayar', count: bookings.filter(b => (b.status || '').toUpperCase() === 'AWAITING_PAYMENT').length },
                                     { key: 'completed', label: 'Selesai', count: bookings.filter(b => ['PAID', 'COMPLETED'].includes((b.status || '').toUpperCase())).length },
+                                    { key: 'cancelled', label: 'Batal / Kadaluarsa', count: bookings.filter(b => ['CANCELLED', 'REJECTED', 'EXPIRED'].includes((b.status || '').toUpperCase())).length },
                                 ].map(tab => (
                                     <button
                                         key={tab.key}
@@ -2364,6 +2382,10 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                                                     <div className="w-full mt-4">
                                                         {bookingTab === 'pending' && (
                                                             <div className="flex flex-col gap-2">
+                                                                <div className="flex items-center gap-1.5 px-2.5 py-1 bg-amber-50 text-amber-800 rounded-lg border border-amber-200/70 mb-1">
+                                                                    <Clock size={11} className="text-amber-600 shrink-0" />
+                                                                    <span className="text-[9px] font-black uppercase tracking-wider">SLA Konfirmasi 1x24 Jam</span>
+                                                                </div>
                                                                 <button
                                                                     onClick={() => handleReject(b)}
                                                                     className="w-full h-10 rounded-xl border border-rose-200 text-rose-500 font-black text-[10px] uppercase hover:bg-rose-50 transition-colors"
@@ -2382,6 +2404,12 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                                                             <div className="flex items-center justify-center gap-2 h-11 px-4 rounded-xl bg-orange-50 text-orange-600 border border-orange-100 w-full animate-pulse">
                                                                 <Clock size={16} />
                                                                 <span className="text-[10px] font-black uppercase tracking-widest">Tunggu Bayar</span>
+                                                            </div>
+                                                        )}
+                                                        {bookingTab === 'cancelled' && (
+                                                            <div className="flex items-center justify-center gap-1.5 h-10 px-3 rounded-xl bg-gray-100 text-gray-500 border border-gray-200 w-full text-[9px] font-black uppercase tracking-wider">
+                                                                <X size={13} />
+                                                                <span>{b.status === 'REJECTED' ? 'Ditolak Pemilik' : (b.status === 'EXPIRED' ? 'Kadaluarsa' : 'Dibatalkan')}</span>
                                                             </div>
                                                         )}
                                                         {bookingTab === 'completed' && (() => {
