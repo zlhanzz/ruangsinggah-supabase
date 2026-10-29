@@ -2,6 +2,32 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 473. Redesain Total UI/UX Modal Profil Calon Penghuni & Tab Navigasi Pesanan Anti-Patah (Dashboard Mitra) (`MitraDashboard.tsx`) (Oktober 2026)
+- **Permintaan & Masukan Pengguna**:
+  1. Perbaikan visual komprehensif pada dua area antarmuka Dashboard Mitra yang terlihat jelek, kaku, dan tidak proporsional:
+     - Modal Detail Profil Calon Penghuni: Avatar raksasa hanging di latar hitam pekat (`rounded-[3.5rem]`), kartu 2 kolom sempit yang memotong teks kontak penting menjadi elipsis (`+6281527...` dan `userbiasa1...`), dan tombol tutup seperti balok abu-abu tebal (`py-6`).
+     - Tab Navigasi Pesanan: Teks label patah menjadi 2 baris canggung (`TUNGGU \n BAYAR` dan `BATAL / \n KADALUARSA 2`) akibat `flex-1` tanpa `whitespace-nowrap` dengan font all-caps kaku.
+- **Implementasi Solusi**:
+  1. **Redesain Modern Modal Profil Calon Penghuni (`MitraDashboard.tsx`)**:
+     - Mengubah frame modal menjadi dialog proptech elegan berukuran proporsional (`max-w-md rounded-3xl`) dengan header bersih dan tombol close bulat `X`.
+     - Hero card profil yang seimbang: Avatar `w-16 h-16 rounded-2xl` dengan inisial/foto, nama lengkap yang jelas, serta badge `Calon Penghuni` dan `✓ Terverifikasi`.
+     - **Baris Kontak Lebar Penuh (Full-Width Anti-Potong)**: Nomor WhatsApp dan Alamat Email ditampilkan 100% utuh tanpa elipsis, dilengkapi tombol interaktif langsung `[ Chat WA ]` (deep-link ke `wa.me`) dan teks yang mudah disalin.
+     - Grid informasi identitas rapi: Pekerjaan, Instansi, Jenis Kelamin, Status Hubungan, dan Alamat Asal dengan ikon SVG yang jelas dan tipografi ramah mata.
+     - Footer aksi ganda: Tombol sekunder `[ Tutup ]` (tinggi standar 44px) dan tombol primer `[ 💬 Tanya Calon ]` untuk memulai obrolan langsung dari modal.
+  2. **Segmented Pill Tab Navigasi Pesanan Anti-Patah (`MitraDashboard.tsx`)**:
+     - Mengubah kontainer tab menjadi *smooth scrollable segmented pill bar* dengan `overflow-x-auto no-scrollbar`.
+     - Menghilangkan aturan `flex-1` yang memicu patah kata, dan menambahkan `whitespace-nowrap shrink-0` sehingga label tab **100% selalu dalam satu baris rapi**.
+     - Mengganti tipografi dari all-caps kaku menjadi Title Case (`Permintaan`, `Tunggu Bayar`, `Selesai`, `Batal / Kadaluarsa`).
+     - Badge jumlah pesanan dibuat serasi: oranye solid pada tab aktif dan slate lembut pada tab non-aktif.
+- **File Tersentuh**:
+  - `functions/public/pages/MitraDashboard.tsx`
+  - `functions/PROGRESS.md`
+  - `IMPLEMENTATION_PLAN.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi frontend Vite (`npm --prefix functions/public run build`): Lulus 100% (2512 modul, code 0).
+  - Kompilasi backend Cloud Functions (`npm --prefix functions run build`): Lulus 100% (tsc, code 0).
+
 ### 472. Standarisasi Industri Alur Peninjauan & Konfirmasi Pengajuan Sewa Pemilik Kost: Tombol Khusus Profil Calon Penghuni, Pre-Approval Chat, Dynamic SLA Timer 24 Jam, Polite Rejection Modal, dan CTA Proptech (`MitraDashboard.tsx`, `userService.ts`) (Oktober 2026)
 - **Permintaan & Masukan Pengguna**:
   1. Audit komprehensif kartu peninjauan dan konfirmasi pesanan di Dashboard Mitra (`/dashboard-mitra/bookings`) agar selaras dengan standar proptech industri (Airbnb Host, Mamikos Owner, Rukita Partner).

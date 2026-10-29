@@ -1,65 +1,114 @@
-# IMPLEMENTATION PLAN: Standarisasi Alur Peninjauan & Konfirmasi Pengajuan Sewa (Dashboard Mitra)
+# IMPLEMENTATION PLAN: Perombakan UI/UX Modal Profil Calon Penghuni & Tab Navigasi Pesanan (Dashboard Mitra)
 
-**ID Rencana**: PLAN-BOOKING-REVIEW-001  
+**ID Rencana**: PLAN-MITRA-UI-REDESIGN-002  
 **Tanggal Pengajuan**: 29 Oktober 2026  
-**Status**: DISETUJUI OLEH USER (Approved with Profile Button Requirement)  
+**Status**: Menunggu Persetujuan Pengguna (Waiting for User Approval)  
 
 ---
 
-## 1. Analisis Masalah & Kebutuhan (Audit Standar Proptech)
+## 1. Analisis Masalah & Kebutuhan UI/UX
 
-Berdasarkan audit komparatif terhadap tampilan mobile pengajuan sewa pada tangkapan layar `media_1793233172345_19e14d9f.png` dibandingkan standar industri proptech (Airbnb Host, Mamikos Owner, Rukita Partner):
+Berdasarkan tinjauan terhadap dua tangkapan layar yang Anda lampirkan:
 
-### A. Temuan Isu Kritis pada Kartu Peninjauan Saat Ini:
-1. **Ketiadaan Tombol Chat Pra-Konfirmasi (*Pre-Approval Inquiry*)**:
-   - Di kode `MitraDashboard.tsx:2318`: tombol chat sengaja di-hide jika `b.status === 'PENDING_APPROVAL'`.
-   - **Dampak Buruk**: Pemilik kost dipaksa mengambil keputusan buta (*blind decision*) antara menolak atau menyetujui tanpa bisa bertanya/berdiskusi terlebih dahulu dengan calon penyewa.
-2. **Identitas Calon Penyewa Sangat Minim & Belum Ada Tombol Khusus Lihat Profil**:
-   - Kartu hanya menampilkan username mentah (misal: `userbiasa1`) dan inisial `u`.
-   - Belum ada tombol eksplisit `[ 👤 Lihat Profil Calon Penghuni ]` agar pemilik kost dapat membuka seluruh informasi latar belakang (pekerjaan, instansi, jenis kelamin, status, kontak, alamat asal) dalam satu kali klik.
-3. **SLA Statis Tanpa Countdown Waktu Riil (*No Real-time Expiry Countdown*)**:
-   - Hanya menampilkan teks statis: `⏰ SLA KONFIRMASI 1X24 JAM`.
-   - Pemilik tidak mengetahui sisa jam/menit sebelum pengajuan otomatis kedaluwarsa.
-4. **Alasan Penolakan Menggunakan Alert Browser Jadul Tanpa Edukasi**:
-   - Saat pemilik klik "TOLAK", sistem hanya menggunakan alert bawaan `window.confirm`.
-5. **Hierarki Visual & Warna Tombol Aksi Kurang Tepat**:
-   - Tombol **SETUJUI** berwarna hitam pekat (`bg-gray-900`) yang terasa seperti tombol netral/sekunder, padahal persetujuan adalah Primary Action positif yang seharusnya hijau emerald (*Emerald Green*).
+### A. Temuan Masalah pada Modal Profil Calon Penghuni (`media_1793234740668_0883304f.png`)
+1. **Proporsi Header & Avatar Terlalu Raksasa & Kaku**:
+   - Header hitam `h-40 bg-gray-900` dengan avatar kotak `w-32 h-32 rounded-[2.5rem]` menggantung canggung dan memakan hampir 50% tinggi layar di perangkat mobile.
+   - Corner radius dialog `rounded-[3.5rem]` (56px) dan padding `px-10 pt-20` sangat berlebihan (*childish / exaggerated AI-slop aesthetic*).
+2. **Layout Kartu Informasi Memotong Teks Penting (Ellipsis Glitch)**:
+   - Tata letak 2 kolom pada layar sempit mobile membatasi lebar tiap kartu hanya ~120px–140px.
+   - Akibatnya, data penting seperti Nomor WhatsApp (`+6281527...`) dan Email (`userbiasa1...`) **terpotong elipsis**, sehingga pemilik kost tidak bisa membaca kontak secara utuh.
+   - Judul field menggunakan huruf kapital mikro dengan spasi huruf berlebihan (`tracking-widest text-[9px]`) yang sulit dibaca.
+3. **Tombol Tutup Seperti Balok Abu-Abu Raksasa**:
+   - Tombol `TUTUP DETAIL PROFIL` dibuat dengan tinggi raksasa (`py-6 rounded-[2rem] font-black text-xs uppercase tracking-[0.3em]`), membuang ruang layar tanpa fungsi yang proporsional.
 
 ---
 
-### B. Matriks Solusi yang Diterapkan
-
-| Komponen Peninjauan | Kondisi Saat Ini | Standar Industri Proptech (Mamikos / Airbnb) | Solusi yang Diterapkan |
-|---|---|---|---|
-| **1. Tombol Khusus Profil** *(User Req)* | ⚠️ Hanya avatar/nama yang bisa diklik secara implisit tanpa label. | ✅ Ada tombol eksplisit `Lihat Profil Lengkap` untuk melihat data calon penghuni. | **Dedicated Profile Button**: Tambahkan tombol `[ 👤 Detail Profil ]` yang membuka modal identitas komprehensif. |
-| **2. Chat Pra-Konfirmasi** | ❌ Tombol Chat disembunyikan saat `PENDING_APPROVAL`. | ✅ Pemilik bisa chat/tanya calon penyewa langsung sebelum klik ACC/Tolak. | **Pre-Approval Chat**: Tambahkan tombol `[ 💬 Tanya Calon ]` di kartu pengajuan untuk membuka obrolan langsung. |
-| **3. Profil & Kepercayaan** | ❌ Hanya username mentah `userbiasa1` & inisial huruf. | ✅ Menampilkan Nama Lengkap, Profesi/Instansi, Jenis Kelamin, dan status verifikasi. | **Mini Profile Header**: Tampilkan foto profil, nama lengkap, badge profesi (misal: *Karyawan Swasta*), instansi, jenis kelamin, dan badge *Terverifikasi*. |
-| **4. Indikator Waktu SLA** | ⚠️ Banner teks statis `SLA 1X24 JAM`. | ✅ Countdown riil sisa waktu respon (jam & menit) dengan indikator warna urgensi. | **Dynamic SLA Countdown**: Menghitung mundur dari `created_at + 24 jam` (Hijau/Amber jika >6 jam, Merah jika <6 jam). |
-| **5. Alur Penolakan** | ❌ Browser alert `window.confirm`. | ✅ Modal pilihan alasan penolakan ramah. | **Modal Alasan Penolakan**: Dialog pilihan alasan (*Kamar Penuh Offline*, *Kriteria Belum Sesuai*, dll). |
-| **6. Tombol Aksi (CTA)** | ⚠️ SETUJUI hitam pekat, TOLAK outline merah muda. | ✅ SETUJUI warna hijau emerald terstandar, TOLAK tombol sekunder bersih. | **Restrukturisasi Tombol**: SETUJUI (Emerald solid prominent), TOLAK (Border slate halus), dan TANYA CALON (Blue/teal outline). |
+### B. Temuan Masalah pada Tab Navigasi Pesanan (`media_1793234757012_c032ee0e.png`)
+1. **Teks Label Patah Menjadi 2 Baris (*Ugly Text Wrapping*)**:
+   - Label tab menggunakan `flex-1` tanpa `whitespace-nowrap` di dalam kontainer yang sempit, menyebabkan kata patah secara tidak teratur:
+     - `TUNGGU` di baris 1 dan `BAYAR` di baris 2.
+     - `BATAL /` di baris 1 dan `KADALUARSA 2` di baris 2.
+2. **Tipografi All-Caps dengan Tracking Berlebihan**:
+   - Penggunaan huruf kapital semua (`UPPERCASE TRACKING-WIDEST`) memakan lebar horizontal secara boros dan membuat teks terdesak.
+3. **Visual Active State Canggung**:
+   - Tab aktif berupa kotak putih tebal dengan bayangan kaku yang menonjol sendirian di antara tab lain yang terhimpit.
 
 ---
 
-## 2. Dampak Perubahan File
+## 2. Solusi Desain Standar Industri Proptech (Airbnb / Mamikos)
+
+| Komponen | Kondisi Saat Ini | Standar Proptech Premium (Solusi yang Diterapkan) |
+|---|---|---|
+| **1. Modal Frame Calon Penghuni** | Kaku, `rounded-[3.5rem]`, padding 40px memboroskan ruang layar. | **Bottom-Sheet / Clean Dialog**: Sudut rounded proporsional (`rounded-3xl`), padding seimbang (`p-5 sm:p-6`), dilengkapi header bersih & tombol `X` elegan. |
+| **2. Avatar & Header Profil** | Avatar raksasa `w-32` menggantung di latar hitam pekat. | **Proptech Tenant Card**: Avatar seimbang `w-16 h-16 rounded-2xl`, nama lengkap jelas, badge `Calon Penghuni` & badge verifikasi `✓ Identitas Terverifikasi`. |
+| **3. Tampilan Kontak (WA & Email)** | Terjepit di kartu kecil 2 kolom sehingga terpotong elipsis (`+6281527...`). | **Full-Width Contact Row**: Baris kontak horizontal lebar penuh dengan nomor WhatsApp dan email utuh 100%, dilengkapi tombol aksi instan **[ Hubungi WhatsApp ]** dan tombol **[ Salin ]**. |
+| **4. Grid Informasi Latar Belakang** | Kartu abu-abu kaku dengan label mikro 9px. | **Clean Info Cards**: Tata letak rapi untuk Pekerjaan, Kampus/Instansi, Jenis Kelamin, dan Status dengan ikon yang bersih dan kontras yang jelas. |
+| **5. Tombol Aksi Modal** | Balok abu-abu raksasa `py-6`. | **Dua Tombol Fungsional**: Tombol primer **[ 💬 Tanya Calon via Chat ]** dan tombol sekunder **[ Tutup ]** yang ramping (tinggi 44px standar Apple/Material). |
+| **6. Tab Navigasi Pesanan** | Teks patah 2 baris (`TUNGGU \n BAYAR`), kaku, terhimpit. | **Smooth Scrollable Pill Tabs**: Dilengkapi `whitespace-nowrap`, teks Title Case (`Permintaan`, `Tunggu Bayar`, `Selesai`, `Batal / Kadaluarsa`), badge jumlah yang rapi, dan scroll horizontal halus tanpa scrollbar jelek di mobile. |
+
+---
+
+## 3. Dampak Perubahan File
 
 1. **`functions/public/pages/MitraDashboard.tsx`**:
-   - Menambahkan tombol khusus `[ 👤 Detail Profil ]` di samping info calon penyewa dan di area aksi.
-   - Membuka akses chat pra-konfirmasi `[ 💬 Tanya Calon ]` untuk pengajuan `PENDING_APPROVAL`.
-   - Menampilkan countdown dinamis SLA 24 jam dengan kalkulasi sisa jam & menit.
-   - Mengganti dialog `window.confirm` dengan Modal Alasan Penolakan (*Reject Reason Modal*) yang ramah pengguna.
-   - Memperkaya tampilan mini profile header calon penyewa.
-   - Memperbarui gaya tombol aksi (Emerald solid untuk Setujui, Clean secondary untuk Tolak).
-2. **`functions/public/userService.ts`**:
-   - Memperkaya query `getOwnerBookings` agar mengikutsertakan field kontak calon penyewa (`phone, email, emergency_phone`).
-   - Memperbarui `updateBookingStatus` agar dapat menerima `rejection_reason` dan menyinkronkan status penolakan ke `resident_status`.
-3. **`functions/PROGRESS.md` & `WALKTHROUGH.md`**:
-   - Dokumentasi progres #472 dan panduan verifikasi.
+   - **Perombakan Tab Pesanan** (sekitar baris 2270–2292): Menerapkan *smooth scrollable segmented pill bar* dengan `whitespace-nowrap`, Title Case, padding proporsional, dan penataan badge jumlah pesanan.
+   - **Perombakan Modal Profil Calon Penghuni** (sekitar baris 3300–3390): Mengganti layout modal lama dengan desain proptech modern:
+     - Header dialog yang bersih dengan avatar proporsional (`w-16 h-16`).
+     - Baris kontak WhatsApp & Email lebar penuh (anti-elipsis / anti-potong) dengan fitur klik kontak langsung.
+     - Grid informasi identitas yang ringkas dan nyaman dibaca.
+     - Tombol aksi terintegrasi (Tanya Calon & Tutup).
 
 ---
 
-## 3. Rencana Eksekusi (Fase 2)
+## 4. Langkah-Langkah Eksekusi (Fase 2)
 
-- **Tahap 1**: Update `userService.ts` (`getOwnerBookings` & `updateBookingStatus`).
-- **Tahap 2**: Update `MitraDashboard.tsx` (Tombol khusus lihat profil, Pre-Approval Chat, Dynamic SLA timer, Reject modal, dan Redesain CTA).
-- **Tahap 3**: Jalankan build frontend & backend (`npm run build`).
-- **Tahap 4**: Catat di `PROGRESS.md`, terbitkan `WALKTHROUGH.md`, dan push ke `bukan-productions`.
+### Tahap 1: Redesain Segmented Pill Tab Navigasi Pesanan
+- Mengubah kontainer tab menjadi `flex items-center gap-2 overflow-x-auto no-scrollbar py-1`.
+- Menghapus aturan `flex-1` yang memicu pemotongan kata dan menambahkan `whitespace-nowrap shrink-0`.
+- Mengganti teks menjadi Title Case:
+  - `Permintaan` (badge oranye jika > 0)
+  - `Tunggu Bayar` (badge netral)
+  - `Selesai` (badge hijau)
+  - `Batal / Kadaluarsa` (badge abu-abu)
+- Memastikan transisi active/inactive mulus dan bebas glitch di semua ukuran layar (mobile 360px hingga desktop 1920px).
+
+### Tahap 2: Redesain Total Modal Profil Calon Penghuni
+- Merestrukturisasi container modal dengan proporsi elegan (`max-w-md w-full rounded-3xl p-6 bg-white shadow-2xl`).
+- Membangun Header Profil yang ramping:
+  - Avatar `w-16 h-16 rounded-2xl` dengan inisial atau foto riil.
+  - Nama calon penghuni, tag `Calon Penghuni`, dan badge `✓ Terverifikasi`.
+- Membangun Baris Kontak Anti-Potong:
+  - Card WhatsApp: Menampilkan nomor lengkap, tombol quick action hubungi WhatsApp.
+  - Card Email: Menampilkan email lengkap tanpa elipsis.
+- Membangun Ringkasan Informasi Pribadi (Pekerjaan, Instansi, Gender, Status, Alamat Asal).
+- Footer Aksi: Tombol `[ 💬 Kirim Pesan / Tanya Calon ]` dan tombol `[ Tutup ]`.
+
+### Tahap 3: Uji Kompilasi & Build
+- Menjalankan `cmd.exe /c "npm --prefix functions/public run build"` (Wajib 0 error).
+- Menjalankan `cmd.exe /c "npm --prefix functions run build"` (Wajib 0 error).
+
+### Tahap 4: Pencatatan Anti-Amnesia & Git Push
+- Mencatat riwayat ke `functions/PROGRESS.md` (#473).
+- Memperbarui `WALKTHROUGH.md`.
+- Commit dan push ke branch `bukan-productions`.
+
+---
+
+## 5. Rencana Verifikasi
+
+1. **Uji Tampilan Tab Pesanan**:
+   - Buka `/dashboard-mitra/bookings` pada mode responsive mobile (lebar 360px–390px).
+   - Pastikan teks tab **TIDAK PERNAH PATAH** menjadi 2 baris.
+   - Pastikan tab dapat digeser (*scroll*) dengan mulus tanpa scrollbar kasar.
+2. **Uji Modal Profil Calon Penghuni**:
+   - Klik tombol `[ 👤 Lihat Profil ]` pada salah satu pengajuan sewa.
+   - Pastikan nomor WhatsApp dan email **terbaca utuh tanpa terpotong `...`**.
+   - Pastikan ukuran avatar, kartu, dan tombol penutup proporsional, rapi, dan nyaman di mata.
+3. **Uji Fungsionalitas**:
+   - Pastikan klik tab berpindah filter pesanan dengan benar.
+   - Pastikan tombol aksi di dalam modal profil dapat menutup modal dan membuka chat dengan lancar.
+
+---
+
+> [!IMPORTANT]
+> **Menunggu Persetujuan Pengguna (ACC)**: Sesuai protokol siklus 2-fase ruang kerja, Agent **BERHENTI** pada tahap ini dan tidak memodifikasi file kode sebelum menerima persetujuan ("ACC" / "Proceed") dari Anda.

@@ -2266,29 +2266,39 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                                 <p className="text-xs text-gray-400 font-bold mt-0.5 uppercase tracking-widest">Kelola semua permintaan sewa</p>
                             </div>
 
-                            {/* Tabs */}
-                            <div className="flex bg-gray-100/60 p-1 rounded-2xl gap-1 overflow-x-auto">
+                            {/* Tabs - Modern Smooth Segmented Pill Bar with Anti-Wrap & Clean Badge */}
+                            <div className="flex items-center gap-1.5 sm:gap-2 p-1.5 bg-slate-100/80 rounded-2xl overflow-x-auto no-scrollbar border border-slate-200/50">
                                 {[
                                     { key: 'pending', label: 'Permintaan', count: bookings.filter(b => (b.status || '').toUpperCase() === 'PENDING_APPROVAL').length },
                                     { key: 'awaiting_payment', label: 'Tunggu Bayar', count: bookings.filter(b => (b.status || '').toUpperCase() === 'AWAITING_PAYMENT').length },
                                     { key: 'completed', label: 'Selesai', count: bookings.filter(b => ['PAID', 'COMPLETED'].includes((b.status || '').toUpperCase())).length },
                                     { key: 'cancelled', label: 'Batal / Kadaluarsa', count: bookings.filter(b => ['CANCELLED', 'REJECTED', 'EXPIRED'].includes((b.status || '').toUpperCase())).length },
-                                ].map(tab => (
-                                    <button
-                                        key={tab.key}
-                                        onClick={() => setBookingTab(tab.key as any)}
-                                        className={`flex-1 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-1.5 ${bookingTab === tab.key
-                                            ? 'bg-white text-gray-900 shadow-sm border border-gray-100'
-                                            : 'text-gray-400 hover:text-gray-600'
+                                ].map(tab => {
+                                    const isActive = bookingTab === tab.key;
+                                    return (
+                                        <button
+                                            key={tab.key}
+                                            type="button"
+                                            onClick={() => setBookingTab(tab.key as any)}
+                                            className={`px-3.5 sm:px-4 py-2 sm:py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 whitespace-nowrap shrink-0 cursor-pointer ${
+                                                isActive
+                                                    ? 'bg-white text-slate-900 shadow-sm border border-slate-200/80'
+                                                    : 'text-slate-500 hover:text-slate-800 hover:bg-slate-200/50'
                                             }`}
-                                    >
-                                        {tab.label}
-                                        {tab.count > 0 && (
-                                            <span className={`min-w-[18px] h-[18px] rounded-full text-[9px] font-black flex items-center justify-center px-1 ${bookingTab === tab.key ? 'bg-orange-500 text-white' : 'bg-gray-200 text-gray-500'
-                                                }`}>{tab.count}</span>
-                                        )}
-                                    </button>
-                                ))}
+                                        >
+                                            <span>{tab.label}</span>
+                                            {tab.count > 0 && (
+                                                <span className={`min-w-[18px] h-[18px] rounded-full text-[10px] font-black flex items-center justify-center px-1.5 ${
+                                                    isActive 
+                                                        ? 'bg-orange-500 text-white shadow-xs' 
+                                                        : 'bg-slate-200 text-slate-600'
+                                                }`}>
+                                                    {tab.count}
+                                                </span>
+                                            )}
+                                        </button>
+                                    );
+                                })}
                             </div>
 
                             {/* Booking Cards */}
@@ -3482,138 +3492,204 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                 </div>
             )}
 
-            {/* APPLICANT PROFILE MODAL - COMPREHENSIVE & SECURE */}
-            {(selectedBookingForProfile || selectedUserForProfile) && (
-                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-                    <div
-                        className="absolute inset-0 bg-gray-900/60 backdrop-blur-md animate-in fade-in duration-300"
-                        onClick={() => { setSelectedBookingForProfile(null); setSelectedUserForProfile(null); }}
-                    />
-                    <div className="relative bg-white w-full max-w-lg rounded-[3.5rem] overflow-hidden shadow-2xl animate-in zoom-in-95 duration-500">
-                        {/* Modal Header */}
-                        <div className="h-40 bg-gray-900 relative">
-                            {/* Decorative background pattern */}
-                            <div className="absolute inset-0 opacity-20 pointer-events-none" style={{ backgroundImage: 'radial-gradient(circle at 2px 2px, white 1px, transparent 0)', backgroundSize: '24px 24px' }} />
-                            <div className="absolute top-0 right-0 w-64 h-64 bg-orange-500/20 rounded-full blur-[80px] -mr-32 -mt-32" />
+            {/* APPLICANT PROFILE MODAL - CLEAN PROPTECH DESIGN */}
+            {(selectedBookingForProfile || selectedUserForProfile) && (() => {
+                const targetUser = selectedUserForProfile || selectedBookingForProfile?.user || {};
+                const name = targetUser.name || targetUser.full_name || selectedBookingForProfile?.metadata?.tenantName || 'Calon Penghuni';
+                const photo = targetUser.photo_url;
+                const phone = targetUser.phone || selectedBookingForProfile?.metadata?.phone || selectedBookingForProfile?.metadata?.tenantPhone;
+                const email = targetUser.email || selectedBookingForProfile?.metadata?.email;
+                const occupation = targetUser.occupation && targetUser.occupation !== '-' ? targetUser.occupation : 'Penyewa';
+                const institution = targetUser.institution && targetUser.institution !== '-' ? targetUser.institution : 'Tidak dicantumkan';
+                const gender = targetUser.gender && targetUser.gender !== '-' ? targetUser.gender : 'Tidak dicantumkan';
+                const statusRel = targetUser.relationship_status && targetUser.relationship_status !== '-' ? targetUser.relationship_status : 'Lajang / Single';
+                const address = targetUser.address && targetUser.address !== '-' ? targetUser.address : (targetUser.city || 'Tidak dicantumkan');
+                const cleanPhoneNum = phone ? String(phone).replace(/[^0-9]/g, '') : '';
+                const waUrl = cleanPhoneNum ? (cleanPhoneNum.startsWith('0') ? '62' + cleanPhoneNum.slice(1) : cleanPhoneNum) : '';
 
-                            <button
-                                onClick={() => { setSelectedBookingForProfile(null); setSelectedUserForProfile(null); }}
-                                className="absolute top-8 right-8 w-12 h-12 bg-white/10 hover:bg-white/20 text-white rounded-full flex items-center justify-center backdrop-blur-md transition-all z-10 border border-white/20 active:scale-90"
-                            >
-                                <X size={24} />
-                            </button>
-
-                            <div className="absolute -bottom-14 left-10">
-                                <div className="w-32 h-32 rounded-[2.5rem] bg-orange-500 border-8 border-white shadow-2xl flex items-center justify-center text-white font-black text-4xl overflow-hidden relative group">
-                                    {/* Layer 1: Initials (Always present in background) */}
-                                    <span className="absolute inset-0 flex items-center justify-center drop-shadow-sm pointer-events-none">
-                                        {(selectedUserForProfile?.name || selectedBookingForProfile?.user?.name || 'U').charAt(0)}
-                                    </span>
-
-                                    {/* Layer 2: Image (On top) */}
-                                    {(selectedUserForProfile?.photo_url || selectedBookingForProfile?.user?.photo_url) && (
-                                        <img
-                                            src={selectedUserForProfile?.photo_url || selectedBookingForProfile?.user?.photo_url}
-                                            className="absolute inset-0 w-full h-full object-cover z-10 transition-opacity duration-300"
-                                            alt=""
-                                            onError={(e) => {
-                                                e.currentTarget.style.display = 'none';
-                                            }}
-                                        />
-                                    )}
+                return (
+                    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+                        <div
+                            className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200"
+                            onClick={() => { setSelectedBookingForProfile(null); setSelectedUserForProfile(null); }}
+                        />
+                        <div className="relative bg-white w-full max-w-md rounded-3xl overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200 border border-slate-100 flex flex-col max-h-[90vh]">
+                            {/* Modal Header */}
+                            <div className="p-5 sm:p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/70">
+                                <div className="flex items-center gap-2.5">
+                                    <div className="w-9 h-9 rounded-xl bg-orange-100 text-orange-600 flex items-center justify-center shrink-0">
+                                        <User size={18} />
+                                    </div>
+                                    <div>
+                                        <h4 className="font-black text-slate-900 text-base leading-tight">Detail Profil Calon</h4>
+                                        <p className="text-[11px] text-slate-500 font-medium">Informasi penyewa di RuangSinggah</p>
+                                    </div>
                                 </div>
-                            </div>
-                        </div>
-
-                        <div className="pt-20 pb-10 px-10">
-                            <div className="mb-10">
-                                <h3 className="text-3xl font-black text-gray-900 leading-none mb-3 tracking-tight">{selectedUserForProfile?.name || selectedBookingForProfile?.user?.name}</h3>
-                                <div className="flex items-center gap-2">
-                                    <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-                                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Profil {selectedBookingForProfile ? 'Calon Penghuni' : 'Penghuni'}</p>
-                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => { setSelectedBookingForProfile(null); setSelectedUserForProfile(null); }}
+                                    className="w-8 h-8 rounded-full bg-slate-200/70 hover:bg-slate-200 text-slate-600 flex items-center justify-center transition-colors cursor-pointer"
+                                >
+                                    <X size={16} />
+                                </button>
                             </div>
 
-                            <div className="space-y-4">
-                                {/* Professional Info Grid */}
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div className="bg-gray-50/80 p-5 rounded-3xl border border-gray-100/50">
-                                        <div className="flex items-center gap-3 text-orange-500 mb-3">
-                                            <Briefcase size={16} />
-                                            <span className="text-[9px] font-black uppercase tracking-widest text-gray-400">Pekerjaan</span>
-                                        </div>
-                                        <p className="text-xs font-black text-gray-900">{selectedUserForProfile?.occupation || selectedBookingForProfile?.user?.occupation || 'Tidak dicantumkan'}</p>
+                            {/* Scrollable Content */}
+                            <div className="p-5 sm:p-6 overflow-y-auto space-y-4 text-left">
+                                {/* Profile Hero Card */}
+                                <div className="flex items-center gap-4 p-4 rounded-2xl bg-gradient-to-r from-orange-50 via-amber-50/30 to-white border border-orange-100/70">
+                                    <div className="w-16 h-16 rounded-2xl bg-orange-500 text-white font-black text-2xl flex items-center justify-center shadow-md shadow-orange-500/20 shrink-0 relative overflow-hidden">
+                                        <span className="absolute inset-0 flex items-center justify-center drop-shadow-xs pointer-events-none">
+                                            {name.charAt(0).toUpperCase()}
+                                        </span>
+                                        {photo && (
+                                            <img
+                                                src={photo}
+                                                className="absolute inset-0 w-full h-full object-cover z-10"
+                                                alt=""
+                                                onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                                            />
+                                        )}
                                     </div>
-                                    <div className="bg-gray-50/80 p-5 rounded-3xl border border-gray-100/50">
-                                        <div className="flex items-center gap-3 text-blue-500 mb-3">
-                                            <GraduationCap size={16} />
-                                            <span className="text-[9px] font-black uppercase tracking-widest text-gray-400">Instansi / Kampus</span>
+                                    <div className="min-w-0 flex-1">
+                                        <div className="flex items-center gap-2 flex-wrap">
+                                            <h3 className="text-lg font-black text-slate-900 truncate">{name}</h3>
+                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9.5px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                                                <ShieldCheck size={11} className="text-emerald-600" />
+                                                Terverifikasi
+                                            </span>
                                         </div>
-                                        <p className="text-xs font-black text-gray-900">{selectedUserForProfile?.institution || selectedBookingForProfile?.user?.institution || 'Tidak dicantumkan'}</p>
+                                        <p className="text-xs font-semibold text-slate-600 mt-0.5 truncate capitalize">
+                                            {occupation} {institution !== 'Tidak dicantumkan' ? `• ${institution}` : ''}
+                                        </p>
                                     </div>
                                 </div>
 
-                                {/* Identity Info Grid */}
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div className="bg-gray-50/80 p-5 rounded-3xl border border-gray-100/50">
-                                        <div className="flex items-center gap-3 text-purple-500 mb-3">
-                                            <User size={16} />
-                                            <span className="text-[9px] font-black uppercase tracking-widest text-gray-400">Jenis Kelamin</span>
+                                {/* Kontak Section (Full Width - Anti Potong!) */}
+                                <div className="space-y-2.5">
+                                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Kontak & Komunikasi</p>
+                                    
+                                    {/* WhatsApp Row */}
+                                    <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200/70 flex items-center justify-between gap-3">
+                                        <div className="flex items-center gap-3 min-w-0 flex-1">
+                                            <div className="w-9 h-9 rounded-xl bg-emerald-100/80 text-emerald-600 flex items-center justify-center shrink-0">
+                                                <Phone size={17} />
+                                            </div>
+                                            <div className="min-w-0 flex-1">
+                                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">WhatsApp / No. HP</p>
+                                                <p className="text-xs sm:text-sm font-bold text-slate-900 select-all font-mono">
+                                                    {phone || 'Tidak dicantumkan'}
+                                                </p>
+                                            </div>
                                         </div>
-                                        <p className="text-xs font-black text-gray-900">{selectedUserForProfile?.gender || selectedBookingForProfile?.user?.gender || '-'}</p>
+                                        {waUrl && (
+                                            <a
+                                                href={`https://wa.me/${waUrl}`}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold shrink-0 flex items-center gap-1 shadow-xs active:scale-95 transition-all cursor-pointer"
+                                            >
+                                                <span>Chat WA</span>
+                                            </a>
+                                        )}
                                     </div>
-                                    <div className="bg-gray-50/80 p-5 rounded-3xl border border-gray-100/50">
-                                        <div className="flex items-center gap-3 text-red-500 mb-3">
-                                            <Heart size={16} />
-                                            <span className="text-[9px] font-black uppercase tracking-widest text-gray-400">Status</span>
+
+                                    {/* Email Row */}
+                                    <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200/70 flex items-center gap-3">
+                                        <div className="w-9 h-9 rounded-xl bg-sky-100/80 text-sky-600 flex items-center justify-center shrink-0">
+                                            <Mail size={17} />
                                         </div>
-                                        <p className="text-xs font-black text-gray-900">{selectedUserForProfile?.relationship_status || selectedBookingForProfile?.user?.relationship_status || '-'}</p>
+                                        <div className="min-w-0 flex-1">
+                                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Alamat Email</p>
+                                            <p className="text-xs sm:text-sm font-bold text-slate-900 select-all break-all">
+                                                {email || 'Tidak dicantumkan'}
+                                            </p>
+                                        </div>
                                     </div>
                                 </div>
 
-                                {/* Contact Info Grid */}
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div className="bg-gray-50/80 p-5 rounded-3xl border border-gray-100/50">
-                                        <div className="flex items-center gap-3 text-emerald-600 mb-3">
-                                            <Phone size={16} />
-                                            <span className="text-[9px] font-black uppercase tracking-widest text-gray-400">No. WhatsApp / HP</span>
+                                {/* Informasi Pribadi Grid */}
+                                <div className="space-y-2.5">
+                                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Informasi Latar Belakang</p>
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200/70">
+                                            <div className="flex items-center gap-2 text-slate-400 mb-1">
+                                                <Briefcase size={14} className="text-orange-500" />
+                                                <span className="text-[10px] font-bold uppercase tracking-wider">Pekerjaan</span>
+                                            </div>
+                                            <p className="text-xs sm:text-sm font-bold text-slate-900 capitalize truncate">{occupation}</p>
                                         </div>
-                                        <p className="text-xs font-black text-gray-900 truncate">{selectedUserForProfile?.phone || selectedBookingForProfile?.user?.phone || 'Tidak dicantumkan'}</p>
-                                    </div>
-                                    <div className="bg-gray-50/80 p-5 rounded-3xl border border-gray-100/50">
-                                        <div className="flex items-center gap-3 text-sky-600 mb-3">
-                                            <Mail size={16} />
-                                            <span className="text-[9px] font-black uppercase tracking-widest text-gray-400">Email</span>
+
+                                        <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200/70">
+                                            <div className="flex items-center gap-2 text-slate-400 mb-1">
+                                                <GraduationCap size={14} className="text-blue-500" />
+                                                <span className="text-[10px] font-bold uppercase tracking-wider">Instansi</span>
+                                            </div>
+                                            <p className="text-xs sm:text-sm font-bold text-slate-900 truncate">{institution}</p>
                                         </div>
-                                        <p className="text-xs font-black text-gray-900 truncate">{selectedUserForProfile?.email || selectedBookingForProfile?.user?.email || 'Tidak dicantumkan'}</p>
+
+                                        <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200/70">
+                                            <div className="flex items-center gap-2 text-slate-400 mb-1">
+                                                <User size={14} className="text-purple-500" />
+                                                <span className="text-[10px] font-bold uppercase tracking-wider">Jenis Kelamin</span>
+                                            </div>
+                                            <p className="text-xs sm:text-sm font-bold text-slate-900">{gender}</p>
+                                        </div>
+
+                                        <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200/70">
+                                            <div className="flex items-center gap-2 text-slate-400 mb-1">
+                                                <Heart size={14} className="text-rose-500" />
+                                                <span className="text-[10px] font-bold uppercase tracking-wider">Status</span>
+                                            </div>
+                                            <p className="text-xs sm:text-sm font-bold text-slate-900 truncate">{statusRel}</p>
+                                        </div>
                                     </div>
                                 </div>
 
-                                {/* Origin Address */}
-                                <div className="bg-gray-50/80 p-5 rounded-3xl border border-gray-100/50">
-                                    <div className="flex items-center gap-3 text-green-500 mb-3">
-                                        <MapPin size={16} />
-                                        <span className="text-[9px] font-black uppercase tracking-widest text-gray-400">Alamat Asal</span>
+                                {/* Domisili Asal */}
+                                <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200/70">
+                                    <div className="flex items-center gap-2 text-slate-400 mb-1">
+                                        <MapPin size={14} className="text-emerald-500" />
+                                        <span className="text-[10px] font-bold uppercase tracking-wider">Alamat Asal</span>
                                     </div>
-                                    <p className="text-xs font-black text-gray-900 leading-relaxed">{selectedUserForProfile?.address || selectedBookingForProfile?.user?.address || 'Tidak dicantumkan'}</p>
+                                    <p className="text-xs sm:text-sm font-bold text-slate-900 leading-relaxed capitalize">{address}</p>
                                 </div>
+                            </div>
 
-                                <div className="pt-10">
+                            {/* Modal Footer Actions */}
+                            <div className="p-4 sm:p-5 border-t border-slate-100 bg-white flex items-center gap-3">
+                                <button
+                                    type="button"
+                                    onClick={() => { setSelectedBookingForProfile(null); setSelectedUserForProfile(null); }}
+                                    className="flex-1 h-11 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs transition-colors cursor-pointer"
+                                >
+                                    Tutup
+                                </button>
+                                {selectedBookingForProfile && (
                                     <button
-                                        onClick={() => { setSelectedBookingForProfile(null); setSelectedUserForProfile(null); }}
-                                        className="w-full bg-gray-100 hover:bg-gray-200 text-gray-600 py-6 rounded-[2rem] font-black text-xs uppercase tracking-[0.3em] transition-all flex items-center justify-center gap-4 active:scale-95"
+                                        type="button"
+                                        onClick={() => {
+                                            const targetUserId = selectedBookingForProfile.user_id || selectedBookingForProfile.user?.id;
+                                            const targetKostId = selectedBookingForProfile.product_id;
+                                            setSelectedBookingForProfile(null);
+                                            setSelectedUserForProfile(null);
+                                            if (targetUserId) {
+                                                handleStartChat(targetUserId, targetKostId);
+                                            } else {
+                                                handleMenuChange('chat');
+                                            }
+                                        }}
+                                        className="flex-1 h-11 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-bold text-xs shadow-md shadow-orange-500/20 active:scale-95 transition-all flex items-center justify-center gap-1.5 cursor-pointer"
                                     >
-                                        Tutup Detail Profil
+                                        <MessageSquare size={14} />
+                                        <span>Tanya Calon</span>
                                     </button>
-                                    <p className="text-center text-[9px] font-bold text-gray-400 uppercase tracking-widest mt-6 opacity-60">
-                                        Data privasi dilindungi oleh RuangSinggah.id
-                                    </p>
-                                </div>
+                                )}
                             </div>
                         </div>
                     </div>
-                </div>
-            )}
+                );
+            })()}
             {/* ── MODAL 1: KOSTMANAGER LIVE ROOM TRACKER (OKUPANSI REAL-TIME) ── */}
             {showKmRoomTracker && selectedKmForRooms && (
                 <div className="fixed inset-0 z-[120] flex items-center justify-center p-4">
