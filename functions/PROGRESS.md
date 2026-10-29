@@ -2,6 +2,41 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 477. Perbaikan Kartu Pengajuan Sewa Hilang di Tab DIAJUKAN Setelah Masuk Tahap Pembayaran Midtrans (`MyKost.tsx`, `index.ts`) (Oktober 2026)
+- **Permintaan & Masukan Pengguna**:
+  1. Investigasi dan perbaikan kartu pengajuan sewa yang tiba-tiba menghilang dari tab DIAJUKAN di halaman Kost Saya (`/my-kost`) setelah pengajuan di-ACC oleh Mitra dan pengguna membuka portal pembayaran.
+  2. Gambar dari pengguna menunjukkan tab DIAJUKAN dengan badge `0` dan menampilkan pesan kosong: *"BELUM ADA PENGAJUAN: Sepertinya Anda belum mengajukan sewa kost apa pun. Yuk cari hunian impianmu sekarang!"*.
+- **Akar Masalah Teknis**:
+  1. **Perubahan Status Transaksi oleh Payment Gateway**: Ketika pengguna membuka portal pembayaran (`PaymentGateway`) dan memilih metode pembayaran (QRIS/VA), Cloud Function `createMidtransPayment` memperbarui status transaksi menjadi `'pending'` (huruf kecil).
+  2. **Filter Ingest Data yang Terlalu Ketat di `MyKost.tsx`**: Pada baris 732, `fetchMyKosts` mengevaluasi:
+     `if (isRent && (isApproved || isPendingApproval || isAwaitingPayment || isRejected || isCancelled))`
+     Kondisi ini tidak mengikutsertakan `statusLower === 'pending'` maupun `statusLower === 'expired'`. Akibatnya, seluruh transaksi sewa yang sedang aktif menunggu pembayaran melalui Midtrans langsung dibuang (*dropped*) dari `kostsData`, memicu kondisi array kosong (*empty state*).
+  3. **Inkonsistensi Pengecekan Status `'PENDING'` pada Komponen**: Logika countdown timer 24 jam (`getBookingExpiryInfo`), auto-expire effect, dan status badge sebelumnya hanya memeriksa string kaku `=== 'AWAITING_PAYMENT'`, sehingga transaksi berstatus `PENDING` tidak mendapatkan penanganan waktu dan badge yang konsisten.
+  4. **Potensi Kehilangan Metadata `approved_at`**: Saat `createMidtransPayment` memperbarui metadata transaksi untuk `finalOrderId`, metadata lama dari database tidak di-merge secara utuh, berisiko menghilangkan timestamp `approved_at`.
+- **Implementasi Solusi**:
+  1. **Perluasan Ingest Data Filter pada `fetchMyKosts` (`MyKost.tsx`)**:
+     - Menambahkan flag `isPending = statusLower === 'pending' || statusLower === 'pending_approval'` dan `isExpired = statusLower === 'expired'`.
+     - Memperbarui kondisi ingest: `if (isRent && (isApproved || isPendingApproval || isAwaitingPayment || isPending || isRejected || isCancelled || isExpired))`.
+     - Menjamin transaksi sewa yang sedang aktif dalam proses checkout pembayaran tidak akan pernah dibuang dari daftar.
+  2. **Sinkronisasi Status `'PENDING'` pada Seluruh Helper UI (`MyKost.tsx`)**:
+     - `getBookingExpiryInfo`: Memperbolehkan status `PENDING` di samping `AWAITING_PAYMENT` (`if (s !== 'AWAITING_PAYMENT' && s !== 'PENDING') return ...`), sehingga countdown timer 24 jam tetap berdetik akurat.
+     - `isAwaitingPayment`: Menggunakan `['AWAITING_PAYMENT', 'PENDING'].includes(...) && !isExpiredBooking`.
+     - Auto-expire effect: Mendukung `s === 'AWAITING_PAYMENT' || s === 'PENDING'`.
+     - `STATUS_COLOR` & `STATUS_LABEL`: Memetakan status `'PENDING'` ke badge oranye terang dan label `'Menunggu Pembayaran'`.
+     - Badge Tagihan: Menampilkan badge `Siap Bayar` untuk status `AWAITING_PAYMENT` maupun `PENDING`.
+  3. **Proteksi Metadata `approved_at` pada Cloud Function (`index.ts`)**:
+     - Di `createMidtransPayment`, mengambil metadata yang sudah ada di database (`existingDbMeta`) dan mempertahankan `approved_at` sehingga timestamp persetujuan tidak hilang saat gateway melakukan pembaruan transaksi.
+- **File Tersentuh**:
+  - `functions/public/pages/MyKost.tsx`
+  - `functions/src/index.ts`
+  - `functions/PROGRESS.md`
+  - `IMPLEMENTATION_PLAN.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Script simulasi logika: Transaksi sewa dengan status `pending` terbukti 100% lolos ingest dan tampil di tab `diajukan`.
+  - Kompilasi frontend Vite (`npm.cmd --prefix functions/public run build`): Lulus 100% (2512 modul, 0 error).
+  - Kompilasi backend Cloud Functions (`npm.cmd --prefix functions run build`): Lulus 100% (tsc, 0 error).
+
 ### 476. Modernisasi & Standardisasi Industri Portal Pembayaran (`PaymentGateway.tsx`) (Oktober 2026)
 - **Permintaan & Masukan Pengguna**:
   1. Evaluasi komprehensif portal pembayaran (`PaymentGateway.tsx`) agar sesuai tema web app RuangSinggah, tidak bergaya "AI slop", dan mengintegrasikan branding resmi RuangSinggah.id (logo resmi, bukan hanya tulisan teks mentah "RS").

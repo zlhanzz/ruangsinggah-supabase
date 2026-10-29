@@ -1342,12 +1342,17 @@ export const createMidtransPayment = functions.https.onRequest({ cors: true }, a
       // [FIX] Distinguish between split extension (visible) and batch payment (hidden)
       const isBatchParent = metadata.pendingBills && Array.isArray(metadata.pendingBills) && metadata.pendingBills.length > 1;
       const isSplitExtension = !!hasSplit;
+      const { data: existingTrx } = await supabase.from('transactions').select('metadata').eq('id', finalOrderId).maybeSingle();
+      const existingDbMeta = typeof existingTrx?.metadata === 'string' ? JSON.parse(existingTrx.metadata) : (existingTrx?.metadata || {});
+      const preservedApprovedAt = metadata?.approved_at || existingDbMeta?.approved_at || null;
 
       const { error: up1Error } = await supabase.from('transactions').update({ 
           amount: hasSplit ? rentAmount : finalAmount, 
           resident_status_id: residentStatusId,
           metadata: { 
+              ...existingDbMeta,
               ...metadata, 
+              ...(preservedApprovedAt ? { approved_at: preservedApprovedAt } : {}),
               surveyId, 
               is_bundled_parent: isBatchParent || isSplitExtension, 
               hidden_from_history: isBatchParent, // [FIX] ONLY hide if it's a batch summary. Extensions should be visible.
@@ -1412,7 +1417,7 @@ export const createMidtransPayment = functions.https.onRequest({ cors: true }, a
             payment_method: req.body.paymentMethod || null,
             resident_status_id: residentStatusId,
             metadata: { 
-                ...metadata, 
+                ...metadata,
                 bill_name: parentBillName, 
                 surveyId, 
                 is_bundled_parent: isBatchParent || isSplitExtension,
@@ -1453,7 +1458,7 @@ export const createMidtransPayment = functions.https.onRequest({ cors: true }, a
           resident_status_id: residentStatusId,
           payment_method: req.body.paymentMethod || null,
           metadata: { 
-              ...metadata, 
+              ...metadata,
               bill_name: `Fasilitas: ${childBillName}`,
               parent_order_id: order.id, 
               is_bundled: true, 

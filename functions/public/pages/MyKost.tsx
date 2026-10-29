@@ -116,7 +116,7 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
         if (s === 'EXPIRED') {
             return { isExpired: true, remainingMs: 0, hours: 0, minutes: 0, seconds: 0, isUrgent: true, deadlineDate: null };
         }
-        if (s !== 'AWAITING_PAYMENT') {
+        if (s !== 'AWAITING_PAYMENT' && s !== 'PENDING') {
             return { isExpired: false, remainingMs: 0, hours: 0, minutes: 0, seconds: 0, isUrgent: false, deadlineDate: null };
         }
         
@@ -162,7 +162,7 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
         if (!activeKosts || activeKosts.length === 0) return;
         activeKosts.forEach(async (kost) => {
             const s = (kost.status || '').toUpperCase();
-            if (s === 'AWAITING_PAYMENT') {
+            if (s === 'AWAITING_PAYMENT' || s === 'PENDING') {
                 const expiry = getBookingExpiryInfo(kost);
                 if (expiry.isExpired && kost.id) {
                     try {
@@ -725,11 +725,14 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
                     const statusLower = (doc.status || '').toLowerCase();
                     const isApproved = ['approved', 'paid', 'selesai', 'success', 'berhasil'].includes(statusLower);
                     const isPendingApproval = statusLower === 'pending_approval';
-                    const isAwaitingPayment = statusLower === 'awaiting_payment';
+                    const isAwaitingPayment = statusLower === 'awaiting_payment' || statusLower === 'pending';
+                    const isPending = statusLower === 'pending' || statusLower === 'pending_approval';
                     const isRejected = statusLower === 'rejected';
                     const isCancelled = statusLower === 'cancelled';
 
-                    if (isRent && (isApproved || isPendingApproval || isAwaitingPayment || isRejected || isCancelled)) {
+                    const isExpired = statusLower === 'expired';
+
+                    if (isRent && (isApproved || isPendingApproval || isAwaitingPayment || isPending || isRejected || isCancelled || isExpired)) {
                         let daysRem = null;
                         const metadata = doc.metadata || {};
                         if (metadata.endDate) {
@@ -1853,6 +1856,7 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
 
     const STATUS_COLOR: any = {
         'AWAITING_PAYMENT': 'bg-orange-50 text-orange-600 border-orange-100',
+        'PENDING': 'bg-orange-50 text-orange-600 border-orange-100',
         'PENDING_ASSIGNMENT': 'bg-amber-50 text-amber-600 border-amber-100',
         'AGENT_ASSIGNED': 'bg-blue-50 text-blue-600 border-blue-100',
         'HEADING_TO_LOCATION': 'bg-indigo-50 text-indigo-600 border-indigo-100',
@@ -1864,6 +1868,7 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
     };
     const STATUS_LABEL: any = {
         'AWAITING_PAYMENT': 'Menunggu Pembayaran',
+        'PENDING': 'Menunggu Pembayaran',
         'PENDING_ASSIGNMENT': 'Mencari Agen',
         'AGENT_ASSIGNED': 'Agen Ditetapkan',
         'HEADING_TO_LOCATION': 'Menuju Lokasi',
@@ -2383,7 +2388,7 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
 
                             const expiry = getBookingExpiryInfo(kost);
                             const isExpiredBooking = expiry.isExpired || (kost.status || '').toUpperCase() === 'EXPIRED';
-                            const isAwaitingPayment = (kost.status || '').toUpperCase() === 'AWAITING_PAYMENT' && !isExpiredBooking;
+                            const isAwaitingPayment = ['AWAITING_PAYMENT', 'PENDING'].includes((kost.status || '').toUpperCase()) && !isExpiredBooking;
 
                             return (
                                 <div key={kost.id} className="group relative bg-white rounded-2xl sm:rounded-[2rem] p-5 sm:p-7 lg:p-8 border border-slate-100 shadow-md shadow-slate-200/50 hover:shadow-xl hover:shadow-orange-900/5 transition-all duration-300 overflow-hidden flex flex-col gap-5 sm:gap-7">
@@ -2794,8 +2799,8 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
                                                             {
                                                                 label: 'Estimasi Tagihan',
                                                                 value: FORMAT_CURRENCY(kost.totalPrice || 0),
-                                                                badge: (kost.status || '').toUpperCase() === 'AWAITING_PAYMENT' ? 'Siap Bayar' : 'Belum Bayar',
-                                                                badgeColor: (kost.status || '').toUpperCase() === 'AWAITING_PAYMENT' ? 'bg-orange-100 text-orange-700 border-orange-200/60' : 'bg-slate-200/70 text-slate-700 border-slate-300/60',
+                                                                badge: ['AWAITING_PAYMENT', 'PENDING'].includes((kost.status || '').toUpperCase()) ? 'Siap Bayar' : 'Belum Bayar',
+                                                                badgeColor: ['AWAITING_PAYMENT', 'PENDING'].includes((kost.status || '').toUpperCase()) ? 'bg-orange-100 text-orange-700 border-orange-200/60' : 'bg-slate-200/70 text-slate-700 border-slate-300/60',
                                                                 icon: Receipt,
                                                             }
                                                         ].map((item, idx) => (
