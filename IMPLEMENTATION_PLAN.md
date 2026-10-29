@@ -1,78 +1,97 @@
-# IMPLEMENTATION PLAN: Proteksi Transaksi Platform & Penghapusan Kontak Langsung (Anti-Bypass)
+# IMPLEMENTATION PLAN: Perbaikan Bug Countdown Batas Waktu Pembayaran (1x24 Jam) di Kost Saya (MyKost.tsx)
 
-**ID Rencana**: PLAN-ANTI-BYPASS-003  
-**Tanggal Pengajuan**: 29 Oktober 2026  
-**Status**: Menunggu Persetujuan Pengguna (Waiting for User Approval)  
+## 1. Analisis Masalah & Kebutuhan
 
----
+### Konteks & Gejala
+Setelah pemilik kost menyetujui pengajuan sewa, status transaksi berubah menjadi `AWAITING_PAYMENT` (Menunggu Pembayaran). Pada halaman penyewa (**Kost Saya / MyKost.tsx**), muncul kartu informasi:
+- **Judul**: `BATAS WAKTU PEMBAYARAN`
+- **Badge**: `1x24 Jam`
+- **Tanggal Batas**: `Batas: 30 Okt 2026, 09:09 WITA`
+- **Timer Countdown**: `769 JAM : 09 MNT : 45 DTK`
 
-## 1. Analisis Masalah & Kebutuhan Bisnis (Platform Integrity)
-
-### A. Masalah Kritis (*Platform Disintermediation Risk*)
-- Pada rilis sebelumnya di modal profil calon penghuni, tercantum nomor WhatsApp pribadi dan alamat email calon penyewa secara gamblang beserta tombol `[ Chat WA ]`.
-- **Dampak Fatal bagi Bisnis Platform**:
-  - Pemilik kost (mitra) dapat langsung menghubungi calon penghuni via WhatsApp atau telepon seluler di luar aplikasi.
-  - Terjadi *platform leakage / disintermediation*: Pemilik kost mengajak penyewa bertransaksi tunai/transfer langsung secara offline tanpa melalui sistem pembayaran resmi RuangSinggah.
-  - RuangSinggah kehilangan komisi platform, kehilangan kontrol atas ketersediaan kamar, dan tidak dapat memberikan proteksi garansi sewa jika terjadi penipuan atau perselisihan offline.
-
-### B. Standar Industri Proptech (Airbnb, Mamikos, Upwork)
-- Di Airbnb, Booking.com, dan Mamikos:
-  - **Dilarang keras menampilkan kontak langsung** (nomor telepon, WhatsApp, email) antara calon penyewa dan pemilik properti sebelum transaksi pemesanan disepakati dan dibayar lunas di platform.
-  - Seluruh komunikasi pra-sewa (*inquiry / diskusi*) **WAJIB 100% melalui In-App Chat resmi platform**.
-  - Kontak pribadi hanya boleh dirilis otomatis oleh sistem setelah penyewa menyelesaikan pembayaran resmi (*post-booking handover*).
+Pengguna bingung karena kartu menyatakan batas waktu adalah **1x24 Jam**, namun timer digital di bawahnya justru menampilkan **769 Jam** (setara 32 hari).
 
 ---
 
-## 2. Rencana Solusi yang Akan Diterapkan
+### Akar Masalah Teknis (Root Cause Analysis)
+1. **Desinkronisasi Antara Timestamp Transaksi dan Waktu Sistem Mock (`RS_MOCK_TIME`)**:
+   - Di database Supabase, transaksi disetujui pada **29 Oktober 2026 pukul 09:09:45 WITA**.
+   - Batas waktu dihitung dengan:
+     $$\text{deadline} = \text{baseTime} + (24 \times 60 \times 60 \times 1000) = \text{30 Oktober 2026, 09:09:45 WITA}$$
+   - Namun, pada browser penyewa (`userbiasa1`), `localStorage` menyimpan waktu simulasi (`RS_MOCK_TIME`) dari sesi pengujian sebelumnya yang diset pada **28 September 2026 pukul 00:00:00 UTC** (pukul **08:00:00 WITA**).
+   - Saat menghitung sisa waktu:
+     $$\text{remainingMs} = \text{deadline} - \text{now}$$
+     $$\text{selisih} = \text{30 Okt 2026, 09:09:45} - \text{28 Sep 2026, 08:00:00} = 32\text{ hari } 1\text{ jam } 9\text{ menit } 45\text{ detik}$$
+     $$32 \times 24\text{ jam} + 1\text{ jam} = \mathbf{769\text{ Jam, } 09\text{ Menit, } 45\text{ Detik}}$$
+   - Nilai $769$ jam tersebut adalah **selisih eksak milidetik** antara tanggal 30 Oktober dan 28 September!
 
-1. **Penghapusan Total Bagian "Kontak & Komunikasi" pada Modal Profil Calon Penghuni**:
-   - Menghapus blok WhatsApp (`+62815...`), tombol `[ Chat WA ]`, dan Alamat Email dari modal detail profil calon penghuni di `MitraDashboard.tsx`.
-2. **Substitusi dengan Banner Keamanan & Saluran Resmi (*Secure In-App Communication Card*)**:
-   - Mengganti bagian kontak dengan kartu edukasi keamanan resmi:
-     - Ikon: `ShieldCheck` (Emerald / Blue).
-     - Judul: **Komunikasi Resmi RuangSinggah**
-     - Pesan Edukasi: *"Demi keamanan transaksi, perlindungan garansi sewa, dan pencegahan penipuan, seluruh obrolan dengan calon penyewa wajib dilakukan melalui sistem Chat RuangSinggah."*
-     - Tombol Aksi: **`[ 💬 Mulai Chat dengan Calon Penghuni ]`** (Membuka in-app chat internal secara instan).
-3. **Pembersihan Data Sensitif pada Query `getOwnerBookings` (`userService.ts`)**:
-   - Menghapus `phone` dan `email` calon penyewa dari query `getOwnerBookings` pada status pra-pembayaran (`PENDING_APPROVAL`), sehingga data kontak mentah tidak bocor ke sisi klien front-end.
+2. **Ketiadaan Batas Maksimum (Absence of Hard Cap / SLA Guardrail)**:
+   - Komponen menghitung `hours = Math.floor(safeMs / (1000 * 60 * 60))` tanpa membatasi bahwa durasi pembayaran adalah **1x24 Jam**.
+   - Jika ada perbedaan jam perangkat (clock drift) atau tanggal simulasi masa lalu (`now < baseTime`), waktu yang ditampilkan membengkak tidak wajar hingga ratusan jam.
 
----
+3. **Ticker Detik Membaca Tanggal Statis**:
+   - `useEffect` interval 1 detik memanggil `setNowTick(getCurrentDate().getTime())`. Jika `RS_MOCK_TIME` berupa tanggal tanggalan mentah (`YYYY-MM-DD`), nilainya tidak berdetik dan waktu countdown menjadi kaku/beku.
 
-## 3. Dampak Perubahan File
-
-1. **`functions/public/pages/MitraDashboard.tsx`**:
-   - Menghapus rendering `phone`, `email`, dan tombol `wa.me` pada modal profil calon penghuni.
-   - Menambahkan banner keamanan *Komunikasi Resmi RuangSinggah* dengan tombol langsung ke in-app chat.
-2. **`functions/public/userService.ts`**:
-   - Merapikan join user pada `getOwnerBookings` agar tidak mengekspos nomor kontak calon penyewa pra-pembayaran.
-3. **`functions/PROGRESS.md` & `WALKTHROUGH.md`**:
-   - Dokumentasi progres #474 dan verifikasi pengujian.
+4. **Timestamp `approved_at` Belum Terkunci Permanen**:
+   - Saat status diubah ke `AWAITING_PAYMENT`, `updateBookingStatus` belum menyematkan `approved_at` eksplisit di metadata transaksi, melainkan mengandalkan `updated_at` yang rentan tergeser oleh query atau mutasi lain di masa mendatang.
 
 ---
 
-## 4. Langkah-Langkah Eksekusi (Fase 2)
+## 2. Dampak Perubahan (Files Touched)
 
-- **Tahap 1**: Hapus blok kontak WhatsApp dan Email di modal profil calon penghuni pada `MitraDashboard.tsx`.
-- **Tahap 2**: Pasang banner edukasi keamanan dan tombol internal chat `[ 💬 Chat Calon Penghuni ]`.
-- **Tahap 3**: Bersihkan field kontak sensitif di `userService.ts` (`getOwnerBookings`).
-- **Tahap 4**: Uji build front-end (`npm --prefix functions/public run build`) dan backend functions (`npm --prefix functions run build`).
-- **Tahap 5**: Catat di `PROGRESS.md` (#474), perbarui `WALKTHROUGH.md`, dan push ke `bukan-productions`.
-
----
-
-## 5. Rencana Verifikasi
-
-1. **Verifikasi Visual Modal Profil Calon Penghuni**:
-   - Buka `/dashboard-mitra/bookings` dan klik tombol **`[ 👤 Lihat Profil ]`**.
-   - Pastikan **TIDAK ADA LAGI** nomor WhatsApp, alamat email, maupun tombol `Chat WA`.
-   - Pastikan muncul banner resmi edukasi keamanan dan tombol **`[ 💬 Mulai Chat dengan Calon Penghuni ]`**.
-2. **Uji Fungsionalitas Chat Internal**:
-   - Klik tombol **`[ 💬 Mulai Chat dengan Calon Penghuni ]`** pada modal.
-   - Pastikan sistem langsung mengarahkan pemilik ke tab obrolan in-app dengan calon penghuni tersebut.
-3. **Uji Keamanan Payload Network**:
-   - Pastikan tidak ada data kontak mentah calon penyewa yang bocor di state browser.
+| File | Perubahan Utama |
+|---|---|
+| `functions/public/pages/MyKost.tsx` | - Menerapkan **SLA 24-Hour Hard Cap Guardrail**: `safeMs` dibatasi maksimal $24 \times 3600 \times 1000$ ms.<br>- Mengatasi kondisi `now < baseTime` (waktu lokal di masa lalu) agar sisa waktu dihitung maksimal 24 jam penuh.<br>- Memperbaiki live ticking countdown agar berdetik mulus per detik.<br>- Memprioritaskan pembacaan timestamp: `metadata.approved_at` > `kost.approved_at` > `kost.updated_at`. |
+| `functions/public/userService.ts` | - Di fungsi `updateBookingStatus`: ketika status bertransisi ke `AWAITING_PAYMENT`, simpan timestamp `approved_at: nowIso` ke dalam `metadata` transaksi dan `resident_status` agar terkunci permanen. |
+| `functions/public/pages/MitraDashboard.tsx` | - Di fungsi `getBookingSlaInfo`: terapkan guardrail proteksi yang sama (`Math.min(24 * 3600 * 1000, Math.max(0, diffMs))`) agar dashboard pemilik kost juga bebas dari bug jam ratusan jika terjadi desinkronisasi waktu. |
 
 ---
 
-> [!IMPORTANT]
-> **Menunggu Persetujuan Pengguna (ACC)**: Sesuai protokol siklus 2-fase ruang kerja, Agent **BERHENTI** pada tahap ini dan tidak memodifikasi file kode sebelum menerima persetujuan ("ACC" / "Proceed") dari Anda.
+## 3. Langkah-Langkah Eksekusi (Incremental Execution)
+
+### Langkah 1: Kunci Timestamp `approved_at` di `userService.ts`
+1. Buka `functions/public/userService.ts`.
+2. Pada fungsi `updateBookingStatus`:
+   ```typescript
+   const isApproving = status === 'AWAITING_PAYMENT';
+   const updatedMeta = {
+     ...existingMeta,
+     ...(typeof extra === 'object' && extra !== null ? extra : {}),
+     ...(isApproving && !existingMeta.approved_at ? { approved_at: nowIso } : {}),
+     ...(rejectionReason ? { rejection_reason: rejectionReason, rejected_at: nowIso } : {})
+   };
+   ```
+
+### Langkah 2: Perbaiki Penghitungan & Guardrail di `MyKost.tsx`
+1. Buka `functions/public/pages/MyKost.tsx`.
+2. Di fungsi `getBookingExpiryInfo(kost)`:
+   - Ambil `baseTimeStr` dengan prioritas: `kMeta.approved_at || kost.approved_at || kost.updated_at || kost.created_at || kMeta.createdAt`.
+   - Tentukan `MAX_WINDOW_MS = BOOKING_EXPIRY_HOURS * 60 * 60 * 1000` (24 Jam = 86.400.000 ms).
+   - Tentukan `effectiveNow = Math.max(now, baseTime)` (mencegah kondisi waktu sistem lebih lampau dari waktu persetujuan transaksi).
+   - Hitung `rawRemaining = deadline - effectiveNow`.
+   - Batasi: `safeMs = Math.min(MAX_WINDOW_MS, Math.max(0, rawRemaining))`.
+   - Dengan guardrail ini, nilai `hours` dijamin berada dalam rentang `0 <= hours <= 24`. Nilai 769 jam **mustahil terjadi lagi**.
+3. Pastikan interval live timer (`useEffect` `1000ms`) memperbarui state secara kontinu sehingga detik berkurang mulus dari 59 ke 00.
+
+### Langkah 3: Proteksi Serupa di `MitraDashboard.tsx`
+1. Buka `functions/public/pages/MitraDashboard.tsx`.
+2. Pada `getBookingSlaInfo(createdAtStr)`:
+   - Terapkan guardrail:
+     ```typescript
+     const safeDiffMs = Math.min(24 * 60 * 60 * 1000, Math.max(0, diffMs));
+     ```
+   - Menjamin countdown konfirmasi pemilik kost juga tidak akan pernah menampilkan angka > 24 jam.
+
+---
+
+## 4. Rencana Verifikasi
+
+1. **Uji Matematis & Tampilan UI**:
+   - Simulasi dengan tanggal `RS_MOCK_TIME` apa pun di masa lalu: pastikan timer di kartu `BATAS WAKTU PEMBAYARAN` **hanya menampilkan maksimal 24 Jam** (misal: `23 JAM : 58 MNT : 12 DTK`).
+   - Verifikasi detik berkurang setiap 1 detik secara real-time.
+2. **Uji Kompilasi TypeScript / Vite**:
+   - Jalankan `npm --prefix functions/public run build` untuk memastikan 0 error kompilasi.
+   - Jalankan `npm --prefix functions run build` untuk memverifikasi backend functions.
+3. **Pencatatan Riwayat**:
+   - Dokumentasikan perubahan ke `functions/PROGRESS.md` sebagai **Progres #475**.
+   - Buat dokumen `WALKTHROUGH.md` dan lakukan push ke branch `bukan-productions`.

@@ -1030,6 +1030,7 @@ export async function updateBookingStatus(
 ): Promise<void> {
   try {
     const rejectionReason = typeof extra === 'string' ? extra : extra?.rejection_reason;
+    const isApproving = status === 'AWAITING_PAYMENT';
     const nowIso = getCurrentDate().toISOString();
 
     // Ambil transaksi saat ini untuk merge metadata & resident_status_id
@@ -1046,6 +1047,7 @@ export async function updateBookingStatus(
     const updatedMeta = {
       ...existingMeta,
       ...(typeof extra === 'object' && extra !== null ? extra : {}),
+      ...(isApproving && !existingMeta.approved_at ? { approved_at: nowIso } : {}),
       ...(rejectionReason ? { rejection_reason: rejectionReason, rejected_at: nowIso } : {})
     };
 
@@ -1074,6 +1076,18 @@ export async function updateBookingStatus(
             ...existingMeta,
             rejection_reason: rejectionReason || 'Ditolak pemilik kost',
             rejected_at: nowIso
+          }
+        })
+        .eq('id', resId);
+    } else if (resId && isApproving) {
+      await supabase
+        .from('resident_status')
+        .update({
+          status: 'AWAITING_PAYMENT',
+          updated_at: nowIso,
+          metadata: {
+            ...existingMeta,
+            approved_at: existingMeta.approved_at || nowIso
           }
         })
         .eq('id', resId);

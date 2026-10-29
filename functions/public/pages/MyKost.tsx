@@ -100,12 +100,12 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
     const [loading, setLoading] = useState(true);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [activeTab, setActiveTab] = useState<'diajukan' | 'aktif' | 'riwayat'>('diajukan');
-    const [nowTick, setNowTick] = useState<number>(() => getCurrentDate().getTime());
+    const [nowTick, setNowTick] = useState<number>(() => Date.now());
 
     // Live 1-second interval for real-time scarcity countdown ticker
     useEffect(() => {
         const timer = setInterval(() => {
-            setNowTick(getCurrentDate().getTime());
+            setNowTick(Date.now());
         }, 1000);
         return () => clearInterval(timer);
     }, []);
@@ -122,13 +122,25 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
         
         // Base time: approved_at > updated_at > created_at
         const kMeta = typeof kost.metadata === 'string' ? JSON.parse(kost.metadata) : (kost.metadata || {});
-        const baseTimeStr = kost.updated_at || kost.approved_at || kMeta.approved_at || kost.created_at || kMeta.createdAt;
+        const baseTimeStr = kMeta.approved_at || kost.approved_at || kost.updated_at || kost.created_at || kMeta.createdAt;
         const baseTime = baseTimeStr ? new Date(baseTimeStr).getTime() : 0;
-        const deadline = baseTime + (BOOKING_EXPIRY_HOURS * 60 * 60 * 1000); // 24 jam
-        const now = getCurrentDate().getTime();
-        const remainingMs = deadline - now;
-        const isExpired = baseTime > 0 && remainingMs <= 0;
-        const safeMs = Math.max(0, remainingMs);
+        const MAX_WINDOW_MS = BOOKING_EXPIRY_HOURS * 60 * 60 * 1000; // 24 jam
+        const deadline = baseTime + MAX_WINDOW_MS;
+        // Proteksi Sinkronisasi Waktu:
+        // Cek simulated date (TimeSimulator) & live wall clock.
+        // Jika mock date tertinggal di masa lalu sebelum baseTime, prioritaskan wallTime agar tidak glitch.
+        const simTime = getCurrentDate().getTime();
+        const wallTime = Date.now();
+        const now = simTime < baseTime ? wallTime : simTime;
+        const effectiveNow = Math.max(now, baseTime);
+        const remainingMs = deadline - effectiveNow;
+        const isExpired = baseTime > 0 && (deadline - Math.max(simTime, wallTime)) <= 0;
+        
+        // Hard Cap Guardrail: Sisa waktu dijamin berada dalam rentang [0, MAX_WINDOW_MS] (Maks 24 Jam)
+        const safeMs = Math.min(MAX_WINDOW_MS, Math.max(0, remainingMs));
+
+
+
         const hours = Math.floor(safeMs / (1000 * 60 * 60));
         const minutes = Math.floor((safeMs % (1000 * 60 * 60)) / (1000 * 60));
         const seconds = Math.floor((safeMs % (1000 * 60)) / 1000);

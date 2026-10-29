@@ -791,15 +791,20 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
         if (!createdAtStr) return { label: 'Batas Konfirmasi: 24 Jam', isUrgent: false, isExpired: false };
         const createdTime = new Date(createdAtStr).getTime();
         if (isNaN(createdTime)) return { label: 'Batas Konfirmasi: 24 Jam', isUrgent: false, isExpired: false };
-        const expiryTime = createdTime + (24 * 60 * 60 * 1000);
-        const now = getCurrentDate().getTime();
-        const diffMs = expiryTime - now;
+        const MAX_SLA_MS = 24 * 60 * 60 * 1000;
+        const expiryTime = createdTime + MAX_SLA_MS;
+        const simTime = getCurrentDate().getTime();
+        const wallTime = Date.now();
+        const now = simTime < createdTime ? wallTime : simTime;
+        const effectiveNow = Math.max(now, createdTime);
+        const diffMs = expiryTime - effectiveNow;
         
-        if (diffMs <= 0) {
+        if (diffMs <= 0 || (expiryTime - Math.max(simTime, wallTime)) <= 0) {
             return { label: 'Waktu Respon Berakhir (24 Jam)', isUrgent: true, isExpired: true };
         }
-        const hours = Math.floor(diffMs / (1000 * 60 * 60));
-        const minutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+        const safeDiffMs = Math.min(MAX_SLA_MS, Math.max(0, diffMs));
+        const hours = Math.floor(safeDiffMs / (1000 * 60 * 60));
+        const minutes = Math.floor((safeDiffMs % (1000 * 60 * 60)) / (1000 * 60));
         const isUrgent = hours < 6;
         const label = hours > 0 
             ? `Sisa Respon: ${hours} Jam ${minutes} Menit` 

@@ -2,6 +2,37 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 475. Proteksi Batas Waktu Pembayaran (Hard Cap 24 Jam) & Penguncian Timestamp Persetujuan (`MyKost.tsx`, `userService.ts`, `MitraDashboard.tsx`) (Oktober 2026)
+- **Permintaan & Masukan Pengguna**:
+  1. Investigasi dan perbaikan kartu "Batas Waktu Pembayaran" di tab Diajukan (Kost Saya / `MyKost.tsx`) yang menampilkan `769 JAM : 09 MNT : 45 DTK` padahal badge menyatakan `1x24 Jam`.
+  2. Pertanyaan pengguna: "apakah penerapan plan ini hanya berdampak pada percobaan sekarang atau akan berdampak juga dari user nantinya? jika hanya untuk percobaan sekarang dan tidak berdampak signifikan bagi real user mending plan nya kita batalkan, tapi kalau iya jalankan".
+- **Akar Masalah Teknis**:
+  1. Desinkronisasi Waktu Simulasi (`RS_MOCK_TIME`): Di Supabase transaksi disetujui pada `29 Okt 2026 09:09 WITA`, namun browser penyewa masih menyimpan mock time tanggal `28 Sep 2026 08:00 WITA` dari sesi testing lama. Selisih 32 hari + 1 jam menghasilkan 769 jam.
+  2. Risiko Nyata bagi Real User (Timer Reset Bug): Sistem sebelumnya membaca `kost.updated_at` sebagai base time. Jika calon penyewa membuka popup Midtrans atau sistem memperbarui transaksi beberapa jam setelah disetujui, `updated_at` ter-update sehingga batas waktu 24 jam ter-reset kembali ke 24 jam (pembeli mendapat waktu ilegal dan kamar mitra tertahan).
+  3. Ketiadaan Hard Cap SLA: Perhitungan `hours` tidak membatasi nilai maksimum ke 24 jam sehingga clock drift atau deviasi jam lokal perangkat bisa memicu angka jam membengkak.
+- **Implementasi Solusi**:
+  1. **Penguncian Permanen Timestamp Persetujuan (`userService.ts`)**:
+     - Pada `updateBookingStatus`, saat status bertransisi ke `AWAITING_PAYMENT`, otomatis mengunci timestamp `approved_at: nowIso` ke dalam metadata `transactions` dan `resident_status`.
+     - Timestamp `approved_at` tidak akan pernah tergeser oleh mutasi transaksi lanjutan (seperti pembuatan token Midtrans atau pembaruan tagihan).
+  2. **Hard Cap Guardrail & Proteksi Desinkronisasi (`MyKost.tsx`)**:
+     - Memprioritaskan pembacaan: `kMeta.approved_at || kost.approved_at || kost.updated_at || kost.created_at`.
+     - Menetapkan `MAX_WINDOW_MS = 24 * 60 * 60 * 1000` (24 jam).
+     - Menangani kondisi waktu sistem di masa lalu (`effectiveNow = Math.max(now, baseTime)`), sehingga jika ada clock drift atau mock date lama, durasi sisa langsung dimulai dari 24 jam penuh tanpa pernah melonjak ke ratusan jam.
+     - Menerapkan batasan matematis ketat: `safeMs = Math.min(MAX_WINDOW_MS, Math.max(0, remainingMs))`. Nilai `hours` dijamin selalu berada dalam rentang `0 <= hours <= 24`.
+     - Memperbarui ticker live `nowTick` agar berdetik mulus per 1 detik (`Date.now()`).
+  3. **Proteksi Serupa pada Dashboard Mitra (`MitraDashboard.tsx`)**:
+     - Menerapkan guardrail `Math.min(MAX_SLA_MS, Math.max(0, diffMs))` pada `getBookingSlaInfo` agar countdown konfirmasi pemilik kost juga 100% kebal dari angka jam membengkak.
+- **File Tersentuh**:
+  - `functions/public/userService.ts`
+  - `functions/public/pages/MyKost.tsx`
+  - `functions/public/pages/MitraDashboard.tsx`
+  - `functions/PROGRESS.md`
+  - `IMPLEMENTATION_PLAN.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi frontend Vite (`npm.cmd --prefix functions/public run build`): Lulus 100% (2512 modul, code 0).
+  - Kompilasi backend Cloud Functions (`npm.cmd --prefix functions run build`): Lulus 100% (tsc, code 0).
+
 ### 474. Proteksi Transaksi Platform & Eliminasi Total Kontak Pribadi (Anti-Bypass) (`MitraDashboard.tsx`, `userService.ts`) (Oktober 2026)
 - **Permintaan & Masukan Pengguna**:
   1. Larangan keras mencantumkan nomor WhatsApp dan email calon penyewa kepada mitra pemilik kost pada tahap pengajuan sewa (*pre-approval*).
