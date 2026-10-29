@@ -1,32 +1,40 @@
-# WALKTHROUGH: Perbaikan Batas Waktu Pembayaran (Hard Cap 24 Jam) & Penguncian Timestamp Persetujuan
+# WALKTHROUGH: Modernisasi & Standardisasi Industri Portal Pembayaran (PaymentGateway.tsx)
 
 ## Ringkasan Pekerjaan
-Pada tugas ini, kita meneliti dan menyelesaikan permasalahan di mana kartu **Batas Waktu Pembayaran (1x24 Jam)** pada tab Diajukan (**Kost Saya / MyKost.tsx**) menampilkan `769 JAM : 09 MNT : 45 DTK` bukannya maksimal 24 jam.
-
-Penyebab utamanya adalah desinkronisasi antara waktu persetujuan transaksi di database (29 Oktober 2026) dengan waktu simulasi lama (`RS_MOCK_TIME`) di browser penyewa (28 September 2026), yang menghasilkan selisih eksak milidetik sebesar 769 jam. Selain itu, kami juga menemukan risiko kritis bagi pengguna riil di produksi (*Timer Reset Bug*): di mana sistem lama menggunakan `updated_at`, sehingga setiap kali ada pembaruan transaksi (misal: memilih metode pembayaran Midtrans), batas waktu 24 jam bisa ter-reset kembali ke 24 jam dari awal.
+Pada tugas ini, kita melakukan evaluasi, redesain visual, serta perbaikan arsitektur sistem pada komponen portal pembayaran (**Checkout Gateway / `PaymentGateway.tsx`**) agar memenuhi standar industri proptech & fintech terkemuka, mengintegrasikan identitas merek resmi **RuangSinggah.id**, serta menyelesaikan bug tabrakan teks dan batas waktu habis palsu.
 
 ---
 
-## Daftar Perubahan Detail
+## Daftar Perubahan Mendalam
 
-### 1. `functions/public/userService.ts` (Penguncian Timestamp `approved_at`)
-- Pada fungsi `updateBookingStatus`, ketika status bertransisi ke `AWAITING_PAYMENT` (pemilik menyetujui pesanan), sistem kini secara otomatis menyematkan timestamp permanen `approved_at: nowIso` ke dalam metadata tabel `transactions` dan `resident_status`.
-- **Dampak Nyata**: Waktu 24 jam kini terkunci permanen sejak detik pertama disetujui. Mutasi data transaksi berikutnya (seperti pembuatan token Midtrans atau pembaruan tagihan) **tidak akan pernah lagi me-reset jendela pembayaran penyewa**.
+### 1. Integrasi Branding Resmi RuangSinggah.id & Keamanan Perbankan
+- **Logo Resmi**: Mengganti teks inisial `"RS"` oranye dengan logo resmi `/logo.png` bersanding dengan tipografi wordmark `RuangSinggah.id`.
+- **Badging & Keamanan**:
+  - Badge header: `Official Checkout Gateway`.
+  - Security strip: `<ShieldCheck className="w-4 h-4 text-emerald-400" /> Enkripsi Bank-Grade 256-bit SSL` dan `Midtrans Verified ✓`.
+  - Footer jaminan keamanan: `Transaksi Resmi Dilindungi RuangSinggah.id • Powered by Midtrans`.
 
-### 2. `functions/public/pages/MyKost.tsx` (Hard Cap Guardrail & Live Ticker)
-- **Prioritas Sumber Waktu**: Memprioritaskan pembacaan `kMeta.approved_at || kost.approved_at || kost.updated_at || kost.created_at`.
-- **Proteksi Desinkronisasi Jam**: Menambahkan logika `effectiveNow = Math.max(now, baseTime)`. Jika jam lokal perangkat tertinggal di masa lalu dibanding waktu approval, sisa waktu dihitung maksimal 24 jam penuh tanpa pernah melonjak ke ratusan jam.
-- **SLA 24-Hour Hard Cap Guardrail**:
-  ```typescript
-  const MAX_WINDOW_MS = BOOKING_EXPIRY_HOURS * 60 * 60 * 1000; // 24 jam
-  const safeMs = Math.min(MAX_WINDOW_MS, Math.max(0, remainingMs));
-  ```
-  Dengan pembatas matematis ini, nilai `hours` dijamin 100% selalu berada dalam rentang `0 <= hours <= 24`.
-- **Live Real-time Ticker**: State `nowTick` kini memperbarui waktu per 1 detik (`Date.now()`), sehingga detik pada kartu timer digital berdetik mulus secara real-time.
+### 2. Eliminasi Total Tampilan "AI Slop" & Emoji Mentah
+- **Radius Proporsional Standar Fintech**: Mengganti sudut bengkak (`rounded-[2.5rem]`, `rounded-[3rem]`) menjadi sudut modern `rounded-2xl` dan `rounded-xl`.
+- **Pure Vector SVG (`lucide-react`)**: Menghapus seluruh emoji teks mentah (`📱 💳`, `📥`, `💳`, `✅`, `⚠️`) dan menggantinya 100% dengan komponen SVG dari paket `lucide-react`:
+  - `<QrCode />`, `<Smartphone />`, `<Wallet />`, `<CreditCard />`, `<Building2 />` untuk saluran pembayaran.
+  - `<Download />` untuk tombol unduh QRIS.
+  - `<Copy />` $\rightarrow$ `<Check />` untuk tombol salin nomor Virtual Account.
+  - `<AlertCircle />` untuk pesan galat.
+  - `<CheckCircle2 />` untuk layar pembayaran berhasil.
 
-### 3. `functions/public/pages/MitraDashboard.tsx` (Proteksi Dashboard Pemilik Kost)
-- Pada fungsi `getBookingSlaInfo`, diterapkan guardrail proteksi yang sama (`Math.min(MAX_SLA_MS, Math.max(0, diffMs))`).
-- Menjamin kartu SLA konfirmasi pemilik kost juga tidak akan pernah menampilkan angka jam berlebih jika jam perangkat penyewa atau pemilik mengalami deviasi.
+### 3. Pemisahan Layout Anti-Tumpuk (Zero Text-Collision Layout)
+- **Akar Masalah Sebelumnya**: Nominal tagihan (`Rp 1.000.000`) dan timer countdown (`00:00:00`) diletakkan dalam satu baris flex horizontal tanpa pembungkus protektif, sehingga pada layar ponsel keduanya menempel rapat (`Rp 1.000.00000:00:00`).
+- **Solusi Industri**:
+  - Total Tagihan diletakkan dalam baris tersendiri dengan tipografi tegas dan tombol toggle `[ Lihat Rincian / Tutup Rincian ]` yang menampilkan accordion rincian biaya secara rapi.
+  - Batas waktu pembayaran dipindahkan ke dalam banner waktu terdedikasi (`bg-amber-50/90 border border-amber-200/70 text-amber-950 rounded-xl px-3.5 py-2`) lengkap dengan ikon vektor `<Clock />`.
+  - Pada tampilan mobile maupun desktop, nominal tagihan dan timer countdown **100% terpisah dan tidak akan pernah bertubrukan**.
+
+### 4. Perbaikan Arsitektur Waktu Batas Pembayaran (`getRemainingSeconds`)
+- **Akar Masalah Sebelumnya**: Komponen lama menghitung waktu mundur dari `created_at` dengan durasi kaku 3 jam. Untuk pesanan sewa kost yang baru saja disetujui mitra hari ini padahal pengajuannya dibuat kemarin, timer langsung menampilkan `00:00:00` merah.
+- **Solusi Industri**:
+  - Sistem kini mendeteksi tipe produk secara otomatis. Untuk pesanan sewa (`kost_booking`, `rent`, `kost`, dll), durasi jendela SLA adalah **24 Jam penuh (86.400 detik)** dihitung dari `metadata.approved_at || updated_at || created_at`.
+  - Timer kini langsung menampilkan sisa waktu yang benar (~23 jam atau 24 jam) saat penyewa menekan tombol BAYAR.
 
 ---
 
@@ -34,7 +42,7 @@ Penyebab utamanya adalah desinkronisasi antara waktu persetujuan transaksi di da
 
 ### 1. Kompilasi Front-End Vite (`functions/public`)
 - Perintah: `npm.cmd --prefix functions/public run build`
-- Hasil: **LULUS (Code 0)**
+- Hasil: **LULUS (2512 modul, 0 error)**
 - Bukti log kompilasi:
   ```text
   vite v6.4.1 building for production...
@@ -42,14 +50,13 @@ Penyebab utamanya adalah desinkronisasi antara waktu persetujuan transaksi di da
   ✓ 2512 modules transformed.
   rendering chunks...
   computing gzip size...
-  ../../public/assets/MyKost-mZaDoyDA.js                 183.62 kB │ gzip:  44.10 kB
-  ../../public/assets/MitraDashboard-oD7QIo8m.js         456.57 kB │ gzip:  99.57 kB
-  ✓ built in 40.43s
+  ../../public/assets/PaymentGateway-DLLe9dHj.js          33.49 kB │ gzip:   9.84 kB
+  ✓ built in 34.46s
   ```
 
 ### 2. Kompilasi Backend Cloud Functions (`functions`)
 - Perintah: `npm.cmd --prefix functions run build`
-- Hasil: **LULUS (Code 0)**
+- Hasil: **LULUS (tsc, 0 error)**
 - Bukti log kompilasi:
   ```text
   > build
@@ -61,10 +68,10 @@ Penyebab utamanya adalah desinkronisasi antara waktu persetujuan transaksi di da
 ## Panduan Pengujian bagi Pengguna
 
 1. Buka halaman **Kost Saya** (`/my-kost`) dengan akun penyewa (`userbiasa1`).
-2. Masuk ke tab **Diajukan**.
-3. Perhatikan kartu **BATAS WAKTU PEMBAYARAN**:
-   - Badge menunjukkan `1x24 Jam`.
-   - Baris informasi batas menunjukkan `Batas: [Tanggal], [Jam:Menit] WITA`.
-   - Timer digital di bawahnya menunjukkan countdown presisi: misal `23 JAM : 5x MNT : xx DTK`.
-   - Detik berkurang mulus setiap 1 detik.
-   - Bahkan jika Time Simulator disetel ke tanggal masa lalu, angka jam **tidak akan pernah lagi melonjak ke 769 Jam**.
+2. Pada pesanan yang berstatus **Tunggu Pembayaran**, klik tombol **BAYAR**.
+3. Periksa tampilan modal Checkout Gateway yang baru:
+   - Header menampilkan logo resmi **RuangSinggah.id** dan badge keamanan bank-grade SSL.
+   - Nominal **Rp 1.000.000** tampil bersih, besar, dan tidak bertabrakan dengan batas waktu.
+   - Countdown timer menunjukkan sisa waktu 24 jam yang valid (bukan 00:00:00).
+   - Seluruh daftar metode bayar (QRIS, GoPay, DANA, Virtual Account) menggunakan kartu bergaris halus dan ikon vektor SVG jernih.
+   - Fitur salin nomor Virtual Account dan unduh QR code berfungsi mulus dengan umpan balik visual instan.

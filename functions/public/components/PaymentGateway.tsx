@@ -1,5 +1,28 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { 
+  ShieldCheck, 
+  Lock, 
+  CheckCircle2, 
+  QrCode, 
+  Building2, 
+  Smartphone, 
+  Wallet, 
+  CreditCard, 
+  Clock, 
+  ChevronRight, 
+  ChevronDown, 
+  Copy, 
+  Check, 
+  Download, 
+  ArrowLeft, 
+  ArrowRight,
+  X, 
+  Receipt, 
+  RefreshCw, 
+  ExternalLink, 
+  AlertCircle 
+} from 'lucide-react';
 import { FORMAT_CURRENCY } from '../constants';
 import { supabase } from '../supabase';
 import { notificationService } from '../notificationService';
@@ -11,7 +34,7 @@ interface PaymentGatewayProps {
   amount: number;
   orderId: string;
   productId: string;
-  productType: 'database' | 'kost_booking' | 'survey' | 'kost' | 'property' | 'perpanjangan_sewa' | string; // Support for different products
+  productType: 'database' | 'kost_booking' | 'survey' | 'kost' | 'property' | 'perpanjangan_sewa' | string;
   userId: string;
   metadata?: any;
   existingOrderId?: string;
@@ -37,7 +60,12 @@ const PaymentGateway: React.FC<PaymentGatewayProps> = ({
   const [searchParams, setSearchParams] = useSearchParams();
   const hasInitialized = useRef(false);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [timeLeft, setTimeLeft] = useState(10800);
+  
+  // Dynamic remaining seconds calculation (SLA-aware)
+  const isRentRelated = ['kost_booking', 'rent', 'kost', 'property', 'perpanjangan_sewa', 'tagihan_ekstra'].includes((productType || '').toLowerCase());
+  const defaultWindowSecs = isRentRelated ? 86400 : 10800; // 24 Jam untuk sewa kost, 3 Jam untuk produk lainnya
+  const [timeLeft, setTimeLeft] = useState<number>(defaultWindowSecs);
+
   const [currentOrder, setCurrentOrder] = useState<Transaction | null>(null);
   const [showCheckout, setShowCheckout] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -48,91 +76,88 @@ const PaymentGateway: React.FC<PaymentGatewayProps> = ({
   const [selectedGateway, setSelectedGateway] = useState<string>('MIDTRANS');
   const [redirectUrl, setRedirectUrl] = useState<string | null>(null);
 
-  const pollIntervalRef = useRef<any>(null);
   const [showDetails, setShowDetails] = useState(false);
   const [availableMethods, setAvailableMethods] = useState<any[]>([]);
-  const [openCategory, setOpenCategory] = useState<string | null>('va');
   const [imageErrors, setImageErrors] = useState<Record<string, boolean>>({});
   const [showCopied, setShowCopied] = useState(false);
   const successTriggered = useRef(false);
 
+  // Helper untuk menghitung sisa detik pembayaran secara presisi
+  const getRemainingSeconds = (order: Transaction | null): number => {
+    const windowSecs = isRentRelated ? 86400 : 10800;
+    if (!order) return windowSecs;
+
+    const orderMeta = typeof order.metadata === 'string' ? JSON.parse(order.metadata) : (order.metadata || {});
+    // Prioritas: approved_at > updated_at > created_at
+    const baseTimeStr = orderMeta.approved_at || (order as any).approved_at || order.updated_at || order.created_at;
+    if (!baseTimeStr) return windowSecs;
+
+    const baseTimeMs = new Date(baseTimeStr).getTime();
+    if (isNaN(baseTimeMs)) return windowSecs;
+
+    const expiryMs = baseTimeMs + (windowSecs * 1000);
+    const nowMs = Date.now();
+    const diffSecs = Math.floor((expiryMs - nowMs) / 1000);
+
+    return Math.min(windowSecs, Math.max(0, diffSecs));
+  };
+
   useEffect(() => {
     let timer: any;
     
-    // Initial calculation immediately when currentOrder changes
-    if (currentOrder && currentOrder.created_at) {
-      const createdMs = new Date(currentOrder.created_at).getTime();
-      const diffSecs = Math.floor((new Date().getTime() - createdMs) / 1000);
-      const remaining = 10800 - diffSecs;
-      setTimeLeft(remaining > 0 ? remaining : 0);
-    }
+    // Perhitungan awal saat order berubah
+    const initialSecs = getRemainingSeconds(currentOrder);
+    setTimeLeft(initialSecs);
 
-    if (currentOrder && currentOrder.status?.toUpperCase() !== 'PAID' && currentOrder.status !== 'expired') {
+    if (currentOrder && !PAID_STATUSES.includes((currentOrder.status || '').toUpperCase()) && currentOrder.status !== 'expired') {
       timer = setInterval(() => {
-        const createdMs = new Date(currentOrder.created_at).getTime();
-        const diffSecs = Math.floor((new Date().getTime() - createdMs) / 1000);
-        const remaining = 10800 - diffSecs;
+        const remaining = getRemainingSeconds(currentOrder);
+        setTimeLeft(remaining);
         if (remaining <= 0) {
-          setTimeLeft(0);
           clearInterval(timer);
-          if (currentOrder.status === 'pending') {
-             setCurrentOrder(prev => prev ? {...prev, status: 'expired'} : prev);
+          if (['pending', 'awaiting_payment'].includes((currentOrder.status || '').toLowerCase())) {
+            setCurrentOrder(prev => prev ? { ...prev, status: 'expired' } : prev);
           }
-        } else {
-          setTimeLeft(remaining);
         }
       }, 1000);
     } else if (!currentOrder) {
       timer = setInterval(() => {
-        setTimeLeft((prev) => (prev > 0 ? prev - 1 : 0));
+        setTimeLeft(prev => (prev > 0 ? prev - 1 : 0));
       }, 1000);
     } else if (currentOrder?.status === 'expired') {
       setTimeLeft(0);
     }
+
     return () => { if (timer) clearInterval(timer); };
-  }, [currentOrder]);
+  }, [currentOrder, productType]);
 
   // Check admin status
   useEffect(() => {
-    // If isAdminProp is provided, we use it directly
     if (isAdminProp !== undefined) {
-      console.log("[DEBUG] Using isAdmin from prop:", isAdminProp);
       setIsAdmin(isAdminProp);
       return;
     }
 
     const checkAdmin = async () => {
-      console.log("[DEBUG] checkAdmin starting for userId:", userId);
-      if (!userId) {
-        console.warn("[DEBUG] checkAdmin: No userId provided");
-        return;
-      }
-      
+      if (!userId) return;
       try {
         const { data, error } = await supabase
           .from('users')
           .select('is_admin, role')
           .eq('id', userId)
-          .maybeSingle(); // Use maybeSingle to avoid error if not found
+          .maybeSingle();
           
-        if (error) {
-          console.error("[DEBUG] checkAdmin error:", error);
-          return;
-        }
-        
+        if (error) return;
         if (data) {
           const isAdm = data.is_admin === true || data.is_admin === 1 || data.role === 'admin';
-          console.log("[DEBUG] checkAdmin data found:", { data, isAdm });
           setIsAdmin(isAdm);
-        } else {
-          console.log("[DEBUG] checkAdmin: No user record found in 'users' table for ID:", userId);
         }
       } catch (err) {
-        console.error("[DEBUG] checkAdmin unexpected error:", err);
+        console.error("checkAdmin error:", err);
       }
     };
     checkAdmin();
-  }, [userId]);
+  }, [userId, isAdminProp]);
 
   useEffect(() => {
     (async () => {
@@ -144,7 +169,6 @@ const PaymentGateway: React.FC<PaymentGatewayProps> = ({
         return;
       }
 
-      // If we already have the same order loaded, don't re-fetch
       if (currentOrder?.id === effectiveOrderId || currentOrder?.pakasir_order_id === effectiveOrderId) {
         return;
       }
@@ -158,7 +182,6 @@ const PaymentGateway: React.FC<PaymentGatewayProps> = ({
         if (isUuid) {
           query = query.eq('id', effectiveOrderId);
         } else {
-          console.log("[DEBUG] Resuming by pakasir_order_id:", effectiveOrderId);
           query = query.eq('pakasir_order_id', effectiveOrderId);
         }
 
@@ -166,7 +189,6 @@ const PaymentGateway: React.FC<PaymentGatewayProps> = ({
         if (error) throw error;
         
         if (order) {
-          console.log("[DEBUG] Resuming order found:", order.id);
           setCurrentOrder(order);
           if (order.payment_method) {
              setSelectedMethod(order.payment_method);
@@ -177,7 +199,7 @@ const PaymentGateway: React.FC<PaymentGatewayProps> = ({
           }
         }
       } catch (err: any) {
-        console.error("[DEBUG] fetchOrder error:", err);
+        console.error("fetchOrder error:", err);
         setError('Gagal memuat detail tagihan: ' + err.message);
       } finally {
         setIsProcessing(false);
@@ -206,21 +228,17 @@ const PaymentGateway: React.FC<PaymentGatewayProps> = ({
     fetchConfig();
   }, []);
 
-  // --- SINGLE ROBUST MONITORING & ACTION EFFECT ---
+  // Real-time Monitoring & Status Sync
   useEffect(() => {
     const orderId = currentOrder?.id;
     if (!orderId) return;
 
-    const isPaid = PAID_STATUSES.includes(currentOrder.status?.toUpperCase() || '');
+    const isPaid = PAID_STATUSES.includes((currentOrder.status || '').toUpperCase());
     
-    // IF ALREADY PAID: Trigger success actions (if not done yet)
     if (isPaid) {
       if (successTriggered.current) return;
       successTriggered.current = true;
 
-      console.log("[DEBUG] Success detected! Triggering actions for:", orderId);
-
-      // Perform background tasks
       notifyAdminStatusUpdate("Pembayaran Gateway", orderId, "PAID", {
         "Tipe Produk": productType,
         "User ID": userId
@@ -239,7 +257,7 @@ const PaymentGateway: React.FC<PaymentGatewayProps> = ({
             : `Pembayaran sewa ${m.kostName || 'Kost'} senilai Rp ${amount.toLocaleString('id-ID')} telah berhasil diverifikasi.`,
         'payment',
         {},
-        isDatabase ? 'https://mail.google.com/mail/u/0/#search/RuangSinggah' : '/my-bookings'
+        isDatabase ? 'https://mail.google.com/mail/u/0/#search/RuangSinggah' : '/my-kost'
       ).catch(err => console.error("Failed to create payment notification:", err));
       
       if (['rent', 'kost_booking', 'tagihan_ekstra', 'property', 'kost', 'perpanjangan_sewa'].includes(productType)) {
@@ -255,10 +273,7 @@ const PaymentGateway: React.FC<PaymentGatewayProps> = ({
       return;
     }
 
-    // IF NOT PAID: Start monitoring
-    console.log(`[DEBUG] MONITORING START for ID: ${orderId}`);
-
-    // 1. Real-time subscription
+    // Real-time Supabase subscription
     const channel = supabase
       .channel(`monitor-${orderId}`)
       .on(
@@ -266,7 +281,6 @@ const PaymentGateway: React.FC<PaymentGatewayProps> = ({
         { event: '*', schema: 'public', table: 'transactions', filter: `id=eq.${orderId}` },
         (payload) => {
           const newStatus = payload.new.status?.toUpperCase() || '';
-          console.log(`[DEBUG] REAL-TIME UPDATE for ${orderId}:`, payload.new.status);
           if (PAID_STATUSES.includes(newStatus)) {
             setCurrentOrder(payload.new as Transaction);
           }
@@ -274,25 +288,23 @@ const PaymentGateway: React.FC<PaymentGatewayProps> = ({
       )
       .subscribe();
 
-    // 2. Polling fallback (Fast 3s)
+    // Polling fallback (3 detik)
     const pollInterval = setInterval(async () => {
-      const { data, error } = await supabase
+      const { data } = await supabase
         .from('transactions')
         .select('*')
         .eq('id', orderId)
         .single();
 
       if (data) {
-        const dbStatus = data.status?.toUpperCase() || '';
+        const dbStatus = (data.status || '').toUpperCase();
         if (PAID_STATUSES.includes(dbStatus)) {
-           console.log("[DEBUG] Polling match! Updating state...");
            setCurrentOrder(data as Transaction);
         }
       }
     }, 3000);
 
     return () => {
-      console.log(`[DEBUG] MONITORING CLEANUP for ID: ${orderId}`);
       clearInterval(pollInterval);
       supabase.removeChannel(channel);
     };
@@ -305,7 +317,7 @@ const PaymentGateway: React.FC<PaymentGatewayProps> = ({
     return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
   };
 
-  // Load Midtrans Snap Script dynamically based on environment
+  // Load Midtrans Snap Script
   useEffect(() => {
     if (!config) return;
 
@@ -316,7 +328,6 @@ const PaymentGateway: React.FC<PaymentGatewayProps> = ({
     
     const clientKey = config.midtransClientKey; 
     
-    // Cleanup old scripts if any
     const existingScript = document.getElementById('midtrans-snap-script');
     if (existingScript) existingScript.remove();
 
@@ -337,8 +348,6 @@ const PaymentGateway: React.FC<PaymentGatewayProps> = ({
     setIsProcessing(true);
     setError(null);
     try {
-      console.log(`[DEBUG] handlePay triggered with ${selectedGateway} for:`, productType);
-      
       const endpoint = selectedGateway === 'MIDTRANS' 
         ? 'https://createmidtranspayment-hzxlewhsuq-uc.a.run.app'
         : 'https://createpakasirpayment-hzxlewhsuq-uc.a.run.app';
@@ -371,7 +380,6 @@ const PaymentGateway: React.FC<PaymentGatewayProps> = ({
       
       const result = await response.json();
 
-      // Notify Admin of transaction creation via FormSubmit
       const targetOrderId = result.orderId || result.order?.id || orderId;
       if (targetOrderId) {
         notifyAdminTransaction(`Pembuatan Transaksi (${productType})`, {
@@ -384,16 +392,13 @@ const PaymentGateway: React.FC<PaymentGatewayProps> = ({
       }
 
       if (result.directPayment) {
-        console.log("[DEBUG] Received Direct Payment Data");
         setDirectData(result.directPayment);
         if (method) setSelectedMethod(method);
-        
         if (result.redirect_url) setRedirectUrl(result.redirect_url);
         setShowCheckout(true);
         setIsProcessing(false);
         
         if (result.order) {
-            console.log("[DEBUG] Setting currentOrder from response:", result.order.id);
             setCurrentOrder(result.order);
         }
 
@@ -401,28 +406,21 @@ const PaymentGateway: React.FC<PaymentGatewayProps> = ({
           setSearchParams({ orderId: result.orderId });
         }
 
-        // [AUTO-REDIRECT] For E-Wallets with Deeplinks (GoPay, ShopeePay)
         const deeplink = result.directPayment?.actions?.find((a: any) => 
             a.name === 'deeplink-redirect' || a.name === 'shopeepay-deeplink' || a.url?.includes('deeplink')
         )?.url;
 
         if (deeplink && (method === 'gopay' || method === 'shopeepay')) {
-            console.log("[DEBUG] Auto-redirecting to Deeplink:", deeplink);
             window.location.href = deeplink;
             return;
         }
       } else if (selectedGateway === 'MIDTRANS' && result.token) {
-        console.log("[DEBUG] Received Snap Token");
         if (result.redirect_url) setRedirectUrl(result.redirect_url);
-        
         if (result.order) {
-            console.log("[DEBUG] Setting currentOrder from Snap response:", result.order.id);
             setCurrentOrder(result.order);
         }
 
-        // [AUTO-REDIRECT] For DANA (Special requirement for direct redirect)
         if (method === 'dana' && result.redirect_url) {
-            console.log("[DEBUG] Auto-redirecting to DANA Redirect URL:", result.redirect_url);
             window.location.href = result.redirect_url;
             return;
         }
@@ -440,7 +438,6 @@ const PaymentGateway: React.FC<PaymentGatewayProps> = ({
         }, 500);
       } else if (result.checkoutUrl || result.redirect_url) {
         const targetUrl = result.checkoutUrl || result.redirect_url;
-        console.log("[DEBUG] Redirecting to Checkout URL:", targetUrl);
         window.location.href = targetUrl;
       } else {
         throw new Error('Gagal mendapatkan respon pembayaran yang valid');
@@ -454,16 +451,11 @@ const PaymentGateway: React.FC<PaymentGatewayProps> = ({
 
   const copyToClipboard = (text: string) => {
     if (!text) return;
-    
-    // Primary method
     if (navigator.clipboard && navigator.clipboard.writeText) {
       navigator.clipboard.writeText(text).then(() => {
         setShowCopied(true);
         setTimeout(() => setShowCopied(false), 2000);
-      }).catch(err => {
-        console.error("Clipboard API failed, using fallback", err);
-        fallbackCopyTextToClipboard(text);
-      });
+      }).catch(() => fallbackCopyTextToClipboard(text));
     } else {
       fallbackCopyTextToClipboard(text);
     }
@@ -472,7 +464,7 @@ const PaymentGateway: React.FC<PaymentGatewayProps> = ({
   const fallbackCopyTextToClipboard = (text: string) => {
     const textArea = document.createElement("textarea");
     textArea.value = text;
-    textArea.style.position = "fixed";  // avoid scrolling to bottom
+    textArea.style.position = "fixed";
     document.body.appendChild(textArea);
     textArea.focus();
     textArea.select();
@@ -491,11 +483,11 @@ const PaymentGateway: React.FC<PaymentGatewayProps> = ({
     
     if (method === 'qris' || method === 'gopay' || method === 'ovo' || method === 'dana' || method === 'shopeepay') {
       return [
-        "Buka aplikasi e-wallet Anda (GoPay, OVO, DANA, LinkAja, dll).",
+        "Buka aplikasi e-wallet Anda (GoPay, OVO, DANA, BCA mobile, dll).",
         "Pilih menu 'Scan' atau 'Bayar'.",
-        "Arahkan kamera ke QR Code yang tertera atau gunakan file dari galeri.",
-        "Periksa nominal pembayaran & konfirmasi transaksi.",
-        "Masukkan PIN Anda & pembayaran selesai."
+        "Arahkan kamera ke QR Code di layar atau gunakan file dari galeri.",
+        "Periksa nominal tagihan yang tertera & konfirmasi pembayaran.",
+        "Masukkan PIN Anda. Transaksi akan otomatis terverifikasi sistem."
       ];
     }
     
@@ -503,9 +495,9 @@ const PaymentGateway: React.FC<PaymentGatewayProps> = ({
       return [
         "Buka m-BCA, pilih menu 'm-Transfer'.",
         "Pilih 'BCA Virtual Account'.",
-        "Masukkan nomor Virtual Account & klik 'Send'.",
-        "Pastikan nominal sesuai, lalu masukkan PIN m-BCA.",
-        "Pembayaran berhasil."
+        "Masukkan nomor Virtual Account di atas & klik 'Send'.",
+        "Pastikan nama & nominal tagihan sesuai, lalu masukkan PIN m-BCA.",
+        "Pembayaran berhasil terverifikasi otomatis."
       ];
     }
 
@@ -514,38 +506,28 @@ const PaymentGateway: React.FC<PaymentGatewayProps> = ({
         "Buka BNI Mobile Banking, pilih menu 'Transfer'.",
         "Pilih 'Virtual Account Billing'.",
         "Pilih rekening debet & masukkan nomor Virtual Account.",
-        "Konfirmasi transaksi & masukkan Password Transaksi.",
-        "Pembayaran berhasil."
+        "Konfirmasi transaksi & masukkan Password Transaksi Anda.",
+        "Pembayaran berhasil terverifikasi otomatis."
       ];
     }
 
     if (method === 'bri_va') {
       return [
-        "Buka BRImo, pilih menu 'Pembayaran'.",
-        "Pilih menu 'BRIVA'.",
-        "Masukkan nomor Virtual Account.",
-        "Konfirmasi transaksi, masukkan nominal & PIN BRImo.",
-        "Pembayaran berhasil."
+        "Buka aplikasi BRImo, pilih menu 'BRIVA'.",
+        "Pilih 'Pembayaran Baru' & masukkan nomor BRIVA.",
+        "Pastikan data transaksi sesuai, lalu klik 'Bayar'.",
+        "Masukkan PIN BRImo Anda.",
+        "Pembayaran berhasil terverifikasi otomatis."
       ];
     }
 
     if (method === 'mandiri_va') {
       return [
         "Buka Livin' by Mandiri, pilih menu 'Bayar'.",
-        "Cari penyedia jasa (Biller) atau masukkan kode perusahaan.",
-        "Masukkan nomor Virtual Account.",
-        "Konfirmasi nominal & masukkan PIN Livin'.",
-        "Pembayaran berhasil."
-      ];
-    }
-
-    if (method === 'bsi_va') {
-      return [
-        "Buka BSI Mobile, pilih menu 'Pembayaran'.",
-        "Pilih 'Virtual Account'.",
-        "Masukkan nomor Virtual Account BSI Anda.",
-        "Konfirmasi data transaksi & masukkan PIN BSI Mobile.",
-        "Pembayaran berhasil."
+        "Cari penyedia jasa atau masukkan Kode Biller.",
+        "Masukkan Bill Key / nomor Virtual Account.",
+        "Konfirmasi tagihan & masukkan PIN Livin'.",
+        "Pembayaran berhasil terverifikasi otomatis."
       ];
     }
 
@@ -555,15 +537,16 @@ const PaymentGateway: React.FC<PaymentGatewayProps> = ({
         "Pilih 'Transfer ke Rekening CIMB Niaga Lain'.",
         "Masukkan nomor Virtual Account CIMB Niaga.",
         "Masukkan nominal & konfirmasi dengan PIN OCTO.",
-        "Pembayaran berhasil."
+        "Pembayaran berhasil terverifikasi otomatis."
       ];
     }
 
     if (method === 'permata_va') {
       return [
-        "Masukkan nomor Virtual Account sebagai rekening tujuan.",
-        "Masukkan nominal yang sesuai dengan tagihan.",
-        "Konfirmasi & selesaikan transaksi."
+        "Buka PermataMobile X atau ATM Permata, pilih 'Transfer'.",
+        "Pilih rekening tujuan Virtual Account.",
+        "Masukkan nomor Virtual Account & nominal yang sesuai.",
+        "Konfirmasi transaksi & selesaikan pembayaran."
       ];
     }
 
@@ -571,19 +554,19 @@ const PaymentGateway: React.FC<PaymentGatewayProps> = ({
       const store = method === 'alfamart' ? 'Alfamart' : 'Indomaret';
       return [
         `Kunjungi gerai ${store} terdekat.`,
-        "Tunjukkan Kode Pembayaran kepada Kasir.",
-        "Bayar sesuai jumlah tagihan yang disebutkan Kasir.",
-        "Simpan struk pembayaran sebagai bukti transaksi.",
-        "Status pembayaran akan terverifikasi secara otomatis."
+        "Sampaikan kepada Kasir bahwa Anda ingin membayar tagihan RuangSinggah.",
+        "Tunjukkan Kode Pembayaran yang tertera di atas kepada Kasir.",
+        "Bayar sesuai jumlah nominal tagihan yang disebutkan Kasir.",
+        "Simpan struk pembayaran sebagai bukti transaksi resmi."
       ];
     }
 
     return [
-      "Buka aplikasi perbankan atau e-wallet Anda.",
-      "Pilih menu pembayaran yang sesuai.",
-      "Masukkan detail nomor bayar yang tertera.",
-      "Pastikan nominal sesuai & konfirmasi transaksi.",
-      "Pembayaran akan terdeteksi otomatis oleh sistem."
+      "Buka aplikasi perbankan atau e-wallet pilihan Anda.",
+      "Pilih menu pembayaran yang sesuai (Virtual Account / Transfer).",
+      "Masukkan nomor pembayaran yang tertera.",
+      "Pastikan nominal tagihan sesuai & konfirmasi transaksi.",
+      "Pembayaran akan otomatis terdeteksi oleh sistem RuangSinggah."
     ];
   };
 
@@ -602,7 +585,7 @@ const PaymentGateway: React.FC<PaymentGatewayProps> = ({
       window.URL.revokeObjectURL(url);
     } catch (err) {
       console.error("Download Error:", err);
-      alert("Gagal mengunduh QRIS. Silakan screenshot layar saja.");
+      alert("Gagal mengunduh QRIS. Anda dapat langsung melakukan screenshot layar.");
     }
   };
 
@@ -620,11 +603,6 @@ const PaymentGateway: React.FC<PaymentGatewayProps> = ({
 
       const result = await response.json();
       if (!response.ok) throw new Error(result.message || 'Gagal simulasi');
-      
-      // We don't call onPaymentSuccess directly anymore. 
-      // The Real-time monitor in the useEffect will detect the DB update to 'PAID'
-      // and automatically switch the UI to the Success screen.
-      console.log("[DEBUG] Simulation trigger sent. Waiting for real-time monitor...");
     } catch (err: any) {
       alert("Simulasi Gagal: " + err.message);
     } finally {
@@ -642,159 +620,221 @@ const PaymentGateway: React.FC<PaymentGatewayProps> = ({
 
   return (
     <div className="fixed inset-0 z-[120] flex items-center justify-center p-0 sm:p-4 overflow-hidden">
-      <div className="absolute inset-0 bg-gray-900/90 backdrop-blur-lg" onClick={onCancel}></div>
+      {/* Backdrop */}
+      <div className="absolute inset-0 bg-slate-950/80 backdrop-blur-md transition-opacity" onClick={onCancel} />
 
-      <div className={`relative bg-white w-full h-full sm:max-w-3xl sm:rounded-[3rem] shadow-2xl overflow-hidden flex flex-col animate-in fade-in slide-in-from-bottom-10 duration-500 ${showCheckout ? 'sm:h-auto sm:max-h-[90vh]' : 'sm:h-auto max-h-[95vh]'}`}>
+      {/* Main Dialog Modal */}
+      <div className={`relative bg-white w-full h-full sm:max-w-xl md:max-w-2xl sm:rounded-3xl shadow-2xl border border-slate-200/80 overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-300 ${
+        showCheckout ? 'sm:h-auto sm:max-h-[92vh]' : 'sm:h-auto max-h-[95vh]'
+      }`}>
         
         {/* Loading Overlay */}
         {isProcessing && (
-          <div className="absolute inset-0 z-[200] bg-white/60 backdrop-blur-sm flex flex-col items-center justify-center p-10 text-center animate-in fade-in duration-300">
-             <div className="w-16 h-16 border-4 border-orange-200 border-t-orange-500 rounded-full animate-spin mb-6"></div>
-             <h3 className="text-sm font-black uppercase tracking-widest text-gray-900">Menyiapkan Pembayaran...</h3>
-             <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-2">Mohon tunggu sebentar.</p>
+          <div className="absolute inset-0 z-[200] bg-white/70 backdrop-blur-sm flex flex-col items-center justify-center p-8 text-center animate-in fade-in duration-200">
+             <div className="w-12 h-12 border-3 border-orange-200 border-t-orange-500 rounded-full animate-spin mb-4" />
+             <h3 className="text-xs font-bold uppercase tracking-wider text-slate-900">Menghubungkan ke Gateway Pembayaran...</h3>
+             <p className="text-[11px] font-medium text-slate-400 mt-1">Enkripsi aman Midtrans sedang diproses.</p>
           </div>
         )}
 
-        {/* Header Summary */}
-        <div className="bg-gray-900 p-6 sm:p-8 text-white flex-shrink-0 relative overflow-hidden">
-          {/* Subtle Background Pattern */}
-          <div className="absolute top-0 right-0 w-64 h-64 bg-orange-500/10 rounded-full blur-3xl -mr-32 -mt-32"></div>
+        {/* 1. Header Resmi RuangSinggah.id */}
+        <div className="p-5 sm:p-6 bg-slate-900 text-white flex-shrink-0 relative overflow-hidden border-b border-slate-800">
+          {/* Subtle Ambient Brand Glow */}
+          <div className="absolute top-0 right-0 w-64 h-64 bg-gradient-to-br from-orange-500/15 via-amber-500/5 to-transparent rounded-full blur-3xl -mr-32 -mt-32 pointer-events-none" />
           
-          <div className="relative z-10">
-            <div className="flex justify-between items-start mb-6">
-              <div>
-                <div className="flex items-center gap-2 mb-2">
-                  <span className="text-orange-500 font-black text-xl">RS</span>
-                  <span className="font-bold text-[10px] uppercase tracking-widest text-gray-400">Checkout Gateway</span>
+          <div className="relative z-10 flex flex-col gap-4">
+            {/* Brand Logo & Top Actions */}
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3 min-w-0">
+                <img 
+                  src="/logo.png" 
+                  alt="RuangSinggah.id" 
+                  className="h-8 w-auto object-contain shrink-0" 
+                />
+                <div className="flex flex-col">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-extrabold text-base sm:text-lg tracking-tight text-white leading-none">
+                      Ruang<span className="text-orange-500">Singgah</span><span className="text-slate-400">.id</span>
+                    </span>
+                    <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-orange-500/15 border border-orange-500/30 text-orange-400 uppercase tracking-wider">
+                      Checkout Gateway
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-400 font-medium mt-1">
+                    Order ID: <span className="text-slate-200 font-bold font-mono">#{currentOrder?.id?.split('-').pop()?.toUpperCase() || orderId}</span>
+                  </p>
                 </div>
-                <p className="text-xs text-gray-500">Order ID: <span className="text-gray-300 font-bold">#{currentOrder?.id?.split('-').pop()?.toUpperCase() || orderId}</span></p>
               </div>
-              <div className="flex items-center gap-3">
+
+              <div className="flex items-center gap-2 shrink-0">
                 {showCheckout && (
                   <button 
                     onClick={() => { setShowCheckout(false); setSelectedMethod(null); setDirectData(null); }}
-                    className="p-2.5 bg-white/5 hover:bg-white/10 rounded-full transition-colors flex items-center gap-2 text-gray-400 border border-white/5"
+                    className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-bold transition-all border border-slate-700 flex items-center gap-1.5 active:scale-95 cursor-pointer"
                   >
-                    <span className="text-[9px] font-black uppercase tracking-tight px-1">Ganti Metode</span>
+                    <ArrowLeft className="w-3.5 h-3.5" />
+                    <span className="hidden sm:inline">Ganti Metode</span>
                   </button>
                 )}
-                <button onClick={onCancel} className="p-2.5 bg-white/5 hover:bg-white/10 rounded-full transition-colors flex items-center justify-center border border-white/5">
-                  <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" /></svg>
+                <button 
+                  onClick={onCancel} 
+                  className="p-2 bg-slate-800/80 hover:bg-slate-700 text-slate-400 hover:text-white rounded-xl transition-all border border-slate-700/80 active:scale-95 cursor-pointer"
+                  title="Tutup"
+                >
+                  <X className="w-5 h-5" />
                 </button>
               </div>
             </div>
 
-            <div className="flex justify-between items-end border-t border-white/5 pt-6">
-              <div>
-                <div className="flex items-center gap-2 mb-1">
-                  <p className="text-[10px] font-black uppercase tracking-widest text-gray-500">Total Tagihan</p>
-                  <button 
-                    onClick={() => setShowDetails(!showDetails)}
-                    className="text-[9px] font-black uppercase tracking-widest text-orange-500 hover:text-orange-400 flex items-center gap-1 transition-colors"
-                  >
-                    {showDetails ? 'Sembunyikan Detail ↑' : 'Lihat Rincian ↓'}
-                  </button>
-                </div>
-                <p className="text-4xl font-black text-orange-500 tracking-tighter">{FORMAT_CURRENCY(amount)}</p>
+            {/* Security Assurance Badge Bar */}
+            <div className="flex items-center justify-between gap-2 pt-3 border-t border-slate-800 text-[11px] text-slate-400">
+              <div className="flex items-center gap-1.5 text-emerald-400">
+                <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
+                <span className="font-semibold text-[10.5px]">Enkripsi Bank-Grade 256-bit SSL</span>
               </div>
-              <div className="text-right">
-                <p className="text-[10px] font-black uppercase tracking-widest text-gray-500 mb-1">Batas Waktu</p>
-                <p className={`text-lg font-mono font-black ${timeLeft < 300 ? 'text-red-500 animate-pulse' : 'text-white'}`}>{formatTime(timeLeft)}</p>
-              </div>
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                Midtrans Verified ✓
+              </span>
             </div>
-
-            {/* Expandable Details Section */}
-            {showDetails && (
-              <div className="mt-6 pt-6 border-t border-white/5 space-y-3 animate-in slide-in-from-top-4 duration-300">
-                {(() => {
-                  const items = metadata?.item_details || [
-                    { name: metadata?.billName || 'Total Pembayaran', price: amount }
-                  ];
-                  return items.map((item: any, idx: number) => (
-                    <div key={idx} className="flex justify-between items-center text-xs">
-                      <span className="text-gray-400 font-medium">{item.name || item.bill_name || 'Item'}</span>
-                      <span className="text-gray-200 font-bold">{FORMAT_CURRENCY(item.price || item.amount || 0)}</span>
-                    </div>
-                  ));
-                })()}
-                <div className="pt-3 border-t border-white/5 flex justify-between items-center text-xs">
-                  <span className="text-gray-500 font-black uppercase">Pajak & Layanan</span>
-                  <span className="text-green-500 font-bold">TERMASUK</span>
-                </div>
-              </div>
-            )}
           </div>
         </div>
 
-        {/* Content Area */}
-        <div className={`flex-grow overflow-y-auto bg-white flex flex-col p-6 sm:p-10`}>
-          {currentOrder?.status === 'expired' ? (
-            <div className="flex flex-col items-center justify-center text-center p-8 space-y-4 my-auto">
-               <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center text-red-500 mb-2">
-                 <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-               </div>
-               <h3 className="text-xl font-black text-gray-900 uppercase tracking-widest">Waktu Habis</h3>
-               <p className="text-sm font-medium text-gray-500 max-w-sm">Sesi pembayaran telah kadaluarsa karena melewati batas waktu 3 jam. Silakan ulangi pemesanan dari awal.</p>
-               <button onClick={onCancel} className="mt-8 bg-gray-900 text-white px-8 py-4 rounded-xl font-black uppercase text-xs tracking-widest hover:bg-orange-500 transition-colors">Tutup</button>
+        {/* 2. Total Tagihan & Timer Countdown (Anti-Tumpuk / Zero-Collision Layout) */}
+        <div className="bg-slate-50 border-b border-slate-200/80 p-5 sm:p-6 flex flex-col gap-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Total Pembayaran</span>
+                <button 
+                  onClick={() => setShowDetails(!showDetails)}
+                  className="text-[10px] font-bold text-orange-600 hover:text-orange-700 uppercase tracking-wider flex items-center gap-1 transition-colors cursor-pointer"
+                >
+                  {showDetails ? 'Tutup Rincian' : 'Lihat Rincian'}
+                  <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${showDetails ? 'rotate-180' : ''}`} />
+                </button>
+              </div>
+              <p className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight mt-0.5">
+                {FORMAT_CURRENCY(amount)}
+              </p>
             </div>
-          ) : PAID_STATUSES.includes(currentOrder?.status?.toUpperCase() || '') ? (
-            <div className="flex flex-col items-center justify-center text-center p-8 space-y-6 my-auto animate-in zoom-in-95 duration-500">
-               <div className="w-24 h-24 bg-green-50 rounded-full flex items-center justify-center text-green-500 mb-2 shadow-inner">
-                 <svg className="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
+
+            {/* Dedicated Countdown Banner (Protected in its own flex container) */}
+            <div className={`px-3.5 py-2 rounded-xl border flex items-center gap-2.5 transition-all self-start sm:self-auto ${
+              timeLeft < 300 
+                ? 'bg-rose-50 border-rose-200 text-rose-900 animate-pulse' 
+                : 'bg-amber-50/90 border-amber-200/70 text-amber-950'
+            }`}>
+              <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${
+                timeLeft < 300 ? 'bg-rose-500 text-white' : 'bg-amber-500 text-white'
+              }`}>
+                <Clock className="w-3.5 h-3.5" />
+              </div>
+              <div className="flex flex-col">
+                <span className="text-[8.5px] font-bold uppercase tracking-wider text-slate-500">Batas Waktu Bayar</span>
+                <span className={`text-xs font-mono font-black ${timeLeft < 300 ? 'text-rose-600' : 'text-amber-800'}`}>
+                  {formatTime(timeLeft)}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Accordion Rincian Item */}
+          {showDetails && (
+            <div className="pt-3.5 border-t border-slate-200/80 space-y-2 text-xs animate-in slide-in-from-top-2 duration-200">
+              {(() => {
+                const items = metadata?.item_details || [
+                  { name: metadata?.billName || metadata?.kostName || 'Total Pembayaran', price: amount }
+                ];
+                return items.map((item: any, idx: number) => (
+                  <div key={idx} className="flex justify-between items-center text-slate-600">
+                    <span className="font-medium">{item.name || item.bill_name || 'Item'}</span>
+                    <span className="font-bold text-slate-900">{FORMAT_CURRENCY(item.price || item.amount || 0)}</span>
+                  </div>
+                ));
+              })()}
+              <div className="pt-2 border-t border-slate-200/60 flex justify-between items-center text-[11px]">
+                <span className="font-bold text-slate-500 uppercase tracking-wider">Biaya Layanan & Pajak</span>
+                <span className="font-bold text-emerald-600 uppercase tracking-wider">Termasuk (Gratis)</span>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* 3. Content Area */}
+        <div className="flex-grow overflow-y-auto bg-white flex flex-col p-5 sm:p-7">
+          {currentOrder?.status === 'expired' ? (
+            /* Expired View */
+            <div className="flex flex-col items-center justify-center text-center p-8 space-y-4 my-auto">
+               <div className="w-14 h-14 bg-rose-50 border border-rose-100 rounded-2xl flex items-center justify-center text-rose-500 mb-1">
+                 <AlertCircle className="w-7 h-7" />
+               </div>
+               <h3 className="text-base font-bold text-slate-900 uppercase tracking-tight">Waktu Pembayaran Telah Berakhir</h3>
+               <p className="text-xs font-normal text-slate-500 max-w-sm leading-relaxed">
+                 Sesi pembayaran ini telah kadaluarsa karena telah melewati batas waktu SLA. Silakan ajukan pesanan ulang untuk mengamankan ketersediaan.
+               </p>
+               <button 
+                 onClick={onCancel} 
+                 className="mt-4 bg-slate-900 text-white px-6 py-2.5 rounded-xl font-bold uppercase text-xs tracking-wider hover:bg-orange-600 transition-colors cursor-pointer"
+               >
+                 Tutup
+               </button>
+            </div>
+          ) : PAID_STATUSES.includes((currentOrder?.status || '').toUpperCase()) ? (
+            /* Success View */
+            <div className="flex flex-col items-center justify-center text-center p-6 space-y-5 my-auto animate-in zoom-in-95 duration-300">
+               <div className="w-16 h-16 bg-emerald-50 border border-emerald-100 rounded-2xl flex items-center justify-center text-emerald-600 shadow-xs">
+                 <CheckCircle2 className="w-8 h-8" />
                </div>
                
-               <div className="space-y-2">
-                 <h2 className="text-3xl font-black text-gray-900 uppercase tracking-tight">Pembayaran Berhasil!</h2>
-                 <p className="text-[10px] font-black uppercase tracking-[0.2em] text-green-600">Transaksi Terverifikasi • #{currentOrder?.id?.slice(0,8)}</p>
+               <div className="space-y-1">
+                 <h2 className="text-2xl font-black text-slate-900 tracking-tight">Pembayaran Berhasil!</h2>
+                 <p className="text-xs font-bold text-emerald-600 uppercase tracking-wider">
+                   Transaksi Terverifikasi • #{currentOrder?.id?.slice(0, 8).toUpperCase()}
+                 </p>
                </div>
 
-               <div className="w-full max-w-sm bg-gray-50 rounded-[2rem] p-6 border border-gray-100 space-y-4">
+               <div className="w-full max-w-sm bg-slate-50 rounded-2xl p-5 border border-slate-200/80 space-y-3">
                   <div className="flex justify-between items-center text-xs">
-                    <span className="text-gray-400 font-bold uppercase tracking-widest text-[9px]">Produk</span>
-                    <span className="text-gray-900 font-black">{productType === 'database' ? 'Database Kost' : productType === 'survey' ? 'Jasa Survey' : 'Sewa Kost'}</span>
+                    <span className="text-slate-500 font-bold uppercase tracking-wider text-[10px]">Tipe Produk</span>
+                    <span className="text-slate-900 font-black">
+                      {productType === 'database' ? 'Database Kost' : productType === 'survey' ? 'Jasa Survey Kost' : 'Sewa Kost'}
+                    </span>
                   </div>
                   <div className="flex justify-between items-center text-xs">
-                    <span className="text-gray-400 font-bold uppercase tracking-widest text-[9px]">Nominal</span>
-                    <span className="text-orange-600 font-black">{FORMAT_CURRENCY(amount)}</span>
+                    <span className="text-slate-500 font-bold uppercase tracking-wider text-[10px]">Total Dibayar</span>
+                    <span className="text-orange-600 font-black text-sm">{FORMAT_CURRENCY(amount)}</span>
                   </div>
-                  <div className="pt-4 border-t border-gray-200 flex flex-col gap-2">
-                    <p className="text-[10px] font-medium text-gray-500 italic">Konfirmasi dan link akses telah dikirimkan ke email Anda.</p>
+                  <div className="pt-3 border-t border-slate-200 flex flex-col gap-1">
+                    <p className="text-[11px] text-slate-500 font-medium">Kwitansi digital dan konfirmasi telah dikirimkan ke email Anda.</p>
                   </div>
                </div>
 
-                <div className="flex flex-col sm:flex-row gap-4 w-full max-w-sm">
+               <div className="flex flex-col sm:flex-row gap-3 w-full max-w-sm">
                   <button 
                     onClick={() => onPaymentSuccess(currentOrder?.id)} 
-                    className="flex-grow bg-gray-900 text-white px-8 py-4 rounded-2xl font-black uppercase text-xs tracking-widest hover:bg-orange-500 transition-all shadow-xl shadow-gray-200"
+                    className="flex-grow bg-slate-900 text-white px-6 py-3.5 rounded-xl font-bold uppercase text-xs tracking-wider hover:bg-orange-600 transition-all shadow-md active:scale-95 cursor-pointer flex items-center justify-center gap-2"
                    >
-                    {productType === 'survey' ? 'Lihat di Kost Saya' : 
-                     productType === 'kostmanager' ? 'Lihat Status Pengajuan' : 'Lanjutkan ke Pesanan'}
+                    <span>{productType === 'survey' ? 'Lihat di Kost Saya' : 'Lanjutkan ke Kost Saya'}</span>
+                    <ArrowRight className="w-4 h-4" />
                    </button>
-                 {productType === 'survey' && (
-                   <a 
-                    href="https://wa.me/6285156634283" 
-                    target="_blank" 
-                    className="flex-grow bg-green-500 text-white px-8 py-4 rounded-2xl font-black uppercase text-xs tracking-widest hover:bg-green-600 transition-all text-center shadow-xl shadow-green-100"
-                   >
-                    Hubungi Admin
-                   </a>
-                 )}
                </div>
             </div>
           ) : !showCheckout ? (
-            <div className="space-y-8">
-              <div className="text-center sm:text-left">
-                <h2 className="text-xl font-black uppercase text-gray-900 tracking-tight">Pilih Metode Pembayaran</h2>
-                <p className="text-[10px] text-gray-400 font-black uppercase tracking-[0.2em] mt-1">100% Aman & Terverifikasi</p>
+            /* Method Selection View */
+            <div className="space-y-6">
+              <div className="text-left">
+                <h2 className="text-lg font-black text-slate-900 tracking-tight">Pilih Metode Pembayaran</h2>
+                <p className="text-xs text-slate-500 font-medium mt-0.5">Seluruh saluran pembayaran terverifikasi resmi dan terlindungi garansi transaksi.</p>
               </div>
 
               {error && (
-                <div className="p-4 bg-red-50 border border-red-100 rounded-2xl text-red-600 text-[10px] font-bold uppercase tracking-widest text-center">
-                  ⚠️ {error}
+                <div className="p-3.5 bg-rose-50 border border-rose-200 rounded-xl text-rose-700 text-xs font-semibold flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                  <span>{error}</span>
                 </div>
               )}
 
-              <div className="w-full space-y-8">
+              <div className="w-full space-y-6">
                 {(() => {
                   const displayCats = [
                     { id: 'none', name: 'Rekomendasi / Instan' },
@@ -810,14 +850,13 @@ const PaymentGateway: React.FC<PaymentGatewayProps> = ({
                     if (methods.length === 0) return null;
 
                     return (
-                      <div key={cat.id} className="space-y-4">
-                        {/* Section Header (No Icon, Always Open) */}
-                        <div className="flex items-center gap-3 px-2">
-                           <span className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400">{cat.name}</span>
-                           <div className="flex-grow h-[1px] bg-gray-100"></div>
+                      <div key={cat.id} className="space-y-2.5">
+                        <div className="flex items-center gap-3">
+                           <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">{cat.name}</span>
+                           <div className="flex-grow h-[1px] bg-slate-100" />
                         </div>
 
-                        <div className="grid grid-cols-1 gap-3">
+                        <div className="grid grid-cols-1 gap-2.5">
                           {methods.map((method) => {
                             const isQRIS = method.code === 'qris';
                             return (
@@ -825,13 +864,13 @@ const PaymentGateway: React.FC<PaymentGatewayProps> = ({
                                 key={method.code}
                                 onClick={() => handlePay(method.code)}
                                 disabled={isProcessing}
-                                className={`group flex items-center gap-5 p-5 rounded-[2.5rem] border-2 text-left transition-all relative overflow-hidden ${
+                                className={`group flex items-center gap-4 p-4 rounded-2xl border text-left transition-all relative cursor-pointer ${
                                   selectedMethod === method.code 
-                                  ? 'border-orange-500 bg-orange-50/50 shadow-xl scale-[1.02]' 
-                                  : 'border-gray-100 bg-white hover:border-orange-200 hover:shadow-lg'
-                                } ${isProcessing ? 'opacity-50' : ''}`}
+                                  ? 'border-orange-500 bg-orange-50/40 shadow-sm ring-2 ring-orange-500/20' 
+                                  : 'border-slate-200 bg-white hover:border-orange-300 hover:shadow-xs'
+                                } ${isProcessing ? 'opacity-50 cursor-not-allowed' : ''}`}
                               >
-                                <div className={`w-12 h-12 ${method.color} rounded-2xl flex items-center justify-center p-2 shadow-sm border border-gray-50 shrink-0`}>
+                                <div className="w-11 h-11 bg-slate-50 border border-slate-150 rounded-xl flex items-center justify-center p-2 shrink-0">
                                   {method.iconUrl && !imageErrors[method.code] ? (
                                     <img 
                                         src={method.iconUrl} 
@@ -839,19 +878,19 @@ const PaymentGateway: React.FC<PaymentGatewayProps> = ({
                                         className="w-full h-full object-contain" 
                                         onError={() => setImageErrors(prev => ({ ...prev, [method.code]: true }))}
                                     />
+                                  ) : isQRIS ? (
+                                    <QrCode className="w-6 h-6 text-slate-700" />
                                   ) : (
-                                    <span className="text-2xl">{method.icon}</span>
+                                    <CreditCard className="w-6 h-6 text-slate-700" />
                                   )}
                                 </div>
-                                <div className="flex-grow">
-                                  <p className="font-black text-[11px] uppercase tracking-widest text-gray-900">{method.name}</p>
-                                  <p className="text-[9px] font-bold text-gray-400 uppercase tracking-tighter mt-0.5">
-                                    {isQRIS ? 'Otomatis Terdeteksi • Semua Bank & E-Wallet' : 'Konfirmasi Instan • Aman'}
+                                <div className="flex-grow min-w-0">
+                                  <p className="font-bold text-xs uppercase tracking-wider text-slate-900 truncate">{method.name}</p>
+                                  <p className="text-[10.5px] font-medium text-slate-400 mt-0.5">
+                                    {isQRIS ? 'Otomatis Terdeteksi • Semua Bank & E-Wallet' : 'Konfirmasi Instan • Bebas Biaya Layanan'}
                                   </p>
                                 </div>
-                                <div className="text-gray-300 group-hover:text-orange-500">
-                                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M9 5l7 7-7 7" /></svg>
-                                </div>
+                                <ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-orange-500 transition-colors shrink-0" />
                               </button>
                             );
                           })}
@@ -863,16 +902,15 @@ const PaymentGateway: React.FC<PaymentGatewayProps> = ({
               </div>
             </div>
           ) : (
-            <div className="w-full flex flex-col items-center animate-in zoom-in-95 duration-300">
-               
-                {/* Unified Native UI (For White-Label Midtrans or Pakasir) */}
+            /* Direct Payment Instruction View */
+            <div className="w-full flex flex-col items-center animate-in zoom-in-95 duration-200">
                 {directData ? (
                   <div className="w-full flex flex-col items-center">
                     {selectedMethod === 'qris' || selectedMethod === 'gopay' || selectedMethod === 'ovo' || selectedMethod === 'dana' || selectedMethod === 'shopeepay' || (directData.payment_type === 'qris') ? (
-                      <div className="space-y-8 w-full max-w-sm text-center">
-                        <div className="bg-white p-6 rounded-[2.5rem] shadow-2xl border border-gray-100 flex flex-col items-center">
+                      /* QRIS Display */
+                      <div className="space-y-6 w-full max-w-sm text-center">
+                        <div className="bg-white p-6 rounded-2xl shadow-md border border-slate-200 flex flex-col items-center">
                             {(() => {
-                              // 1. Get raw string for QR (Robust fallbacks for Midtrans/Pakasir)
                               const qrString = directData?.qr_string || 
                                                directData?.payment?.data || 
                                                directData?.qr_data || 
@@ -884,7 +922,7 @@ const PaymentGateway: React.FC<PaymentGatewayProps> = ({
                               const qrUrl = qrAction?.url;
                               
                               if (!qrString && !qrUrl && !isProcessing) {
-                                return <div className="w-full aspect-square bg-gray-50 rounded-2xl flex items-center justify-center text-[10px] font-bold text-gray-400 uppercase tracking-widest p-10 text-center">Data Pembayaran Belum Tersedia</div>;
+                                return <div className="w-full aspect-square bg-slate-50 rounded-xl flex items-center justify-center text-xs font-semibold text-slate-400 p-8 text-center">Data QRIS belum tersedia</div>;
                               }
 
                               const finalSrc = qrString 
@@ -894,30 +932,30 @@ const PaymentGateway: React.FC<PaymentGatewayProps> = ({
                               return (
                                 <img 
                                     src={finalSrc} 
-                                    alt="QRIS Code" 
-                                    className="w-full h-full max-w-[250px] aspect-square object-contain" 
+                                    alt="QRIS RuangSinggah" 
+                                    className="w-full h-full max-w-[240px] aspect-square object-contain" 
                                 />
                               );
                             })()}
-                            <div className="mt-4 flex items-center gap-2">
-                                <span className="font-black text-xs uppercase tracking-widest text-gray-400">Scan via</span>
-                                <div className="flex gap-2 text-xl">📱 💳</div>
+                            <div className="mt-4 flex items-center gap-2 text-xs font-semibold text-slate-500">
+                                <QrCode className="w-4 h-4 text-orange-500" />
+                                <span>Pindai menggunakan aplikasi m-Banking atau E-Wallet apa saja</span>
                             </div>
                         </div>
 
-                        {/* Deep Link / Open App Button */}
+                        {/* Deeplink CTA */}
                         {(() => {
                             const deeplink = directData?.actions?.find((a: any) => a.name === 'deeplink-redirect' || a.name === 'shopeepay-deeplink' || a.url?.includes('deeplink'))?.url;
                             if (deeplink) {
                                 return (
-                                    <div className="space-y-4 w-full">
+                                    <div className="space-y-2 w-full">
                                         <a 
                                             href={deeplink}
-                                            className="block w-full py-5 bg-blue-600 text-white rounded-3xl font-black uppercase tracking-widest text-center shadow-xl shadow-blue-200 active:scale-95 transition-all animate-bounce"
+                                            className="block w-full py-3.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold uppercase tracking-wider text-xs text-center shadow-md active:scale-95 transition-all"
                                         >
                                             Buka Aplikasi {selectedMethod?.toUpperCase()}
                                         </a>
-                                        <p className="text-[9px] font-bold text-gray-400 uppercase">Klik tombol di atas untuk bayar langsung di HP Anda</p>
+                                        <p className="text-[10px] font-medium text-slate-400">Klik untuk langsung membuka aplikasi e-wallet Anda</p>
                                     </div>
                                 );
                             }
@@ -931,25 +969,25 @@ const PaymentGateway: React.FC<PaymentGatewayProps> = ({
                                     if (qrString) handleDownloadQR(qrString);
                                     else alert("Gagal mendapatkan data QRIS.");
                                 }}
-                                className="w-full flex items-center justify-center gap-2 bg-gray-100 text-gray-700 py-4 rounded-3xl text-xs font-black uppercase tracking-widest hover:bg-gray-200 transition-all"
+                                className="w-full flex items-center justify-center gap-2 bg-slate-100 text-slate-700 py-3 rounded-xl text-xs font-bold uppercase tracking-wider hover:bg-slate-200 transition-all cursor-pointer"
                            >
-                                📥 Download QR Code
+                                <Download className="w-4 h-4" />
+                                <span>Unduh QR Code</span>
                            </button>
                         </div>
                       </div>
                     ) : (
-                      <div className="space-y-10 w-full max-w-sm text-center py-6">
-                        <div className="space-y-6">
-                            <h2 className="text-xl font-black uppercase text-gray-900 tracking-tight">Instruksi Pembayaran</h2>
-                            <div className="bg-gray-50 p-8 rounded-[3rem] border border-gray-100 space-y-6">
+                      /* Virtual Account Display */
+                      <div className="space-y-6 w-full max-w-sm text-center py-2">
+                        <div className="space-y-4">
+                            <h2 className="text-base font-bold text-slate-900 uppercase tracking-tight">Instruksi Pembayaran</h2>
+                            <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200 space-y-5">
                                 {(() => {
                                     const midtransVa = directData?.va_numbers?.[0]?.va_number;
                                     const mandiriVa = directData?.bill_key;
                                     const permataVa = directData?.permata_va_number;
                                     const retailCode = directData?.payment_code;
                                     
-                                    // [ROBUST] Multi-gateway & Multi-bank Fallback logic
-                                    // Priorities: 1. Server-side flat field, 2. Direct paths, 3. Deep fallbacks
                                     const codeToCopy = (currentOrder?.metadata as any)?.payment_number || 
                                                        (currentOrder?.metadata as any)?.midtrans_charge_response?.va_numbers?.[0]?.va_number ||
                                                        midtransVa || 
@@ -965,16 +1003,16 @@ const PaymentGateway: React.FC<PaymentGatewayProps> = ({
                                                        '';
                                     
                                     return (
-                                        <div className="flex flex-col items-center gap-6 w-full">
-                                            <div className="flex flex-col items-center gap-2">
-                                                <span className="text-[10px] font-black uppercase tracking-[0.3em] text-gray-400">
+                                        <div className="flex flex-col items-center gap-4 w-full">
+                                            <div className="flex flex-col items-center gap-1.5">
+                                                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
                                                     {availableMethods.find(m => m.code === selectedMethod)?.name || 'Nomor Virtual Account'}
                                                 </span>
-                                                <p className="text-3xl font-black text-gray-900 tracking-wider font-mono">
+                                                <p className="text-2xl font-black text-slate-900 tracking-wider font-mono">
                                                     {codeToCopy || '---'}
                                                 </p>
                                                 {(directData?.biller_code || directData?.bill_key) && (
-                                                    <p className="text-[10px] font-bold text-gray-500 uppercase">
+                                                    <p className="text-[10px] font-bold text-slate-500 uppercase">
                                                         {directData?.biller_code ? `Kode Biller: ${directData.biller_code}` : ''}
                                                         {directData?.biller_code && directData?.bill_key ? ' | ' : ''}
                                                         {directData?.bill_key ? `Bill Key: ${directData.bill_key}` : ''}
@@ -985,13 +1023,14 @@ const PaymentGateway: React.FC<PaymentGatewayProps> = ({
                                             {codeToCopy && (
                                                 <button 
                                                     onClick={() => copyToClipboard(codeToCopy)} 
-                                                    className={`px-8 py-3 bg-white text-[10px] font-black uppercase tracking-widest rounded-full border transition-all active:scale-95 shadow-sm ${
+                                                    className={`px-5 py-2.5 text-xs font-bold uppercase tracking-wider rounded-xl border transition-all active:scale-95 flex items-center gap-2 cursor-pointer ${
                                                         showCopied 
-                                                        ? 'border-green-500 text-green-500 bg-green-50' 
-                                                        : 'border-gray-200 text-gray-900 hover:border-orange-500 hover:text-orange-500'
+                                                        ? 'border-emerald-500 text-emerald-600 bg-emerald-50' 
+                                                        : 'border-slate-300 text-slate-800 bg-white hover:border-orange-500 hover:text-orange-600'
                                                     }`}
                                                 >
-                                                    {showCopied ? '✅ Berhasil Disalin!' : 'Salin Kode Bayar'}
+                                                    {showCopied ? <Check className="w-4 h-4 text-emerald-600" /> : <Copy className="w-4 h-4" />}
+                                                    <span>{showCopied ? 'Berhasil Disalin!' : 'Salin Kode Bayar'}</span>
                                                 </button>
                                             )}
                                         </div>
@@ -999,13 +1038,17 @@ const PaymentGateway: React.FC<PaymentGatewayProps> = ({
                                 })()}
                             </div>
                         </div>
-                         <div className="space-y-6 text-left">
-                            <h2 className="text-xl font-black uppercase text-gray-900 tracking-tight text-center">TUTORIAL PEMBAYARAN</h2>
-                            <ul className="text-[10px] font-bold uppercase tracking-widest text-gray-400 space-y-3 list-none bg-gray-50 p-6 rounded-[2rem] border border-gray-100">
+
+                        {/* Tutorial Accordion */}
+                        <div className="space-y-3 text-left">
+                            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-700">Panduan Pembayaran</h3>
+                            <ul className="text-xs font-medium text-slate-600 space-y-2 list-none bg-slate-50 p-4 rounded-xl border border-slate-200">
                                 {getTutorial().map((step, idx) => (
-                                    <li key={idx} className="flex gap-3">
-                                        <span className="flex-shrink-0 w-4 h-4 bg-white rounded-full flex items-center justify-center text-[8px] text-gray-600 font-black border border-gray-200">{idx + 1}</span>
-                                        <span className="leading-tight">{step}</span>
+                                    <li key={idx} className="flex gap-2.5 items-start">
+                                        <span className="w-4 h-4 bg-white rounded-full flex items-center justify-center text-[10px] text-slate-700 font-bold border border-slate-200 shrink-0 mt-0.5">
+                                          {idx + 1}
+                                        </span>
+                                        <span className="leading-snug">{step}</span>
                                     </li>
                                 ))}
                             </ul>
@@ -1014,106 +1057,80 @@ const PaymentGateway: React.FC<PaymentGatewayProps> = ({
                     )}
                   </div>
                 ) : (
-                  <div className="w-full flex flex-col items-center justify-center py-20 px-6 text-center space-y-6">
-                     <div className="w-20 h-20 bg-orange-50 rounded-full flex items-center justify-center text-4xl animate-bounce">
-                        💳
+                  /* Snap Redirection Fallback */
+                  <div className="w-full flex flex-col items-center justify-center py-12 px-4 text-center space-y-4">
+                     <div className="w-14 h-14 bg-orange-50 rounded-2xl flex items-center justify-center text-orange-600 border border-orange-100">
+                        <CreditCard className="w-7 h-7" />
                      </div>
-                     <div className="space-y-2">
-                        <h3 className="text-xl font-black text-gray-900 uppercase tracking-tight">Lanjutkan Pembayaran</h3>
-                        <p className="text-xs font-medium text-gray-500 max-w-[280px]">Klik tombol di bawah untuk menyelesaikan pembayaran via portal resmi Midtrans yang aman.</p>
+                     <div className="space-y-1">
+                        <h3 className="text-base font-bold text-slate-900 uppercase tracking-tight">Lanjutkan Pembayaran</h3>
+                        <p className="text-xs font-normal text-slate-500 max-w-[280px]">Selesaikan pembayaran via portal resmi Midtrans yang aman.</p>
                      </div>
                      <button 
                         onClick={() => handlePay(selectedMethod || undefined)}
-                        className="w-full max-w-[280px] bg-gray-900 text-white py-5 rounded-[2rem] font-black uppercase tracking-widest shadow-xl shadow-gray-200 active:scale-95 transition-all"
+                        className="w-full max-w-[260px] bg-slate-900 text-white py-3 rounded-xl font-bold uppercase tracking-wider text-xs hover:bg-orange-600 shadow-md active:scale-95 transition-all cursor-pointer"
                      >
                         Bayar Sekarang
                      </button>
-                     <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">Otomatis Terverifikasi • Aman & Terenkripsi</p>
+                     <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Otomatis Terverifikasi • Enkripsi SSL 256-Bit</p>
                   </div>
                 )}
 
-               {/* Universal Status & Admin Controls */}
-               <div className="w-full max-w-sm mt-8 space-y-4">
-                  <div className="px-6 py-5 bg-orange-50 rounded-[2rem] border border-orange-100 flex flex-col gap-4">
-                    <div className="flex items-center gap-3 w-full">
-                      <div className={`w-2 h-2 rounded-full ${currentOrder?.status?.toUpperCase() === 'PAID' ? 'bg-green-500' : 'bg-orange-500 animate-pulse'}`}></div>
-                      <span className="text-[10px] font-black uppercase tracking-widest text-orange-600 flex-grow">
-                        {currentOrder?.status?.toUpperCase() === 'PAID' ? 'Pembayaran Terverifikasi' : 'Menunggu pembayaran terdeteksi sistem...'}
+               {/* Live Status Checking Strip */}
+               <div className="w-full max-w-sm mt-6">
+                  <div className="px-4 py-3 bg-slate-50 rounded-xl border border-slate-200 flex items-center justify-between gap-3 text-xs">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <div className={`w-2 h-2 rounded-full shrink-0 ${
+                        currentOrder?.status?.toUpperCase() === 'PAID' ? 'bg-emerald-500' : 'bg-orange-500 animate-pulse'
+                      }`} />
+                      <span className="text-[11px] font-semibold text-slate-600 truncate">
+                        {currentOrder?.status?.toUpperCase() === 'PAID' ? 'Pembayaran Terverifikasi' : 'Menunggu pembayaran terdeteksi...'}
                       </span>
-                      {currentOrder?.status?.toUpperCase() !== 'PAID' && (
-                        <button 
-                          onClick={async () => {
-                              setIsProcessing(true);
-                              try {
-                                  const { data, error } = await supabase.from('transactions').select('*').eq('id', currentOrder?.id).single();
-                                  if (data && PAID_STATUSES.includes(data.status?.toUpperCase() || '')) {
-                                      setCurrentOrder(data as Transaction);
-                                  } else {
-                                      alert("Pembayaran belum terdeteksi. Pastikan Anda sudah menyelesaikan transaksi di aplikasi.");
-                                  }
-                              } catch (e) {
-                                  console.error(e);
-                              } finally {
-                                  setIsProcessing(false);
-                              }
-                          }}
-                          className="text-[9px] font-black text-orange-500 underline decoration-2 underline-offset-4 uppercase tracking-widest hover:text-orange-600 transition-colors"
-                        >
-                          Cek Status
-                        </button>
-                      )}
                     </div>
 
-                    {currentOrder?.status?.toUpperCase() === 'PAID' && (
-                      <div className="pt-4 border-t border-orange-200/50 space-y-3">
-                          <div className="flex items-center justify-between">
-                              <span className="text-[9px] font-black uppercase tracking-widest text-gray-400">Notifikasi Email</span>
-                              <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full ${
-                                  currentOrder.metadata?.email_sent_status === 'SUCCESS' ? 'bg-green-500 text-white' :
-                                  currentOrder.metadata?.email_sent_status === 'FAILED' ? 'bg-red-500 text-white' : 'bg-blue-500 text-white animate-pulse'
-                              }`}>
-                                  {currentOrder.metadata?.email_sent_status || 'MEMPROSES...'}
-                              </span>
-                          </div>
-                          {currentOrder.metadata?.email_error && (
-                              <div className="bg-red-100/50 p-3 rounded-xl border border-red-200">
-                                  <p className="text-[10px] font-medium text-red-700 leading-tight font-mono break-all">{currentOrder.metadata.email_error}</p>
-                              </div>
-                          )}
-                      </div>
+                    {currentOrder?.status?.toUpperCase() !== 'PAID' && (
+                      <button 
+                        onClick={async () => {
+                            setIsProcessing(true);
+                            try {
+                                const { data } = await supabase.from('transactions').select('*').eq('id', currentOrder?.id).single();
+                                if (data && PAID_STATUSES.includes((data.status || '').toUpperCase())) {
+                                    setCurrentOrder(data as Transaction);
+                                } else {
+                                    alert("Pembayaran belum terdeteksi. Silakan selesaikan transfer di aplikasi m-Banking atau E-Wallet Anda terlebih dahulu.");
+                                }
+                            } catch (e) {
+                                console.error(e);
+                            } finally {
+                                setIsProcessing(false);
+                            }
+                        }}
+                        className="text-[11px] font-bold text-orange-600 hover:text-orange-700 flex items-center gap-1 shrink-0 cursor-pointer"
+                      >
+                        <RefreshCw className="w-3 h-3" />
+                        <span>Cek Status</span>
+                      </button>
                     )}
                   </div>
-
-
                </div>
 
             </div>
           )}
         </div>
 
-        {/* Footer Actions */}
-        <div className={`flex-shrink-0 p-6 sm:p-10 border-t border-gray-50 bg-gray-50/50 ${showCheckout ? 'py-4' : ''}`}>
-          <div className="flex flex-col items-center gap-3">
-            <p className="text-center text-[9px] text-gray-400 font-bold uppercase tracking-widest">
-                {showCheckout 
-                ? 'Selesaikan pembayaran pada panel di atas' 
-                : `Pembayaran aman & terverifikasi oleh ${selectedGateway === 'MIDTRANS' ? 'Midtrans' : 'Pakasir'}`
-                }
-            </p>
-            
-            {/* COMPARISON MODE (Admin/Sandbox Only) */}
-            {redirectUrl && showCheckout && (
-                <a 
-                    href={redirectUrl} 
-                    target="_blank" 
-                    rel="noopener noreferrer"
-                    className="flex items-center gap-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 text-[9px] font-black uppercase tracking-widest text-gray-500 rounded-full transition-all border border-gray-200"
-                >
-                    🔍 Bandingkan dengan Snap Resmi (Mode Audit)
-                </a>
-            )}
+        {/* 4. Footer */}
+        <div className="flex-shrink-0 px-5 py-3.5 border-t border-slate-100 bg-slate-50/70">
+          <div className="flex items-center justify-between text-[10px] text-slate-400 font-medium">
+            <span className="flex items-center gap-1.5">
+              <Lock className="w-3 h-3 text-slate-400" />
+              <span>Transaksi Resmi Dilindungi RuangSinggah.id</span>
+            </span>
+            <span className="font-semibold text-slate-500">
+              Powered by Midtrans
+            </span>
           </div>
         </div>
+
       </div>
     </div>
   );

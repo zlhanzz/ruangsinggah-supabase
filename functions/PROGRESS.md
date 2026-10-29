@@ -2,6 +2,42 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 476. Modernisasi & Standardisasi Industri Portal Pembayaran (`PaymentGateway.tsx`) (Oktober 2026)
+- **Permintaan & Masukan Pengguna**:
+  1. Evaluasi komprehensif portal pembayaran (`PaymentGateway.tsx`) agar sesuai tema web app RuangSinggah, tidak bergaya "AI slop", dan mengintegrasikan branding resmi RuangSinggah.id (logo resmi, bukan hanya tulisan teks mentah "RS").
+  2. Perbaikan arsitektur, tampilan, dan sistem pembayaran agar memenuhi standar industri perbankan/fintech.
+  3. Mengatasi visual glitch pada gambar yang dilampirkan pengguna di mana teks "Rp 1.000.000" dan timer countdown "00:00:00" menempel rapat (tabrakan horizontal / text collision) serta timer menampilkan 00:00:00 palsu pada pesanan yang baru disetujui.
+- **Implementasi Solusi**:
+  1. **Integrasi Branding Resmi RuangSinggah.id**:
+     - Mengganti teks mentah "RS" oranye dengan logo resmi `/logo.png`, tipografi wordmark `RuangSinggah.id`, dan badge `Checkout Gateway`.
+     - Menyematkan jaminan keamanan transaksi: badge `Enkripsi Bank-Grade 256-bit SSL` dan `Midtrans Verified ✓`.
+  2. **Eliminasi Total Gaya "AI Slop" & Emoji Mentah**:
+     - Mengganti header gelap kaku (`bg-gray-900`) dengan desain header proptech berkelas (`bg-slate-900` dengan ambient brand glow lembut dan border halus).
+     - Mengganti seluruh radius membulat bengkak (`rounded-[2.5rem]`, `rounded-[3rem]`) ke standar proptech modern (`rounded-2xl` & `rounded-xl`).
+     - Menghapus 100% emoji teks mentah (`📱 💳`, `📥`, `💳`, `✅`, `⚠️`) dan menggantinya dengan pure vector SVG dari `lucide-react` (`<ShieldCheck />`, `<Lock />`, `<CheckCircle2 />`, `<QrCode />`, `<Building2 />`, `<Smartphone />`, `<Wallet />`, `<CreditCard />`, `<Clock />`, `<ChevronRight />`, `<ChevronDown />`, `<Copy />`, `<Check />`, `<Download />`, `<ArrowLeft />`, `<ArrowRight />`, `<X />`, `<Receipt />`, `<RefreshCw />`, `<AlertCircle />`).
+  3. **Pemisahan Layout Anti-Tumpuk (Zero Text-Collision Layout)**:
+     - Memisahkan total pembayaran dan batas waktu countdown ke dalam kontainer terpisah yang terlindungi:
+       - Kontainer Nominal: Menampilkan `Rp 1.000.000` dengan tipografi jelas dan tombol accordion `[ Lihat Rincian / Tutup Rincian ]` dengan animasi rotasi `<ChevronDown />`.
+       - Kontainer Batas Waktu: Ditempatkan dalam badge waktu mandiri (`bg-amber-50/90 border border-amber-200/70 text-amber-950 rounded-xl px-3.5 py-2`) yang tidak akan pernah menempel atau bertubrukan dengan angka nominal pada ukuran layar ponsel apa pun.
+  4. **Perbaikan Arsitektur Waktu Batas Pembayaran (`getRemainingSeconds`)**:
+     - Menghapus logika lama yang menghitung durasi 3 jam statis dari `created_at`.
+     - Logika baru secara cerdas mengenali pesanan sewa (`kost_booking`, `rent`, `kost`, dll) dan menghitung jendela 24 jam penuh (86400 detik) berdasarkan timestamp `metadata.approved_at || updated_at || created_at`.
+     - Mencegah bug false-expired di mana timer langsung menunjukkan `00:00:00` merah pada pengajuan sewa yang baru saja disetujui mitra.
+  5. **Modernisasi Komponen Pemilihan Metode & Instruksi Pembayaran**:
+     - Segmented category view bersih untuk QRIS, E-Wallet, dan Virtual Account Transfer Bank.
+     - Kartu metode bayar responsif dengan highlight border oranye saat dipilih.
+     - Tampilan QRIS modern dengan tombol unduh QR (`<Download />`) dan instruksi scan m-Banking.
+     - Tampilan Virtual Account dengan tombol interaktif salin kode bayar (`<Copy />` $\rightarrow$ `<Check /> Berhasil Disalin!`).
+     - Layar transaksi berhasil modern dengan rincian pembayaran terverifikasi.
+- **File Tersentuh**:
+  - `functions/public/components/PaymentGateway.tsx`
+  - `functions/PROGRESS.md`
+  - `IMPLEMENTATION_PLAN.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi frontend Vite (`npm.cmd --prefix functions/public run build`): Lulus 100% (2512 modul, 0 error).
+  - Kompilasi backend Cloud Functions (`npm.cmd --prefix functions run build`): Lulus 100% (tsc, 0 error).
+
 ### 475. Proteksi Batas Waktu Pembayaran (Hard Cap 24 Jam) & Penguncian Timestamp Persetujuan (`MyKost.tsx`, `userService.ts`, `MitraDashboard.tsx`) (Oktober 2026)
 - **Permintaan & Masukan Pengguna**:
   1. Investigasi dan perbaikan kartu "Batas Waktu Pembayaran" di tab Diajukan (Kost Saya / `MyKost.tsx`) yang menampilkan `769 JAM : 09 MNT : 45 DTK` padahal badge menyatakan `1x24 Jam`.
