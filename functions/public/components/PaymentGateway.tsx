@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { 
-  ShieldCheck, 
   Lock, 
   CheckCircle2, 
   QrCode, 
@@ -638,101 +637,79 @@ const PaymentGateway: React.FC<PaymentGatewayProps> = ({
         )}
 
         {/* 1. Header Resmi RuangSinggah.id */}
-        <div className="p-5 sm:p-6 bg-slate-900 text-white flex-shrink-0 relative overflow-hidden border-b border-slate-800">
+        <div className="px-5 py-3 sm:px-6 sm:py-3.5 bg-slate-900 text-white flex-shrink-0 relative overflow-hidden border-b border-slate-800">
           {/* Subtle Ambient Brand Glow */}
-          <div className="absolute top-0 right-0 w-64 h-64 bg-gradient-to-br from-orange-500/15 via-amber-500/5 to-transparent rounded-full blur-3xl -mr-32 -mt-32 pointer-events-none" />
+          <div className="absolute top-0 right-0 w-64 h-64 bg-gradient-to-br from-orange-500/10 via-amber-500/5 to-transparent rounded-full blur-3xl -mr-32 -mt-32 pointer-events-none" />
           
-          <div className="relative z-10 flex flex-col gap-4">
-            {/* Brand Logo & Top Actions */}
-            <div className="flex items-center justify-between gap-3">
-              <div className="flex items-center gap-3 min-w-0">
-                <img 
-                  src="/logo.png" 
-                  alt="RuangSinggah.id" 
-                  className="h-8 w-auto object-contain shrink-0" 
-                />
-                <div className="flex flex-col">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="font-extrabold text-base sm:text-lg tracking-tight text-white leading-none">
-                      Ruang<span className="text-orange-500">Singgah</span><span className="text-slate-400">.id</span>
-                    </span>
-                    <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-orange-500/15 border border-orange-500/30 text-orange-400 uppercase tracking-wider">
-                      Checkout Gateway
-                    </span>
-                  </div>
-                  <p className="text-[11px] text-slate-400 font-medium mt-1">
-                    Order ID: <span className="text-slate-200 font-bold font-mono">#{currentOrder?.id?.split('-').pop()?.toUpperCase() || orderId}</span>
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-2 shrink-0">
-                {showCheckout && (
-                  <button 
-                    onClick={() => { setShowCheckout(false); setSelectedMethod(null); setDirectData(null); }}
-                    className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-bold transition-all border border-slate-700 flex items-center gap-1.5 active:scale-95 cursor-pointer"
-                  >
-                    <ArrowLeft className="w-3.5 h-3.5" />
-                    <span className="hidden sm:inline">Ganti Metode</span>
-                  </button>
-                )}
-                <button 
-                  onClick={onCancel} 
-                  className="p-2 bg-slate-800/80 hover:bg-slate-700 text-slate-400 hover:text-white rounded-xl transition-all border border-slate-700/80 active:scale-95 cursor-pointer"
-                  title="Tutup"
-                >
-                  <X className="w-5 h-5" />
-                </button>
+          <div className="relative z-10 flex items-center justify-between gap-3">
+            {/* Brand Logo & Order ID */}
+            <div className="flex items-center gap-2.5 min-w-0">
+              <img 
+                src="/logo.png" 
+                alt="RuangSinggah.id" 
+                className="h-7 w-auto object-contain shrink-0" 
+              />
+              <div className="flex flex-col">
+                <span className="font-extrabold text-sm sm:text-base tracking-tight text-white leading-none">
+                  Ruang<span className="text-orange-500">Singgah</span><span className="text-slate-400">.id</span>
+                </span>
+                <p className="text-[10px] text-slate-400 font-mono mt-0.5">
+                  Order ID: <span className="text-slate-200 font-bold">#{currentOrder?.id?.split('-').pop()?.toUpperCase() || orderId}</span>
+                </p>
               </div>
             </div>
 
-            {/* Security Assurance Badge Bar */}
-            <div className="flex items-center justify-between gap-2 pt-3 border-t border-slate-800 text-[11px] text-slate-400">
-              <div className="flex items-center gap-1.5 text-emerald-400">
-                <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
-                <span className="font-semibold text-[10.5px]">Enkripsi Bank-Grade 256-bit SSL</span>
-              </div>
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
-                <Lock className="w-3 h-3 text-emerald-400 shrink-0" />
-                Transaksi Terlindungi
-              </span>
+            <div className="flex items-center gap-2 shrink-0">
+              {showCheckout && (
+                <button 
+                  onClick={() => { setShowCheckout(false); setSelectedMethod(null); setDirectData(null); }}
+                  className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-[11px] font-bold transition-all border border-slate-700 flex items-center gap-1 active:scale-95 cursor-pointer"
+                  title="Ganti Metode Pembayaran"
+                >
+                  <ArrowLeft className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">Ganti Metode</span>
+                </button>
+              )}
+              <button 
+                onClick={onCancel} 
+                className="p-1.5 sm:p-2 bg-slate-800/80 hover:bg-slate-700 text-slate-400 hover:text-white rounded-xl transition-all border border-slate-700/80 active:scale-95 cursor-pointer"
+                title="Tutup"
+              >
+                <X className="w-4 h-4 sm:w-5 sm:h-5" />
+              </button>
             </div>
           </div>
         </div>
 
-        {/* 2. Total Tagihan & Timer Countdown (Anti-Tumpuk / Zero-Collision Layout) */}
-        <div className="bg-slate-50 border-b border-slate-200/80 p-5 sm:p-6 flex flex-col gap-4">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        {/* 2. Total Tagihan & Timer Countdown (Satu Baris Kompak / Zero Vertical Waste) */}
+        <div className="bg-slate-50 border-b border-slate-200/80 px-5 py-3 sm:px-6 sm:py-3.5 flex flex-col gap-2.5">
+          <div className="flex items-center justify-between gap-3">
             <div>
-              <div className="flex items-center gap-2">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Total Pembayaran</span>
+              <span className="text-[9.5px] font-bold uppercase tracking-wider text-slate-500 block leading-tight">Total Pembayaran</span>
+              <div className="flex items-baseline gap-2 mt-0.5">
+                <p className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight leading-none">
+                  {FORMAT_CURRENCY(amount)}
+                </p>
                 <button 
                   onClick={() => setShowDetails(!showDetails)}
-                  className="text-[10px] font-bold text-orange-600 hover:text-orange-700 uppercase tracking-wider flex items-center gap-1 transition-colors cursor-pointer"
+                  className="text-[10px] font-bold text-orange-600 hover:text-orange-700 uppercase tracking-wider flex items-center gap-0.5 transition-colors cursor-pointer"
                 >
-                  {showDetails ? 'Tutup Rincian' : 'Lihat Rincian'}
-                  <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${showDetails ? 'rotate-180' : ''}`} />
+                  {showDetails ? 'Tutup' : 'Rincian'}
+                  <ChevronDown className={`w-3 h-3 transition-transform duration-200 ${showDetails ? 'rotate-180' : ''}`} />
                 </button>
               </div>
-              <p className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight mt-0.5">
-                {FORMAT_CURRENCY(amount)}
-              </p>
             </div>
 
-            {/* Dedicated Countdown Banner (Protected in its own flex container) */}
-            <div className={`px-3.5 py-2 rounded-xl border flex items-center gap-2.5 transition-all self-start sm:self-auto ${
+            {/* Countdown Timer Pill Kompak */}
+            <div className={`px-2.5 py-1.5 rounded-xl border flex items-center gap-1.5 shrink-0 transition-all ${
               timeLeft < 300 
-                ? 'bg-rose-50 border-rose-200 text-rose-900 animate-pulse' 
-                : 'bg-amber-50/90 border-amber-200/70 text-amber-950'
+                ? 'bg-rose-50 border-rose-200 text-rose-700 animate-pulse' 
+                : 'bg-amber-50/90 border-amber-200/80 text-amber-900'
             }`}>
-              <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${
-                timeLeft < 300 ? 'bg-rose-500 text-white' : 'bg-amber-500 text-white'
-              }`}>
-                <Clock className="w-3.5 h-3.5" />
-              </div>
-              <div className="flex flex-col">
-                <span className="text-[8.5px] font-bold uppercase tracking-wider text-slate-500">Batas Waktu Bayar</span>
-                <span className={`text-xs font-mono font-black ${timeLeft < 300 ? 'text-rose-600' : 'text-amber-800'}`}>
+              <Clock className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+              <div className="flex items-baseline gap-1">
+                <span className="text-[9px] font-semibold uppercase text-slate-500 hidden sm:inline">Batas:</span>
+                <span className={`text-xs font-mono font-bold tracking-tight ${timeLeft < 300 ? 'text-rose-600' : 'text-amber-950'}`}>
                   {formatTime(timeLeft)}
                 </span>
               </div>
@@ -762,7 +739,7 @@ const PaymentGateway: React.FC<PaymentGatewayProps> = ({
         </div>
 
         {/* 3. Content Area */}
-        <div className="flex-grow overflow-y-auto bg-white flex flex-col p-5 sm:p-7">
+        <div className="flex-grow overflow-y-auto bg-white flex flex-col p-4 sm:p-6">
           {currentOrder?.status === 'expired' ? (
             /* Expired View */
             <div className="flex flex-col items-center justify-center text-center p-8 space-y-4 my-auto">
@@ -979,10 +956,8 @@ const PaymentGateway: React.FC<PaymentGatewayProps> = ({
                       </div>
                     ) : (
                       /* Virtual Account Display */
-                      <div className="space-y-6 w-full max-w-sm text-center py-2">
-                        <div className="space-y-4">
-                            <h2 className="text-base font-bold text-slate-900 uppercase tracking-tight">Instruksi Pembayaran</h2>
-                            <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200 space-y-5">
+                      <div className="space-y-4 w-full max-w-sm text-center py-1">
+                        <div className="bg-slate-50 p-4 sm:p-5 rounded-2xl border border-slate-200 space-y-4">
                                 {(() => {
                                     const midtransVa = directData?.va_numbers?.[0]?.va_number;
                                     const mandiriVa = directData?.bill_key;
@@ -1060,7 +1035,6 @@ const PaymentGateway: React.FC<PaymentGatewayProps> = ({
                                     );
                                 })()}
                             </div>
-                        </div>
 
                         {/* Tutorial Accordion */}
                         <div className="space-y-3 text-left">
@@ -1142,16 +1116,11 @@ const PaymentGateway: React.FC<PaymentGatewayProps> = ({
         </div>
 
         {/* 4. Footer */}
-        <div className="flex-shrink-0 px-5 py-3.5 border-t border-slate-100 bg-slate-50/70">
-          <div className="flex items-center justify-between text-[10px] text-slate-400 font-medium">
-            <span className="flex items-center gap-1.5">
-              <Lock className="w-3 h-3 text-slate-400" />
-              <span>Transaksi Resmi Dilindungi RuangSinggah.id</span>
-            </span>
-            <span className="font-semibold text-slate-500">
-              Sistem Verifikasi Otomatis 24/7
-            </span>
-          </div>
+        <div className="flex-shrink-0 px-5 py-2.5 border-t border-slate-100 bg-slate-50/70 flex items-center justify-center text-[10.5px] text-slate-400 font-medium">
+          <span className="flex items-center gap-1.5">
+            <Lock className="w-3 h-3 text-slate-400" />
+            <span>Transaksi Resmi RuangSinggah.id</span>
+          </span>
         </div>
 
       </div>
