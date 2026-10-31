@@ -12,6 +12,7 @@ AI Agent **DILARANG KERAS** membuat `IMPLEMENTATION_PLAN.md` dan langsung mengek
 Ketika User memberikan instruksi baru untuk mengembangkan fitur, memperbaiki bug, atau mengubah logika sistem:
 1. Agent **HANYA** bertugas menganalisis masalah dan menyusun dokumen `IMPLEMENTATION_PLAN.md` dalam Bahasa Indonesia yang memuat:
    - **Analisis Masalah / Kebutuhan**: Apa yang rusak, apa tujuan pengembangan, dan konteks alurnya.
+   - **Komparasi & Evaluasi Standar Industri Objektif (Anti-Bias Konfirmasi)**: Analisis komparatif jujur apakah solusi yang dirancang berada di bawah standar industri, setara standar industri, atau lebih maju dari industri pada dimensi terkait, dilengkapi alasan teknis dan rekomendasi langkah terbaik (mengacu pada Pasal 8).
    - **Dampak Perubahan**: Daftar spesifik file yang akan disentuh.
    - **Langkah-Langkah Eksekusi**: Rencana urutan modifikasi kode yang akan dilakukan secara bertahap.
    - **Rencana Verifikasi**: Bagaimana cara memastikan fitur tersebut berhasil (misal: uji kompilasi `npm run build` dan verifikasi manual).
@@ -97,3 +98,32 @@ Untuk menjaga performa front-end super responsif, menghemat kuota pembacaan (*re
    - Secara default tanpa instruksi khusus, Agent tidak melakukan push langsung ke branch `main`.
    - Namun, **jika User memberikan instruksi tertulis secara eksplisit melalui prompt** (misal: "lakukan push ke main", "push github ke main", "merge dan push ke main"), maka Agent **DIPERBOLEHKAN dan WAJIB mengeksekusi merge/push ke branch `main`** sesuai perintah eksplisit User.
 
+---
+
+## 8. Standar Baku Evaluasi Objektif Standar Industri pada Implementation Plan (Anti-Bias Konfirmasi)
+
+Untuk memastikan seluruh arsitektur, kode, dan fitur RuangSinggah dibangun dengan kualitas kelas dunia (*world-class engineering*):
+
+1. **Kewajiban Analisis Objektif Tanpa Bias Konfirmasi**:
+   - Agent **DILARANG KERAS** bersikap *sycophantic* (hanya memuji, membenarkan rancangan buruk, atau menyetujui pendekatan sub-optimal demi menyenangkan pengguna).
+   - Agent **WAJIB** bersikap kritis, jujur, dan berani menunjukkan kelemahan arsitektur, celah keamanan, potensi *bottleneck*, atau ketertinggalan teknologi dari suatu rencana pengembangan.
+
+2. **Tiga Tingkat Klasifikasi Standar Industri**:
+   Pada setiap IMPLEMENTATION_PLAN.md, Agent wajib menyertakan tabel/ringkasan evaluasi dengan klasifikasi tegas:
+   - ⚠️ **Tertinggal dari Standar Industri (*Below / Lagging Industry Standard*)**: Jika pendekatan yang direncanakan masih berupa solusi sementara (*hacky/workaround*), tidak aman (*insecure*), memicu *over-fetching*, merusak skalabilitas, atau tertinggal dari praktik terbaik modern.
+   - 🌟 **Setara Standar Industri (*Industry Standard*)**: Jika pendekatan yang diambil mencerminkan *best practice* yang umum digunakan oleh platform teknologi terkemuka (misal: Airbnb, Stripe, Uber, Traveloka, Supabase Official Architecture).
+   - 🚀 **Lebih Maju dari Standar Industri (*Ahead of / Beyond Industry Standard*)**: Jika solusi yang dirancang memberikan efisiensi yang melampaui standar umum (misal: zero-latency bundling, proteksi multi-lapis tanpa overhead jaringan, optimasi *client-side processing* tingkat tinggi yang menghemat 90%+ biaya cloud/storage).
+
+3. **Cakupan Dimensi Evaluasi**:
+   Evaluasi wajib membedah dimensi yang relevan dengan tugas yang sedang dikerjakan:
+   - **Fitur & Logika Bisnis**: Kelengkapan skenario (*edge cases*), validasi alur, pencegahan *state conflict*.
+   - **Arsitektur & Struktur Kode**: *Design patterns*, modularitas, keterbacaan, *maintainability*, prinsip SOLID.
+   - **Frontend & UX**: Reaktivitas, eliminasi FOUT/layout shift, *accessibility*, performa rendering, *core web vitals*.
+   - **Backend & Processing**: *Concurrency*, *race-condition guard*, keandalan *idempotency*, *queue/event handling*.
+   - **Database & SQL**: Normalisasi vs denormalisasi, struktur indeks, *locking mechanism*, integritas relasi, RLS.
+   - **Keamanan & Proteksi Sistem**: Autentikasi, otorisasi RBAC, *input sanitization*, pencegahan *disintermediation / platform bypass*, OWASP.
+   - **Efisiensi Biaya & Skalabilitas**: Pemakaian kuota baca/tulis (*read/write quota*), *caching strategy*, latensi, beban serverless.
+
+4. **Kewajiban Penjelasan Alasan & Rekomendasi Terbaik**:
+   - Setiap klasifikasi wajib disertai **alasan konkrit** (mengapa hal ini tertinggal, setara, atau lebih maju).
+   - Agent wajib memberikan **rekomendasi langkah terbaik selanjutnya (*best actionable advice*)**: Apa kompromi yang diambil, mengapa pendekatan tersebut dipilih untuk tahap ini, dan langkah mitigasi apa yang disiapkan untuk masa depan.

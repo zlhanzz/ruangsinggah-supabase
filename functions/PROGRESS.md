@@ -2,6 +2,30 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 478. Penambahan Aturan Baku Proyek: Evaluasi Objektif Standar Industri pada Implementation Plan (Anti-Bias Konfirmasi) (AGENTS.md, GEMINI.md) (Oktober 2026)
+- **Permintaan & Masukan Pengguna**:
+  1. Membuat aturan baku baru untuk proyek di mana seluruh AI Agent wajib menyajikan evaluasi secara objektif tanpa bias konfirmasi (*anti-sycophancy*) pada setiap IMPLEMENTATION_PLAN.md.
+  2. Evaluasi harus membedah apakah rancangan yang akan dilakukan berada di bawah standar industri (*tertinggal*), setara standar industri, atau lebih maju dari standar industri.
+  3. Menjelaskan setiap alasan teknisnya secara mendalam dan memberikan rekomendasi langkah terbaik selanjutnya (*best actionable advice*).
+  4. Cakupan evaluasi standar industri mencakup: fitur, arsitektur, data processing, frontend, backend, logika bisnis, database & SQL, struktur kode, keamanan/security, user experience (UX), efektivitas dan efisiensi biaya.
+- **Implementasi Solusi**:
+  1. **Pembaruan Protokol FASE 1 pada AGENTS.md dan GEMINI.md**:
+     - Memperbarui Pasal 1 butir 1 dengan klausul wajib: Komparasi & Evaluasi Standar Industri Objektif (Anti-Bias Konfirmasi) sebagai komponen inti dari setiap IMPLEMENTATION_PLAN.md.
+  2. **Perumusan Pasal 8 Baru: Standar Baku Evaluasi Objektif Standar Industri pada Implementation Plan**:
+     - *Anti-Sycophancy Mandate*: Larangan keras sekadar memuji atau menyetujui pendekatan sub-optimal demi menyenangkan pengguna; Agent wajib bersikap kritis dan jujur membedah kelemahan serta celah teknis.
+     - *3 Tingkat Klasifikasi Baku*: Tertinggal dari Standar Industri (⚠️), Setara Standar Industri (🌟), dan Lebih Maju dari Standar Industri (🚀).
+     - *Cakupan Multi-Dimensi Lengkap*: Fitur & Logika Bisnis, Arsitektur & Struktur Kode, Frontend & UX, Backend & Processing, Database & SQL, Keamanan & Proteksi Sistem, serta Efisiensi Biaya & Skalabilitas.
+     - *Kewajiban Alasan & Rekomendasi Langkah Terbaik*: Setiap klasifikasi wajib disertai perbandingan riil dengan industri teknologi terkemuka dan arahan mitigasi konkret.
+- **File Tersentuh**:
+  - AGENTS.md
+  - GEMINI.md
+  - unctions/PROGRESS.md
+  - IMPLEMENTATION_PLAN.md
+  - WALKTHROUGH.md
+- **Verifikasi**:
+  - Verifikasi integritas dokumen dan sinkronisasi lintas runtime (AGENTS.md & GEMINI.md).
+  - Dogfooding langsung pada IMPLEMENTATION_PLAN.md di mana rancangan aturan diuji dan dievaluasi dengan standar industri.
+
 ### 477. Perbaikan Kartu Pengajuan Sewa Hilang di Tab DIAJUKAN Setelah Masuk Tahap Pembayaran Midtrans (`MyKost.tsx`, `index.ts`) (Oktober 2026)
 - **Permintaan & Masukan Pengguna**:
   1. Investigasi dan perbaikan kartu pengajuan sewa yang tiba-tiba menghilang dari tab DIAJUKAN di halaman Kost Saya (`/my-kost`) setelah pengajuan di-ACC oleh Mitra dan pengguna membuka portal pembayaran.
@@ -11322,21 +11346,29 @@
   - Kompilasi `cmd /c npm run build` di `functions/public/` berhasil 100% dengan 0 error dalam 34.84s (✓ 2531 modules transformed).
 
 
-### 264. Perbaikan Bug Integritas Data oom_types pada Alur Pendaftaran Kost Mitra Self-Listing (September 2026)
+### 264. Perbaikan Bug Integritas Data 
+oom_types pada Alur Pendaftaran Kost Mitra Self-Listing (September 2026)
 - **Permintaan & Masalah**:
   1. Mitra yang mendaftarkan 2 tipe kamar (mis. Standard + VIP) pada form KostFormMitra.tsx mendapati hanya 1 tipe kamar tersimpan di database setelah klik "Publikasikan Kost".
-  2. Tipe kamar kedua hilang karena fungsi syncPropertyRooms di dminService.ts melakukan re-aggregasi oom_types dari latRooms dan menimpa (overwrite) kolom properties.room_types dengan hasil yang berpotensi corrupt akibat error RLS pada tabel relasional ooms.
+  2. Tipe kamar kedua hilang karena fungsi syncPropertyRooms di dminService.ts melakukan re-aggregasi 
+oom_types dari latRooms dan menimpa (overwrite) kolom properties.room_types dengan hasil yang berpotensi corrupt akibat error RLS pada tabel relasional 
+ooms.
   3. Muncul pesan console.error merah ([SYNC_ROOMS] Error upserting rooms: new row violates row-level security policy for table "rooms") yang membingungkan mitra seolah proses gagal, padahal data kost utama sudah 100% tersimpan.
 - **Investigasi & Temuan**:
   - properties.room_types (JSONB) adalah *single source of truth*. Data sudah benar saat diinsert dari form.
-  - Fungsi syncPropertyRooms mencoba sync ke tabel relasional sekunder ooms ? gagal karena RLS 42501 ? tetap lanjut re-aggregate ulang oom_types dari latRooms ? overwrite data asli yang sudah benar ? tipe kamar kedua hilang.
+  - Fungsi syncPropertyRooms mencoba sync ke tabel relasional sekunder 
+ooms ? gagal karena RLS 42501 ? tetap lanjut re-aggregate ulang 
+oom_types dari latRooms ? overwrite data asli yang sudah benar ? tipe kamar kedua hilang.
   - Pemisahan data self-listing vs KostManager sudah ada via kolom is_managed (false = self-listing, true = KostManager).
 - **Implementasi & Solusi**:
-  * **1. Hapus Overwrite oom_types di syncPropertyRooms**:
+  * **1. Hapus Overwrite 
+oom_types di syncPropertyRooms**:
     - Blok re-aggregasi ggregatedRoomTypes dan UPDATE properties SET room_types = aggregatedRoomTypes dihapus sepenuhnya.
-    - syncPropertyRooms sekarang hanya mengupdate kolom price (harga minimum) yang dihitung dari awRooms asli (properties.room_types), bukan dari flatRooms yang bisa korup.
+    - syncPropertyRooms sekarang hanya mengupdate kolom price (harga minimum) yang dihitung dari 
+awRooms asli (properties.room_types), bukan dari flatRooms yang bisa korup.
   * **2. Graceful Handling RLS Error**:
-    - console.error diubah menjadi console.warn untuk error RLS kode 42501 pada tabel ooms, sehingga tidak muncul alarm palsu di konsol browser mitra.
+    - console.error diubah menjadi console.warn untuk error RLS kode 42501 pada tabel 
+ooms, sehingga tidak muncul alarm palsu di konsol browser mitra.
 - **File Tersentuh**:
   - unctions/public/adminService.ts
   - unctions/PROGRESS.md
@@ -11534,5 +11566,4 @@
   - `WALKTHROUGH.md`
 - **Verifikasi**:
   - Build Vite frontend `npm run build` di `functions/public/` sukses 100% dengan 0 error dalam 1m 1s (✓ 2512 modules transformed).
-
 
