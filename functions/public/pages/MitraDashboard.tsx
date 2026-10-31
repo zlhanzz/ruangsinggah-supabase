@@ -373,6 +373,8 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
     const [selectedRejectReason, setSelectedRejectReason] = useState<string>('Kamar sudah terisi oleh penyewa offline');
     const [customRejectReason, setCustomRejectReason] = useState<string>('');
     const [isSubmittingReject, setIsSubmittingReject] = useState<boolean>(false);
+    const [approvingBooking, setApprovingBooking] = useState<any | null>(null);
+    const [isSubmittingApprove, setIsSubmittingApprove] = useState<boolean>(false);
     const [selectedWithdrawalDetail, setSelectedWithdrawalDetail] = useState<any | null>(null);
 
     // --- KOSTMANAGER SMART AUTO-PILOT STATE ---
@@ -812,18 +814,23 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
         return { label, isUrgent, isExpired: false, hours, minutes };
     };
 
-    const handleApprove = async (group: any) => {
-        if (!window.confirm('Setujui pesanan ini? Calon penghuni akan menerima notifikasi untuk segera melakukan pembayaran.')) return;
+    const handleApprove = (group: any) => {
+        setApprovingBooking(group);
+    };
+
+    const handleConfirmApprove = async () => {
+        if (!approvingBooking) return;
         try {
-            setLoading(true);
-            const transactions = group.all_transactions || [group];
+            setIsSubmittingApprove(true);
+            const transactions = approvingBooking.all_transactions || [approvingBooking];
             await Promise.all(transactions.map((t: any) => updateBookingStatus(t.id, 'AWAITING_PAYMENT')));
             await loadData();
-            alert('Pengajuan sewa berhasil disetujui! Status pesanan kini Menunggu Pembayaran dari calon penghuni.');
+            setApprovingBooking(null);
         } catch (err: any) {
-            alert('Gagal menyetujui: ' + err.message);
+            console.error('Gagal menyetujui pesanan:', err);
+            alert('Gagal menyetujui: ' + (err.message || 'Terjadi kesalahan'));
         } finally {
-            setLoading(false);
+            setIsSubmittingApprove(false);
         }
     };
 
@@ -3496,6 +3503,127 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                     </div>
                 </div>
             )}
+
+            {/* MODAL KONFIRMASI PERSETUJUAN SEWA (PROPTECH APPROVAL MODAL) */}
+            {approvingBooking && (() => {
+                const b = approvingBooking;
+                const tenantName = b.user?.name || b.metadata?.tenantName || 'Calon Penghuni';
+                const propertyTitle = b.property?.title || b.metadata?.kostName || 'Kost';
+                const roomType = b.metadata?.roomType || b.metadata?.roomCategory || 'Standard';
+                const periodLabel = b.metadata?.periodLabel || (b.metadata?.total_months ? String(b.metadata.total_months) + ' Bulan' : 'Per Bulan');
+                const startDate = b.metadata?.startDate || b.metadata?.leaseStart || '-';
+                const occupants = b.metadata?.occupantCount || b.metadata?.occupants || 1;
+                const totalAmount = b.amount || b.metadata?.totalPrice || b.metadata?.total || 0;
+
+                return (
+                    <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
+                        <div 
+                            className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200"
+                            onClick={() => !isSubmittingApprove && setApprovingBooking(null)}
+                        />
+                        <div className="relative bg-white w-full max-w-lg rounded-3xl p-6 sm:p-8 shadow-2xl animate-in zoom-in-95 duration-200 border border-slate-100 flex flex-col gap-5 max-h-[90vh] overflow-y-auto no-scrollbar">
+                            {/* Modal Header */}
+                            <div className="flex items-center justify-between pb-4 border-b border-slate-100">
+                                <div className="flex items-center gap-3">
+                                    <div className="w-11 h-11 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center border border-emerald-200/60 shrink-0">
+                                        <CheckCircle2 size={22} />
+                                    </div>
+                                    <div>
+                                        <h4 className="font-black text-slate-900 text-base leading-tight">Konfirmasi Persetujuan Sewa</h4>
+                                        <p className="text-xs text-slate-500 font-medium mt-0.5">Tinjau rincian pemesanan dan konfirmasi ketersediaan kamar</p>
+                                    </div>
+                                </div>
+                                <button
+                                    type="button"
+                                    disabled={isSubmittingApprove}
+                                    onClick={() => setApprovingBooking(null)}
+                                    className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-500 cursor-pointer transition-colors shrink-0"
+                                >
+                                    <X size={16} />
+                                </button>
+                            </div>
+
+                            {/* Mini Order Summary Card */}
+                            <div className="bg-slate-50/80 rounded-2xl p-4 sm:p-5 border border-slate-200/70 space-y-3.5">
+                                <div className="flex items-start justify-between gap-3">
+                                    <div className="min-w-0">
+                                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Hunian & Kamar</span>
+                                        <p className="font-black text-slate-900 text-sm truncate">{propertyTitle}</p>
+                                        <p className="text-xs font-semibold text-orange-600">Tipe {roomType}</p>
+                                    </div>
+                                    <div className="text-right shrink-0">
+                                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Total Tagihan</span>
+                                        <p className="font-black text-emerald-600 text-base sm:text-lg leading-tight">
+                                            {FORMAT_CURRENCY(totalAmount)}
+                                        </p>
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 pt-3 border-t border-slate-200/60 text-xs">
+                                    <div>
+                                        <span className="text-[9.5px] font-bold text-slate-400 uppercase tracking-wider block">Calon Penghuni</span>
+                                        <p className="font-bold text-slate-800 truncate mt-0.5">{tenantName}</p>
+                                    </div>
+                                    <div>
+                                        <span className="text-[9.5px] font-bold text-slate-400 uppercase tracking-wider block">Tanggal Masuk</span>
+                                        <p className="font-bold text-slate-800 truncate mt-0.5">{startDate}</p>
+                                    </div>
+                                    <div>
+                                        <span className="text-[9.5px] font-bold text-slate-400 uppercase tracking-wider block">Paket / Kapasitas</span>
+                                        <p className="font-bold text-slate-800 truncate mt-0.5">{periodLabel} • {occupants} Org</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Informational Callout & SOP Commitments */}
+                            <div className="space-y-2.5">
+                                <div className="flex items-start gap-2.5 p-3 rounded-xl bg-amber-50/80 border border-amber-200/70 text-amber-900 text-xs">
+                                    <Clock size={16} className="text-amber-600 shrink-0 mt-0.5" />
+                                    <p className="leading-relaxed">
+                                        Calon penghuni diberikan batas waktu pembayaran resmi selama <strong>1x24 jam</strong> sejak persetujuan ini diterbitkan.
+                                    </p>
+                                </div>
+                                <div className="flex items-start gap-2.5 p-3 rounded-xl bg-slate-50 border border-slate-200/70 text-slate-600 text-xs">
+                                    <ShieldCheck size={16} className="text-emerald-600 shrink-0 mt-0.5" />
+                                    <p className="leading-relaxed">
+                                        Kamar akan ditandai <strong>Dipesan</strong> di sistem. Jika calon penghuni tidak membayar tepat waktu, pesanan otomatis hangus dan kamar kembali tersedia.
+                                    </p>
+                                </div>
+                            </div>
+
+                            {/* Action Buttons */}
+                            <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
+                                <button
+                                    type="button"
+                                    disabled={isSubmittingApprove}
+                                    onClick={() => setApprovingBooking(null)}
+                                    className="px-5 py-2.5 rounded-xl border border-slate-200 text-slate-600 font-bold text-xs hover:bg-slate-50 cursor-pointer transition-all disabled:opacity-50"
+                                >
+                                    Batal
+                                </button>
+                                <button
+                                    type="button"
+                                    disabled={isSubmittingApprove}
+                                    onClick={handleConfirmApprove}
+                                    className="px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs shadow-lg shadow-emerald-600/20 active:scale-95 cursor-pointer transition-all flex items-center gap-1.5 disabled:opacity-50"
+                                >
+                                    {isSubmittingApprove ? (
+                                        <>
+                                            <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                            <span>Memproses...</span>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <CheckCircle2 size={15} />
+                                            <span>Setujui & Kirim Tagihan</span>
+                                        </>
+                                    )}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                );
+            })()}
 
             {/* APPLICANT PROFILE MODAL - CLEAN PROPTECH DESIGN */}
             {(selectedBookingForProfile || selectedUserForProfile) && (() => {

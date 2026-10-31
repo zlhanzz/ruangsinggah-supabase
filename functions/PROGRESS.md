@@ -2,6 +2,30 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 479. Modernisasi & Profesionalisasi Dialog Konfirmasi Persetujuan Pengajuan Sewa Mitra (`MitraDashboard.tsx`) (Oktober 2026)
+- **Permintaan & Masukan Pengguna**:
+  1. Menghilangkan dialog pop-up konfirmasi peramban native (`localhost:5173 says: Setujui pesanan ini?...`) yang muncul saat mengklik tombol SETUJUI di Dashboard Mitra (`/dashboard-mitra/bookings`).
+  2. Pengguna meminta tampilan pop-up konfirmasi yang jauh lebih profesional beserta isi teks konfirmasi yang proporsional dan profesional.
+  3. Masukan spesifik pengguna pada copywriting: Menggunakan kalimat aktif "Tinjau rincian pemesanan dan konfirmasi ketersediaan kamar" (menggunakan kata "dan" bukan "sebelum") agar lugas dan menegaskan peninjauan sekaligus penguncian unit kamar.
+- **Implementasi Solusi**:
+  1. **Eliminasi Total Native Browser Dialog (`MitraDashboard.tsx`)**:
+     - Menghapus 100% pemanggilan `window.confirm` dan `alert` pada alur persetujuan sewa pemilik kost.
+     - Menggantikan alur sinkron dengan state asinkron mandiri: `approvingBooking` dan `isSubmittingApprove`.
+  2. **Modal Dialog Proptech Konfirmasi Persetujuan (`MitraDashboard.tsx`)**:
+     - Header berkelas: Ikon Emerald `<CheckCircle2 />` (22px), judul **Konfirmasi Persetujuan Sewa**, dan subjudul **"Tinjau rincian pemesanan dan konfirmasi ketersediaan kamar"**.
+     - Mini Order Summary Card (`bg-slate-50/80 rounded-2xl`): Merangkum nama kost & tipe kamar, nama calon penghuni, tanggal masuk, durasi sewa & kapasitas, serta total tagihan tebal hijau emerald (`FORMAT_CURRENCY(totalAmount)`).
+     - SOP & Komitmen Edukatif:
+       - ⏱️ *Tenggat Bayar*: Calon penghuni memiliki waktu resmi **1x24 jam** sejak persetujuan untuk melunasi sewa.
+       - 🔒 *Komitmen Kamar*: Kamar otomatis ditandai **Dipesan** di sistem dan akan otomatis dibuka kembali jika calon penghuni tidak membayar tepat waktu.
+     - Tombol Aksi Proptech: Tombol sekunder `[ Batal ]` (slate outline) dan tombol primer `[ ✔️ Setujui & Kirim Tagihan ]` (Emerald Green solid dengan spinner `Memproses...` dan proteksi anti double-click).
+- **File Tersentuh**:
+  - `functions/public/pages/MitraDashboard.tsx`
+  - `functions/PROGRESS.md`
+  - `IMPLEMENTATION_PLAN.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Uji kompilasi frontend Vite (`npm.cmd --prefix functions/public run build`): Lulus 100% (2512 modul, 0 error).
+
 ### 478. Penambahan Aturan Baku Proyek: Evaluasi Objektif Standar Industri pada Implementation Plan (Anti-Bias Konfirmasi) (AGENTS.md, GEMINI.md) (Oktober 2026)
 - **Permintaan & Masukan Pengguna**:
   1. Membuat aturan baku baru untuk proyek di mana seluruh AI Agent wajib menyajikan evaluasi secara objektif tanpa bias konfirmasi (*anti-sycophancy*) pada setiap IMPLEMENTATION_PLAN.md.
