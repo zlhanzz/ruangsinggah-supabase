@@ -1902,7 +1902,23 @@ export const midtransWebhook = functions.https.onRequest(async (req, res) => {
       }
     } else if (['expire', 'cancel', 'deny'].includes(transaction_status)) {
         console.log(`MIDTRANS_WEBHOOK: Transaction ${order_id} failed with status: ${transaction_status}`);
-        await supabase.from('transactions').update({ status: 'CANCELLED' }).eq('id', order_id);
+        // [FINTECH STANDARD GUARD] Jangan batalkan seluruh booking jika hanya salah satu percobaan pembayaran gateway yang gagal/ditolak.
+        // Calon penghuni tetap berhak mencoba metode lain selama dalam batas waktu SLA 1x24 jam dari persetujuan mitra.
+        const isBooking = ['kost_booking', 'perpanjangan_sewa', 'rent', 'kost'].includes(order.product_type);
+        if (isBooking) {
+            console.log(`MIDTRANS_WEBHOOK: Booking order ${order_id} payment attempt failed/denied, keeping order pending for retry within SLA.`);
+            await supabase.from('transactions').update({ 
+                metadata: { 
+                    ...metadata, 
+                    last_failed_attempt: { 
+                        transaction_status, 
+                        at: new Date().toISOString() 
+                    } 
+                } 
+            }).eq('id', order_id);
+        } else {
+            await supabase.from('transactions').update({ status: 'CANCELLED' }).eq('id', order_id);
+        }
     }
 
     res.status(200).send('OK');

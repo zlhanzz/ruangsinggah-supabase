@@ -19,7 +19,10 @@
      - *Footer Bar*: Menghapus `Powered by Midtrans`, diganti dengan `Sistem Verifikasi Otomatis 24/7`.
      - *Loading State*: Mengubah teks *"Enkripsi aman Midtrans sedang diproses"* menjadi *"Enkripsi pembayaran aman sedang diproses..."*.
      - *Snap Fallback Description*: Mengubah *"Selesaikan pembayaran via portal resmi Midtrans yang aman"* menjadi *"Selesaikan pembayaran Anda melalui portal transaksi resmi RuangSinggah."*.
-  4. **Robustness UI/UX Virtual Account (`PaymentGateway.tsx`)**:
+  4. **Proteksi Status Transaksi Booking pada Webhook Gateway (`functions/src/index.ts`)**:
+     - *Penyebab Kartu Sempat Berpindah ke Riwayat*: Saat Midtrans Production menolak charge lama dengan status deny (akibat string dummy), webhook Midtrans mengeksekusi `status: 'CANCELLED'` pada database transaksi, sehingga kartu pesanan otomatis berpindah ke tab Riwayat.
+     - *Fintech Standard SLA Guard*: Menambahkan pengecekan pada webhook `midtransWebhook`: jika produk bertipe sewa/booking (`kost_booking`, `perpanjangan_sewa`, `rent`, `kost`), kegagalan satu percobaan saluran gateway tidak boleh membatalkan keseluruhan reservasi booking selama masih dalam SLA 1x24 jam. Status booking tetap `pending` agar pengguna dapat memilih metode bayar lain. Status order transaksi dipulihkan kembali ke `pending`.
+  5. **Robustness UI/UX Virtual Account (`PaymentGateway.tsx`)**:
      - Membaca nomor VA terpadu dari `directData.paymentNumber`, `metadata.payment_number`, `directData.va_numbers[0].va_number`, `bill_key`, dll.
      - Mengganti tampilan teks pasif `---` saat kode belum terbit dengan komponen feedback interaktif: ikon `<AlertCircle />`, pesan penjelasan koneksi bank mitra, dan tombol *"Muat Ulang Kode"* (`<RefreshCw />`).
 - **File Tersentuh**:
