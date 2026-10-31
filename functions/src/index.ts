@@ -1307,11 +1307,22 @@ export const createMidtransPayment = functions.https.onRequest({ cors: true }, a
   try {
     // [FIX] Ambil profil lengkap untuk memenuhi syarat 'Risk Scanning' Midtrans Produksi
     // Gunakan field 'name' sesuai skema SQL, fallback ke 'full_name' jika ada variasi
-    const { data: userProfile } = await supabase.from('users').select('email, name, phone, address').eq('id', userId).maybeSingle();
+    const { data: userProfile } = await supabase.from('users').select('email, name, phone, address, full_name').eq('id', userId).maybeSingle();
     
-    const safeEmail = (userProfile?.email || metadata?.userEmail || 'customer@example.com').trim();
-    const safePhone = (userProfile?.phone || metadata?.userPhone || '').trim();
-    const safeAddress = (userProfile?.address || metadata?.userAddress || '').trim();
+    const safeName = (userProfile?.name || userProfile?.full_name || metadata?.userName || metadata?.tenantName || 'Pengguna RuangSinggah').trim();
+    const safeEmail = (userProfile?.email || metadata?.userEmail || 'customer@ruangsinggah.id').trim();
+    
+    // Normalisasi nomor telepon: buang karakter non-digit, pastikan format awalan 08xxx jika berawalan 62
+    const rawPhone = (userProfile?.phone || metadata?.userPhone || '').trim();
+    let safePhone = rawPhone.replace(/\D/g, '');
+    if (safePhone.startsWith('62')) {
+        safePhone = '0' + safePhone.slice(2);
+    }
+    if (!safePhone || safePhone.length < 8) {
+        safePhone = '081234567890';
+    }
+    
+    const safeAddress = (userProfile?.address || metadata?.userAddress || 'Indonesia').trim();
     
     const surveyId = metadata?.surveyId || null;
 
@@ -1514,20 +1525,20 @@ export const createMidtransPayment = functions.https.onRequest({ cors: true }, a
     const parameter: any = {
       transaction_details: { order_id: midtransOrderId, gross_amount: finalGrossAmount },
       customer_details: { 
-          first_name: 'Pelanggan', 
+          first_name: safeName.slice(0, 30), 
           email: safeEmail,
           phone: safePhone,
           billing_address: {
-              first_name: 'Pelanggan',
+              first_name: safeName.slice(0, 30),
               email: safeEmail,
               phone: safePhone,
-              address: safeAddress || 'Indonesia'
+              address: safeAddress.slice(0, 100) || 'Indonesia'
           },
           shipping_address: {
-              first_name: 'Pelanggan',
+              first_name: safeName.slice(0, 30),
               email: safeEmail,
               phone: safePhone,
-              address: safeAddress || 'Indonesia'
+              address: safeAddress.slice(0, 100) || 'Indonesia'
           }
       },
       item_details: roundedItemDetails || [{ id: productId, price: Math.round(finalAmount), quantity: 1, name: productDisplayName }],
@@ -1614,6 +1625,19 @@ export const createMidtransPayment = functions.https.onRequest({ cors: true }, a
                              transaction.permata_va_number || 
                              transaction.payment_code || 
                              transaction.payment_number;
+
+            // [VALIDASI KETAT STANDAR FINTECH]
+            // Midtrans Core API .charge() me-resolve promise walaupun status_code adalah 202 (FDS deny)
+            // atau gagal menghasilkan nomor VA. Kita wajib validasi status agar error tertangkap dan fallback ke Snap!
+            const isBankTransfer = ['bank_transfer', 'echannel'].includes(parameter.payment_type);
+            const isDenied = transaction.fraud_status === 'deny' || transaction.transaction_status === 'deny';
+            const isInvalidStatus = transaction.status_code && !['200', '201'].includes(String(transaction.status_code));
+
+            if (isDenied || isInvalidStatus || (isBankTransfer && !vaNumber)) {
+                const failReason = transaction.status_message || `Midtrans charge rejected (Status: ${transaction.status_code}, Fraud: ${transaction.fraud_status})`;
+                console.warn(`MIDTRANS_CREATE: Core API charge returned invalid/denied status: ${failReason}. Triggering Snap fallback...`);
+                throw new Error(failReason);
+            }
 
             responseData = {
                 directPayment: transaction,

@@ -633,7 +633,7 @@ const PaymentGateway: React.FC<PaymentGatewayProps> = ({
           <div className="absolute inset-0 z-[200] bg-white/70 backdrop-blur-sm flex flex-col items-center justify-center p-8 text-center animate-in fade-in duration-200">
              <div className="w-12 h-12 border-3 border-orange-200 border-t-orange-500 rounded-full animate-spin mb-4" />
              <h3 className="text-xs font-bold uppercase tracking-wider text-slate-900">Menghubungkan ke Gateway Pembayaran...</h3>
-             <p className="text-[11px] font-medium text-slate-400 mt-1">Enkripsi aman Midtrans sedang diproses.</p>
+             <p className="text-[11px] font-medium text-slate-400 mt-1">Enkripsi pembayaran aman sedang diproses...</p>
           </div>
         )}
 
@@ -692,8 +692,9 @@ const PaymentGateway: React.FC<PaymentGatewayProps> = ({
                 <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
                 <span className="font-semibold text-[10.5px]">Enkripsi Bank-Grade 256-bit SSL</span>
               </div>
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                Midtrans Verified ✓
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
+                <Lock className="w-3 h-3 text-emerald-400 shrink-0" />
+                Transaksi Terlindungi
               </span>
             </div>
           </div>
@@ -988,7 +989,8 @@ const PaymentGateway: React.FC<PaymentGatewayProps> = ({
                                     const permataVa = directData?.permata_va_number;
                                     const retailCode = directData?.payment_code;
                                     
-                                    const codeToCopy = (currentOrder?.metadata as any)?.payment_number || 
+                                    const codeToCopy = directData?.paymentNumber ||
+                                                       (currentOrder?.metadata as any)?.payment_number || 
                                                        (currentOrder?.metadata as any)?.midtrans_charge_response?.va_numbers?.[0]?.va_number ||
                                                        midtransVa || 
                                                        mandiriVa || 
@@ -1002,6 +1004,29 @@ const PaymentGateway: React.FC<PaymentGatewayProps> = ({
                                                        (directData?.va_numbers && directData.va_numbers[0] ? directData.va_numbers[0].va_number : '') ||
                                                        '';
                                     
+                                    if (!codeToCopy) {
+                                      return (
+                                        <div className="flex flex-col items-center gap-3 w-full py-2">
+                                          <div className="w-11 h-11 rounded-2xl bg-amber-50 border border-amber-200 flex items-center justify-center text-amber-600">
+                                            <AlertCircle className="w-5 h-5" />
+                                          </div>
+                                          <div className="text-center space-y-1">
+                                            <p className="text-xs font-bold text-slate-800">Nomor Pembayaran Sedang Diproses</p>
+                                            <p className="text-[11px] text-slate-500 max-w-[260px] leading-relaxed">
+                                              Koneksi pembayaran sedang diperbarui. Silakan muat ulang kode atau ganti metode pembayaran.
+                                            </p>
+                                          </div>
+                                          <button
+                                            onClick={() => handlePay(selectedMethod || undefined)}
+                                            className="mt-1 px-4 py-2 text-xs font-bold uppercase tracking-wider rounded-xl bg-slate-900 text-white hover:bg-orange-600 transition-all active:scale-95 cursor-pointer shadow-sm flex items-center gap-1.5"
+                                          >
+                                            <RefreshCw className="w-3.5 h-3.5" />
+                                            <span>Muat Ulang Kode</span>
+                                          </button>
+                                        </div>
+                                      );
+                                    }
+
                                     return (
                                         <div className="flex flex-col items-center gap-4 w-full">
                                             <div className="flex flex-col items-center gap-1.5">
@@ -1009,7 +1034,7 @@ const PaymentGateway: React.FC<PaymentGatewayProps> = ({
                                                     {availableMethods.find(m => m.code === selectedMethod)?.name || 'Nomor Virtual Account'}
                                                 </span>
                                                 <p className="text-2xl font-black text-slate-900 tracking-wider font-mono">
-                                                    {codeToCopy || '---'}
+                                                    {codeToCopy}
                                                 </p>
                                                 {(directData?.biller_code || directData?.bill_key) && (
                                                     <p className="text-[10px] font-bold text-slate-500 uppercase">
@@ -1020,19 +1045,17 @@ const PaymentGateway: React.FC<PaymentGatewayProps> = ({
                                                 )}
                                             </div>
                                             
-                                            {codeToCopy && (
-                                                <button 
-                                                    onClick={() => copyToClipboard(codeToCopy)} 
-                                                    className={`px-5 py-2.5 text-xs font-bold uppercase tracking-wider rounded-xl border transition-all active:scale-95 flex items-center gap-2 cursor-pointer ${
-                                                        showCopied 
-                                                        ? 'border-emerald-500 text-emerald-600 bg-emerald-50' 
-                                                        : 'border-slate-300 text-slate-800 bg-white hover:border-orange-500 hover:text-orange-600'
-                                                    }`}
-                                                >
-                                                    {showCopied ? <Check className="w-4 h-4 text-emerald-600" /> : <Copy className="w-4 h-4" />}
-                                                    <span>{showCopied ? 'Berhasil Disalin!' : 'Salin Kode Bayar'}</span>
-                                                </button>
-                                            )}
+                                            <button 
+                                                onClick={() => copyToClipboard(codeToCopy)} 
+                                                className={`px-5 py-2.5 text-xs font-bold uppercase tracking-wider rounded-xl border transition-all active:scale-95 flex items-center gap-2 cursor-pointer ${
+                                                    showCopied 
+                                                    ? 'border-emerald-500 text-emerald-600 bg-emerald-50' 
+                                                    : 'border-slate-300 text-slate-800 bg-white hover:border-orange-500 hover:text-orange-600'
+                                                }`}
+                                            >
+                                                {showCopied ? <Check className="w-4 h-4 text-emerald-600" /> : <Copy className="w-4 h-4" />}
+                                                <span>{showCopied ? 'Berhasil Disalin!' : 'Salin Kode Bayar'}</span>
+                                            </button>
                                         </div>
                                     );
                                 })()}
@@ -1064,7 +1087,7 @@ const PaymentGateway: React.FC<PaymentGatewayProps> = ({
                      </div>
                      <div className="space-y-1">
                         <h3 className="text-base font-bold text-slate-900 uppercase tracking-tight">Lanjutkan Pembayaran</h3>
-                        <p className="text-xs font-normal text-slate-500 max-w-[280px]">Selesaikan pembayaran via portal resmi Midtrans yang aman.</p>
+                        <p className="text-xs font-normal text-slate-500 max-w-[280px]">Selesaikan pembayaran Anda melalui portal transaksi resmi RuangSinggah.</p>
                      </div>
                      <button 
                         onClick={() => handlePay(selectedMethod || undefined)}
@@ -1126,7 +1149,7 @@ const PaymentGateway: React.FC<PaymentGatewayProps> = ({
               <span>Transaksi Resmi Dilindungi RuangSinggah.id</span>
             </span>
             <span className="font-semibold text-slate-500">
-              Powered by Midtrans
+              Sistem Verifikasi Otomatis 24/7
             </span>
           </div>
         </div>

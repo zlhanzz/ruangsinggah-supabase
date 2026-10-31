@@ -2,6 +2,36 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 480. Perbaikan Virtual Account (VA) & Eliminasi Branding Midtrans Menuju Pure White-Label Gateway (`index.ts`, `PaymentGateway.tsx`) (Oktober 2026)
+- **Permintaan & Masukan Pengguna**:
+  1. Memperbaiki nomor Virtual Account (VA) pada payment gateway yang tidak muncul (tampil `---` tanpa kode dan tombol salin).
+  2. Menghilangkan seluruh embel-embel dan branding Midtrans di UI/UX portal pembayaran RuangSinggah.id karena dinilai tidak diperlukan dan menurunkan standar branding resmi.
+- **Implementasi Solusi**:
+  1. **Investigasi Akar Masalah (*Root Cause Analysis*)**:
+     - *Midtrans FDS Deny*: Di `functions/src/index.ts:1517`, `customer_details.first_name` di-hardcode dengan string dummy `"Pelanggan"`. Pada Midtrans Production, ini secara otomatis memicu FDS (Fraud Detection System) menolak charge dengan `status_code: "202"`, `fraud_status: "deny"`, dan `va_numbers: undefined`.
+     - *Ketiadaan Validasi Status Code Server*: Midtrans Core API `.charge(parameter)` me-resolve Promise tanpa throw exception saat statusnya 202, sehingga backend mengirimkan data tanpa nomor VA ke klien dan Snap fallback gagal terpicu.
+  2. **Sanitasi Data & Validasi Ketat Standar Fintech (`functions/src/index.ts`)**:
+     - *Sanitasi Profil Pelanggan*: Menggunakan nama riil pengguna (`users.name` / `users.full_name` / `metadata.userName`), email resmi, alamat asli, serta normalisasi nomor telepon ke format lokal bersih `08xxx` (menghapus tanda `+` dan awalan `62`). Terbukti pada pengujian API langsung: BRI VA dan BNI VA seketika disetujui (`status_code: 201`, `fraud_status: accept`) dan nomor VA terbit sukses.
+     - *Validasi Status Code Eksplisit*: Memeriksa apakah `transaction.status_code !== '201'` atau `transaction.fraud_status === 'deny'` atau nomor VA kosong untuk bank transfer. Jika tidak valid, backend seketika melempar error agar blok `catch` mengaktifkan fallback Snap atau memberikan error yang terstruktur.
+     - *Persistensi Metadata*: Menyimpan `payment_number` langsung ke database Supabase transaksi.
+  3. **Eliminasi Total Branding Midtrans Menuju Pure White-Label (`PaymentGateway.tsx`)**:
+     - *Header Security Bar*: Menghapus badge `Midtrans Verified ✓`, diganti dengan badge resmi: `<Lock className="w-3 h-3 text-emerald-400" /> Transaksi Terlindungi`.
+     - *Footer Bar*: Menghapus `Powered by Midtrans`, diganti dengan `Sistem Verifikasi Otomatis 24/7`.
+     - *Loading State*: Mengubah teks *"Enkripsi aman Midtrans sedang diproses"* menjadi *"Enkripsi pembayaran aman sedang diproses..."*.
+     - *Snap Fallback Description*: Mengubah *"Selesaikan pembayaran via portal resmi Midtrans yang aman"* menjadi *"Selesaikan pembayaran Anda melalui portal transaksi resmi RuangSinggah."*.
+  4. **Robustness UI/UX Virtual Account (`PaymentGateway.tsx`)**:
+     - Membaca nomor VA terpadu dari `directData.paymentNumber`, `metadata.payment_number`, `directData.va_numbers[0].va_number`, `bill_key`, dll.
+     - Mengganti tampilan teks pasif `---` saat kode belum terbit dengan komponen feedback interaktif: ikon `<AlertCircle />`, pesan penjelasan koneksi bank mitra, dan tombol *"Muat Ulang Kode"* (`<RefreshCw />`).
+- **File Tersentuh**:
+  - `functions/src/index.ts`
+  - `functions/public/components/PaymentGateway.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Pengujian langsung Core API multi-bank: BRI VA (`124123839023062700`) dan BNI VA (`8578685681572331`) berhasil diterbitkan dengan status 201 accept.
+  - Kompilasi backend TypeScript (`npm run build` di `functions`): Lulus 100% (0 error).
+  - Kompilasi frontend Vite (`npm run build` di `functions/public`): Lulus 100% (2512 modul, 0 error).
+
 ### 479. Modernisasi & Profesionalisasi Dialog Konfirmasi Persetujuan Pengajuan Sewa Mitra (`MitraDashboard.tsx`) (Oktober 2026)
 - **Permintaan & Masukan Pengguna**:
   1. Menghilangkan dialog pop-up konfirmasi peramban native (`localhost:5173 says: Setujui pesanan ini?...`) yang muncul saat mengklik tombol SETUJUI di Dashboard Mitra (`/dashboard-mitra/bookings`).
