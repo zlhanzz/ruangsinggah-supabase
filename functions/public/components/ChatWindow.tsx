@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Send, MessageSquare, Clock, Check, CheckCheck, ChevronLeft, ShieldAlert, ShieldCheck, Home, Zap, Sparkles } from 'lucide-react';
+import { X, Send, MessageSquare, Clock, Check, CheckCheck, ChevronLeft, ShieldAlert, ShieldCheck, Home, Zap, Sparkles, Wrench, AlertTriangle } from 'lucide-react';
 import { ChatSession, ChatMessage, getChatMessages, sendMessage, subscribeToMessages, markMessagesAsRead, containsPhoneNumber } from '../chatService';
 
 interface ChatWindowProps {
@@ -17,6 +17,16 @@ interface ChatWindowProps {
   roomPrice?: number;
   propertyId?: string;
   onRentClick?: () => void;
+  ticketContext?: {
+    id: string;
+    title: string;
+    category?: string;
+    urgency?: string;
+    status?: string;
+    roomNumber?: string;
+    kostName?: string;
+    photoUrl?: string;
+  };
 }
 
 const QUICK_REPLIES = [
@@ -40,7 +50,8 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
   roomType,
   roomPrice,
   propertyId,
-  onRentClick
+  onRentClick,
+  ticketContext
 }) => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [newMessage, setNewMessage] = useState('');
@@ -422,8 +433,53 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
           </button>
         </div>
 
-        {/* Pinned Room Card (Konteks Kamar Tersemat) */}
-        {(propertyName || displayRoomLabel || (typeof roomPrice === 'number' && roomPrice > 0)) && (
+        {/* Pinned Ticket Context Banner (Konteks Laporan Kendala Tersemat) */}
+        {ticketContext ? (
+          <div className="bg-slate-900 border-t border-white/10 px-4 py-2.5 text-white flex items-center justify-between gap-3 shrink-0 shadow-sm">
+            <div className="flex items-center gap-3 min-w-0 flex-1">
+              {ticketContext.photoUrl ? (
+                <img
+                  src={ticketContext.photoUrl}
+                  alt="Bukti Kendala"
+                  className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl object-cover shrink-0 border border-white/15 bg-slate-800"
+                />
+              ) : (
+                <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl bg-orange-500/20 border border-orange-500/30 flex items-center justify-center shrink-0 text-orange-400">
+                  <Wrench size={18} />
+                </div>
+              )}
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span className="text-[9px] font-black font-mono px-1.5 py-0.5 rounded bg-white/10 text-white">
+                    #TKT-{ticketContext.id.substring(0, 6).toUpperCase()}
+                  </span>
+                  {ticketContext.urgency === 'EMERGENCY' ? (
+                    <span className="text-[9px] font-black px-1.5 py-0.5 rounded bg-rose-500/20 text-rose-300 border border-rose-500/30">
+                      Darurat
+                    </span>
+                  ) : (
+                    <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-300 border border-blue-500/30">
+                      {ticketContext.category || 'Kendala'}
+                    </span>
+                  )}
+                  <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border ${
+                    ticketContext.status === 'open' ? 'bg-amber-500/20 text-amber-300 border-amber-500/30' :
+                    ticketContext.status === 'in_progress' ? 'bg-blue-500/20 text-blue-300 border-blue-500/30' :
+                    'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
+                  }`}>
+                    {ticketContext.status === 'open' ? 'Menunggu Tindakan' : ticketContext.status === 'in_progress' ? 'Sedang Ditangani' : 'Selesai'}
+                  </span>
+                </div>
+                <h4 className="font-black text-xs sm:text-sm text-white truncate mt-0.5 leading-tight">
+                  {ticketContext.title}
+                </h4>
+                <p className="text-[10px] text-white/60 truncate">
+                  {ticketContext.kostName || propertyName} &bull; Kamar {ticketContext.roomNumber || '-'}
+                </p>
+              </div>
+            </div>
+          </div>
+        ) : (propertyName || displayRoomLabel || (typeof roomPrice === 'number' && roomPrice > 0)) && (
           <div className="bg-slate-900/95 border-t border-white/10 px-5 py-3 text-white flex items-center justify-between gap-3 shrink-0 shadow-sm backdrop-blur-sm">
             <div className="flex items-center gap-3 min-w-0 flex-1">
               {propertyPhoto && !imgFailed ? (

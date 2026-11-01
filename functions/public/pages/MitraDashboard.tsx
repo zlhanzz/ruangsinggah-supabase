@@ -20,7 +20,7 @@ import {
     Clock, LogOut, Bell, ChevronRight, TrendingUp, Menu, X, Landmark, CreditCard, Save,
     Briefcase, GraduationCap, Heart, MapPin, Trash2, FileText,
     Bed, Lock, Send, ShieldCheck, Sparkles, CheckCircle2, AlertCircle, Phone, Mail, Building2, Receipt,
-    Printer, Share2, Download, Calendar
+    Printer, Share2, Download, Calendar, Wrench, AlertTriangle, Wind, Droplets, BedDouble, ZoomIn, RotateCw
 } from 'lucide-react';
 import MitraProfile from './MitraProfile';
 import ChatWindow from '../components/ChatWindow';
@@ -76,7 +76,7 @@ const CHART_DATA = [
     { day: 'Kam', views: 500 }, { day: 'Jum', views: 800 }, { day: 'Sab', views: 1200 }, { day: 'Min', views: 950 }
 ];
 
-type MenuKey = 'overview' | 'properties' | 'bookings' | 'tenants' | 'chat' | 'wallet' | 'profile' | 'km_progress';
+type MenuKey = 'overview' | 'properties' | 'bookings' | 'tenants' | 'complaints' | 'chat' | 'wallet' | 'profile' | 'km_progress';
 
 // ── Pilihan Cepat Bank & E-Wallet Populer (Standard E-Commerce / Fintech) ─────
 const POPULAR_BANKS = [
@@ -181,6 +181,16 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
     const [isStartingFresh, setIsStartingFresh] = useState(false);
     const [quickRoomModalKost, setQuickRoomModalKost] = useState<Kost | null>(null);
     const [updatingRoomKostId, setUpdatingRoomKostId] = useState<string | null>(null);
+    const [complaints, setComplaints] = useState<any[]>([]);
+    const [loadingComplaints, setLoadingComplaints] = useState<boolean>(false);
+    const [complaintSearch, setComplaintSearch] = useState('');
+    const [complaintStatusFilter, setComplaintStatusFilter] = useState<'ALL' | 'open' | 'in_progress' | 'resolved'>('ALL');
+    const [complaintUrgencyFilter, setComplaintUrgencyFilter] = useState<'ALL' | 'NORMAL' | 'EMERGENCY'>('ALL');
+    const [complaintPropertyFilter, setComplaintPropertyFilter] = useState<string>('ALL');
+    const [updatingComplaintId, setUpdatingComplaintId] = useState<string | null>(null);
+    const [previewComplaintPhotoUrl, setPreviewComplaintPhotoUrl] = useState<string | null>(null);
+    const [activeTicketChatContext, setActiveTicketChatContext] = useState<any | null>(null);
+    const [inlineComplaintNote, setInlineComplaintNote] = useState<{ [id: string]: string }>({});
     const draftStorageKey = useMemo(() => {
         const effectiveUid = uid || user?.id;
         return effectiveUid ? `kost_form_draft_${effectiveUid}` : 'kost_form_draft_guest';
@@ -654,6 +664,23 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
 
             setKmRequests(kmRequestsData.data || []);
 
+            // Ambil seluruh tiket kendala kamar untuk seluruh properti milik mitra
+            const allPropIds = (propsData || []).map((p: any) => p.id).filter(Boolean);
+            if (allPropIds.length > 0) {
+                try {
+                    const { data: compData, error: compErr } = await supabase
+                        .from('complaints')
+                        .select('*')
+                        .in('kost_id', allPropIds)
+                        .order('created_at', { ascending: false });
+                    if (!compErr && compData) {
+                        setComplaints(compData);
+                    }
+                } catch (cErr) {
+                    console.warn('[MitraDashboard] Error loading complaints:', cErr);
+                }
+            }
+
             // --- TIME TRAVEL SYNCED ANALYTICS ---
             const now = getCurrentDate();
             const currentMonth = now.getMonth();
@@ -999,6 +1026,7 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
         { key: 'properties', icon: <Home size={20} />, label: 'Kelola Kost' },
         { key: 'bookings', icon: <ClipboardList size={20} />, label: 'Pesanan', badge: pendingCount },
         { key: 'tenants', icon: <Users size={20} />, label: 'Penghuni Aktif', badge: stats.activeTenants },
+        { key: 'complaints', icon: <Wrench size={20} />, label: 'Kendala Hunian', badge: complaints.filter(c => c.status === 'open').length },
         { key: 'chat', icon: <MessageSquare size={20} />, label: 'Pesan', badge: chatUnreadCount },
         { key: 'wallet', icon: <Wallet size={20} />, label: 'Dompet' },
         { key: 'profile', icon: <User size={20} />, label: 'Profil' },
@@ -1012,6 +1040,93 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
             </div>
         );
     }
+
+    const fetchMitraComplaints = async () => {
+        const propIds = properties.map(p => p.id).filter(Boolean);
+        if (propIds.length === 0) return;
+        setLoadingComplaints(true);
+        try {
+            const { data, error } = await supabase
+                .from('complaints')
+                .select('*')
+                .in('kost_id', propIds)
+                .order('created_at', { ascending: false });
+            if (!error && data) {
+                setComplaints(data);
+            }
+        } catch (err) {
+            console.error('Error fetching complaints:', err);
+        } finally {
+            setLoadingComplaints(false);
+        }
+    };
+
+    const handleUpdateComplaintStatus = async (id: string, newStatus: string, adminNotes?: string) => {
+        setUpdatingComplaintId(id);
+        try {
+            const updatePayload: any = {
+                status: newStatus,
+                updated_at: new Date().toISOString()
+            };
+            if (adminNotes !== undefined) {
+                updatePayload.admin_notes = adminNotes;
+            }
+
+            const { error } = await supabase
+                .from('complaints')
+                .update(updatePayload)
+                .eq('id', id);
+
+            if (error) throw error;
+
+            setComplaints(prev => prev.map(c => c.id === id ? { ...c, ...updatePayload } : c));
+        } catch (err: any) {
+            console.error('Error updating complaint status:', err);
+            alert(`Gagal memperbarui status: ${err?.message || 'Koneksi bermasalah'}`);
+        } finally {
+            setUpdatingComplaintId(null);
+        }
+    };
+
+    const handleStartComplaintChat = async (c: any) => {
+        if (!user || !c.user_id) return;
+        try {
+            const session = await getOrCreateChatSession(c.user_id, uid, c.kost_id);
+            
+            let ticketPhoto = '';
+            if (c.photo_url) {
+                const trimmed = c.photo_url.trim();
+                if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
+                    try {
+                        const parsed = JSON.parse(trimmed);
+                        if (Array.isArray(parsed) && parsed.length > 0) ticketPhoto = parsed[0];
+                    } catch {}
+                } else if (trimmed.includes('|||')) {
+                    ticketPhoto = trimmed.split('|||')[0].trim();
+                } else {
+                    ticketPhoto = trimmed;
+                }
+            }
+
+            const ticketCtx = {
+                id: c.id,
+                title: c.title,
+                category: c.category,
+                urgency: c.urgency,
+                status: c.status,
+                roomNumber: c.room_number,
+                kostName: c.kost_name,
+                photoUrl: ticketPhoto
+            };
+
+            setActiveTicketChatContext(ticketCtx);
+            handleSelectChat(session);
+            handleMenuChange('chat');
+        } catch (err: any) {
+            console.error('Error opening chat for complaint:', err);
+            alert(`Gagal membuka chat: ${err?.message || 'Koneksi bermasalah'}`);
+        }
+    };
 
     const handleSelectChat = (session: ChatSession) => {
         setActiveChat(session);
@@ -2613,6 +2728,500 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                             />
                         </div>
                     )}
+
+                                        {/* KENDALA HUNIAN / TIKET KOMPLAIN (MITRA DASHBOARD) */}
+                    {activeMenu === 'complaints' && (() => {
+                        const openCount = complaints.filter(c => c.status === 'open').length;
+                        const inProgressCount = complaints.filter(c => c.status === 'in_progress').length;
+                        const resolvedCount = complaints.filter(c => c.status === 'resolved' || c.status === 'closed').length;
+                        const emergencyCount = complaints.filter(c => c.urgency === 'EMERGENCY').length;
+
+                        const filteredComplaints = complaints.filter(c => {
+                            if (complaintPropertyFilter !== 'ALL' && c.kost_id !== complaintPropertyFilter) return false;
+                            if (complaintStatusFilter === 'open' && c.status !== 'open') return false;
+                            if (complaintStatusFilter === 'in_progress' && c.status !== 'in_progress') return false;
+                            if (complaintStatusFilter === 'resolved' && c.status !== 'resolved' && c.status !== 'closed') return false;
+                            if (complaintUrgencyFilter !== 'ALL' && c.urgency !== complaintUrgencyFilter) return false;
+
+                            if (complaintSearch.trim()) {
+                                const q = complaintSearch.toLowerCase().trim();
+                                const idMatch = (c.id || '').toLowerCase().includes(q);
+                                const userMatch = (c.user_name || '').toLowerCase().includes(q);
+                                const titleMatch = (c.title || '').toLowerCase().includes(q);
+                                const descMatch = (c.description || '').toLowerCase().includes(q);
+                                const roomMatch = (c.room_number || '').toLowerCase().includes(q);
+                                const kostMatch = (c.kost_name || '').toLowerCase().includes(q);
+                                if (!idMatch && !userMatch && !titleMatch && !descMatch && !roomMatch && !kostMatch) return false;
+                            }
+                            return true;
+                        });
+
+                        const getCategoryIcon = (catName: string) => {
+                            const c = (catName || '').toLowerCase();
+                            if (c.includes('ac') || c.includes('ventilasi')) return <Wind size={14} className="text-sky-500" />;
+                            if (c.includes('pipa') || c.includes('air') || c.includes('sanitasi')) return <Droplets size={14} className="text-blue-500" />;
+                            if (c.includes('listrik') || c.includes('lampu')) return <Zap size={14} className="text-amber-500" />;
+                            if (c.includes('furnitur') || c.includes('kasur')) return <BedDouble size={14} className="text-indigo-500" />;
+                            if (c.includes('wifi') || c.includes('internet')) return <Wifi size={14} className="text-violet-500" />;
+                            if (c.includes('bersih')) return <Sparkles size={14} className="text-emerald-500" />;
+                            if (c.includes('kunci') || c.includes('aman')) return <ShieldCheck size={14} className="text-teal-500" />;
+                            return <HelpCircle size={14} className="text-slate-500" />;
+                        };
+
+                        return (
+                            <div className="space-y-6 animate-in fade-in duration-300 pb-16">
+                                {/* Header Bar */}
+                                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 bg-white p-5 sm:p-6 rounded-3xl border border-gray-100 shadow-xs">
+                                    <div className="flex items-center gap-3.5">
+                                        <div className="w-12 h-12 rounded-2xl bg-orange-500/10 border border-orange-500/20 flex items-center justify-center text-orange-600 shrink-0">
+                                            <Wrench size={24} />
+                                        </div>
+                                        <div>
+                                            <h2 className="text-lg sm:text-xl font-black text-gray-900 tracking-tight">
+                                                Pusat Kendala & Pemeliharaan Hunian
+                                            </h2>
+                                            <p className="text-xs text-gray-500 font-semibold mt-0.5">
+                                                Tindak lanjuti laporan kerusakan kamar dari penghuni aktif secara tepat waktu tanpa perantara.
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={fetchMitraComplaints}
+                                        disabled={loadingComplaints}
+                                        className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gray-50 hover:bg-gray-100 border border-gray-200 text-xs font-bold text-gray-700 transition-all active:scale-95 cursor-pointer disabled:opacity-50 self-start sm:self-auto shrink-0 shadow-xs"
+                                    >
+                                        <RotateCw size={14} className={loadingComplaints ? 'animate-spin text-orange-500' : 'text-gray-500'} />
+                                        <span>{loadingComplaints ? 'Memuat...' : 'Segarkan Data'}</span>
+                                    </button>
+                                </div>
+
+                                {/* KPI Metrics Cards */}
+                                <div className="grid grid-cols-2 lg:grid-cols-5 gap-3.5">
+                                    <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-xs flex items-center gap-3">
+                                        <div className="w-10 h-10 rounded-xl bg-gray-50 border border-gray-100 flex items-center justify-center text-gray-600 shrink-0">
+                                            <FileText size={18} />
+                                        </div>
+                                        <div>
+                                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Total Laporan</p>
+                                            <p className="text-lg font-black text-gray-900 leading-tight">{complaints.length}</p>
+                                        </div>
+                                    </div>
+
+                                    <div className="bg-white p-4 rounded-2xl border border-amber-100/80 shadow-xs flex items-center gap-3">
+                                        <div className="w-10 h-10 rounded-xl bg-amber-50 border border-amber-100 flex items-center justify-center text-amber-600 shrink-0 relative">
+                                            <Clock size={18} />
+                                            {openCount > 0 && <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse" />}
+                                        </div>
+                                        <div>
+                                            <p className="text-[10px] font-bold text-amber-700 uppercase tracking-wider">Perlu Tindakan</p>
+                                            <p className="text-lg font-black text-amber-900 leading-tight">{openCount}</p>
+                                        </div>
+                                    </div>
+
+                                    <div className="bg-white p-4 rounded-2xl border border-blue-100/80 shadow-xs flex items-center gap-3">
+                                        <div className="w-10 h-10 rounded-xl bg-blue-50 border border-blue-100 flex items-center justify-center text-blue-600 shrink-0">
+                                            <Wrench size={18} />
+                                        </div>
+                                        <div>
+                                            <p className="text-[10px] font-bold text-blue-700 uppercase tracking-wider">Sedang Diproses</p>
+                                            <p className="text-lg font-black text-blue-900 leading-tight">{inProgressCount}</p>
+                                        </div>
+                                    </div>
+
+                                    <div className="bg-white p-4 rounded-2xl border border-emerald-100/80 shadow-xs flex items-center gap-3">
+                                        <div className="w-10 h-10 rounded-xl bg-emerald-50 border border-emerald-100 flex items-center justify-center text-emerald-600 shrink-0">
+                                            <CheckCircle2 size={18} />
+                                        </div>
+                                        <div>
+                                            <p className="text-[10px] font-bold text-emerald-700 uppercase tracking-wider">Selesai / Teratasi</p>
+                                            <p className="text-lg font-black text-emerald-900 leading-tight">{resolvedCount}</p>
+                                        </div>
+                                    </div>
+
+                                    <div className="bg-white p-4 rounded-2xl border border-rose-100/80 shadow-xs flex items-center gap-3 col-span-2 lg:col-span-1">
+                                        <div className="w-10 h-10 rounded-xl bg-rose-50 border border-rose-100 flex items-center justify-center text-rose-600 shrink-0">
+                                            <AlertTriangle size={18} />
+                                        </div>
+                                        <div>
+                                            <p className="text-[10px] font-bold text-rose-700 uppercase tracking-wider">Tiket Darurat</p>
+                                            <p className="text-lg font-black text-rose-900 leading-tight">{emergencyCount}</p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Filter Toolbar */}
+                                <div className="bg-white p-4 sm:p-5 rounded-3xl border border-gray-100 shadow-xs space-y-3.5">
+                                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                        {/* Search Input */}
+                                        <div className="sm:col-span-2 relative">
+                                            <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
+                                            <input
+                                                type="text"
+                                                value={complaintSearch}
+                                                onChange={(e) => setComplaintSearch(e.target.value)}
+                                                placeholder="Cari nomor tiket, nama penghuni, nomor kamar, atau kendala..."
+                                                className="w-full h-11 pl-10 pr-4 bg-gray-50/80 border border-gray-200 rounded-xl text-xs font-bold text-gray-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all placeholder:text-gray-400 placeholder:font-normal"
+                                            />
+                                        </div>
+
+                                        {/* Property Filter */}
+                                        <div>
+                                            <select
+                                                value={complaintPropertyFilter}
+                                                onChange={(e) => setComplaintPropertyFilter(e.target.value)}
+                                                className="w-full h-11 px-3.5 bg-gray-50/80 border border-gray-200 rounded-xl text-xs font-bold text-gray-800 focus:bg-white focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all cursor-pointer"
+                                            >
+                                                <option value="ALL">Semua Properti Kost ({properties.length})</option>
+                                                {properties.map(p => (
+                                                    <option key={p.id} value={p.id}>
+                                                        {p.title || p.name}
+                                                    </option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                    </div>
+
+                                    {/* Status & Urgency Pills */}
+                                    <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-gray-100">
+                                        <div className="flex items-center gap-1.5 flex-wrap">
+                                            <span className="text-[10px] font-bold text-gray-400 uppercase mr-1">Status:</span>
+                                            {[
+                                                { id: 'ALL', label: `Semua (${complaints.length})` },
+                                                { id: 'open', label: `Menunggu Tindakan (${openCount})` },
+                                                { id: 'in_progress', label: `Sedang Diproses (${inProgressCount})` },
+                                                { id: 'resolved', label: `Selesai (${resolvedCount})` }
+                                            ].map(st => (
+                                                <button
+                                                    key={st.id}
+                                                    type="button"
+                                                    onClick={() => setComplaintStatusFilter(st.id as any)}
+                                                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                                                        complaintStatusFilter === st.id
+                                                            ? 'bg-orange-500 text-white shadow-xs'
+                                                            : 'bg-gray-100 text-gray-600 hover:bg-gray-200/80'
+                                                    }`}
+                                                >
+                                                    {st.label}
+                                                </button>
+                                            ))}
+                                        </div>
+
+                                        <div className="flex items-center gap-1.5">
+                                            <span className="text-[10px] font-bold text-gray-400 uppercase mr-1">Urgensi:</span>
+                                            {[
+                                                { id: 'ALL', label: 'Semua' },
+                                                { id: 'NORMAL', label: 'Standar' },
+                                                { id: 'EMERGENCY', label: 'Darurat' }
+                                            ].map(ug => (
+                                                <button
+                                                    key={ug.id}
+                                                    type="button"
+                                                    onClick={() => setComplaintUrgencyFilter(ug.id as any)}
+                                                    className={`px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                                                        complaintUrgencyFilter === ug.id
+                                                            ? (ug.id === 'EMERGENCY' ? 'bg-rose-600 text-white shadow-xs' : 'bg-slate-800 text-white shadow-xs')
+                                                            : 'bg-gray-100 text-gray-600 hover:bg-gray-200/80'
+                                                    }`}
+                                                >
+                                                    {ug.label}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* List of Complaints */}
+                                {loadingComplaints ? (
+                                    <div className="bg-white rounded-3xl p-12 text-center border border-gray-100 shadow-xs space-y-3">
+                                        <div className="w-8 h-8 border-3 border-orange-500 border-t-transparent rounded-full animate-spin mx-auto" />
+                                        <p className="text-xs font-bold text-gray-500">Memuat tiket kendala hunian...</p>
+                                    </div>
+                                ) : filteredComplaints.length === 0 ? (
+                                    <div className="bg-white rounded-3xl p-12 text-center border border-dashed border-gray-200 shadow-xs space-y-3">
+                                        <div className="w-14 h-14 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center mx-auto border border-emerald-100 shadow-xs">
+                                            <ShieldCheck size={28} />
+                                        </div>
+                                        <h4 className="text-base font-black text-gray-900">Tidak Ada Laporan Kendala</h4>
+                                        <p className="text-xs text-gray-500 max-w-sm mx-auto leading-relaxed">
+                                            {complaints.length === 0
+                                                ? 'Seluruh fasilitas kamar hunian Anda terpantau aman dan prima. Belum ada keluhan yang dilaporkan oleh penghuni.'
+                                                : 'Tidak ada tiket kendala yang cocok dengan filter pencarian yang Anda pilih saat ini.'}
+                                        </p>
+                                    </div>
+                                ) : (
+                                    <div className="space-y-4">
+                                        {filteredComplaints.map(c => {
+                                            const photoList = (() => {
+                                                if (!c.photo_url) return [];
+                                                const trimmed = c.photo_url.trim();
+                                                if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
+                                                    try {
+                                                        const parsed = JSON.parse(trimmed);
+                                                        if (Array.isArray(parsed)) return parsed.filter(Boolean);
+                                                    } catch {}
+                                                }
+                                                if (trimmed.includes('|||')) {
+                                                    return trimmed.split('|||').map((s: string) => s.trim()).filter(Boolean);
+                                                }
+                                                return [trimmed];
+                                            })();
+
+                                            const isOpen = c.status === 'open';
+                                            const isInProgress = c.status === 'in_progress';
+                                            const isResolved = c.status === 'resolved' || c.status === 'closed';
+                                            const isEmergency = c.urgency === 'EMERGENCY';
+                                            const dateFormatted = new Date(c.created_at).toLocaleDateString('id-ID', {
+                                                day: 'numeric',
+                                                month: 'short',
+                                                year: 'numeric',
+                                                hour: '2-digit',
+                                                minute: '2-digit'
+                                            });
+
+                                            const isUpdating = updatingComplaintId === c.id;
+
+                                            return (
+                                                <div key={c.id} className="bg-white rounded-3xl p-5 sm:p-6 border border-gray-100 shadow-xs space-y-4 hover:border-gray-200 transition-all">
+                                                    {/* Top Row: Ticket ID, Location, Urgency, Status */}
+                                                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-gray-100 pb-3.5">
+                                                        <div className="flex items-center gap-2.5 flex-wrap">
+                                                            <span className="text-[10px] font-black font-mono px-2 py-0.5 rounded-lg bg-gray-100 text-gray-700">
+                                                                #TKT-{c.id.substring(0, 6).toUpperCase()}
+                                                            </span>
+                                                            <span className="text-xs font-bold text-gray-500 flex items-center gap-1">
+                                                                <Clock size={12} className="text-gray-400" />
+                                                                <span>{dateFormatted}</span>
+                                                            </span>
+                                                            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-lg bg-slate-100 text-slate-800 text-xs font-bold">
+                                                                <Building2 size={12} className="text-slate-600" />
+                                                                <span>{c.kost_name}</span>
+                                                                <span>&bull;</span>
+                                                                <span className="text-orange-600">Kamar {c.room_number}</span>
+                                                            </span>
+                                                        </div>
+
+                                                        <div className="flex items-center gap-2 shrink-0">
+                                                            {isEmergency ? (
+                                                                <span className="bg-rose-50 text-rose-700 border border-rose-200 text-[10px] font-black px-2.5 py-1 rounded-lg uppercase tracking-wider flex items-center gap-1 animate-pulse">
+                                                                    <AlertTriangle size={11} className="text-rose-600" />
+                                                                    <span>Darurat</span>
+                                                                </span>
+                                                            ) : (
+                                                                <span className="bg-slate-100 text-slate-600 text-[10px] font-bold px-2 py-1 rounded-lg uppercase tracking-wider">
+                                                                    Standar
+                                                                </span>
+                                                            )}
+
+                                                            <span className={`text-[10px] font-bold px-3 py-1 rounded-lg uppercase tracking-wider border flex items-center gap-1.5 ${
+                                                                isOpen ? 'bg-amber-50 text-amber-800 border-amber-200' :
+                                                                isInProgress ? 'bg-blue-50 text-blue-700 border-blue-200' :
+                                                                'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                                            }`}>
+                                                                {isOpen ? (
+                                                                    <>
+                                                                        <Clock size={11} className="text-amber-600" />
+                                                                        <span>Menunggu Tindakan</span>
+                                                                    </>
+                                                                ) : isInProgress ? (
+                                                                    <>
+                                                                        <Wrench size={11} className="text-blue-600 animate-spin" />
+                                                                        <span>Sedang Ditangani</span>
+                                                                    </>
+                                                                ) : (
+                                                                    <>
+                                                                        <CheckCircle2 size={11} className="text-emerald-600" />
+                                                                        <span>Selesai</span>
+                                                                    </>
+                                                                )}
+                                                            </span>
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Tenant Info & In-App Chat Action (NO WHATSAPP!) */}
+                                                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-3.5 bg-gray-50/70 rounded-2xl border border-gray-100">
+                                                        <div className="flex items-center gap-3">
+                                                            <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-orange-500 to-amber-500 text-white font-bold text-xs flex items-center justify-center shrink-0 shadow-xs">
+                                                                {(c.user_name || 'P').charAt(0).toUpperCase()}
+                                                            </div>
+                                                            <div>
+                                                                <p className="text-xs font-black text-gray-900 leading-tight">
+                                                                    {c.user_name || 'Penghuni Kamar'}
+                                                                </p>
+                                                                <p className="text-[10px] text-gray-500 font-semibold mt-0.5">
+                                                                    Penghuni Aktif Unit
+                                                                </p>
+                                                            </div>
+                                                        </div>
+
+                                                        {/* In-App Chat Direct Button with Pinned Ticket Context */}
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => handleStartComplaintChat(c)}
+                                                            className="px-4 py-2 rounded-xl bg-orange-500 hover:bg-orange-600 text-white text-xs font-bold transition-all flex items-center gap-1.5 shadow-xs shadow-orange-500/20 active:scale-95 cursor-pointer self-start sm:self-auto"
+                                                            title="Buka percakapan in-app dengan penghuni terkait tiket ini"
+                                                        >
+                                                            <MessageSquare size={13} />
+                                                            <span>Chat Penghuni di RuangSinggah</span>
+                                                        </button>
+                                                    </div>
+
+                                                    {/* Problem Description & Category */}
+                                                    <div className="space-y-2">
+                                                        <div className="flex items-center gap-2">
+                                                            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-lg bg-orange-50 border border-orange-100 text-[10px] font-bold text-orange-800 uppercase tracking-wider">
+                                                                {getCategoryIcon(c.category)}
+                                                                <span>{c.category}</span>
+                                                            </span>
+                                                            <h4 className="text-sm font-black text-gray-900 leading-snug">
+                                                                {c.title}
+                                                            </h4>
+                                                        </div>
+                                                        <p className="text-xs text-gray-700 leading-relaxed whitespace-pre-line bg-gray-50/60 p-3.5 rounded-2xl border border-gray-100">
+                                                            {c.description}
+                                                        </p>
+                                                    </div>
+
+                                                    {/* Photo proofs */}
+                                                    {photoList.length > 0 && (
+                                                        <div className="space-y-1.5">
+                                                            <span className="text-[10px] font-black text-gray-400 uppercase tracking-wider block">
+                                                                Foto Bukti Kerusakan ({photoList.length} Foto WebP)
+                                                            </span>
+                                                            <div className="flex items-center gap-2.5 flex-wrap">
+                                                                {photoList.map((url: string, idx: number) => (
+                                                                    <div
+                                                                        key={idx}
+                                                                        onClick={() => setPreviewComplaintPhotoUrl(url)}
+                                                                        className="relative w-16 h-16 sm:w-20 sm:h-20 rounded-2xl overflow-hidden bg-slate-900 border border-gray-200 cursor-pointer group shrink-0 shadow-xs"
+                                                                        title="Klik untuk memperbesar"
+                                                                    >
+                                                                        <img src={url} alt={`Bukti ${idx + 1}`} className="w-full h-full object-cover group-hover:scale-110 transition-transform" />
+                                                                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white">
+                                                                            <ZoomIn size={16} />
+                                                                        </div>
+                                                                        <div className="absolute bottom-1 left-1 bg-black/70 backdrop-blur-md px-1.5 py-0.5 rounded text-[8px] font-bold text-white">
+                                                                            Foto {idx + 1}
+                                                                        </div>
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        </div>
+                                                    )}
+
+                                                    {/* Catatan Respon Mitra & Action Buttons */}
+                                                    <div className="pt-2 border-t border-gray-100 space-y-3">
+                                                        {/* Inline Response Note */}
+                                                        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+                                                            <input
+                                                                type="text"
+                                                                value={inlineComplaintNote[c.id] !== undefined ? inlineComplaintNote[c.id] : (c.admin_notes || '')}
+                                                                onChange={(e) => setInlineComplaintNote({ ...inlineComplaintNote, [c.id]: e.target.value })}
+                                                                placeholder="Tulis catatan respon / jadwal teknisi (terlihat oleh penghuni)..."
+                                                                className="flex-1 h-10 px-3.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-semibold text-gray-800 focus:bg-white focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all placeholder:text-gray-400"
+                                                            />
+                                                            <button
+                                                                type="button"
+                                                                disabled={isUpdating}
+                                                                onClick={() => {
+                                                                    const note = inlineComplaintNote[c.id] !== undefined ? inlineComplaintNote[c.id] : (c.admin_notes || '');
+                                                                    handleUpdateComplaintStatus(c.id, c.status, note);
+                                                                }}
+                                                                className="h-10 px-3.5 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-bold transition-all active:scale-95 cursor-pointer shrink-0"
+                                                            >
+                                                                Simpan Catatan
+                                                            </button>
+                                                        </div>
+
+                                                        {/* Status Update Buttons */}
+                                                        <div className="flex items-center justify-end gap-2 flex-wrap">
+                                                            {isOpen && (
+                                                                <>
+                                                                    <button
+                                                                        type="button"
+                                                                        disabled={isUpdating}
+                                                                        onClick={() => handleUpdateComplaintStatus(c.id, 'in_progress', inlineComplaintNote[c.id] || c.admin_notes)}
+                                                                        className="px-4 py-2.5 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 text-xs font-bold transition-all active:scale-95 cursor-pointer flex items-center gap-1.5 shadow-xs"
+                                                                    >
+                                                                        <Wrench size={13} className={isUpdating ? 'animate-spin' : ''} />
+                                                                        <span>Mulai Tangani (Proses)</span>
+                                                                    </button>
+                                                                    <button
+                                                                        type="button"
+                                                                        disabled={isUpdating}
+                                                                        onClick={() => handleUpdateComplaintStatus(c.id, 'resolved', inlineComplaintNote[c.id] || c.admin_notes)}
+                                                                        className="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all active:scale-95 cursor-pointer flex items-center gap-1.5 shadow-xs shadow-emerald-600/20"
+                                                                    >
+                                                                        <CheckCircle2 size={13} />
+                                                                        <span>Tandai Selesai</span>
+                                                                    </button>
+                                                                </>
+                                                            )}
+
+                                                            {isInProgress && (
+                                                                <>
+                                                                    <button
+                                                                        type="button"
+                                                                        disabled={isUpdating}
+                                                                        onClick={() => handleUpdateComplaintStatus(c.id, 'open', inlineComplaintNote[c.id] || c.admin_notes)}
+                                                                        className="px-3.5 py-2.5 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-bold transition-all active:scale-95 cursor-pointer"
+                                                                    >
+                                                                        <span>Kembalikan ke Menunggu</span>
+                                                                    </button>
+                                                                    <button
+                                                                        type="button"
+                                                                        disabled={isUpdating}
+                                                                        onClick={() => handleUpdateComplaintStatus(c.id, 'resolved', inlineComplaintNote[c.id] || c.admin_notes)}
+                                                                        className="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all active:scale-95 cursor-pointer flex items-center gap-1.5 shadow-xs shadow-emerald-600/20"
+                                                                    >
+                                                                        <CheckCircle2 size={13} />
+                                                                        <span>Tandai Selesai</span>
+                                                                    </button>
+                                                                </>
+                                                            )}
+
+                                                            {isResolved && (
+                                                                <button
+                                                                    type="button"
+                                                                    disabled={isUpdating}
+                                                                    onClick={() => handleUpdateComplaintStatus(c.id, 'in_progress', inlineComplaintNote[c.id] || c.admin_notes)}
+                                                                    className="px-4 py-2 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-bold transition-all active:scale-95 cursor-pointer flex items-center gap-1.5"
+                                                                >
+                                                                    <RotateCw size={13} />
+                                                                    <span>Buka Kembali Tiket Kendala</span>
+                                                                </button>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                )}
+
+                                {/* Modal Zoom Foto Bukti */}
+                                {previewComplaintPhotoUrl && (
+                                    <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/90 backdrop-blur-md animate-in fade-in duration-200">
+                                        <div className="relative max-w-2xl max-h-[85vh] flex flex-col items-center">
+                                            <button
+                                                onClick={() => setPreviewComplaintPhotoUrl(null)}
+                                                className="absolute -top-12 right-0 bg-white/20 hover:bg-white/40 text-white rounded-full p-2.5 transition-all shadow-lg active:scale-95 cursor-pointer"
+                                                title="Tutup Pratinjau"
+                                            >
+                                                <X className="w-6 h-6" />
+                                            </button>
+                                            <img
+                                                src={previewComplaintPhotoUrl}
+                                                alt="Preview Bukti Kerusakan"
+                                                className="max-h-[80vh] w-auto max-w-full rounded-2xl shadow-2xl object-contain border border-white/10"
+                                            />
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        );
+                    })()}
+
 
                     {/* CHAT */}
                     {activeMenu === 'chat' && (

@@ -2,6 +2,40 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 483. Redesain Profesional Laporan Kendala Kamar (`MyKost.tsx`), Eliminasi AI-Slope, dan Integrasi Menu Tiket Kendala pada Dashboard Mitra (`MitraDashboard.tsx`) (November 2026)
+- **Permintaan & Masukan Pengguna**:
+  1. Tampilan laporan kendala kamar yang diakses melalui kartu sewa aktif (`MyKost.tsx`) diubah agar lebih profesional dan berstandar industri proptech, bukan tampilan *AI slope* (eliminasi gradien merah mencolok dan emoji mentah).
+  2. Menambahkan menu terpusat untuk menampung tiket laporan kendala kamar di Dashboard Mitra (`MitraDashboard.tsx`), baik untuk kost mitra biasa (reguler) maupun kost mitra KostManager, sehingga laporan langsung masuk ke dashboard mitra pengelola.
+  3. Meniadakan celah komunikasi di luar aplikasi (seperti WhatsApp) guna mencegah risiko kebocoran transaksi/disintermediasi; komunikasi dilakukan 100% via sistem chat internal dengan memanfaatkan *floating context banner* di bagian atas chat yang menampilkan konteks tiket kendala (nomor tiket, foto bukti, kamar, dan status).
+- **Implementasi Solusi**:
+  1. **Redesain Profesional Modal Kendala Penghuni (`MyKost.tsx`)**:
+     - Mengeliminasi gradien merah-oranye mencolok (*AI slope*) dan menggantinya dengan header *dark slate/navy* (`bg-slate-900`) yang elegan dan konsisten dengan antarmuka portal pembayaran RuangSinggah.
+     - Mengganti seluruh 8 emoji kategori mentah dengan komponen vektor SVG murni berstandar industri (`lucide-react`: `Wind`, `Droplets`, `Zap`, `BedDouble`, `Wifi`, `Sparkles`, `ShieldCheck`, `HelpCircle`).
+     - Merapikan selector tingkat urgensi (Normal vs Darurat) dengan badge dan ikon SVG profesional (`Clock` & `AlertTriangle`).
+     - Memodernisasi tab Riwayat Tiket dengan indikator progres status yang bersih (Terbuka, Sedang Diproses, Selesai) serta tombol aksi *"Chat Pengelola Soal Tiket Ini"* yang membuka chat internal RuangSinggah dengan sematan tiket.
+  2. **Integrasi Menu Manajemen Kendala pada Dashboard Mitra (`MitraDashboard.tsx`)**:
+     - Menambahkan menu baru **"Kendala Hunian" (`complaints`)** pada navigasi desktop & mobile sidebar mitra lengkap dengan *badge counter* tiket yang menunggu tindakan (`open`).
+     - Mengintegrasikan query data `complaints` yang otomatis menyaring tiket sesuai daftar seluruh properti milik Mitra yang sedang login (`kost_id IN (mitra_property_ids)`).
+     - Menyediakan panel kendala hunian lengkap:
+       - 5 Kartu ringkasan metrik KPI (Total Masuk, Perlu Tindakan, Sedang Diproses, Selesai, Tiket Darurat).
+       - Filter interaktif (pencarian teks, filter per properti kost, filter status tiket, filter urgensi).
+       - Kartu tiket interaktif memuat data penyewa, kamar, deskripsi kerusakan, galeri foto WebP dengan modal zoom pratinjau.
+       - Kontrol pembaruan status realtime (*Mulai Tangani* / `in_progress`, *Tandai Selesai* / `resolved`, *Buka Kembali*).
+       - Kolom catatan respon mitra / jadwal kedatangan teknisi yang langsung tersimpan dan dapat dibaca oleh penghuni.
+  3. **Penyematan Konteks Tiket pada Floating Banner Chat Internal (`ChatWindow.tsx`)**:
+     - Memperluas antarmuka `ChatWindow` untuk menerima `ticketContext`.
+     - Ketika Mitra atau Penghuni mengklik tombol chat dari kartu kendala, sistem langsung membuka sesi chat in-app yang menampilkan *floating ticket banner* di bagian atas (nomor tiket `#TKT-XXXXXX`, thumbnail foto bukti, kamar, dan badge status).
+     - Komunikasi terkunci 100% di dalam platform RuangSinggah demi keamanan, akuntabilitas, dan pencegahan transaksi liar di luar aplikasi.
+- **File Tersentuh**:
+  - `functions/public/components/ChatWindow.tsx`
+  - `functions/public/pages/MyKost.tsx`
+  - `functions/public/pages/MitraDashboard.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Uji kompilasi frontend Vite (`npm.cmd --prefix functions/public run build`): Lulus 100% (2512 modul, 0 error).
+  - Validasi alur in-app chat berkonteks tiket tanpa kebocoran WhatsApp.
+
 ### 482. Integrasi Aset Logo Versi Dark-Mode & Optimalisasi WebP pada Header Payment Gateway (`PaymentGateway.tsx`) (November 2026)
 - **Permintaan & Masukan Pengguna**:
   1. Mengganti logo versi standar pada header menu checkout / payment gateway dengan logo versi dark-mode baru yang memiliki outline rumah dan huruf "R" berwarna putih bersih serta pin dan huruf "S" berwarna oranye signature.
