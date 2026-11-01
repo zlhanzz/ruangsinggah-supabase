@@ -20,7 +20,8 @@ import {
     Clock, LogOut, Bell, ChevronRight, TrendingUp, Menu, X, Landmark, CreditCard, Save,
     Briefcase, GraduationCap, Heart, MapPin, Trash2, FileText,
     Bed, Lock, Send, ShieldCheck, Sparkles, CheckCircle2, AlertCircle, Phone, Mail, Building2, Receipt,
-    Printer, Share2, Download, Calendar, Wrench, AlertTriangle, Wind, Droplets, BedDouble, ZoomIn, RotateCw
+    Printer, Share2, Download, Calendar, Wrench, AlertTriangle, Wind, Droplets, BedDouble, ZoomIn, RotateCw,
+    Wifi, HelpCircle
 } from 'lucide-react';
 import MitraProfile from './MitraProfile';
 import ChatWindow from '../components/ChatWindow';
