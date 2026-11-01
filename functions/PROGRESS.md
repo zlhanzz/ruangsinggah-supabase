@@ -11709,3 +11709,47 @@ ooms, sehingga tidak muncul alarm palsu di konsol browser mitra.
 - **Verifikasi**:
   - Build Vite frontend `npm run build` di `functions/public/` sukses 100% dengan 0 error dalam 1m 1s (✓ 2512 modules transformed).
 
+### 273. Redesain Profesional Tiket Kendala Kamar (`MyKost.tsx`), Pusat Kelola Komplain Mitra (`MitraDashboard.tsx`), & Floating Context Banner In-App Chat (`ChatWindow.tsx`) (November 2026)
+- **Permintaan & Masalah**:
+  1. Tampilan modal tiket kendala kamar pada kartu sewa aktif (`MyKost.tsx`) memiliki desain *AI slope* (header gradien merah-oranye permen, emoji mentah non-vektor).
+  2. Belum ada antarmuka khusus di dashboard mitra (`MitraDashboard.tsx`) untuk menampung dan merespons laporan kendala dari penghuni kamar (sebelumnya hanya ada di dashboard KostManager).
+  3. Adanya feedback tegas dari user untuk **anti-disintermediasi**: tidak boleh ada tombol redirect ke WhatsApp eksternal agar tidak membuka peluang transaksi di luar platform. Alur percakapan perbaikan wajib menggunakan fitur in-app chat yang sudah ada dengan menampilkan *floating context banner* di bagian atas jendela chat (ID Tiket `#TKT-XXXXXX`, judul kendala, nomor kamar, foto bukti, dan status penanganan).
+- **Implementasi & Solusi**:
+  1. **Redesain Modern Modal Tiket Penghuni (`MyKost.tsx`)**:
+     - Mengganti header gradien merah-oranye dengan dark navy profesional (`bg-slate-900 border-b border-slate-800`).
+     - Mengganti seluruh emoji mentah kategori fasilitas menjadi 100% vector SVG `lucide-react` (`Wind`, `Droplets`, `Zap`, `BedDouble`, `Wifi`, `Sparkles`, `ShieldCheck`, `HelpCircle`).
+     - Menyederhanakan selektor urgensi menjadi tombol ringkas dengan ikon `<Clock />` (Normal) dan `<AlertTriangle />` (Darurat).
+     - Modernisasi tab "Riwayat Tiket" dengan status badge yang elegan dan tombol aksi in-app chat berkonteks tiket.
+  2. **Pusat Manajemen Kendala Mitra (`MitraDashboard.tsx`)**:
+     - Menambahkan menu `Laporan Kendala` pada navigasi samping mitra dengan ikon `<Wrench size={20} />` dan badge counter tiket aktif.
+     - 5 Kartu KPI metrik kendala (*Total, Perlu Tindakan, Sedang Diproses, Selesai, Darurat*).
+     - Query multi-properti milik mitra (`kost_id IN (mitra_property_ids)`).
+     - Toolbar filter pencarian instan dan filter status penanganan.
+     - Kartu kendala komprehensif dengan pratinjau thumbnail foto kendala (modal zoom foto), formulir catatan tanggapan mitra, pembaruan status realtime (`in_progress`, `resolved`), dan tombol aksi *"Chat Penghuni di RuangSinggah"* yang langsung menghubungkan mitra ke chat penghuni dengan banner konteks tiket terpancang.
+  3. **Floating Context Banner In-App Chat (`ChatWindow.tsx`)**:
+     - Menambahkan prop `ticketContext` pada komponen `ChatWindow`.
+     - Merender pinned banner di header chat yang memuat nomor tiket, foto bukti thumbnail, kamar, dan status perbaikan secara instan.
+- **File Tersentuh**:
+  - `functions/public/pages/MyKost.tsx`
+  - `functions/public/pages/MitraDashboard.tsx`
+  - `functions/public/components/ChatWindow.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Build Vite frontend `npm run build` di `functions/public/` sukses 100% dengan 0 error (✓ 2512 modules transformed).
+
+### 274. Perbaikan ReferenceError Ikon Vector `Wifi`, `HelpCircle`, dan `Sparkles` (November 2026)
+- **Permintaan & Masalah**:
+  1. Muncul error runtime browser: `MitraDashboard.tsx:2765 Uncaught ReferenceError: Wifi is not defined at getCategoryIcon`.
+  2. Ikon `HelpCircle` juga belum diimpor dari package `lucide-react` di `MitraDashboard.tsx`.
+- **Implementasi & Solusi**:
+  1. Menambahkan impor `Wifi` dan `HelpCircle` dari `lucide-react` pada file `functions/public/pages/MitraDashboard.tsx`.
+  2. Memverifikasi seluruh ikon JSX di `MitraDashboard.tsx`, `MyKost.tsx`, dan `ChatWindow.tsx` telah ter-bundle dan terimpor 100%.
+- **File Tersentuh**:
+  - `functions/public/pages/MitraDashboard.tsx`
+  - `functions/PROGRESS.md`
+- **Verifikasi**:
+  - Build Vite frontend `npm run build` sukses 100% dengan 0 error dalam 54.86s (`wifi-D6YmAlL6.js` & `MitraDashboard-DizbMcCG.js` ter-bundle rapi).
+  - Push otomatis ke branch `bukan-productions`.
+
+
