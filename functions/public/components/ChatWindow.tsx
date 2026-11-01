@@ -337,8 +337,8 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
           <div className="bg-emerald-50/90 border-b border-emerald-100/70 px-3.5 py-1.5 flex items-center justify-between gap-2 text-emerald-900 text-[11px] shrink-0 transition-all">
             <div className="flex items-center gap-1.5 min-w-0">
               <ShieldCheck size={14} className="text-emerald-600 shrink-0" />
-              <p className="text-[11px] text-emerald-950 truncate">
-                <span className="font-bold">Transaksi Resmi:</span> Selalu bayar sewa via RuangSinggah agar aman & terverifikasi.
+              <p className="text-[10.5px] sm:text-[11px] text-emerald-950 leading-tight">
+                <span className="font-bold">Transaksi Resmi:</span> Selalu bayar sewa resmi via RuangSinggah agar aman & terverifikasi.
               </p>
             </div>
             <button
@@ -445,7 +445,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
         )}
 
         {/* Clean Input Area */}
-        <form onSubmit={handleSendMessage} className="p-2.5 sm:p-3.5 bg-white border-t border-slate-100 flex items-center gap-2 shrink-0 shadow-[0_-1px_3px_rgba(0,0,0,0.02)]">
+        <form onSubmit={handleSendMessage} className="p-2.5 sm:p-3.5 pb-safe sm:pb-3.5 bg-white border-t border-slate-100 flex items-center gap-2 shrink-0 shadow-[0_-1px_3px_rgba(0,0,0,0.02)]">
           <input
             type="text"
             value={newMessage}

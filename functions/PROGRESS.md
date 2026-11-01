@@ -2,6 +2,32 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 484. Full-Screen Mobile Conversation Mode & Unblocking Chat Typing Box from Mobile Bottom Navigation Bar (`MitraDashboard.tsx`, `ChatWindow.tsx`) (November 2026)
+- **Permintaan & Masukan Pengguna**:
+  1. Pada tampilan seluler/mobile di Dashboard Mitra, kotak input pengetikan pesan (*typing box*) dan tombol kirim pada antarmuka chat terhalang dan tertutup oleh navigasi bawah web app (`BERANDA | KELOLA KOST | PESANAN | PENGHUNI AKTIF | PROFIL`).
+  2. Memastikan antarmuka chat di ponsel beroperasi layaknya aplikasi pesan modern kelas dunia (WhatsApp Web Mobile / Telegram Web) di mana typing box berada tepat di dasar layar tanpa terhalang elemen navigasi apapun.
+- **Implementasi Solusi**:
+  1. **Full-Screen Mobile Conversation Mode (`MitraDashboard.tsx`)**:
+     - Memodifikasi container area chat pada saat `activeChat` aktif:
+       `<div className={`${activeChat ? 'fixed inset-0 z-50 bg-white flex flex-col sm:static sm:z-auto sm:flex sm:flex-1 sm:flex-col' : 'hidden sm:flex flex-1 flex-col bg-white'}`}>`
+     - Pada layar seluler (`< sm`), kontainer chat melepaskan diri dari scroll container dan padding `<main>` (`pt-20 pb-28 p-4`), memenuhi viewport layar secara presisi (`fixed inset-0 z-50`).
+     - Menyediakan tombol kembali (`<ChevronLeft />`) di header chat mobile yang memicu `setActiveChat(null)`, mengembalikan pengguna ke daftar percakapan secara instan.
+     - Pada layar desktop/tablet (`sm:` dan di atasnya), tata letak kembali menjadi 2 kolom sidebar + panel pesan tersemat (`sm:static sm:z-auto sm:flex sm:flex-1 sm:flex-col`) tanpa merombak desktop experience.
+  2. **Penyembunyian Dinamis Mobile Bottom Navigation Bar (`MitraDashboard.tsx`)**:
+     - Mengondisikan mobile bottom navigation bar (`<nav className="lg:hidden ...">`) agar otomatis disembunyikan saat `activeChat` bernilai truthy (`${activeChat ? 'hidden' : 'flex'}`).
+     - Mencegah interferensi *touch event* dan menghilangkan tumpang-tindih visual di bagian bawah layar.
+  3. **Optimasi Safe-Area Input Bar (`ChatWindow.tsx`)**:
+     - Menambahkan utilitas padding safe area `pb-safe` pada form pengetikan pesan (`p-2.5 sm:p-3.5 pb-safe sm:pb-3.5`) untuk kompatibilitas home indicator perangkat iOS/Android modern.
+     - Merapikan baris jaminan transaksi resmi agar tidak memakan ruang vertikal yang tidak perlu.
+- **File Tersentuh**:
+  - `functions/public/pages/MitraDashboard.tsx`
+  - `functions/public/components/ChatWindow.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Uji kompilasi frontend Vite (`npm.cmd run build`): Lulus 100% (2512 modul, 0 error).
+  - Verifikasi mobile: Typing box dan tombol kirim berada bebas di bawah layar tanpa halangan bottom nav bar.
+
 ### 483. Redesain Profesional Laporan Kendala Kamar (`MyKost.tsx`), Eliminasi AI-Slope, dan Integrasi Menu Tiket Kendala pada Dashboard Mitra (`MitraDashboard.tsx`) (November 2026)
 - **Permintaan & Masukan Pengguna**:
   1. Tampilan laporan kendala kamar yang diakses melalui kartu sewa aktif (`MyKost.tsx`) diubah agar lebih profesional dan berstandar industri proptech, bukan tampilan *AI slope* (eliminasi gradien merah mencolok dan emoji mentah).

@@ -3340,7 +3340,7 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                                 </div>
 
                                 {/* Chat area */}
-                                <div className={`${activeChat ? 'flex' : 'hidden sm:flex'} flex-1 flex-col bg-white`}>
+                                <div className={`${activeChat ? 'fixed inset-0 z-50 bg-white flex flex-col sm:static sm:z-auto sm:flex sm:flex-1 sm:flex-col' : 'hidden sm:flex flex-1 flex-col bg-white'}`}>
                                     {activeChat ? (
                                         <div className="flex-1 overflow-hidden flex flex-col h-full">
                                             <ChatWindow
@@ -3592,7 +3592,7 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                 </main>
 
                 {/* ── MOBILE BOTTOM NAV ────────────────────────────────────── */}
-                <nav className="lg:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-100 z-50 flex items-center px-3 pt-2 pb-safe shadow-[0_-10px_40px_rgba(0,0,0,0.08)]">
+                <nav className={`lg:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-100 z-50 flex items-center px-3 pt-2 pb-safe shadow-[0_-10px_40px_rgba(0,0,0,0.08)] ${activeChat ? 'hidden' : 'flex'}`}>
                     {NAV_ITEMS.filter(item => ['overview', 'bookings', 'tenants', 'properties', 'profile'].includes(item.key)).map(item => (
                         <BottomNavItem
                             key={item.key}
