@@ -11752,4 +11752,25 @@ ooms, sehingga tidak muncul alarm palsu di konsol browser mitra.
   - Build Vite frontend `npm run build` sukses 100% dengan 0 error dalam 54.86s (`wifi-D6YmAlL6.js` & `MitraDashboard-DizbMcCG.js` ter-bundle rapi).
   - Push otomatis ke branch `bukan-productions`.
 
-
+### 275. Perbaikan Otentikasi & Otorisasi Sesi Chat Dwiarah (Bidirectional Chat Session) Mitra & Penghuni (`chatService.ts`) (November 2026)
+- **Permintaan & Masalah**:
+  1. Saat Mitra mengklik tombol *"Chat Penghuni di RuangSinggah"* pada tiket kendala hunian, muncul exception: `Error opening chat for complaint: Error: Gagal memverifikasi identitas Anda. Silakan login ulang.` pada `chatService.ts:46:11` via `ensureUserProfileExists`.
+  2. Akar masalah: Fungsi `ensureUserProfileExists` sebelumnya berasumsi pemanggil sesi chat selalu penghuni (`authUser.id === userId`). Ketika Mitra (`ownerId`) yang menginisiasi sesi, perbandingan `authUser.id !== userId` bernilai true sehingga melempar pesan kesalahan palsu (false positive).
+- **Implementasi & Solusi**:
+  1. **Refactor `ensureUserProfileExists`**:
+     - Fungsi tidak lagi menolak ID jika berbeda dengan parameter `userId`.
+     - Memvalidasi keberadaan sesi auth aktif (`authUser`) dan mensinkronisasi profil pemanggil yang sedang login ke `public.users` sesuai izin RLS `auth.uid() = id`.
+  2. **Otorisasi Partisipan Dwiarah pada `getOrCreateChatSession`**:
+     - Memvalidasi bahwa pemanggil adalah partisipan sah dalam percakapan: Penghuni (`userId`), Pemilik/Mitra (`finalOwnerId`), atau Administrator sistem.
+     - Mendukung inisiasi sesi baru baik dari arah Penghuni maupun dari arah Mitra (dengan tunneling metadata nama dan foto penghuni secara otomatis).
+  3. **Penyempurnaan DDL Policy RLS**:
+     - Memperbarui dokumentasi kebijakan RLS `chat_sessions` INSERT pada `supabase_schema.sql` agar mengizinkan `auth.uid() = owner_id` di samping `auth.uid() = user_id`.
+- **File Tersentuh**:
+  - `functions/public/chatService.ts`
+  - `functions/public/pages/MitraDashboard.tsx`
+  - `functions/public/supabase_schema.sql`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Build Vite frontend `npm run build` di `functions/public/` sukses 100% dengan 0 error dalam 43.36s (✓ 2512 modules transformed).
+  - Push otomatis ke branch `bukan-productions`.

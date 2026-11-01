@@ -926,10 +926,11 @@ USING (
   OR EXISTS (SELECT 1 FROM public.users WHERE users.id = auth.uid() AND users.role = 'admin')
 );
 
-CREATE POLICY "Users and admins can start a chat session"
+CREATE POLICY "Users, owners and admins can start a chat session"
 ON public.chat_sessions FOR INSERT
 WITH CHECK (
   auth.uid() = user_id 
+  OR auth.uid() = owner_id
   OR EXISTS (SELECT 1 FROM public.users WHERE users.id = auth.uid() AND users.role = 'admin')
 );
 

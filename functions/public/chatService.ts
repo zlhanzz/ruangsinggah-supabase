@@ -38,14 +38,16 @@ export interface ChatMessage {
 /**
  * Memastikan profil user ada di tabel public.users sebelum melakukan operasi yang memerlukan foreign key
  */
-async function ensureUserProfileExists(userId: string): Promise<void> {
+async function ensureUserProfileExists(expectedUserId?: string): Promise<void> {
   // Ambil data auth terlebih dahulu untuk mendapatkan data terbaru
   const { data: { user: authUser }, error: authError } = await supabase.auth.getUser();
   
-  if (authError || !authUser || authUser.id !== userId) {
+  if (authError || !authUser) {
     throw new Error('Gagal memverifikasi identitas Anda. Silakan login ulang.');
   }
 
+  // Sinkronisasi profil hanya dilakukan untuk akun yang sedang aktif login (auth.uid() = id)
+  const userId = authUser.id;
   const metadata = authUser.user_metadata || {};
   const userName = metadata.full_name || metadata.name || metadata.displayName || authUser.email?.split('@')[0] || 'User Baru';
   const photoUrl = metadata.avatar_url || metadata.picture || '';
@@ -80,13 +82,15 @@ async function ensureUserProfileExists(userId: string): Promise<void> {
 
   if (upsertError) {
     console.error('CRITICAL: Failed to sync user profile:', upsertError);
-    // Jika error karena RLS (403/Policy), kita harus memberitahu user
-    throw new Error(`Sistem gagal mendaftarkan profil Anda (Error: ${upsertError.code}). Silakan hubungi Admin RS.`);
+    // Jika bukan error fatal, jangan memblokir jika profil sudah ada
+    if (upsertError.code !== '42501' && upsertError.code !== '23505') {
+      throw new Error(`Sistem gagal mendaftarkan profil Anda (Error: ${upsertError.code}). Silakan hubungi Admin RS.`);
+    }
   }
 }
 
 /**
- * Mendapatkan atau membuat sesi chat antara user dan owner
+ * Mendapatkan atau membuat sesi chat antara user dan owner (Dukungan dwiarah: User -> Owner atau Owner -> User)
  */
 export async function getOrCreateChatSession(
   userId: string, 
@@ -95,13 +99,37 @@ export async function getOrCreateChatSession(
   requesterName?: string,
   requesterPhoto?: string
 ): Promise<ChatSession> {
-  // 0. Ensure user profile exists in public.users to avoid FK violations
-  await ensureUserProfileExists(userId);
+  // Ambil auth user saat ini untuk otorisasi dan sinkronisasi
+  const { data: { user: authUser }, error: authError } = await supabase.auth.getUser();
+  if (authError || !authUser) {
+    throw new Error('Sesi login Anda tidak valid atau telah berakhir. Silakan login kembali.');
+  }
 
   // Normalize ownerId if it matches legacy placeholder
   const finalOwnerId = (ownerId === 'admin-system-id' || !isValidUUID(ownerId)) 
     ? SYSTEM_ADMIN_ID 
     : ownerId;
+
+  // 0a. Validasi Otorisasi Partisipan Dwiarah:
+  // Pemanggil HARUS salah satu dari:
+  // - Penghuni yang bersangkutan (userId)
+  // - Pemilik/Pengelola Kost (finalOwnerId)
+  // - Admin sistem
+  const isParticipant = (authUser.id === userId || authUser.id === finalOwnerId);
+  if (!isParticipant) {
+    const { data: adminCheck } = await supabase
+      .from('users')
+      .select('role')
+      .eq('id', authUser.id)
+      .maybeSingle();
+
+    if (adminCheck?.role !== 'admin') {
+      throw new Error('Gagal memverifikasi identitas Anda. Anda tidak berwenang mengakses percakapan ini.');
+    }
+  }
+
+  // 0b. Pastikan profil pemanggil aktif (authUser) ada di public.users untuk menjamin Foreign Key
+  await ensureUserProfileExists();
 
   // 1. Cek apakah sudah ada sesi untuk user dan properti ini (cegah duplikasi)
   let query = supabase
@@ -139,10 +167,28 @@ export async function getOrCreateChatSession(
   // RLS BYPASS: Proactively tunnel the requester's name/photo so the Mitra can see it immediately
   let initialMetadata = '';
   
-  // Use provided name/photo first (Frontend Injection)
-  const name = requesterName || 'Calon Penghuni';
-  const photo = requesterPhoto || '';
-  initialMetadata = `${name}|||${photo}|||Mulai percakapan...`;
+  if (authUser.id === finalOwnerId) {
+    // Mitra/Owner yang memulai sesi chat baru ke penghuni
+    let tenantName = requesterName || 'Penghuni';
+    let tenantPhoto = requesterPhoto || '';
+    if (!requesterName) {
+      const { data: tenantProfile } = await supabase
+        .from('users')
+        .select('name, full_name, photo_url')
+        .eq('id', userId)
+        .maybeSingle();
+      if (tenantProfile) {
+        tenantName = tenantProfile.full_name || tenantProfile.name || tenantName;
+        tenantPhoto = tenantProfile.photo_url || tenantPhoto;
+      }
+    }
+    initialMetadata = `${tenantName}|||${tenantPhoto}|||Percakapan dibuka oleh Pengelola...`;
+  } else {
+    // Penghuni yang memulai percakapan
+    const name = requesterName || 'Calon Penghuni';
+    const photo = requesterPhoto || '';
+    initialMetadata = `${name}|||${photo}|||Mulai percakapan...`;
+  }
 
   const { data: newSession, error: createError } = await supabase
     .from('chat_sessions')
@@ -163,9 +209,6 @@ export async function getOrCreateChatSession(
   return newSession;
 }
 
-/**
- * Mengambil semua pesan dalam satu sesi
- */
 export async function getChatMessages(sessionId: string): Promise<ChatMessage[]> {
   const { data, error } = await supabase
     .from('chat_messages')

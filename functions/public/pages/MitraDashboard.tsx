@@ -1092,7 +1092,7 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
     const handleStartComplaintChat = async (c: any) => {
         if (!user || !c.user_id) return;
         try {
-            const session = await getOrCreateChatSession(c.user_id, uid, c.kost_id);
+            const session = await getOrCreateChatSession(c.user_id, uid, c.kost_id, c.user_name || c.user_full_name || 'Penghuni');
             
             let ticketPhoto = '';
             if (c.photo_url) {
