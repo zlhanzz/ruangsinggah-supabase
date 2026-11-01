@@ -645,7 +645,7 @@ const PaymentGateway: React.FC<PaymentGatewayProps> = ({
             {/* Brand Logo & Order ID */}
             <div className="flex items-center gap-2.5 min-w-0">
               <img 
-                src="/logo.png" 
+                src="/logo-white.webp" 
                 alt="RuangSinggah.id" 
                 className="h-7 w-auto object-contain shrink-0" 
               />

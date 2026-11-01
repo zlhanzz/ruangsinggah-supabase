@@ -2,6 +2,30 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 482. Integrasi Aset Logo Versi Dark-Mode & Optimalisasi WebP pada Header Payment Gateway (`PaymentGateway.tsx`) (November 2026)
+- **Permintaan & Masukan Pengguna**:
+  1. Mengganti logo versi standar pada header menu checkout / payment gateway dengan logo versi dark-mode baru yang memiliki outline rumah dan huruf "R" berwarna putih bersih serta pin dan huruf "S" berwarna oranye signature.
+- **Implementasi Solusi**:
+  1. **Pemrosesan Aset Gambar Berstandar Industri (Pasal 5 WebP)**:
+     - Mengambil gambar logo transparan baru yang diunggah pengguna (`media_1793503108052_1aa4ddad.png`).
+     - Melakukan *auto-trim* memotong ruang kosong transparan berlebih (dari 1024x1024 menjadi 672x582).
+     - Melakukan resampling resolusi proporsional tinggi 160px (5x supersampling untuk ketajaman retina display saat di-render pada tinggi `h-7`/28px).
+     - Mengonversi menjadi format ultra-ringan modern `logo-white.webp` (hanya 12.3 KB, efisiensi bandwidth >99% dibanding logo lama 1.6 MB) serta cadangan `logo-white.png` (22.2 KB).
+  2. **Pembaruan Komponen Header (`PaymentGateway.tsx`)**:
+     - Mengarahkan pemanggilan gambar logo header ke `/logo-white.webp`.
+     - Memberikan kontras sempurna di atas latar belakang gelap *dark navy* (`bg-slate-900`) tanpa risiko warna outline hitam tenggelam ke latar.
+- **File Tersentuh**:
+  - `functions/public/public/logo-white.webp` (aset baru)
+  - `functions/public/public/logo-white.png` (aset baru)
+  - `public/logo-white.webp` (salinan build)
+  - `public/logo-white.png` (salinan build)
+  - `functions/public/components/PaymentGateway.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Uji kompilasi frontend Vite (`npm.cmd --prefix functions/public run build`): Lulus 100% (2512 modul, 0 error).
+  - Verifikasi kontras dan transparansi visual aset WebP pada background `#0f172a`.
+
 ### 481. Redesain Efisiensi UI/UX Payment Gateway: Eliminasi AI-Slope, Reposisi Timer Kompak & Zero-Clipping VA (`PaymentGateway.tsx`) (Oktober 2026)
 - **Permintaan & Masukan Pengguna**:
   1. Menghilangkan elemen-elemen yang tidak urgent dan membuang-buang tempat (*AI slope*): badge "Checkout Gateway", teks "Transaksi Terlindungi" pada baris sekunder header, serta teks footer "Sistem Verifikasi Otomatis 24/7".
