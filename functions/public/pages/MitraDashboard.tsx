@@ -1120,6 +1120,15 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                 photoUrl: ticketPhoto
             };
 
+            // Attach tenant real name to session
+            (session as any).complaint_user_name = c.user_name || c.user_full_name;
+            if (!session.user || session.user.name === 'Calon Penghuni') {
+                session.user = {
+                    name: c.user_name || c.user_full_name || 'Penghuni',
+                    photo_url: session.user?.photo_url || ''
+                };
+            }
+
             setActiveTicketChatContext(ticketCtx);
             handleSelectChat(session);
             handleMenuChange('chat');
@@ -3226,11 +3235,16 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
 
                     {/* CHAT */}
                     {activeMenu === 'chat' && (
-                        <div className="animate-in fade-in duration-300 h-[calc(100vh-8.5rem)] min-h-[640px] flex flex-col">
-                            <div className="mb-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 shrink-0">
+                        <div className={`animate-in fade-in duration-300 flex flex-col ${
+                            activeChat 
+                                ? 'h-[calc(100dvh-5.5rem)] sm:h-[calc(100vh-8.5rem)] sm:min-h-[640px]' 
+                                : 'h-[calc(100vh-8.5rem)] min-h-[640px]'
+                        }`}>
+                            {/* Outer Header: Sembunyikan di mobile jika sedang membuka percakapan aktif */}
+                            <div className={`${activeChat ? 'hidden sm:flex' : 'flex'} mb-4 flex-col sm:flex-row sm:items-center sm:justify-between gap-2 shrink-0`}>
                                 <div>
                                     <h3 className="font-black text-gray-900 text-lg">Pesan & Diskusi</h3>
-                                    <p className="text-xs text-gray-400 font-bold mt-0.5 uppercase tracking-widest">Komunikasi dengan calon penghuni</p>
+                                    <p className="text-xs text-gray-400 font-bold mt-0.5 uppercase tracking-widest">Komunikasi dengan penghuni</p>
                                 </div>
                                 {chatUnreadCount > 0 && (
                                     <span className="self-start sm:self-auto bg-rose-50 border border-rose-200 text-rose-600 text-xs font-black px-3.5 py-1.5 rounded-full flex items-center gap-1.5 shadow-sm">
@@ -3239,7 +3253,7 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                                     </span>
                                 )}
                             </div>
-                            <div className="flex-1 bg-white rounded-3xl border border-gray-100 shadow-sm flex overflow-hidden">
+                            <div className={`flex-1 bg-white sm:rounded-3xl sm:border border-gray-100 sm:shadow-sm flex overflow-hidden ${activeChat ? 'rounded-2xl border' : 'rounded-3xl border shadow-sm'}`}>
                                 {/* Sidebar list */}
                                 <div className={`${activeChat ? 'hidden sm:flex' : 'flex'} w-full sm:w-80 md:w-96 lg:w-[360px] xl:w-[380px] shrink-0 flex-col border-r border-gray-100 bg-white`}>
                                     <div className="p-4 border-b border-gray-100 bg-white">
@@ -3332,9 +3346,17 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                                             <ChatWindow
                                                 session={activeChat}
                                                 currentUser={user}
-                                                onClose={() => setActiveChat(null)}
-                                                propertyName={(activeChat as any).property?.title}
+                                                onClose={() => {
+                                                    setActiveChat(null);
+                                                    setActiveTicketChatContext(null);
+                                                }}
+                                                propertyName={(activeChat as any).property?.title || activeTicketChatContext?.kostName}
+                                                contactName={
+                                                    (activeChat as any).complaint_user_name || 
+                                                    (activeChat.user?.name && activeChat.user?.name !== 'Calon Penghuni' ? activeChat.user.name : undefined)
+                                                }
                                                 isEmbedded={true}
+                                                ticketContext={activeTicketChatContext || undefined}
                                                 onMessagesRead={() => {
                                                     setChatSessions(prev => prev.map(s => s.id === activeChat.id ? { ...s, unread_count: 0 } : s));
                                                 }}

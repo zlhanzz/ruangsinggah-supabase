@@ -11774,3 +11774,37 @@ ooms, sehingga tidak muncul alarm palsu di konsol browser mitra.
 - **Verifikasi**:
   - Build Vite frontend `npm run build` di `functions/public/` sukses 100% dengan 0 error dalam 43.36s (✓ 2512 modules transformed).
   - Push otomatis ke branch `bukan-productions`.
+
+### 276. Redesain Modern Antarmuka Chat Dashboard Mitra & Eliminasi Header Clipping pada Mobile (`ChatWindow.tsx` & `MitraDashboard.tsx`) (November 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna mengevaluasi bahwa tampilan obrolan pada Dashboard Mitra terasa kaku (*"masih kurang profesional dan masih agak gimanaa gitu"*).
+  2. Analisis screenshot pengguna:
+     - Terdapat *header clipping* di mana judul luar `KOMUNIKASI DENGAN CALON PENGHUNI` terpotong di belakang navbar atas mobile.
+     - Nama kontak terpotong sempit di karakter ke-8 (`"Calon Pe..."`) yang berdiri berdampingan secara janggal dengan badge berbingkai oranye `[CALON PENGHUNI]`.
+     - Terdapat banner hijau mint permanen berukuran tebal (*"Jaminan Keamanan Transaksi & Garansi Uang Kembali 100%"*) yang memakan $\approx 25\%$ ruang vertikal layar HP dan menutupi riwayat percakapan.
+     - Gelembung pesan keluar (*outgoing*) berwarna oranye solid tajam dengan penempatan waktu/jam dan centang yang terpisah di bawah.
+     - Prop `ticketContext` belum diteruskan pada pemanggilan komponen `<ChatWindow>` di Dashboard Mitra sehingga kartu kendala hunian tersemat tidak muncul.
+- **Implementasi & Solusi**:
+  1. **Optimalisasi Tata Letak Layar Mobile (`MitraDashboard.tsx`)**:
+     - Menyembunyikan judul luar `Pesan & Diskusi` di mobile saat obrolan aktif dibuka (`activeChat !== null`), mengeliminasi teks terpotong secara total.
+     - Mengubah container chat menjadi fleksibel `h-[calc(100dvh-5.5rem)]` tanpa card ganda yang menjepit di layar kecil.
+     - Meneruskan `ticketContext={activeTicketChatContext || undefined}` dan `contactName` secara dinamis ke `<ChatWindow>`.
+  2. **Modernisasi Header Chat (`ChatWindow.tsx`)**:
+     - Resolusi cerdas nama lawan bicara dari data komplain, profil, dan tunneled metadata sehingga nama asli pengguna (misal: "userbiasa1") tampil utuh.
+     - Menghapus badge oranye `[CALON PENGHUNI]` yang berdesakan dan menggantinya dengan avatar bulat elegan serta subtitle informatif (`🏠 Nama Kost • Kamar X` atau `🔧 Tiket #TKT-XXXXXX`).
+  3. **Penyederhanaan Trust & Safety Notice**:
+     - Mengganti banner tebal dengan *dismissible safety pill* 1-baris yang minimalis dan dapat ditutup (`X`), membebaskan $100\%$ ruang baca pesan.
+  4. **Penyematan Kartu Tiket Kendala di Header Chat Embedded**:
+     - Menampilkan floating ticket banner (`#TKT-XXXXXX`, urgensi, status, nomor kamar, dan thumbnail foto kerusakan) saat chat dibuka dari tiket komplain mitra.
+  5. **Redesain Gelembung Pesan & Input Bar**:
+     - Gelembung pesan keluar menggunakan gradien oranye modern halus dengan timestamp dan centang baca (`✓✓` cyan lembut) yang menyatu di pojok kanan bawah gelembung.
+     - Gelembung pesan masuk berlatar putih bersih dengan border halus `border-slate-200/70` dan jarak antar pesan proporsional (`space-y-2`).
+     - Input pesan berbentuk pill membulat bersih dengan tombol kirim modern.
+- **File Tersentuh**:
+  - `functions/public/components/ChatWindow.tsx`
+  - `functions/public/pages/MitraDashboard.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Build Vite frontend `npm run build` di `functions/public/` sukses 100% dengan 0 error dalam 31.78s (✓ 2512 modules transformed).
+  - Push otomatis ke branch `bukan-productions`.
