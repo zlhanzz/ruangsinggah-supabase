@@ -2,6 +2,33 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 486. Penerapan Matriks Kelayakan Ulasan & Rating Kost Berbasis Validasi Terima Kunci dan Durasi Tinggal (`MyKost.tsx`) (November 2026)
+- **Permintaan & Masukan Pengguna**:
+  1. Tombol "Beri Ulasan & Rating" pada kartu sewa aktif (`MyKost.tsx`) seharusnya tidak langsung bisa diakses sejak hari pertama pembayaran.
+  2. Untuk sewa bulanan ke bawah (harian, mingguan, 1 bulan), tombol ulasan baru bisa diakses saat masa sewa akan berakhir (H-7) atau telah selesai.
+  3. Untuk sewa jangka panjang (> 1 bulan: 3 bulan, 6 bulan, 1 tahun), tombol ulasan bisa diakses setelah tinggal minimal 30 hari pertama atau saat masa sewa akan berakhir.
+  4. Penyewa WAJIB sudah terkonfirmasi menerima kunci / masuk kamar (`is_checked_in`) sebelum diperbolehkan memberikan ulasan.
+  5. 1 akun dan 1 penyewaan hanya bisa memberikan ulasan satu kali (mode edit jika sudah ada ulasan).
+- **Implementasi Solusi**:
+  1. **Gate 1: Validasi Fisik Terima Kunci / Handover (`MyKost.tsx`)**:
+     - Memeriksa `isCheckedIn = Boolean(kMeta.actual_checkin_at || kMeta.handover_confirmed || kost.actual_checkin_at || kost.is_checked_in)`.
+     - Jika penyewa belum menyelesaikan konfirmasi Terima Kunci & Masuk, tombol ulasan berstatus dinonaktifkan (*disabled*) dengan teks mikro: *"Selesaikan Terima Kunci terlebih dahulu"*.
+  2. **Gate 2: Matriks Kelayakan Durasi Tinggal (*Review Eligibility Matrix*)**:
+     - Menghitung `totalLeaseDays` dan `daysElapsed` dari `startDate` dan `endDate`.
+     - *Sewa Jangka Panjang (> 31 Hari / > 1 Bulan)*: Tombol ulasan terbuka jika telah tinggal minimal 30 hari (`daysElapsed >= 30`) ATAU saat masa sewa akan berakhir (`daysRemaining <= 7`) ATAU sewa telah selesai. Jika belum 30 hari, tombol berstatus *disabled* dengan countdown: *"Tersedia stlh 30 hari tinggal (X hari lagi)"*.
+     - *Sewa Bulanan / Pendek (<= 31 Hari)*: Tombol ulasan terbuka jika masa sewa akan berakhir (`daysRemaining <= 7`) ATAU sewa telah selesai/riwayat. Jika belum H-7, tombol berstatus *disabled* dengan keterangan: *"Dapat diisi saat masa sewa akan berakhir (H-7)"*.
+  3. **Gate 3: Integritas Ulasan (1 Akun = 1 Ulasan, Anti-Spam)**:
+     - Jika penyewa sudah pernah mengirim ulasan (`hasExistingReview`), tombol selalu aktif dengan label *"Edit Ulasan & Rating"* untuk memungkinkan revisi ulasan tanpa menciptakan duplikat.
+  4. **Proteksi Ganda Handler (`handleOpenPropertyReview`)**:
+     - Menyematkan validasi guard di dalam fungsi handler untuk menolak pembukaan modal secara paksa jika kondisi kelayakan belum terpenuhi.
+- **File Tersentuh**:
+  - `functions/public/pages/MyKost.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Uji kompilasi frontend Vite (`npm run build`): Lulus 100% (2512 modul, 0 error).
+  - Verifikasi akun "userbiasa1" (Kost Ryuta, sewa 2 bulan, belum terima kunci): Tombol ulasan tampil dalam keadaan *disabled* abu-abu dengan label informatif jelas.
+
 ### 485. Perbaikan Integritas Data Penghuni Aktif, Eliminasi Kebocoran 'AWAITING_PAYMENT', Normalisasi Deduplikasi Kamar, dan Koreksi Otomatisasi KostManager pada Kost Reguler (`adminService.ts`, `MitraTenantManagement.tsx`, `MitraDashboard.tsx`) (November 2026)
 - **Permintaan & Masukan Pengguna**:
   1. Pengguna mempertanyakan mengapa akun mitra dengan kost reguler mandiri (Kost Ryuta, tidak terdaftar layanan KostManager) memunculkan penyewa hasil testing ("userbiasa1") dengan badge `⭐ KOSTMANAGER` dan kontrol otomatisasi Auto-Pilot / Hubungi Tim KM.

@@ -239,8 +239,36 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
 
     const handleOpenPropertyReview = (kost: any) => {
         const propId = kost.kostId || kost.property_id || kost.id;
-        setSelectedPropertyReviewKost(kost);
         const existing = userReviewMap[propId];
+
+        // Guard validation based on Review Eligibility Matrix
+        const kMeta = typeof kost.metadata === 'string' ? JSON.parse(kost.metadata) : (kost.metadata || {});
+        const isCheckedIn = Boolean(kMeta.actual_checkin_at || kMeta.handover_confirmed || kost.actual_checkin_at || kost.is_checked_in);
+        const startDateObj = parseDateSafely(kost.moveInDate || kMeta.startDate);
+        const endDateObj = parseDateSafely(kost.endDate || kMeta.endDate);
+        const nowObj = getCurrentDate();
+        let totalLeaseDays = 30;
+        let daysElapsed = 0;
+        if (startDateObj && endDateObj) {
+            totalLeaseDays = Math.max(1, Math.round((endDateObj.getTime() - startDateObj.getTime()) / (1000 * 60 * 60 * 24)));
+            daysElapsed = Math.min(totalLeaseDays, Math.round(Math.max(0, nowObj.getTime() - startDateObj.getTime()) / (1000 * 60 * 60 * 24)));
+        }
+        const isLongTerm = totalLeaseDays > 31 || (kost.total_months || 1) > 1;
+        const isNearEndOrEnded = (kost.daysRemaining || 0) <= 7 || (kost.daysRemaining || 0) <= 0 || kost.is_checked_out || activeTab === 'riwayat';
+        const isEligible = existing || ((isCheckedIn || kost.is_checked_out || activeTab === 'riwayat') && (isLongTerm ? (daysElapsed >= 30 || isNearEndOrEnded) : isNearEndOrEnded));
+
+        if (!isEligible) {
+            if (!isCheckedIn && !kost.is_checked_out && activeTab !== 'riwayat') {
+                alert('Anda harus menyelesaikan konfirmasi Terima Kunci & Masuk terlebih dahulu sebelum dapat memberikan ulasan.');
+            } else if (isLongTerm && daysElapsed < 30) {
+                alert(`Ulasan untuk sewa jangka panjang baru dapat diberikan setelah minimal 30 hari tinggal (${Math.max(1, 30 - daysElapsed)} hari lagi).`);
+            } else {
+                alert('Ulasan baru dapat diberikan saat masa sewa akan berakhir (H-7).');
+            }
+            return;
+        }
+
+        setSelectedPropertyReviewKost(kost);
         if (existing) {
             setRatingValue(Number(existing.rating) || 5);
             setRatingComment(existing.comment || '');
@@ -3074,16 +3102,68 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
                                                         </button>
                                                     )}
 
-                                                    {/* Beri / Edit Ulasan & Rating Kost */}
-                                                    {isPaid && (
-                                                        <button
-                                                            onClick={() => handleOpenPropertyReview(kost)}
-                                                            className="w-full bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 px-4 sm:px-5 py-2.5 sm:py-3 rounded-xl sm:rounded-2xl font-black flex items-center justify-center gap-2 transition-all text-[9px] uppercase tracking-widest active:scale-[0.98] cursor-pointer"
-                                                        >
-                                                            <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-500" />
-                                                            {userReviewMap[kost.kostId || kost.property_id || kost.id] ? 'Edit Ulasan & Rating' : 'Beri Ulasan & Rating'}
-                                                        </button>
-                                                    )}
+                                                    {/* Beri / Edit Ulasan & Rating Kost (Sesuai Aturan Kelayakan Waktu & Terima Kunci) */}
+                                                    {isPaid && (() => {
+                                                        const isCheckedIn = Boolean(kMeta.actual_checkin_at || kMeta.handover_confirmed || kost.actual_checkin_at || kost.is_checked_in);
+                                                        const propId = kost.kostId || kost.property_id || kost.id;
+                                                        const hasExistingReview = Boolean(userReviewMap[propId]);
+                                                        const isLongTermLease = totalLeaseDays > 31 || (kost.total_months || 1) > 1;
+                                                        const isNearEndOrEnded = (kost.daysRemaining || 0) <= 7 || (kost.daysRemaining || 0) <= 0 || kost.is_checked_out || activeTab === 'riwayat';
+
+                                                        let canAccessReview = false;
+                                                        let reviewLockReason = '';
+
+                                                        if (hasExistingReview) {
+                                                            canAccessReview = true;
+                                                        } else if (!isCheckedIn && !kost.is_checked_out && activeTab !== 'riwayat') {
+                                                            canAccessReview = false;
+                                                            reviewLockReason = 'Selesaikan Terima Kunci terlebih dahulu';
+                                                        } else if (isLongTermLease) {
+                                                            if (daysElapsed >= 30 || isNearEndOrEnded) {
+                                                                canAccessReview = true;
+                                                            } else {
+                                                                canAccessReview = false;
+                                                                reviewLockReason = `Tersedia stlh 30 hari tinggal (${Math.max(1, 30 - daysElapsed)} hari lagi)`;
+                                                            }
+                                                        } else {
+                                                            if (isNearEndOrEnded) {
+                                                                canAccessReview = true;
+                                                            } else {
+                                                                canAccessReview = false;
+                                                                reviewLockReason = 'Dapat diisi saat masa sewa akan berakhir (H-7)';
+                                                            }
+                                                        }
+
+                                                        if (canAccessReview) {
+                                                            return (
+                                                                <button
+                                                                    onClick={() => handleOpenPropertyReview(kost)}
+                                                                    className="w-full bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 px-4 sm:px-5 py-2.5 sm:py-3 rounded-xl sm:rounded-2xl font-black flex items-center justify-center gap-2 transition-all text-[9px] uppercase tracking-widest active:scale-[0.98] cursor-pointer"
+                                                                >
+                                                                    <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-500" />
+                                                                    {hasExistingReview ? 'Edit Ulasan & Rating' : 'Beri Ulasan & Rating'}
+                                                                </button>
+                                                            );
+                                                        }
+
+                                                        return (
+                                                            <div className="flex flex-col gap-1 w-full">
+                                                                <button
+                                                                    disabled
+                                                                    className="w-full bg-gray-50 text-gray-400 border border-gray-100 px-4 sm:px-5 py-2.5 sm:py-3 rounded-xl sm:rounded-2xl font-black flex items-center justify-center gap-2 transition-all text-[9px] uppercase tracking-widest cursor-not-allowed opacity-80"
+                                                                    title={reviewLockReason}
+                                                                >
+                                                                    <Star className="w-3.5 h-3.5 text-gray-300" />
+                                                                    Beri Ulasan & Rating
+                                                                </button>
+                                                                {reviewLockReason && (
+                                                                    <p className="text-[8px] font-bold text-gray-400 text-center uppercase tracking-[0.12em] px-1">
+                                                                        {reviewLockReason}
+                                                                    </p>
+                                                                )}
+                                                            </div>
+                                                        );
+                                                    })()}
 
                                                     {/* Awaiting Payment Actions: Batalkan Pengajuan */}
                                                     {['AWAITING_PAYMENT', 'PENDING'].includes((kost.status || '').toUpperCase()) && !isExpiredBooking && (
