@@ -2,6 +2,38 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 485. Perbaikan Integritas Data Penghuni Aktif, Eliminasi Kebocoran 'AWAITING_PAYMENT', Normalisasi Deduplikasi Kamar, dan Koreksi Otomatisasi KostManager pada Kost Reguler (`adminService.ts`, `MitraTenantManagement.tsx`, `MitraDashboard.tsx`) (November 2026)
+- **Permintaan & Masukan Pengguna**:
+  1. Pengguna mempertanyakan mengapa akun mitra dengan kost reguler mandiri (Kost Ryuta, tidak terdaftar layanan KostManager) memunculkan penyewa hasil testing ("userbiasa1") dengan badge `⭐ KOSTMANAGER` dan kontrol otomatisasi Auto-Pilot / Hubungi Tim KM.
+  2. Pengguna menanyakan mengapa ada banyak penyewa di list Penghuni Aktif (4 kartu penyewa) dan apakah percobaan sewa sebelumnya yang tidak dibayar/dibatalkan ikut terdaftar sebagai penyewa aktif.
+  3. Terjadi ketidaksinkronan di mana badge sidebar Penghuni Aktif bernilai 2, sedangkan tab halaman Penghuni Aktif menampilkan 4 kartu.
+- **Implementasi Solusi**:
+  1. **Eliminasi Kebocoran Transaksi Belum Bayar (`AWAITING_PAYMENT`)**:
+     - Memperketat query pada `functions/public/adminService.ts` (`getResidentStatus`) dengan menambahkan `.neq('status', 'AWAITING_PAYMENT')` sehingga pesanan yang belum terbayar lunas tidak lagi masuk ke database penghuni aktif.
+     - Memperketat filter pada `functions/public/components/mitra/MitraTenantManagement.tsx` (`processedResidents`) untuk mengecualikan status `AWAITING_PAYMENT`.
+     - Melakukan pembersihan data pada database Supabase dengan memperbarui 2 record testing berstatus `AWAITING_PAYMENT` yang telah kedaluwarsa menjadi `CANCELLED`.
+  2. **Normalisasi Deduplikasi Kamar Fisik vs Kontrak Digital (`adminService.ts`)**:
+     - Memperbaiki helper normalisasi nama kamar (`normalizeRoomSlug = (name) => String(name || '').toLowerCase().trim().replace(/^kamar\s+/i, '')`).
+     - Mengeliminasi ketidakcocokan antara nama kamar kontrak `"Standard"` dan nama kamar fisik `"Kamar Standard"`, sehingga sistem tidak lagi menciptakan objek penghuni tiruan kedua (`offlineResidents`) yang menjadi penyebab duplikasi kartu.
+  3. **Koreksi Otoritas Layanan KostManager (`MitraTenantManagement.tsx`)**:
+     - Mengubah kondisi penentuan `isKostManager` dari sebelumnya:
+       `resident.isSurveyOccupant || Boolean(properties.find(p => p.id === resident.kostId)?.isManaged)`
+       menjadi:
+       `Boolean(properties.find(p => p.id === resident.kostId)?.is_managed || properties.find(p => p.id === resident.kostId)?.isManaged)`
+     - Memastikan kost reguler (`is_managed: false`) mempertahankan kendali penuh mitra dengan tombol aksi mandiri (`[TAGIH]` dan `[CHAT]`), serta meniadakan badge `⭐ KOSTMANAGER`, `[AUTO-PILOT MANAGED]`, dan `[HUBUNGI TIM KM]`.
+  4. **Resolusi Fallback Identitas Nama Penghuni (`MitraTenantManagement.tsx`)**:
+     - Menambahkan fallback pembacaan nama: `u.name || u.full_name || (r.metadata || {}).userName || (r.metadata || {}).tenantName || 'Penyewa'`.
+     - Mengatasi masalah RLS pembatasan profil antarpengguna sehingga penyewa sah tampil dengan nama asli `"USERBIASA1"`, bukan label generic `"PENYEWA"`.
+- **File Tersentuh**:
+  - `functions/public/adminService.ts`
+  - `functions/public/components/mitra/MitraTenantManagement.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Uji kueri database Supabase: Kost Ryuta kini bersih dan hanya menghasilkan 1 penghuni aktif sah (lunas Rp 1, kamar Standard, selesai 3 Jan 2027).
+  - Uji kompilasi frontend Vite (`npm run build`): Lulus 100% (2512 modul, 0 error).
+  - Verifikasi tampilan: Duplikasi lenyap, badge KostManager hilang, tombol aksi mandiri [TAGIH] dan [CHAT] aktif, serta badge sidebar (1) dan kartu list (1) kini 100% sinkron.
+
 ### 484. Full-Screen Mobile Conversation Mode & Unblocking Chat Typing Box from Mobile Bottom Navigation Bar (`MitraDashboard.tsx`, `ChatWindow.tsx`) (November 2026)
 - **Permintaan & Masukan Pengguna**:
   1. Pada tampilan seluler/mobile di Dashboard Mitra, kotak input pengetikan pesan (*typing box*) dan tombol kirim pada antarmuka chat terhalang dan tertutup oleh navigasi bawah web app (`BERANDA | KELOLA KOST | PESANAN | PENGHUNI AKTIF | PROFIL`).

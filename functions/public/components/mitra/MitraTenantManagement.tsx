@@ -123,7 +123,7 @@ const MitraTenantManagement: React.FC<MitraTenantManagementProps> = ({
         // Filter ketat: Calon penyewa berstatus PENDING (belum ACC/bayar), CANCELLED, atau REJECTED dilarang masuk database penghuni
         const confirmedResidents = residentStatus.filter(r => {
             const s = (r.status || '').toUpperCase();
-            if (['PENDING', 'CANCELLED', 'REJECTED'].includes(s)) return false;
+            if (['PENDING', 'CANCELLED', 'REJECTED', 'AWAITING_PAYMENT'].includes(s)) return false;
             return true;
         });
 
@@ -139,7 +139,7 @@ const MitraTenantManagement: React.FC<MitraTenantManagementProps> = ({
                 id: r.id,
                 uid: r.user_id,
                 profile: {
-                    name: u.name || u.full_name || 'Penyewa',
+                    name: u.name || u.full_name || (r.metadata || {}).userName || (r.metadata || {}).tenantName || 'Penyewa',
                     photo_url: u.photo_url,
                     phone: u.phone,
                     email: u.email,
@@ -339,7 +339,7 @@ const MitraTenantManagement: React.FC<MitraTenantManagementProps> = ({
                     filteredResidents.map((resident) => {
                         const daysLeft = getRemainingDays(resident.endDate);
                         const resKey = resident.id || resident.uid;
-                        const isKostManager = resident.isSurveyOccupant || Boolean(properties.find(p => p.id === resident.kostId)?.isManaged);
+                        const isKostManager = Boolean(properties.find(p => p.id === resident.kostId)?.is_managed || properties.find(p => p.id === resident.kostId)?.isManaged);
                         
                         return (
                             <div key={resKey} className="bg-white rounded-3xl overflow-hidden border border-gray-100 shadow-sm hover:shadow-md transition-all duration-300 mb-4 group">

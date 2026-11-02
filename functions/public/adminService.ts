@@ -653,7 +653,7 @@ export async function getResidentStatus(filters?: { ownerUid?: string; userId?: 
     }
     // Filter out unconfirmed / pending booking applications from resident database
     if (ownerUid || !userId) {
-        query = query.neq('status', 'PENDING').neq('status', 'CANCELLED').neq('status', 'REJECTED');
+        query = query.neq('status', 'PENDING').neq('status', 'CANCELLED').neq('status', 'REJECTED').neq('status', 'AWAITING_PAYMENT');
     }
     
     const { data: residents, error: resError } = await query.order('created_at', { ascending: false });
@@ -697,8 +697,9 @@ export async function getResidentStatus(filters?: { ownerUid?: string; userId?: 
     // 5. Ekstraksi Penghuni Offline / KostManager Survey (Jika tidak mencari spesifik userId penyewa lain)
     const offlineResidents: any[] = [];
     if (!userId) {
+        const normalizeRoomSlug = (name) => String(name || '').toLowerCase().trim().replace(/^kamar\s+/i, '');
         const occupiedRoomSet = new Set(
-            mappedData.map(r => `${r.kost_id}_${String(r.room_type || '').toLowerCase().trim()}`)
+            mappedData.map(r => `${r.kost_id}_${normalizeRoomSlug(r.room_type)}`)
         );
 
         const propsToCheck = propertiesForExtraction.length > 0 ? propertiesForExtraction : (propsRes.data || []);
@@ -710,7 +711,7 @@ export async function getResidentStatus(filters?: { ownerUid?: string; userId?: 
                 const isOccupied = hasExplicitTenantName || (p.is_managed === true && (rt.isAvailable === false || rt.status === 'Terisi'));
                 if (isOccupied) {
                     const cleanRoomName = rt.name ? (String(rt.name).trim().toLowerCase().startsWith('kamar') ? rt.name : `Kamar ${rt.name}`) : `Kamar ${rIdx + 1}`;
-                    const roomKey = `${p.id}_${cleanRoomName.toLowerCase().trim()}`;
+                    const roomKey = `${p.id}_${normalizeRoomSlug(cleanRoomName)}`;
                     
                     if (!occupiedRoomSet.has(roomKey)) {
                         const tenantName = (rt.residentName || rt.tenantName || rt.occupant_name || `Penghuni Kamar ${rt.name || rIdx + 1}`).trim();
