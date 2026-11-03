@@ -50,6 +50,17 @@ const FORMAT_DATE = (dateStr: any) => {
 
     return date.toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' });
 };
+const formatRentalPackageDisplay = (period?: string, duration?: number) => {
+    const p = (period || 'bulanan').toLowerCase().trim();
+    const d = duration && duration > 0 ? duration : 1;
+    if (p === 'harian') return `${d} Hari`;
+    if (p === 'mingguan') return `${d} Minggu`;
+    if (p === 'bulanan') return `${d} Bulan`;
+    if (p === '3bulanan') return '3 Bulan';
+    if (p === '6bulanan') return '6 Bulan';
+    if (p === 'tahunan') return d > 1 ? `${d} Tahun` : '1 Tahun';
+    return `${d} Bulan`;
+};
 
 const SkeletonLoader = () => (
     <div className="space-y-6 animate-pulse">
@@ -1217,7 +1228,7 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
                     // Only accept valid kost billing cycle keys.
                     period: (() => {
                         const raw = (combinedMeta.period || combinedMeta.periodLabel || prop?.period || 'bulanan').toLowerCase().trim();
-                        const validPeriods = ['bulanan', '3bulanan', '6bulanan', 'tahunan'];
+                        const validPeriods = ['harian', 'mingguan', 'bulanan', '3bulanan', '6bulanan', 'tahunan'];
                         return validPeriods.includes(raw) ? raw : 'bulanan';
                     })(),
                     moveInDate: r.start_date,
@@ -2846,7 +2857,7 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
                                             {isPaid && (
                                                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3 w-full">
                                                     {[
-                                                        { label: 'Durasi Sewa', value: `${kost.duration || 1} ${kost.period}`, subtext: 'Paket Sewa', icon: Clock, color: 'text-orange-500', bg: 'bg-orange-50' },
+                                                        { label: 'Durasi Sewa', value: formatRentalPackageDisplay(kost.period, kost.duration), subtext: 'Paket Sewa', icon: Clock, color: 'text-orange-500', bg: 'bg-orange-50' },
                                                         { label: 'Mulai Masuk', value: FORMAT_DATE(kost.moveInDate), subtext: 'Check-in', icon: FileText, color: 'text-blue-500', bg: 'bg-blue-50' },
                                                         { label: 'Selesai Sewa', value: FORMAT_DATE(kost.endDate), subtext: 'Jatuh Tempo', icon: Calendar, color: 'text-rose-500', bg: 'bg-rose-50' },
                                                         { label: 'Tagihan Pokok', value: FORMAT_CURRENCY(kost.totalPrice || 0), subtext: 'Lunas', icon: Receipt, color: 'text-emerald-500', bg: 'bg-emerald-50' }
@@ -2874,7 +2885,7 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
                                                         {[
                                                             {
                                                                 label: 'Paket Sewa',
-                                                                value: `${kost.duration || 1} ${kost.period || 'Bulan'}`,
+                                                                value: formatRentalPackageDisplay(kost.period, kost.duration),
                                                                 icon: Clock,
                                                             },
                                                             {

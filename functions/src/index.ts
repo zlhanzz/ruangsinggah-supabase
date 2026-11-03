@@ -2144,45 +2144,81 @@ export async function syncResidentStatus(trxId: string, options: { overrideMasaS
         }
     }
 
-    let newEnd: Date;
-    let startDate: string;
-
-    if (resident) {
-        newEnd = new Date(resident.endDate || resident.end_date || new Date());
-        startDate = resident.start_date || resident.startDate || new Date().toISOString().split('T')[0];
-    } else {
-        // [CREATE NEW] For first-time bookings
-        console.log(`SYNC_RESIDENT: Creating new resident status for first-time booking.`);
-        startDate = metadata.startDate || metadata.move_in_date || new Date().toISOString().split('T')[0];
-        newEnd = new Date(startDate);
-    }
-
-    const isManualExt = options.isManualExtension || metadata.isManualExtension;
+    const isExtension = trx.product_type === 'perpanjangan_sewa' || Boolean(metadata.extensionPeriod) || metadata.extensionType === 'manual_extension' || metadata.isManualExtension === true || options.isManualExtension === true;
     const now = new Date(metadata.simulated_date || new Date());
 
-    // [FIX v2] LEASE JUMP LOGIC: Jika masa sewa sudah expired, mulai perpanjangan dari hari ini (simulated_date).
-    // Tidak lagi melompat ke "awal bulan" dari nama tagihan, karena ini menyebabkan hari bonus
-    // (misal: lompat ke 1 Juli + 90 hari = 29 Sept, padahal hari ini 17 Juni = 104 hari tersisa, bukan 90).
-    if (isManualExt && newEnd < now) {
-        console.log(`SYNC_RESIDENT: Lease expired (end: ${newEnd.toISOString().split('T')[0]}, now: ${now.toISOString().split('T')[0]}). Starting extension from today.`);
-        newEnd = new Date(now);
-    }
+    let newEnd: Date;
+    let startDate: string;
+    let totalMonthsCalc = 1;
 
-    // CALCULATE DURATION
-    const masaSewaHari = options.overrideMasaSewaHari || Number(metadata.masa_sewa_hari || 0);
-    const durationMonths = Number(metadata.extensionPeriod || 0);
-    
-    if (masaSewaHari > 0) {
-      newEnd.setDate(newEnd.getDate() + masaSewaHari);
-    } else if (durationMonths > 0) {
-      newEnd.setMonth(newEnd.getMonth() + durationMonths);
+    if (isExtension) {
+        // [EXTENSION LIFECYCLE] Extend from existing end_date (or today if expired)
+        console.log(`SYNC_RESIDENT: [EXTENSION] Processing lease extension.`);
+        let baseDate = new Date(resident?.endDate || resident?.end_date || new Date());
+        
+        // LEASE JUMP LOGIC: Jika masa sewa sudah expired, mulai perpanjangan dari hari ini (simulated_date).
+        if (baseDate < now) {
+            console.log(`SYNC_RESIDENT: Lease expired (end: ${baseDate.toISOString().split('T')[0]}, now: ${now.toISOString().split('T')[0]}). Starting extension from today.`);
+            baseDate = new Date(now);
+        }
+        
+        newEnd = new Date(baseDate);
+        const masaSewaHari = options.overrideMasaSewaHari || Number(metadata.masa_sewa_hari || 0);
+        const durationMonths = Number(metadata.extensionPeriod || 0);
+
+        if (masaSewaHari > 0) {
+            newEnd.setDate(newEnd.getDate() + masaSewaHari);
+        } else if (durationMonths > 0) {
+            newEnd.setMonth(newEnd.getMonth() + durationMonths);
+        } else {
+            const p = (metadata.period || 'bulanan').toLowerCase();
+            if (p === 'harian') newEnd.setDate(newEnd.getDate() + 1);
+            else if (p === 'mingguan') newEnd.setDate(newEnd.getDate() + 7);
+            else if (p === 'bulanan') newEnd.setMonth(newEnd.getMonth() + 1);
+            else if (p === '3bulanan') newEnd.setMonth(newEnd.getMonth() + 3);
+            else if (p === '6bulanan') newEnd.setMonth(newEnd.getMonth() + 6);
+            else if (p === 'tahunan') newEnd.setFullYear(newEnd.getFullYear() + 1);
+            else newEnd.setMonth(newEnd.getMonth() + 1);
+        }
+
+        startDate = resident?.start_date || resident?.startDate || metadata.startDate || new Date().toISOString().split('T')[0];
+        const startDateObj = new Date(startDate);
+        const calculatedMonths = (newEnd.getFullYear() - startDateObj.getFullYear()) * 12 + (newEnd.getMonth() - startDateObj.getMonth());
+        totalMonthsCalc = Math.max(calculatedMonths, Number(resident?.total_months || 0) + 1);
     } else {
-      newEnd.setDate(newEnd.getDate() + 30);
-    }
+        // [INITIAL BOOKING / ACTIVATION LIFECYCLE]
+        // Lock strictly to the agreed booking dates without adding secondary bonus days
+        console.log(`SYNC_RESIDENT: [INITIAL BOOKING] Activating lease using agreed booking schedule.`);
+        startDate = metadata.startDate || metadata.move_in_date || resident?.start_date || resident?.startDate || new Date().toISOString().split('T')[0];
+        
+        if (metadata.endDate) {
+            newEnd = new Date(metadata.endDate);
+        } else if (resident?.end_date && resident.status === 'PENDING') {
+            newEnd = new Date(resident.end_date);
+        } else {
+            const d = new Date(startDate);
+            const p = (metadata.period || 'bulanan').toLowerCase();
+            if (p === 'harian') d.setDate(d.getDate() + (Number(metadata.advanceLimitDays) || 1));
+            else if (p === 'mingguan') d.setDate(d.getDate() + 7);
+            else if (p === 'bulanan') d.setMonth(d.getMonth() + 1);
+            else if (p === '3bulanan') d.setMonth(d.getMonth() + 3);
+            else if (p === '6bulanan') d.setMonth(d.getMonth() + 6);
+            else if (p === 'tahunan') d.setFullYear(d.getFullYear() + 1);
+            else d.setMonth(d.getMonth() + 1);
+            newEnd = d;
+        }
 
-    // [FIX] Calculate total_months from start_date to new end_date
-    const startDateObj = new Date(startDate);
-    const totalMonthsCalc = (newEnd.getFullYear() - startDateObj.getFullYear()) * 12 + (newEnd.getMonth() - startDateObj.getMonth());
+        const p = (metadata.period || 'bulanan').toLowerCase();
+        if (p === 'tahunan') totalMonthsCalc = 12;
+        else if (p === '6bulanan') totalMonthsCalc = 6;
+        else if (p === '3bulanan') totalMonthsCalc = 3;
+        else if (p === 'harian' || p === 'mingguan') totalMonthsCalc = 1;
+        else {
+            const startDateObj = new Date(startDate);
+            const monthsDiff = (newEnd.getFullYear() - startDateObj.getFullYear()) * 12 + (newEnd.getMonth() - startDateObj.getMonth());
+            totalMonthsCalc = Math.max(monthsDiff, 1);
+        }
+    }
 
     // [FIX] Build metadata to persist pricing and composition info.
     // IMPORTANT: basePrice must be PER-MONTH (divide total by extensionPeriod).

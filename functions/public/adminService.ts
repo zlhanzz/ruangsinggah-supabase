@@ -987,47 +987,105 @@ export async function syncResidentStatus(transactionId: string, metadataOverride
         // NEW SESSION DETECTION: Jika ada booking_session_id baru, kita abaikan riwayat lama
         const isNewSession = !isExtension && incomingSessionId && (!existing || (existing.metadata?.booking_session_id && existing.metadata?.booking_session_id !== incomingSessionId));
 
-        // Only extend if it's NOT a new session and it's an extension or has duration
-        let baseDateForExtension: Date | null = null;
-        if (existing && !isNewSession && (isExtension || (existing.end_date && durationInMonths > 0))) {
-            baseDateForExtension = parseDateSafely(existing.end_date);
-            console.log(`SYNC_RESIDENT: [DEBUG] EXTENDING from existing end_date: ${existing.end_date}`);
-        } else if (existing && !isNewSession) {
-            // Preserve current dates for facility payments
-            baseDateForExtension = parseDateSafely(existing.end_date);
-            console.log(`SYNC_RESIDENT: [DEBUG] Facility payment. Preserving existing dates.`);
-            durationInMonths = 0;
-        } else {
-            // FRESH START (New Session or No Existing Record)
-            baseDateForExtension = parseDateSafely(startDateRaw);
-            console.log(`SYNC_RESIDENT: [DEBUG] STARTING FRESH from: ${startDateRaw}`);
-        }
-
-        if (!baseDateForExtension) {
-            baseDateForExtension = getCurrentDate();
-            console.warn("SYNC_RESIDENT: [DEBUG] Fallback to today (via TimeSimulator) for base date.");
-        }
-
-        const newEndDate = new Date(baseDateForExtension);
-        console.log(`SYNC_RESIDENT: [DEBUG] Before Add Month: ${newEndDate.toISOString()} + ${durationInMonths} months`);
-        newEndDate.setMonth(newEndDate.getMonth() + durationInMonths);
-        console.log(`SYNC_RESIDENT: [DEBUG] After Add Month: ${newEndDate.toISOString()}`);
-
         const parseDateISO = (d: any) => {
             const date = parseDateSafely(d);
             return date ? date.toISOString().split('T')[0] : new Date().toISOString().split('T')[0]; // ALWAYS fallback to today
         };
 
-        const startDate = (existing?.start_date && !isNewSession) ? existing.start_date : parseDateISO(startDateRaw);
-        const currentTotalMonths = isNewSession ? 0 : Number(existing?.total_months || 0);
-        const newTotalMonths = currentTotalMonths + durationInMonths;
-        const endDate = parseDateISO(newEndDate);
+        const formatRentalPackage = (periodStr?: string, dur?: number) => {
+            const p = (periodStr || 'bulanan').toLowerCase().trim();
+            const d = dur && dur > 0 ? dur : 1;
+            if (p === 'harian') return `${d} Hari`;
+            if (p === 'mingguan') return `${d} Minggu`;
+            if (p === 'bulanan') return `${d} Bulan`;
+            if (p === '3bulanan') return '3 Bulan';
+            if (p === '6bulanan') return '6 Bulan';
+            if (p === 'tahunan') return d > 1 ? `${d} Tahun` : '1 Tahun';
+            return `${d} Bulan`;
+        };
 
-        console.log(`SYNC_RESIDENT: [DEBUG] FINAL CALCULATION: Start=${startDate}, End=${endDate} (+${durationInMonths} months)`);
+        let startDate = '';
+        let endDate = '';
+        let newTotalMonths = 1;
+        let durationLabel = '';
 
-        const durationLabel = durationInMonths >= 12 && durationInMonths % 12 === 0 
-            ? `${durationInMonths / 12} Tahun` 
-            : `${durationInMonths} Bulan`;
+        if (isFacilityOnly) {
+            // FACILITY ONLY: Preserve current dates & months
+            console.log(`SYNC_RESIDENT: [DEBUG] Facility bill payment. Preserving existing dates & duration.`);
+            startDate = (existing?.start_date && !isNewSession) ? existing.start_date : parseDateISO(startDateRaw);
+            endDate = existing?.end_date ? parseDateISO(existing.end_date) : parseDateISO(meta.endDate || startDateRaw);
+            newTotalMonths = isNewSession ? 1 : Number(existing?.total_months || 1);
+            durationLabel = existing?.metadata?.paketSewa || formatRentalPackage(meta.period, durationInMonths);
+        } else if (isExtension) {
+            // EXTENSION: Extend from existing end_date (or today if expired)
+            console.log(`SYNC_RESIDENT: [DEBUG] Extension payment (+${durationInMonths} bulan). Extending from current lease.`);
+            let baseDateForExtension = parseDateSafely(existing?.end_date);
+            const now = getCurrentDate();
+            if (baseDateForExtension && baseDateForExtension < now) {
+                console.log(`SYNC_RESIDENT: [DEBUG] Lease expired. Starting extension from today.`);
+                baseDateForExtension = now;
+            }
+            if (!baseDateForExtension) {
+                baseDateForExtension = now;
+            }
+
+            const newEndDate = new Date(baseDateForExtension);
+            const masaSewaHari = Number(meta.masa_sewa_hari || 0);
+            if (masaSewaHari > 0) {
+                newEndDate.setDate(newEndDate.getDate() + masaSewaHari);
+            } else if (durationInMonths > 0) {
+                newEndDate.setMonth(newEndDate.getMonth() + durationInMonths);
+            } else {
+                const p = (meta.period || 'bulanan').toLowerCase();
+                if (p === 'harian') newEndDate.setDate(newEndDate.getDate() + 1);
+                else if (p === 'mingguan') newEndDate.setDate(newEndDate.getDate() + 7);
+                else if (p === 'bulanan') newEndDate.setMonth(newEndDate.getMonth() + 1);
+                else if (p === '3bulanan') newEndDate.setMonth(newEndDate.getMonth() + 3);
+                else if (p === '6bulanan') newEndDate.setMonth(newEndDate.getMonth() + 6);
+                else if (p === 'tahunan') newEndDate.setFullYear(newEndDate.getFullYear() + 1);
+                else newEndDate.setMonth(newEndDate.getMonth() + 1);
+            }
+
+            startDate = (existing?.start_date && !isNewSession) ? existing.start_date : parseDateISO(startDateRaw);
+            endDate = parseDateISO(newEndDate);
+            const currentTotalMonths = isNewSession ? 0 : Number(existing?.total_months || 0);
+            newTotalMonths = currentTotalMonths + (durationInMonths > 0 ? durationInMonths : 1);
+            durationLabel = formatRentalPackage(meta.period, durationInMonths);
+        } else {
+            // INITIAL BOOKING / ACTIVATION (NOT AN EXTENSION):
+            // Lock strictly to the agreed booking dates without adding secondary bonus days
+            console.log(`SYNC_RESIDENT: [DEBUG] Initial booking activation. Using agreed booking dates.`);
+            startDate = parseDateISO(meta.startDate || meta.move_in_date || startDateRaw);
+            
+            let computedEnd = meta.endDate ? parseDateISO(meta.endDate) : null;
+            if (!computedEnd && existing?.end_date && existing.status === 'PENDING') {
+                computedEnd = parseDateISO(existing.end_date);
+            }
+            if (!computedEnd) {
+                const d = new Date(startDate);
+                const p = (meta.period || 'bulanan').toLowerCase();
+                if (p === 'harian') d.setDate(d.getDate() + (Number(meta.advanceLimitDays) || 1));
+                else if (p === 'mingguan') d.setDate(d.getDate() + 7);
+                else if (p === 'bulanan') d.setMonth(d.getMonth() + 1);
+                else if (p === '3bulanan') d.setMonth(d.getMonth() + 3);
+                else if (p === '6bulanan') d.setMonth(d.getMonth() + 6);
+                else if (p === 'tahunan') d.setFullYear(d.getFullYear() + 1);
+                else d.setMonth(d.getMonth() + (durationInMonths || 1));
+                computedEnd = parseDateISO(d);
+            }
+            endDate = computedEnd;
+
+            const p = (meta.period || 'bulanan').toLowerCase();
+            if (p === 'tahunan') newTotalMonths = 12;
+            else if (p === '6bulanan') newTotalMonths = 6;
+            else if (p === '3bulanan') newTotalMonths = 3;
+            else if (p === 'harian' || p === 'mingguan') newTotalMonths = 1;
+            else newTotalMonths = durationInMonths > 0 ? durationInMonths : 1;
+
+            durationLabel = formatRentalPackage(meta.period, newTotalMonths);
+        }
+
+        console.log(`SYNC_RESIDENT: [DEBUG] FINAL CALCULATION: Start=${startDate}, End=${endDate}, total_months=${newTotalMonths}, label=${durationLabel}`);
 
         // 5. Save computed data back to transaction for record keeping
         await supabase

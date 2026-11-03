@@ -11893,3 +11893,104 @@ ooms, sehingga tidak muncul alarm palsu di konsol browser mitra.
 - **Verifikasi**:
   - Build Vite frontend `npm run build` di `functions/public/` sukses 100% dengan 0 error dalam 31.78s (✓ 2512 modules transformed).
   - Push otomatis ke branch `bukan-productions`.
+
+
+### 277. Mode Obrolan Layar Penuh Mobile & Eliminasi Halangan Typing Box dari Bottom Navigation Bar (`MitraDashboard.tsx` & `ChatWindow.tsx`) (November 2026)
+- **Permintaan & Masalah**:
+  1. Pada tampilan mobile, saat mitra membuka percakapan dengan penyewa, input text / typing box terhalang oleh Bottom Navigation Bar dashboard mitra (`Beranda, Kelola Kost, Pesanan, Penghuni Aktif, Profil`).
+  2. Ruang percakapan menjadi sangat sempit dan menyulitkan pengetikan pesan.
+- **Implementasi & Solusi**:
+  1. **Mode Full-Screen Mobile Chat**:
+     - Pada `MitraDashboard.tsx`, saat percakapan aktif terbuka pada viewport mobile (`isMobile && activeChat`), Bottom Navigation Bar disembunyikan secara otomatis.
+     - Wadah chat beralih ke mode fixed full-screen viewport (`h-[100dvh]`) sehingga seluruh area layar dialokasikan untuk percakapan.
+  2. **Tombol Kembali Intuitif**:
+     - Tombol panah kembali (`<ChevronLeft />`) di header chat otomatis menutup obrolan dan mengembalikan tampilan daftar percakapan serta Bottom Navigation Bar seperti semula.
+  3. **Penyesuaian Padding Input Box**:
+     - Memastikan input bar memiliki padding bawah yang aman dari bilah navigasi gestur sistem operasi mobile.
+- **File Tersentuh**:
+  - `functions/public/pages/MitraDashboard.tsx`
+  - `functions/public/components/ChatWindow.tsx`
+  - `functions/PROGRESS.md`
+- **Verifikasi**:
+  - Build Vite sukses 100% dengan 0 error.
+
+### 278. Integritas Data Penghuni Aktif & Eliminasi Kebocoran Booking Belum Bayar pada Dashboard Mitra (`MitraDashboard.tsx`) (November 2026)
+- **Permintaan & Masalah**:
+  1. Pada tab "Penghuni Aktif" dashboard mitra, pesanan yang belum dibayar / dibatalkan (`AWAITING_PAYMENT`) ikut muncul sebagai penghuni aktif.
+  2. Kost biasa milik mitra yang tidak berlangganan KostManager menampilkan badge KostManager secara keliru pada kartu penyewa `userbiasa1`.
+  3. Jumlah penghuni aktif terduplikasi dan nomor kamar tidak terdeduplikasi dengan benar.
+- **Implementasi & Solusi**:
+  1. **Eliminasi Kebocoran Pesanan Belum Bayar**:
+     - Memperketat filter pada tab Penghuni Aktif hanya untuk transaksi dengan status `PAID` atau `resident_status` berstatus `ACTIVE`.
+     - Pesanan berstatus `AWAITING_PAYMENT`, `PENDING_APPROVAL`, atau `CANCELLED` tidak pernah dimasukkan ke dalam daftar penghuni aktif.
+  2. **Koreksi Badge KostManager**:
+     - Menghapus badge KostManager palsu jika properti induk bertipe kost reguler (`is_managed !== true`).
+  3. **Deduplikasi Kamar & Sinkronisasi Badge Counter Sidebar**:
+     - Menormalkan slug kategori kamar dan menyinkronkan badge counter pada sidebar navigasi mitra agar selalu akurat dengan jumlah penghuni riil.
+- **File Tersentuh**:
+  - `functions/public/pages/MitraDashboard.tsx`
+  - `functions/PROGRESS.md`
+- **Verifikasi**:
+  - Build Vite sukses 100% dengan 0 error.
+
+### 279. Matriks Kelayakan Ulasan & Rating Kost Berdasarkan Serah Terima Fisik Kunci & Durasi Sewa (`MyKost.tsx`) (November 2026)
+- **Permintaan & Masalah**:
+  1. Tombol ulasan & rating kost sebelumnya dapat diakses segera setelah booking dibayar, padahal penghuni belum melakukan konfirmasi terima kunci / tinggal di kost.
+  2. Pengguna meminta aturan kelayakan ulasan:
+     - Tidak boleh memberi ulasan jika belum konfirmasi masuk / terima kunci fisik.
+     - Untuk sewa bulanan ke bawah (harian/mingguan/1 bulan), tombol ulasan baru bisa diakses saat masa sewa akan berakhir (H-7).
+     - Untuk sewa di atas 1 bulan (jangka panjang: 3 bulan, 6 bulan, 1 tahun), ulasan dapat diakses setelah tinggal minimal 30 hari atau saat masa sewa mendekati akhir.
+     - Setiap penyewaan hanya dapat memberi ulasan 1 kali.
+- **Implementasi & Solusi**:
+  1. **Penerapan Matriks Kelayakan Ulasan**:
+     - Menambahkan validasi `isCheckedIn` (`actual_checkin_at || handover_confirmed`).
+     - Menghitung hari berjalan (`daysElapsed`) dan total masa sewa (`totalLeaseDays`).
+     - Mengunci tombol rating dengan peringatan informatif jika syarat belum terpenuhi.
+- **File Tersentuh**:
+  - `functions/public/pages/MyKost.tsx`
+  - `functions/PROGRESS.md`
+- **Verifikasi**:
+  - Build Vite sukses 100% dengan 0 error.
+
+### 280. Perbaikan Akurasi Durasi Sewa & Eliminasi Bug 60 Hari Menjadi Tepat 30 Hari / 1 Bulan (`index.ts`, `adminService.ts`, `MyKost.tsx`) (November 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna melakukan simulasi sewa kamar Kost Ryuta selama 1 bulan dan memilih paket 1 bulan (check-in 04 November 2026).
+  2. Pada halaman `MyKost.tsx`, durasi sewa yang muncul malah 60 hari (04 November 2026 s.d. 03 Januari 2027), bukan 1 bulan / 30 hari (04 November 2026 s.d. 04 Desember 2026).
+  3. Terdapat inkonsistensi label `"1 bulanan"` dan durasi hari. Pengguna meminta sistem menyelaraskan durasi sewa secara akurat untuk setiap paket sewa (`harian`, `mingguan`, `bulanan`, `3bulanan`, `6bulanan`, `tahunan`).
+- **Investigasi & Analisis Akar Masalah**:
+  1. Saat pengajuan sewa dibuat (`createBookingRequest` di `userService.ts`), sistem sudah menghitung tanggal dengan benar: `start_date: 2026-11-04`, `end_date: 2026-12-04` (status `PENDING`).
+  2. Namun, saat pembayaran dikonfirmasi (`PAID`), fungsi `syncResidentStatus` (di backend webhook `functions/src/index.ts` dan frontend `functions/public/adminService.ts`) salah mengasumsikan keberadaan record pending tersebut sebagai "sewa aktif yang sedang diperpanjang" (*extension*).
+  3. Backend menambahkan 30 hari sekunder (`newEnd.setDate(newEnd.getDate() + 30)`), dan frontend menambahkan 1 bulan ekstra (`setMonth(+1)`), sehingga tanggal akhir melompat dari 04 Desember 2026 menjadi 03 Januari 2027 (60 hari / 2 bulan).
+- **Implementasi & Solusi**:
+  1. **Pemisahan Tegas Siklus Booking Baru vs. Perpanjangan Sewa (`functions/src/index.ts`)**:
+     - Jika transaksi bertipe `kost_booking` atau `!isExtension`: sistem mengunci tanggal mulai dan tanggal selesai sesuai nilai yang disepakati saat pemesanan (`metadata.startDate` s.d. `metadata.endDate`), tanpa penambahan hari sekunder.
+     - Jika transaksi bertipe `perpanjangan_sewa` atau `isExtension`: barulah sistem memperpanjang tanggal dari `end_date` yang ada.
+  2. **Koreksi Sinkronisasi Frontend (`functions/public/adminService.ts`)**:
+     - Memperbaiki percabangan agar aktivasi booking baru tidak memperpanjang `existing.end_date`.
+     - Menghitung `total_months` secara presisi sesuai paket sewa (`harian/mingguan`: 1, `bulanan`: durasi, `3bulanan`: 3, `6bulanan`: 6, `tahunan`: 12).
+  3. **Standardisasi Tipografi & Sanitasi Paket Sewa (`functions/public/pages/MyKost.tsx`)**:
+     - Menambahkan fungsi pemformat profesional `formatRentalPackageDisplay(period, duration)` yang mengubah slug mentah menjadi format baku Bahasa Indonesia: `"1 Bulan"`, `"3 Bulan"`, `"6 Bulan"`, `"1 Tahun"`, `"1 Minggu"`, `"1 Hari"`.
+     - Memperluas array `validPeriods` agar mencakup `'harian'` dan `'mingguan'`.
+  4. **Normalisasi Data Uji Coba Penyewa `userbiasa1` di Supabase**:
+     - Memperbarui record `resident_status` ID `a15ff468-82ad-4983-887c-e3084e793060`:
+       - `start_date`: `'2026-11-04'`
+       - `end_date`: `'2026-12-04'` (tepat 30 hari / 1 bulan)
+       - `total_months`: `1`
+       - `metadata.paketSewa`: `'1 Bulan'`
+- **File Tersentuh**:
+  - `functions/src/index.ts`
+  - `functions/public/adminService.ts`
+  - `functions/public/pages/MyKost.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Build backend `tsc` (`functions/`): Exit code 0, 0 error.
+  - Build frontend Vite (`functions/public/`): Exit code 0, 0 error (✓ 2512 modules transformed).
+  - Verifikasi matriks sewa:
+    - Harian: 1 hari
+    - Mingguan: 7 hari
+    - Bulanan: 30 hari
+    - 3 Bulanan: 92 hari
+    - 6 Bulanan: 181 hari
+    - Tahunan: 365 hari
+  - Data Kost Ryuta penyewa `userbiasa1` terverifikasi di Supabase: `2026-11-04` s.d. `2026-12-04` (30 hari / 1 bulan).
