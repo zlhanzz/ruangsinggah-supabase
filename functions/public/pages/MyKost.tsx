@@ -391,13 +391,27 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
     };
 
     const handleConfirmTenantCheckIn = async (kostItem: any) => {
-        if (!window.confirm('Konfirmasi bahwa Anda sudah tiba di kost dan telah menerima kunci kamar fisik dari pemilik/penjaga?')) return;
+        const kMeta = kostItem.metadata || {};
+        const plannedStart = kostItem.moveInDate || kMeta.startDate;
+        const nowObj = getCurrentDate();
+        const todayStr = nowObj.toISOString().split('T')[0];
+        const isEarly = Boolean(plannedStart && todayStr < plannedStart);
+
+        let confirmMsg = 'Konfirmasi bahwa Anda sudah tiba di kost dan telah menerima kunci kamar fisik dari pemilik/penjaga?';
+        if (isEarly) {
+            confirmMsg = `Perhatian: Jadwal masuk rencana Anda adalah ${FORMAT_DATE(plannedStart)}. Konfirmasi serah terima kunci hari ini (${FORMAT_DATE(todayStr)}) akan otomatis memajukan masa sewa Anda mulai HARI INI dan mempercepat jatuh tempo sewa/perpanjangan berikutnya secara proporsional.\n\nApakah Anda sudah menerima kunci fisik dan ingin memulai masa sewa hari ini?`;
+        }
+        if (!window.confirm(confirmMsg)) return;
         try {
             setIsConfirmingCheckIn(true);
             const targetId = kostItem.resident_status_id || kostItem.id;
             const res = await confirmCheckIn(targetId, 'tenant', 'Dikonfirmasi langsung oleh penyewa via aplikasi');
             if (res.success) {
-                alert('Selamat! Status hunian Anda kini telah aktif. Selamat menempati kamar baru Anda!');
+                if ((res as any).isEarly) {
+                    alert(`Selamat! Anda telah resmi menempati kamar mulai hari ini (${FORMAT_DATE((res as any).newStartDate)}). Tanggal selesai sewa dan jatuh tempo berikutnya telah otomatis disesuaikan menjadi ${FORMAT_DATE((res as any).newEndDate)}.`);
+                } else {
+                    alert('Selamat! Status hunian Anda kini telah aktif. Selamat menempati kamar baru Anda!');
+                }
                 await fetchMyKosts();
             } else {
                 alert('Gagal konfirmasi check-in: ' + (res.error || 'Terjadi kesalahan'));
@@ -2782,12 +2796,21 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
                                                                     Menunggu ACC Masuk Tgl {FORMAT_DATE(kMeta.early_checkin_proposed_date)}
                                                                 </span>
                                                             ) : (
-                                                                <button
-                                                                    onClick={() => handleOpenEarlyCheckInModal(kost)}
-                                                                    className="px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-black uppercase tracking-wider transition-all shadow-sm active:scale-95 shrink-0 cursor-pointer flex items-center gap-1.5"
-                                                                >
-                                                                    <Zap className="w-3.5 h-3.5" /> Masuk Lebih Cepat?
-                                                                </button>
+                                                                <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap shrink-0">
+                                                                    <button
+                                                                        onClick={() => handleConfirmTenantCheckIn(kost)}
+                                                                        disabled={isConfirmingCheckIn}
+                                                                        className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-black uppercase tracking-wider transition-all shadow-sm active:scale-95 shrink-0 cursor-pointer flex items-center gap-1.5"
+                                                                    >
+                                                                        <CheckCircle2 className="w-3.5 h-3.5" /> Sudah Tiba & Terima Kunci
+                                                                    </button>
+                                                                    <button
+                                                                        onClick={() => handleOpenEarlyCheckInModal(kost)}
+                                                                        className="px-3 py-2 rounded-xl bg-blue-100 hover:bg-blue-200 text-blue-800 text-[10px] font-black uppercase tracking-wider transition-all shadow-sm active:scale-95 shrink-0 cursor-pointer flex items-center gap-1.5"
+                                                                    >
+                                                                        <Zap className="w-3.5 h-3.5" /> Jadwalkan Lebih Cepat
+                                                                    </button>
+                                                                </div>
                                                             )}
                                                         </div>
                                                     );

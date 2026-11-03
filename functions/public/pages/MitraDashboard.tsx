@@ -891,13 +891,32 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
     };
 
     const handleOwnerConfirmHandover = async (booking: any) => {
-        if (!window.confirm(`Konfirmasi bahwa Anda telah menyerahkan kunci kamar fisik kepada calon penghuni (${booking.user?.name || 'Penghuni'})?`)) return;
+        const bMeta = booking.metadata || {};
+        const plannedStart = booking.start_date || bMeta.startDate;
+        const nowObj = getCurrentDate();
+        const todayStr = nowObj.toISOString().split('T')[0];
+        const isEarly = Boolean(plannedStart && todayStr < plannedStart);
+
+        const formatD = (dStr: string) => {
+            const d = new Date(dStr);
+            return isNaN(d.getTime()) ? dStr : d.toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' });
+        };
+
+        let confirmMsg = `Konfirmasi bahwa Anda telah menyerahkan kunci kamar fisik kepada calon penghuni (${booking.user?.name || 'Penghuni'})?`;
+        if (isEarly) {
+            confirmMsg = `Perhatian: Calon penghuni dijadwalkan masuk tanggal ${formatD(plannedStart)}. Menyerahkan kunci hari ini (${formatD(todayStr)}) akan otomatis memajukan masa sewa penyewa mulai hari ini dan mempercepat jatuh tempo sewa/perpanjangan berikutnya secara proporsional.\n\nApakah Anda yakin ingin menyerahkan kunci dan mengaktifkan sewa hari ini?`;
+        }
+        if (!window.confirm(confirmMsg)) return;
         try {
             setLoading(true);
             const targetId = booking.resident_status_id || booking.id;
             const res = await confirmCheckIn(targetId, 'owner', 'Kunci diserahkan langsung oleh pemilik kost');
             if (res.success) {
-                alert('Serah terima kunci kamar berhasil dicatat. Status sewa kini aktif.');
+                if ((res as any).isEarly) {
+                    alert(`Serah terima kunci kamar berhasil dicatat! Masa sewa penyewa telah resmi dimajukan menjadi ${formatD((res as any).newStartDate)} s/d ${formatD((res as any).newEndDate)}.`);
+                } else {
+                    alert('Serah terima kunci kamar berhasil dicatat. Status sewa kini aktif.');
+                }
                 await loadData();
             } else {
                 alert('Gagal serah terima: ' + (res.error || 'Terjadi kesalahan'));

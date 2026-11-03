@@ -11994,3 +11994,39 @@ ooms, sehingga tidak muncul alarm palsu di konsol browser mitra.
     - 6 Bulanan: 181 hari
     - Tahunan: 365 hari
   - Data Kost Ryuta penyewa `userbiasa1` terverifikasi di Supabase: `2026-11-04` s.d. `2026-12-04` (30 hari / 1 bulan).
+
+
+### 281. Penyesuaian Otomatis Masa Sewa saat Serah Terima Kunci Lebih Cepat (Early Check-in & Dynamic Lease Anchoring) (`userService.ts`, `MyKost.tsx`, `MitraDashboard.tsx`) (November 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna meminta kepastian sistem: Jika terjadi situasi menghuni lebih cepat dari tanggal rencana masuk dan serah terima kunci dilakukan lebih awal, proses perhitungan countdown masa sewa harus langsung berjalan hari itu juga, dan tanggal akhir sewa otomatis menyesuaikan maju sesuai tanggal real masuk.
+  2. Artinya: jika masuk kost dimajukan, maka masa berakhirnya sewa dan jatuh tempo perpanjangan berikutnya juga otomatis datang lebih cepat secara proporsional agar tidak timbul celah hari sewa gratis (*unbilled stay gap*).
+- **Implementasi & Solusi**:
+  1. **Logika Dynamic Lease Anchoring pada `confirmCheckIn` (`userService.ts`)**:
+     - Membandingkan tanggal hari ini (`todayStr` via `getCurrentDate()`) dengan tanggal rencana masuk (`plannedStartDate`).
+     - Jika serah terima kunci terjadi lebih cepat (`todayStr < plannedStartDate`):
+       - Sistem otomatis menetapkan `start_date` menjadi tanggal hari ini (`todayStr`).
+       - Sistem menghitung ulang `end_date` baru secara otomatis berdasarkan durasi paket sewa yang dipilih (`harian`, `mingguan`, `bulanan`, `3bulanan`, `6bulanan`, `tahunan`).
+       - Menyimpan riwayat audit: `original_planned_start_date`, `original_planned_end_date`, `early_checkin_effective: true`, dan `early_checkin_adjusted_at: nowIso`.
+       - Menyinkronkan tanggal baru ke tabel `resident_status` dan `transactions`.
+  2. **Presisi Kalender pada `approveEarlyCheckIn` (`userService.ts`)**:
+     - Menggunakan kalkulator paket kalender resmi agar penyesuaian tanggal akhir selalu konsisten dengan paket durasi sewa.
+  3. **Transparansi UX Konfirmasi Terima Kunci Penyewa (`MyKost.tsx`)**:
+     - Menambahkan tombol "Sudah Tiba & Terima Kunci" langsung pada banner status *Upcoming Stay*.
+     - Dialog konfirmasi memberikan edukasi transparan: memberitahukan penyewa bahwa konfirmasi serah terima kunci hari ini akan resmi memulai masa sewa hari ini dan memajukan tanggal jatuh tempo sewa berikutnya.
+     - Progress bar langsung beralih ke mode **"Masa Sewa Berjalan (Hari ke-0 dari N Hari)"** tanpa jeda.
+  4. **Transparansi Dialog Serah Terima Kunci Pemilik (`MitraDashboard.tsx`)**:
+     - Jika pemilik kost mengonfirmasi serah terima kunci lebih awal pada tab pesanan, sistem menampilkan notifikasi transparan bahwa masa sewa penyewa dan jatuh tempo perpanjangan akan dimajukan secara otomatis.
+- **File Tersentuh**:
+  - `functions/public/userService.ts`
+  - `functions/public/pages/MyKost.tsx`
+  - `functions/public/pages/MitraDashboard.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Uji simulasi logika:
+    - Bulanan: Rencana 10 Nov $\rightarrow$ Masuk 04 Nov $\rightarrow$ Baru: 04 Nov s.d. 04 Des (tepat 30 hari).
+    - 3 Bulanan: Rencana 10 Nov $\rightarrow$ Masuk 04 Nov $\rightarrow$ Baru: 04 Nov s.d. 04 Feb (tepat 92 hari).
+    - Mingguan: Rencana 10 Nov $\rightarrow$ Masuk 04 Nov $\rightarrow$ Baru: 04 Nov s.d. 11 Nov (tepat 7 hari).
+    - Harian: Rencana 10 Nov $\rightarrow$ Masuk 04 Nov $\rightarrow$ Baru: 04 Nov s.d. 05 Nov (tepat 1 hari).
+  - Backend `tsc` build: Exit code 0, 0 error.
+  - Frontend Vite build: Exit code 0, 0 error (✓ 2512 modules transformed).

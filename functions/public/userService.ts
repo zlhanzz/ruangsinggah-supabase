@@ -2148,16 +2148,68 @@ export async function confirmCheckIn(
   targetId: string, 
   role: 'tenant' | 'owner' | 'system' = 'tenant', 
   notes: string = ''
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: boolean; isEarly?: boolean; newStartDate?: string; newEndDate?: string; error?: string }> {
   try {
-    const nowIso = new Date().toISOString();
+    const now = getCurrentDate();
+    const nowIso = now.toISOString();
+    const todayStr = nowIso.split('T')[0];
     
-    // 1. Coba perbarui di tabel resident_status
+    // 1. Ambil data resident_status & transactions
     const { data: resRecord } = await supabase
       .from('resident_status')
       .select('id, metadata, status, start_date, end_date')
       .or(`id.eq.${targetId},last_transaction_id.eq.${targetId}`)
       .maybeSingle();
+
+    const { data: trxRecord } = await supabase
+      .from('transactions')
+      .select('id, metadata, resident_status_id')
+      .or(`id.eq.${targetId},resident_status_id.eq.${targetId}`)
+      .maybeSingle();
+
+    const plannedStartDate = resRecord?.start_date || trxRecord?.metadata?.startDate;
+    const plannedEndDate = resRecord?.end_date || trxRecord?.metadata?.endDate;
+
+    const isEarlyCheckIn = Boolean(plannedStartDate && todayStr < plannedStartDate);
+    let finalStartDate = plannedStartDate || todayStr;
+    let finalEndDate = plannedEndDate || todayStr;
+
+    if (isEarlyCheckIn) {
+      console.log(`[userService] Early check-in detected! Planned: ${plannedStartDate}, Real check-in: ${todayStr}. Adjusting lease cycle forward.`);
+      finalStartDate = todayStr;
+      const combinedMeta = { ...(resRecord?.metadata || {}), ...(trxRecord?.metadata || {}) };
+      const period = (combinedMeta.period || combinedMeta.periodLabel || 'bulanan').toLowerCase().trim();
+      const d = new Date(todayStr);
+
+      if (period === 'harian') {
+        const days = Number(combinedMeta.advanceLimitDays || 1);
+        d.setDate(d.getDate() + Math.max(1, days));
+      } else if (period === 'mingguan') {
+        d.setDate(d.getDate() + 7);
+      } else if (period === 'bulanan') {
+        d.setMonth(d.getMonth() + 1);
+      } else if (period === '3bulanan') {
+        d.setMonth(d.getMonth() + 3);
+      } else if (period === '6bulanan') {
+        d.setMonth(d.getMonth() + 6);
+      } else if (period === 'tahunan') {
+        d.setFullYear(d.getFullYear() + 1);
+      } else {
+        if (plannedStartDate && plannedEndDate) {
+          const oldStart = new Date(plannedStartDate);
+          const oldEnd = new Date(plannedEndDate);
+          const diffDays = Math.round((oldEnd.getTime() - oldStart.getTime()) / (1000 * 60 * 60 * 24));
+          d.setDate(d.getDate() + Math.max(1, diffDays));
+        } else {
+          d.setMonth(d.getMonth() + 1);
+        }
+      }
+      finalEndDate = d.toISOString().split('T')[0];
+    }
+
+    const formatOpts: Intl.DateTimeFormatOptions = { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' };
+    const formattedStart = new Date(finalStartDate).toLocaleDateString('id-ID', formatOpts);
+    const formattedEnd = new Date(finalEndDate).toLocaleDateString('id-ID', formatOpts);
 
     if (resRecord) {
       const currentMeta = resRecord.metadata || {};
@@ -2166,25 +2218,32 @@ export async function confirmCheckIn(
         actual_checkin_at: nowIso,
         handover_confirmed: true,
         checked_in_by: role,
-        checkin_notes: notes || currentMeta.checkin_notes || null
+        checkin_notes: notes || currentMeta.checkin_notes || null,
+        startDate: finalStartDate,
+        endDate: finalEndDate,
+        formattedStartDate: formattedStart,
+        formattedEndDate: formattedEnd,
+        leaseStart: finalStartDate,
+        leaseEnd: finalEndDate,
+        ...(isEarlyCheckIn ? {
+          early_checkin_effective: true,
+          early_checkin_adjusted_at: nowIso,
+          original_planned_start_date: plannedStartDate,
+          original_planned_end_date: plannedEndDate
+        } : {})
       };
 
       await supabase
         .from('resident_status')
         .update({
           status: 'ACTIVE',
+          start_date: finalStartDate,
+          end_date: finalEndDate,
           metadata: updatedMeta,
           updated_at: nowIso
         })
         .eq('id', resRecord.id);
     }
-
-    // 2. Coba perbarui di tabel transactions (jika targetId adalah transaksi booking)
-    const { data: trxRecord } = await supabase
-      .from('transactions')
-      .select('id, metadata, resident_status_id')
-      .or(`id.eq.${targetId},resident_status_id.eq.${targetId}`)
-      .maybeSingle();
 
     if (trxRecord) {
       const tMeta = trxRecord.metadata || {};
@@ -2193,7 +2252,19 @@ export async function confirmCheckIn(
         actual_checkin_at: nowIso,
         handover_confirmed: true,
         checked_in_by: role,
-        checkin_notes: notes || tMeta.checkin_notes || null
+        checkin_notes: notes || tMeta.checkin_notes || null,
+        startDate: finalStartDate,
+        endDate: finalEndDate,
+        formattedStartDate: formattedStart,
+        formattedEndDate: formattedEnd,
+        leaseStart: finalStartDate,
+        leaseEnd: finalEndDate,
+        ...(isEarlyCheckIn ? {
+          early_checkin_effective: true,
+          early_checkin_adjusted_at: nowIso,
+          original_planned_start_date: plannedStartDate,
+          original_planned_end_date: plannedEndDate
+        } : {})
       };
 
       await supabase
@@ -2210,13 +2281,20 @@ export async function confirmCheckIn(
           .from('resident_status')
           .update({
             status: 'ACTIVE',
+            start_date: finalStartDate,
+            end_date: finalEndDate,
             updated_at: nowIso
           })
           .eq('id', trxRecord.resident_status_id);
       }
     }
 
-    return { success: true };
+    return { 
+      success: true, 
+      isEarly: isEarlyCheckIn, 
+      newStartDate: finalStartDate, 
+      newEndDate: finalEndDate 
+    };
   } catch (error: any) {
     console.error('[userService] Error confirming check-in:', error);
     return { success: false, error: error?.message || 'Gagal mengonfirmasi check-in' };
@@ -2309,21 +2387,30 @@ export async function approveEarlyCheckIn(
       .maybeSingle();
 
     let newEndDate = '';
-    const oldStartDate = resRecord?.start_date ? new Date(resRecord.start_date) : null;
-    const oldEndDate = resRecord?.end_date ? new Date(resRecord.end_date) : null;
-    const newStart = new Date(approvedDate);
+    const meta = resRecord?.metadata || {};
+    const period = (meta.period || meta.periodLabel || 'bulanan').toLowerCase().trim();
+    const d = new Date(approvedDate);
 
-    if (oldStartDate && oldEndDate && !isNaN(oldStartDate.getTime()) && !isNaN(oldEndDate.getTime())) {
-      // Hitung selisih durasi masa sewa asli dalam hari
-      const diffMs = oldEndDate.getTime() - oldStartDate.getTime();
-      const newEnd = new Date(newStart.getTime() + diffMs);
-      newEndDate = newEnd.toISOString().split('T')[0];
+    if (period === 'harian') {
+      const days = Number(meta.advanceLimitDays || 1);
+      d.setDate(d.getDate() + Math.max(1, days));
+    } else if (period === 'mingguan') {
+      d.setDate(d.getDate() + 7);
+    } else if (period === 'bulanan') {
+      d.setMonth(d.getMonth() + 1);
+    } else if (period === '3bulanan') {
+      d.setMonth(d.getMonth() + 3);
+    } else if (period === '6bulanan') {
+      d.setMonth(d.getMonth() + 6);
+    } else if (period === 'tahunan') {
+      d.setFullYear(d.getFullYear() + 1);
+    } else if (resRecord?.start_date && resRecord?.end_date) {
+      const diffDays = Math.round((new Date(resRecord.end_date).getTime() - new Date(resRecord.start_date).getTime()) / (1000 * 60 * 60 * 24));
+      d.setDate(d.getDate() + Math.max(1, diffDays));
     } else {
-      // Fallback: 1 bulan dari newStart
-      const fallbackEnd = new Date(newStart);
-      fallbackEnd.setMonth(fallbackEnd.getMonth() + 1);
-      newEndDate = fallbackEnd.toISOString().split('T')[0];
+      d.setMonth(d.getMonth() + 1);
     }
+    newEndDate = d.toISOString().split('T')[0];
 
     if (resRecord) {
       const meta = resRecord.metadata || {};
