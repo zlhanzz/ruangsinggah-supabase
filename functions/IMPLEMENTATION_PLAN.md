@@ -1,102 +1,76 @@
-# IMPLEMENTATION PLAN: Penyelarasan Tombol Pra-Masuk (Jadwalkan Lebih Cepat vs Terima Kunci) & Penguncian Lapor Kendala pada Fase Menunggu Masuk
+# IMPLEMENTATION PLAN: Pemformatan Standar Tanggal Indonesia pada Modal "Ajukan Check-in Lebih Awal" (`MyKost.tsx`)
 
-## 1. Analisis Masalah & Kebutuhan
+Dokumen ini disusun sebagai **Fase 1: Perencanaan & Pengajuan** sesuai dengan Protokol Kerja Workspace RuangSinggah.
 
-### A. Konteks Masalah
-Berdasarkan tinjauan alur penyewaan aktif pada halaman Orders (`MyKost.tsx`) dan tangkapan layar pengguna:
-1. **Tombol "Lapor Kendala Kamar" Masih Aktif di Fase Menunggu Masuk**:
-   - Saat ini, tombol "Lapor Kendala Kamar" aktif selama transaksi berstatus `PAID` tanpa memeriksa apakah penghuni sudah tiba / menerima kunci (`isHandoverDone`).
-   - Secara logika operasional, calon penghuni yang belum menerima kunci dan belum menempati kamar fisik tidak mungkin dapat atau diizinkan melaporkan kerusakan fasilitas kamar kost (misal: keran bocor, AC rusak, lampu mati).
-2. **Tombol "Jadwalkan Lebih Cepat" dan "Terima Kunci & Masuk" Terpisah dan Tampil Bersamaan**:
-   - Di banner atas, terdapat tombol `[⚡ JADWALKAN LEBIH CEPAT]`.
-   - Di daftar aksi bawah (sidebar), tombol hijau `[✓ TERIMA KUNCI & MASUK]` juga muncul secara bersamaan, padahal tanggal check-in masih 6 hari lagi (10 November 2026, sedangkan hari ini 04 November 2026).
-   - Pengguna meminta agar kedua tombol ini **bukan tombol terpisah yang muncul bersamaan**, melainkan **satu tombol kontekstual yang bergantian (alternating)**:
-     - **Sebelum Hari H Masuk (H-N)**: Tombol yang muncul adalah **"JADWALKAN LEBIH CEPAT"**. Tombol "Terima Kunci & Masuk" **TIDAK MUNCUL**.
-     - **Di Hari H Masuk yang Disepakati (Hari H)**: Tombol otomatis berganti menjadi **"TERIMA KUNCI & MASUK"**. Tanggal ini bisa berasal dari tanggal booking awal atau tanggal percepatan yang telah disetujui (di-ACC) oleh pemilik kost.
-3. **Penyelarasan Durasi Sewa 1 Bulan (`end_date`)**:
-   - Pada kartu sewa, durasi sewa tertulis "1 Bulan" (Mulai 10 Nov 2026), namun tanggal selesai sewa tertulis "09 Januari 2027" (2 bulan) akibat sisa nilai `end_date` pada database `resident_status`. Perlu disinkronkan agar `end_date` secara akurat mencerminkan tepat 1 bulan (10 Des 2026).
+---
+
+## 1. Analisis Masalah / Kebutuhan Pengguna
+
+### Konteks & Permasalahan
+Berdasarkan tangkapan layar yang dilampirkan pengguna (`media_1793777368645_e5fcae14.png`):
+- Pada modal **"AJUKAN CHECK-IN LEBIH AWAL"**, field input untuk **"RENCANA TANGGAL MASUK BARU (LEBIH AWAL)"** saat ini menggunakan elemen standar HTML `<input type="date">` polos tanpa format presentasi kustom.
+- Akibatnya, pada browser/sistem pengguna dengan locale bawaan `en-US`, nilai tanggal dirender menjadi **`11/04/2026`** (format `MM/DD/YYYY`).
+- Hal ini menimbulkan ambiguitas kritis bagi pengguna Indonesia:
+  1. Pengguna dapat salah mengartikan `11/04/2026` sebagai tanggal 11 April 2026 (format DD/MM/YYYY) atau format US yang membingungkan.
+  2. Kontras dengan kotak informasi di atasnya yang menampilkan format baku Indonesia: *"Tanggal masuk awal Anda adalah 10 November 2026"*, sehingga tampilan input terasa tidak konsisten (*inconsistent UI*).
+- Pengguna memberikan instruksi tegas: **"perbaiki format tanggalnya"**.
 
 ---
 
 ## 2. Komparasi & Evaluasi Standar Industri Objektif (Anti-Bias Konfirmasi)
 
-Mengacu pada Pasal 8 Aturan Baku Workspace:
+Mengacu pada **Pasal 8 Protokol Kerja Workspace**, berikut analisis evaluasi objektif atas pendekatan perbaikan:
 
-| Dimensi | Solusi Saat Ini (Sebelum Perbaikan) | Pendekatan Solusi yang Direncanakan | Klasifikasi Standar Industri | Alasan Teknis & Rekomendasi Terbaik |
+| Dimensi Evaluasi | Kondisi Saat Ini (Existing) | Solusi yang Direncanakan (Proposed) | Klasifikasi Standar Industri | Alasan Teknis & Rekomendasi |
 | :--- | :--- | :--- | :--- | :--- |
-| **Alur Check-in & Lifecycle Hunian** | Tombol check-in ("Terima Kunci") dan tombol reschedule ("Jadwalkan Lebih Cepat") muncul bersamaan di dua tempat terpisah sejak H-N jauh hari | Mengadopsi pola *Linear State-Driven Action Slot* (seperti Airbnb Trips & Traveloka Hotel Check-in): Hanya menampilkan satu aksi utama yang relevan sesuai timeline (Reschedule saat H-N, Check-in saat Hari H) | 🌟 **Setara Standar Industri (*Industry Standard*)** | Menghilangkan beban kognitif (*cognitive load*) pengguna dan mencegah kesalahan klik konfirmasi serah terima kunci sebelum penghuni benar-benar tiba di lokasi. |
-| **Proteksi Tiket Kendala (Issue Management)** | Form lapor kendala dapat dikirim kapan saja meskipun kunci fisik belum diserahterimakan | Mengunci tombol "Lapor Kendala Kamar" dengan status disabled dan tooltip penjelas "Tersedia setelah serah terima kunci & masuk" | 🚀 **Lebih Maju dari Standar Industri (*Ahead of Industry Standard*)** | Mencegah *spam ticket* dan laporan fiktif pada sistem pengelola kost, menjamin bahwa hanya penghuni yang sudah resmi menempati kamar yang dapat mengajukan komplain fasilitas. |
-| **Integritas Data Tanggal & Durasi** | Tanggal selesai sewa membaca kolom mentah `r.end_date` yang sempat terdistorsi 2 bulan | Menyelaraskan kalkulasi `endDate` agar konsisten dengan `start_date` dan `duration` paket sewa 1 bulan | 🌟 **Setara Standar Industri (*Industry Standard*)** | Menjamin transparansi dan akurasi informasi finansial/jadwal bagi pengguna sesuai durasi yang dibayar. |
+| **Frontend & UI/UX Presentation** | Menggunakan raw `<input type="date">` polos yang merender string `11/04/2026` tergantung setting OS/browser client. | Menggunakan **Locale-Aware Hybrid Date Picker UI**: Menampilkan teks tanggal Indonesia terformat baku (`04 November 2026` + nama hari `Rabu`) dengan ikon kalender dan live helper badge (*"Maju 6 hari lebih cepat"*). | 🚀 **Lebih Maju dari Standar Industri (*Ahead of Industry Standard*)** | Menghilangkan 100% ketergantungan pada preferensi bahasa OS browser client, menyajikan teks format Indonesia yang elegan sekaligus memberikan feedback kalkulasi selisih hari instan layaknya platform OTA tier-1. |
+| **Cross-Platform Compatibility** | Mengandalkan UI native browser yang berbeda-beda bentuknya di Windows/macOS/Android/iOS. | Menggunakan overlay transparan (`opacity-0 absolute inset-0`) di atas komponen visual: User tetap mendapatkan picker native bawaan HP/OS tanpa visual glitch raw format. | 🌟 **Setara Standar Industri (*Industry Standard*)** | Pola standar yang digunakan Traveloka & Airbnb Web Mobile untuk mempertahankan performa date picker native perangkat tanpa merusak konsistensi desain visual aplikasi. |
+| **Data Integrity & Backend Contract** | Menyimpan format ISO `YYYY-MM-DD` ke state `earlyCheckInDate`. | Mempertahankan state `earlyCheckInDate` tetap dalam format ISO `YYYY-MM-DD` untuk komunikasi API/Supabase. | 🌟 **Setara Standar Industri (*Industry Standard*)** | Pemisahan tegas (*separation of concerns*) antara format visual (*presentation layer*) dan format ISO (*data transfer layer*). |
+| **Pencegahan Human Error & Safety** | Tidak ada indikator visual selisih hari; hanya field input tanggal biasa. | Dilengkapi *Live Dynamic Context Badge* yang otomatis menghitung selisih hari terhadap jadwal awal (`diffDays`). | 🚀 **Lebih Maju dari Standar Industri (*Ahead of Industry Standard*)** | Mencegah penyewa salah memilih tanggal yang tidak disengaja (misal memilih hari yang sama atau tanggal yang lebih mundur). |
 
 ---
 
-## 3. Dampak Perubahan (Scope & Affected Files)
+## 3. Dampak Perubahan (Affected Files)
 
-- **File yang Dimodifikasi:**
-  - `functions/public/pages/MyKost.tsx`
-- **Tingkat Risiko:** Sangat Rendah (*Non-Breaking & Non-Destructive*).
-  - Logika transisi tombol murni berbasis waktu (`todayNorm` vs `checkInNorm`) dan status serah terima kunci (`isHandoverDone`).
-  - Fungsi submit kendala dan modal reschedule yang sudah ada dipertahankan 100%.
+Modifikasi difokuskan secara presisi pada modal pengajuan check-in lebih awal:
+1. **`functions/public/pages/MyKost.tsx`**:
+   - Merombak visual input tanggal pada modal `showEarlyCheckInModal` (sekitar baris 6096–6108).
+   - Menambahkan visual display box berformat Indonesia baku (`FORMAT_DATE(earlyCheckInDate)` dan nama hari).
+   - Memasang transparent overlay input picker agar tetap kompatibel dengan native device picker.
+   - Menambahkan *Live Calculation Helper* selisih hari terhadap `selectedKost.moveInDate`.
+2. **`functions/PROGRESS.md`**: Pencatatan riwayat Milestone #493.
+3. **`WALKTHROUGH.md`**: Laporan verifikasi dan panduan pengujian setelah eksekusi.
 
 ---
 
-## 4. Langkah-Langkah Eksekusi (Fase 2 Setelah di-ACC)
+## 4. Langkah-Langkah Eksekusi (Fase 2)
 
-### Langkah 1: Penyelarasan Tombol Kontekstual Bergantian
-1. Hitung status waktu masuk:
-   ```typescript
-   const agreedStartDate = startDateObj; // Tanggal masuk awal atau tanggal lebih cepat yang sudah di-ACC
-   const isBeforeCheckInDay = Boolean(agreedStartDate && todayNorm.getTime() < startNorm.getTime());
-   const isCheckInDayOrAfter = Boolean(agreedStartDate && todayNorm.getTime() >= startNorm.getTime());
-   ```
-2. Pada banner atas kartu pesanan (`isWaitingArrival`):
-   - Jadikan banner murni informatif yang elegan:
-     - Jika sebelum Hari H (`isBeforeCheckInDay`): Tampilkan informasi "MENUNGGU TANGGAL MASUK", tanggal check-in yang disepakati, dan badge countdown kedatangan (`Masuk dlm N hari` / `Masuk Besok`).
-     - Jika sudah Hari H (`isCheckInDayOrAfter`): Tampilkan informasi "HARI MASUK KOST TELAH TIBA! Siap Check-in", "Silakan serah terima kunci fisik dengan pemilik/penjaga kost."
-3. Pada slot aksi utama sidebar (menggantikan posisi tombol `Terima Kunci & Masuk` saat ini):
-   - **Jika `!isHandoverDone && isBeforeCheckInDay` (Masih Jauh Hari)**:
-     - Jika sedang menunggu ACC mitra (`isEarlyRequested`): Tampilkan tombol/badge informatif disabled `[🕒 Menunggu Persetujuan Masuk Tgl DD/MM/YYYY]`.
-     - Jika belum mengajukan: Tampilkan tombol oranye **`[⚡ JADWALKAN LEBIH CEPAT]`** yang memicu `handleOpenEarlyCheckInModal`.
-     - Tombol "Terima Kunci & Masuk" **100% TIDAK MUNCUL**.
-   - **Jika `!isHandoverDone && isCheckInDayOrAfter` (Sudah Hari H)**:
-     - Tombol otomatis berganti menjadi tombol hijau emerald **`[✓ TERIMA KUNCI & MASUK]`** yang memicu `handleConfirmTenantCheckIn`.
-     - Tombol "Jadwalkan Lebih Cepat" **100% TIDAK MUNCUL**.
-   - **Jika `isHandoverDone` (Sudah Terima Kunci)**:
-     - Kedua tombol check-in/reschedule hilang dan status beralih ke masa sewa berjalan.
+Setelah rencana ini disetujui (*ACC*) oleh pengguna:
 
-### Langkah 2: Penguncian Tombol "Lapor Kendala Kamar"
-1. Perbarui tombol "Lapor Kendala Kamar" di sidebar:
-   ```typescript
-   const canReportComplaint = isPaid && !kost.is_checked_out && isHandoverDone;
-   ```
-2. Jika `!isHandoverDone`:
-   - Tombol dirender dalam kondisi `disabled` dengan styling abu-abu lembut (`bg-gray-50 text-gray-400 border-gray-200 cursor-not-allowed`).
-   - Tampilkan sub-teks helper kecil di bawahnya: `Selesaikan terima kunci terlebih dahulu` (serupa dengan tombol Ulasan).
-3. Di dalam fungsi handler `handleOpenComplaint`:
-   - Tambahkan proteksi guardrail: jika `!isHandoverDone`, tampilkan pesan edukatif bahwa kendala kamar hanya dapat dilaporkan setelah menerima kunci kamar dan check-in.
-
-### Langkah 3: Sanitasi Data Durasi & Selesai Sewa
-1. Pastikan pemetaan `endDate` pada Kost Ryuta menghitung 1 bulan penuh secara presisi dari `start_date` (`2026-11-10` s/d `2026-12-10`) jika durasi sewa yang dipilih adalah 1 bulan.
-2. Perbarui baris record `resident_status` pengujian di Supabase agar `end_date: 2026-12-10` dan `total_months: 1` sinkron dengan `metadata`.
-
-### Langkah 4: Kompilasi, Pencatatan Progres, dan Push
-1. Jalankan `npm.cmd --prefix functions/public run build` (wajib 0 error).
-2. Catat pencapaian Milestone #492 di `functions/PROGRESS.md` dan `WALKTHROUGH.md`.
-3. Commit dan push ke branch `bukan-productions`.
+1. **Implementasi UI Komponen Date Picker Berformat Indonesia di `MyKost.tsx`**:
+   - Mengubah blok input tanggal di baris 6096–6108 menjadi komponen input berbasis kontainer kustom:
+     - Tampilan utama menampilkan: Ikon `<Calendar className="w-4 h-4 text-amber-600" />`, tanggal terformat baku (*e.g.* `04 November 2026`), subteks hari (*e.g.* `Rabu`), dan badge interaksi *"Ubah ▾"*.
+     - Lapisan input native `<input type="date">` diletakkan transparan secara absolut (`opacity-0 absolute inset-0 w-full h-full cursor-pointer z-10`), menjaga batasan `min` (hari ini) dan `max` (tanggal masuk awal).
+     - Menambahkan ringkasan kalkulasi dinamis: Jika dipilih tanggal 4 Nov 2026 sedangkan jadwal awal 10 Nov 2026, sistem menampilkan: *"⚡ Masuk 6 hari lebih cepat dari jadwal awal (10 November 2026)"*.
+2. **Uji Kompilasi Front-End**:
+   - Menjalankan `npm.cmd --prefix functions/public run build` untuk memastikan 0 error kompilasi TypeScript / Vite.
+3. **Pencatatan Riwayat Progres**:
+   - Mencatat Milestone #493 ke dalam `functions/PROGRESS.md`.
+4. **Penerbitan Dokumen Walkthrough**:
+   - Menyajikan `WALKTHROUGH.md` lengkap dengan bukti pengujian.
+5. **Git Commit & Push**:
+   - Melakukan commit dan push ke branch `bukan-productions`.
 
 ---
 
 ## 5. Rencana Verifikasi
 
-1. **Uji Kasus 1: Fase Pra-Masuk (H-6, Hari Ini: 04 Nov, Mulai Masuk: 10 Nov)**:
-   - Buka kartu Kost Ryuta di tab "AKTIF".
-   - Verifikasi bahwa tombol di sidebar adalah **`[⚡ JADWALKAN LEBIH CEPAT]`**.
-   - Verifikasi bahwa tombol **`[✓ TERIMA KUNCI & MASUK]` TIDAK MUNCUL**.
-   - Verifikasi bahwa tombol **`[🔧 LAPOR KENDALA KAMAR]` BERSTATUS NONAKTIF / DISABLED** dengan keterangan *"Selesaikan terima kunci terlebih dahulu"*.
-2. **Uji Kasus 2: Simulasi Hari H (Ubah Tanggal Masuk Menjadi Hari Ini / Waktu Live >= 10 Nov)**:
-   - Verifikasi tombol otomatis berganti dari "Jadwalkan Lebih Cepat" menjadi **`[✓ TERIMA KUNCI & MASUK]`**.
-   - Tombol "Jadwalkan Lebih Cepat" tidak muncul lagi.
-3. **Uji Kasus 3: Setelah Konfirmasi Terima Kunci**:
-   - Klik "Terima Kunci & Masuk".
-   - Verifikasi kartu berubah ke masa sewa berjalan (`KUNCI DITERIMA`).
-   - Verifikasi tombol **`[🔧 LAPOR KENDALA KAMAR]` KINI AKTIF** dan dapat diklik untuk mengisi form laporan kendala.
+1. **Uji Visual & Format Tanggal**:
+   - Membuka modal "Ajukan Check-in Lebih Awal".
+   - Memastikan tidak ada lagi teks mentah `11/04/2026`.
+   - Memastikan tanggal tampil dalam Bahasa Indonesia yang elegan: `04 November 2026` lengkap dengan keterangan hari (`Rabu`).
+2. **Uji Interaksi & Pemilihan Tanggal**:
+   - Mengetuk/mengklik kontainer tanggal: dialog kalender native terbuka normal.
+   - Memilih tanggal baru (misal tanggal 6 November 2026): visual tanggal langsung terupdate instan menjadi `06 November 2026` dan kalkulasi *"Masuk 4 hari lebih cepat"* muncul otomatis.
+3. **Uji Pengiriman Data**:
+   - Menekan tombol "Kirim Permintaan": Memastikan payload `early_checkin_proposed_date` tetap terkirim dalam format ISO `YYYY-MM-DD` yang valid ke Supabase.

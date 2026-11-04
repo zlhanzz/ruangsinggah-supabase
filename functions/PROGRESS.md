@@ -2,6 +2,32 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 493. Standardisasi Format Tanggal Indonesia (Locale-Aware Hybrid Date Picker UI) pada Modal 'Ajukan Check-in Lebih Awal' (`MyKost.tsx`) (November 2026)
+- **Permintaan & Masukan Pengguna**:
+  - Pengguna menemukan format tanggal pada modal "Ajukan Check-in Lebih Awal" menampilkan format raw US yang membingungkan: `11/04/2026` (seharusnya format baku Indonesia).
+  - Pengguna meminta instruksi perbaikan: "perbaiki format tanggalnya".
+- **Akar Masalah & Analisis Teknis**:
+  - Pada modal `showEarlyCheckInModal` (`MyKost.tsx`), field tanggal menggunakan elemen HTML `<input type="date">` polos tanpa format presentasi kustom.
+  - Perilaku browser native pada mesin dengan locale default `en-US` secara otomatis menampilkan format `MM/DD/YYYY` (`11/04/2026` untuk 4 November 2026), yang sangat ambigu bagi pengguna Indonesia (dapat disalahartikan sebagai 11 April).
+  - Selain itu, parsing string ISO `YYYY-MM-DD` berisiko mengalami timezone drift jika dievaluasi langsung via `new Date('YYYY-MM-DD')` di zona waktu tertentu.
+- **Implementasi Solusi**:
+  1. **Locale-Aware Hybrid Date Picker UI (`MyKost.tsx`)**:
+     - Mengganti input polos dengan komponen visual styled box yang menampilkan tanggal baku Indonesia: `FORMAT_DATE(earlyCheckInDate)` (*e.g.* **`04 November 2026`**), nama hari (*e.g.* **`Rabu`**), ikon kalender (`Calendar` dari `lucide-react`), serta badge interaksi *"Ubah ▾"*.
+     - Mempertahankan aksesibilitas dan performa native dengan memasang transparent input overlay (`opacity-0 absolute inset-0 w-full h-full cursor-pointer z-10`), menjaga batasan `min` (hari ini) dan `max` (tanggal masuk awal).
+  2. **Live Dynamic Context Calculation**:
+     - Menghitung secara real-time selisih hari antara tanggal yang dipilih dengan tanggal masuk awal (`moveInDate`).
+     - Menampilkan feedback dinamis: *"⚡ Permintaan diajukan N hari lebih awal dari jadwal awal"* atau notifikasi jika tanggal sama dengan jadwal awal.
+  3. **Timezone Drift Safeguard pada `FORMAT_DATE`**:
+     - Menambahkan penanganan khusus regex `/^\d{4}-\d{2}-\d{2}$/` dengan konversi pemisah tanda hubung menjadi slash (`replace(/-/g, '/')`) agar parsing tanggal ISO lokal selalu konsisten tanpa risiko UTC offset rollback.
+- **File Tersentuh**:
+  - `functions/public/pages/MyKost.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi build frontend Vite (`npm.cmd --prefix functions/public run build`): Lulus 100% (2512 modul, 0 error).
+  - Uji visual: Modal menampilkan format elegan `04 November 2026 (Rabu)`, bebas 100% dari string mentah `11/04/2026`.
+  - Uji live helper: Kalkulasi selisih hari terhadap jadwal 10 November 2026 menampilkan info akurat: *"Permintaan diajukan 6 hari lebih awal dari jadwal awal (10 November 2026)"*.
+
 ### 492. Contextual Alternating Action Slot (Jadwalkan Lebih Cepat vs Terima Kunci & Masuk), Proteksi Gembok Fitur Lapor Kendala Kamar, & Penyelarasan Durasi Sewa (`MyKost.tsx`) (November 2026)
 - **Permintaan & Masukan Pengguna**:
   1. Pada fase menunggu masuk (`!isHandoverDone`), tombol **"Lapor Kendala Kamar"** seharusnya belum berfungsi karena penyewa belum memegang kunci fisik atau menempati kamar.

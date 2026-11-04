@@ -24,7 +24,9 @@ const FORMAT_DATE = (dateStr: any) => {
     if (!dateStr) return '-';
 
     // Try native parsing (works for ISO strings: YYYY-MM-DD or full ISO)
-    let date = new Date(dateStr);
+    let date = typeof dateStr === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dateStr.trim())
+        ? new Date(dateStr.replace(/-/g, '/'))
+        : new Date(dateStr);
 
     // If native fails (Invalid Date), try matching Indonesian locale string format "D Month YYYY"
     // Examples: "20 April 2026", "5 Januari 2026"
@@ -6093,18 +6095,71 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
                                 <p className="mt-0.5">Tanggal masuk awal Anda adalah <strong>{FORMAT_DATE(selectedKost.moveInDate)}</strong>. Jika Anda tiba lebih cepat, sistem akan mengajukan penyesuaian tanggal masuk resmi kepada pemilik kost.</p>
                             </div>
 
-                            <div className="space-y-1.5">
+                            <div className="space-y-2">
                                 <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest">
                                     Rencana Tanggal Masuk Baru (Lebih Awal)
                                 </label>
-                                <input
-                                    type="date"
-                                    value={earlyCheckInDate}
-                                    onChange={(e) => setEarlyCheckInDate(e.target.value)}
-                                    min={new Date().toISOString().split('T')[0]}
-                                    max={selectedKost.moveInDate ? new Date(selectedKost.moveInDate).toISOString().split('T')[0] : undefined}
-                                    className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-xs font-bold text-gray-900 focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500"
-                                />
+                                <div className="relative group">
+                                    {/* Presentasi Visual Tanggal Format Baku Indonesia (Bebas Glitch MM/DD/YYYY Browser) */}
+                                    <div className="w-full bg-white hover:bg-amber-50/40 border-2 border-amber-200/90 rounded-2xl px-4 py-3 text-xs font-black text-gray-900 flex items-center justify-between shadow-2xs transition-all group-hover:border-amber-400 cursor-pointer">
+                                        <div className="flex items-center gap-2.5 min-w-0">
+                                            <div className="w-8 h-8 rounded-xl bg-amber-500/10 text-amber-600 flex items-center justify-center shrink-0">
+                                                <Calendar className="w-4 h-4 text-amber-600" />
+                                            </div>
+                                            <div className="min-w-0">
+                                                <p className="text-xs sm:text-sm font-black text-gray-900 leading-tight truncate">
+                                                    {earlyCheckInDate ? FORMAT_DATE(earlyCheckInDate) : 'Pilih Tanggal Masuk'}
+                                                </p>
+                                                <p className="text-[10px] font-bold text-amber-700/80 leading-tight mt-0.5 capitalize">
+                                                    {earlyCheckInDate ? new Date(earlyCheckInDate.replace(/-/g, '/')).toLocaleDateString('id-ID', { weekday: 'long' }) : 'Klik untuk memilih'}
+                                                </p>
+                                            </div>
+                                        </div>
+                                        <span className="text-[10px] font-black text-amber-700 bg-amber-100/70 group-hover:bg-amber-200/80 px-2.5 py-1 rounded-xl border border-amber-200 uppercase tracking-wider flex items-center gap-1 shrink-0">
+                                            Ubah ▾
+                                        </span>
+                                    </div>
+
+                                    {/* Transparent Native Date Picker Overlay (Tetap Mempertahankan Picker Native Perangkat) */}
+                                    <input
+                                        type="date"
+                                        value={earlyCheckInDate}
+                                        onChange={(e) => setEarlyCheckInDate(e.target.value)}
+                                        min={new Date().toISOString().split('T')[0]}
+                                        max={selectedKost.moveInDate ? new Date(selectedKost.moveInDate).toISOString().split('T')[0] : undefined}
+                                        className="absolute inset-0 opacity-0 w-full h-full cursor-pointer z-10"
+                                        title="Pilih tanggal masuk baru"
+                                    />
+                                </div>
+
+                                {/* Live Context Helper: Menghitung Selisih Hari terhadap Jadwal Awal */}
+                                {earlyCheckInDate && selectedKost.moveInDate && (() => {
+                                    const proposed = new Date(earlyCheckInDate.replace(/-/g, '/'));
+                                    const initial = new Date(selectedKost.moveInDate.replace(/-/g, '/'));
+                                    const diffTime = initial.getTime() - proposed.getTime();
+                                    const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
+
+                                    if (diffDays > 0) {
+                                        return (
+                                            <div className="p-2.5 bg-amber-50/80 border border-amber-200/80 rounded-xl text-[11px] text-amber-900 flex items-center gap-2 animate-in fade-in duration-200">
+                                                <Zap className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                                                <span>
+                                                    Permintaan diajukan <strong>{diffDays} hari lebih awal</strong> dari jadwal awal ({FORMAT_DATE(selectedKost.moveInDate)}).
+                                                </span>
+                                            </div>
+                                        );
+                                    } else if (diffDays === 0) {
+                                        return (
+                                            <div className="p-2.5 bg-gray-50 border border-gray-200/80 rounded-xl text-[11px] text-gray-700 flex items-center gap-2 animate-in fade-in duration-200">
+                                                <Clock className="w-3.5 h-3.5 text-gray-500 shrink-0" />
+                                                <span>
+                                                    Tanggal sama dengan jadwal masuk awal Anda ({FORMAT_DATE(selectedKost.moveInDate)}).
+                                                </span>
+                                            </div>
+                                        );
+                                    }
+                                    return null;
+                                })()}
                             </div>
 
                             <div className="space-y-1.5">
