@@ -12062,3 +12062,30 @@ ooms, sehingga tidak muncul alarm palsu di konsol browser mitra.
   - Simulasi `getResidentStatus` untuk pemilik Kost Ryuta (`sulhan`): Menghasilkan `0` penghuni aktif (kartu hantu hilang 100%).
   - Backend `tsc` build: Exit code 0, 0 error.
   - Frontend Vite build: Exit code 0, 0 error (2512 modules transformed).
+
+
+### 284. Redesain Ramping & Harmonisasi Tema Oranye Banner Menunggu Tanggal Masuk (`MyKost.tsx`) (November 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna meminta penyederhanaan antarmuka banner status pra-kedatangan (*Upcoming Stay*) pada halaman pesanan penyewa (`MyKost.tsx`) agar tidak berbelit dan terlihat lebih rapi.
+  2. Cukup menampilkan label ringkas dan tanggal masuk ("Menunggu Tanggal Masuk : [Tanggal]").
+  3. Mengeliminasi tombol hijau "Sudah Tiba & Terima Kunci" dari fase pra-kedatangan (sebelum hari H tiba) agar tidak menimbulkan kebingungan psikologis calon penyewa, dan cukup menyediakan 1 tombol aksi utama: `[⚡ Jadwalkan Lebih Cepat]`.
+  4. Mengubah tone section dari warna biru generic menjadi warna oranye khas identitas branding RuangSinggah.
+- **Implementasi & Solusi**:
+  1. **Tipografi Bersih & Elegan**:
+     - Menghapus badge `"Lunas"` dan teks ganda `"(UPCOMING STAY)"`.
+     - Mengganti teks menjadi label atas oranye halus `text-[10px] font-black uppercase tracking-widest text-orange-600` bertuliskan `"MENUNGGU TANGGAL MASUK"`.
+     - Menampilkan tanggal utama secara tebal dan jelas `text-xs sm:text-sm font-black text-gray-900 tracking-tight` (`FORMAT_DATE(kost.moveInDate)`), dilengkapi jam check-in & ETA secara proporsional.
+  2. **Single Call-to-Action (Tunggal & Efektif)**:
+     - Menghapus tombol ganda hijau `Sudah Tiba & Terima Kunci` dari fase `isUpcoming` (tombol ini tetap otomatis aktif pada hari H check-in di baris 2819 `!isUpcoming`).
+     - Menyediakan 1 tombol aksi primer: `[⚡ Jadwalkan Lebih Cepat]` dengan styling `bg-orange-500 hover:bg-orange-600 text-white shadow-orange-500/25`.
+  3. **Harmonisasi Palet Warna Oranye RuangSinggah**:
+     - Kontainer banner diubah ke `bg-orange-50/70 border border-orange-200/80 shadow-xs`.
+     - Ikon kalender diubah ke `w-9 h-9 sm:w-10 sm:h-10 bg-orange-500 text-white shadow-orange-500/20`.
+     - Badge status tunggu persetujuan jadwal lebih cepat disesuaikan ke tone amber/oranye yang lembut.
+- **File Tersentuh**:
+  - `functions/public/pages/MyKost.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Frontend Vite build: Exit code 0, 0 error (`✓ 2512 modules transformed`).
+  - Banner kini tampil ramping, minimalis, efisien, dan selaras dengan tema branding RuangSinggah.
