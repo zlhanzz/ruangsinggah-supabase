@@ -222,6 +222,7 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
     const navigate = useNavigate();
     const { "*": tabParam } = useParams();
     const [activeKosts, setActiveKosts] = useState<any[]>([]);
+    const [residentStatus, setResidentStatus] = useState<any[]>([]);
     const [surveyRequests, setSurveyRequests] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -483,7 +484,6 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
     const [paymentProductType, setPaymentProductType] = useState<'kost_booking' | 'database' | 'survey'>('kost_booking');
     const [paymentMetadata, setPaymentMetadata] = useState<any>({});
     const [includeFacilityInExtension, setIncludeFacilityInExtension] = useState(true);
-    const [residentStatus, setResidentStatus] = useState<any[]>([]);
 
     // Digital Receipt states
     const [selectedReceipt, setSelectedReceipt] = useState<ReceiptData | null>(null);

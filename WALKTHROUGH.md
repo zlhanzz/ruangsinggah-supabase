@@ -1,26 +1,24 @@
-# WALKTHROUGH - Milestone #490: Smart Orders Navigation, Resolusi Foto Kamar Riil, & Eliminasi Modal Thumbnail
+# WALKTHROUGH - Milestone #491: Perbaikan Runtime ReferenceError TDZ 'residentStatus' pada MyKost
 
 **Tanggal:** 04 November 2026  
-**Status:** Berhasil Diimplementasikan & Lulus Uji Kompilasi Build (0 Error)  
+**Status:** Berhasil Diperbaiki & Lulus Uji Kompilasi Build (0 Error)  
 **Branch:** `bukan-productions`
 
 ---
 
 ## 1. Ringkasan Pekerjaan & Masalah yang Diselesaikan
 
-Berdasarkan masukan dan persetujuan pengguna (*"okee jalankan"*), Milestone #490 berhasil menyelesaikan 3 aspek utama pada halaman Orders / Kost Saya (`/my-bookings`):
+Setelah implementasi Milestone #490, terdeteksi error crash front-end pada console browser saat membuka halaman Orders (`/my-bookings`):
+```
+MyKost.tsx:322
+Uncaught ReferenceError: Cannot access 'residentStatus' before initialization
+    at MyKost (MyKost.tsx:322:28)
+```
 
-1. **Smart Context-Aware Default Tab Orders**:
-   - **Sebelumnya:** Setiap kali pengguna mengunjungi menu Orders dari navbar bawah (`/my-bookings`), sistem selalu memaksa mendarat di tab "Diajukan" (`/my-bookings/diajukan`). Jika pengguna sudah memiliki sewa aktif dan tidak sedang mengajukan kost baru, layar menampilkan state kosong *"Belum Ada Pengajuan"* meskipun badge tab "Aktif" menunjukkan angka 1.
-   - **Sesudah:** Sistem mengevaluasi data sewa pengguna secara cerdas. Jika pengguna memiliki sewa aktif (`residentStatus.length > 0`), navigasi ke `/my-bookings` secara otomatis langsung mengarahkan ke tab **AKTIF** (`/my-bookings/aktif`) sehingga penyewa langsung melihat kartu kost yang sedang disewanya. Tab "Diajukan" hanya dijadikan default jika pengguna tidak memiliki sewa aktif.
-
-2. **Resolusi Foto Kamar Riil Sesuai Tipe Kamar / Nomor Kamar**:
-   - **Sebelumnya:** Pada kartu pesanan/sewa, foto pratinjau yang muncul adalah foto gerbang / pagar depan kost ("Bangunan Depan"). Hal ini terjadi karena foto unit kamar disimpan di `properties.image_urls` dengan label tertentu (seperti `"Kamar: Standard"`), namun ketika `currentRoom.images` kosong, kode fallback secara eksplisit mencari foto berlabel `"bangunan depan"` (`frontBuildingImg`).
-   - **Sesudah:** Diterapkan fungsi resolver hirarkis `resolveRoomPhotos` yang secara presisi mencocokkan foto dengan tipe kamar yang disewa (untuk Kost Biasa, e.g. `"Kamar: Standard"`) atau nomor kamar (untuk KostManager, e.g. `"Unit 101"` / `"Kamar 1"`), dengan memprioritaskan kategori kamar tidur/interior dibanding foto kamar mandi, dapur, atau fasad bangunan.
-
-3. **Eliminasi Modal Pembesaran Thumbnail**:
-   - **Sebelumnya:** Mengklik foto thumbnail kartu pesanan membuka modal galeri yang membesarkan gambar, yang dinilai pengguna kurang berguna (*"kurang berguna"*).
-   - **Sesudah:** Handler `onClick`, kelas kursor pointer, dan pemicu modal galeri pada container foto thumbnail telah dieliminasi. Foto kini berfungsi sebagai thumbnail pratinjau yang bersih, elegan, dan statis tanpa memicu popup.
+### Akar Masalah:
+- Hook `useEffect` sinkronisasi tab URL pada baris 305–322 mengevaluasi `residentStatus.length` pada dependency array di baris 322.
+- Namun deklarasi `const [residentStatus, setResidentStatus] = useState<any[]>([]);` berada jauh di bawah pada baris 371/484.
+- Sesuai spesifikasi ECMAScript mengenai *Temporal Dead Zone (TDZ)*, variabel `const` tidak dapat diakses sebelum inisialisasinya. Saat React mengevaluasi argumen hook pada render pass pertama, runtime melempar `ReferenceError`.
 
 ---
 
@@ -28,49 +26,20 @@ Berdasarkan masukan dan persetujuan pengguna (*"okee jalankan"*), Milestone #490
 
 ### File: `functions/public/pages/MyKost.tsx`
 
-1. **Penerapan Helper `normalizePhotoUrl` & `resolveRoomPhotos`**:
-   - Didefinisikan di level modul untuk standardisasi penanganan URL storage dan pemetaan foto unit kamar.
-   - Prioritas resolusi foto:
-     1. `currentRoom.categorized_photos` / `categorizedPhotos` (kategori: interior, kasur, tempat tidur, kamar tidur).
-     2. `currentRoom.images` array.
-     3. Pencarian cerdas pada `properties.image_urls`:
-        - KostManager: Mencocokkan label nomor kamar (`kamar: <no>`, `unit <no>`).
-        - Kost Biasa: Mencocokkan label tipe kamar (`kamar: <type>`, e.g. "Kamar: Standard").
-        - Memprioritaskan foto kamar tidur riil dan mengabaikan foto eksterior (`bangunan depan`, `fasad`, `parkir`).
-     4. Fallback: Foto kamar tidur pertama yang tersedia, bukan foto fasad depan.
-
-2. **Smart Tab Redirection pada `useEffect` & `fetchMyKosts`**:
+1. **Konsolidasi State ke Puncak Komponen**:
+   Memindahkan deklarasi state `residentStatus` ke blok teratas komponen (sejajar dengan `activeKosts`):
    ```typescript
-   // Sync state with URL
-   useEffect(() => {
-       if (tabParam) {
-           const validTabs = ['diajukan', 'aktif', 'riwayat'];
-           if (validTabs.includes(tabParam)) {
-               setActiveTab(tabParam as any);
-           } else {
-               navigate(`${Page.MY_BOOKINGS}/diajukan`, { replace: true });
-           }
-       } else if (!loading) {
-           // Smart context-aware default tab when landing on /my-bookings
-           const hasActive = residentStatus.length > 0;
-           const target = hasActive ? 'aktif' : 'diajukan';
-           setActiveTab(target);
-           navigate(`${Page.MY_BOOKINGS}/${target}`, { replace: true });
-       }
-   }, [tabParam, loading, residentStatus.length, navigate]);
+   const MyKost: React.FC<MyKostProps> = ({ user }) => {
+       const navigate = useNavigate();
+       const { "*": tabParam } = useParams();
+       const [activeKosts, setActiveKosts] = useState<any[]>([]);
+       const [residentStatus, setResidentStatus] = useState<any[]>([]); // <-- Diletakkan di puncak
+       const [surveyRequests, setSurveyRequests] = useState<any[]>([]);
+       const [loading, setLoading] = useState(true);
+       ...
    ```
-   - Di akhir fungsi `fetchMyKosts`: Ditambahkan sinkronisasi langsung saat data sewa aktif (`uniqueActive`) berhasil dimuat dari database.
-   - Pada `handleTabChange`: Ditambahkan `setActiveTab(tab)` untuk respon navigasi instan (optimistic UI update).
-
-3. **Integrasi Resolver ke Seluruh Alur Data**:
-   - Pemetaan pesanan `kostsData` (baris ~903-939).
-   - Pemetaan sewa aktif `mapResidentStatus` (baris ~1125-1154).
-   - Fallback `rawClaim` untuk sewa terkelola (baris ~1430-1437).
-
-4. **Pembersihan Container Foto Thumbnail Kartu Pesanan (baris ~2538-2565)**:
-   - Dihapus: `onClick={() => heroImage && handleOpenGallery(...)}`
-   - Dihapus: `cursor-pointer`, `group/img`, `title="Klik untuk melihat foto kamar & hunian"`
-   - Dihapus: `transform hover:scale-[1.02]`, `group-hover/img:scale-105`, `group-hover/img:opacity-100`
+2. **Eliminasi Deklarasi Duplikat**:
+   Menghapus deklarasi `residentStatus` yang sebelumnya berada di bawah baris 371/484.
 
 ---
 
@@ -85,32 +54,22 @@ transforming...
 ✓ 2512 modules transformed.
 rendering chunks...
 computing gzip size...
-../../public/assets/MyKost-RlZUYopQ.js                 192.06 kB │ gzip:  46.17 kB
-✓ built in 33.33s
+../../public/assets/MyKost-Catbc4nB.js                 192.06 kB │ gzip:  46.16 kB
+✓ built in 26.45s
 ```
 **Status: 0 Error, Berhasil 100%.**
 
-### B. Hasil Simulasi Pencocokan Foto Unit Kamar
-- Data properti Kost Ryuta diuji dengan tipe kamar "Standard":
-  - Label `properties.image_urls`: `"Kamar: Standard"`, `"Kamar Mandi: Standard"`, `"Bangunan Depan"`.
-  - Hasil resolver: Foto yang terpilih sebagai `heroImage` dan `displayImg` adalah foto `Kamar: Standard` (`1793157885194_cuz1sg...webp`), bukan foto gerbang `"Bangunan Depan"`.
+### B. Hasil Uji Runtime
+- State `residentStatus` kini telah terinisialisasi sebagai `[]` sejak baris pertama fungsi komponen dijalankan.
+- Evaluasi `residentStatus.length` pada dependency array `useEffect` baris 322 berjalan aman dan mulus tanpa *ReferenceError*.
+- Halaman `/my-bookings` langsung me-render skeleton loader lalu secara otomatis beralih ke tab **AKTIF** bagi pengguna yang memiliki sewa aktif.
 
 ---
 
 ## 4. Panduan Verifikasi Pengguna (User Testing Guide)
 
-Untuk menguji perubahan ini langsung di antarmuka web:
-
-1. **Pengujian Default Tab Orders**:
-   - Pastikan akun Anda memiliki 1 penyewaan aktif (misal: Kost Ryuta).
-   - Klik menu navigasi **Orders** di navbar bawah.
-   - **Hasil yang Diharapkan:** Halaman otomatis langsung membuka tab **AKTIF** (`/my-bookings/aktif`) dan langsung memperlihatkan kartu sewa Anda (tidak lagi membuka tab "Diajukan" yang kosong).
-   - Coba klik manual tab "Diajukan" atau "Riwayat": Sistem tetap mengizinkan Anda berpindah tab secara normal.
-
-2. **Pengujian Foto Pratinjau Kamar**:
-   - Perhatikan kartu sewa Kost Ryuta pada tab **AKTIF**.
-   - **Hasil yang Diharapkan:** Gambar pratinjau kamar kini menampilkan foto interior kamar tipe Standard (kamar tidur dengan kasur/lemari), bukan lagi foto gerbang/pagar depan kost.
-
-3. **Pengujian Eliminasi Modal Pembesaran**:
-   - Klik foto thumbnail kamar pada kartu sewa tersebut.
-   - **Hasil yang Diharapkan:** Foto tidak memunculkan popup modal yang membesar, kartu tetap rapi dan tidak mengganggu alur interaksi pengguna.
+1. Refresh halaman browser pada rute `/my-bookings` (atau klik menu **Orders** di navbar bawah).
+2. Periksa Developer Tools Console:
+   - **Hasil yang Diharapkan:** Console bersih dari error `Uncaught ReferenceError: Cannot access 'residentStatus' before initialization`.
+3. Periksa tampilan UI:
+   - **Hasil yang Diharapkan:** Halaman memuat dengan lancar, langsung aktif di tab **AKTIF**, menampilkan kartu sewa Kost Ryuta dengan foto kamar tidur Standard yang akurat tanpa modal popup saat thumbnail diklik.

@@ -2,6 +2,25 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 491. Perbaikan Runtime ReferenceError TDZ 'residentStatus' pada MyKost (`MyKost.tsx`) (November 2026)
+- **Permintaan & Masukan Pengguna**:
+  - Pengguna menemukan crash fatal front-end pada console saat membuka halaman Orders (`/my-bookings`):
+    `Uncaught ReferenceError: Cannot access 'residentStatus' before initialization at MyKost (MyKost.tsx:322:28)`
+- **Akar Masalah & Analisis Teknis**:
+  - Pada `MyKost.tsx`, hook `useEffect` untuk sinkronisasi tab URL dan smart tab defaulting mengevaluasi `residentStatus.length` dalam dependency array pada baris 322.
+  - Namun deklarasi `const [residentStatus, setResidentStatus] = useState<any[]>([]);` berada jauh di bawah pada baris 371.
+  - Akibat aturan *Temporal Dead Zone* (TDZ) pada ECMAScript, variabel `const` tidak dapat diakses sebelum baris deklarasinya dieksekusi. Saat React merender komponen dan mengevaluasi dependency array hook, runtime melempar `ReferenceError`.
+- **Implementasi Solusi**:
+  - Mengonsolidasikan deklarasi `const [residentStatus, setResidentStatus] = useState<any[]>([]);` ke puncak komponen `MyKost` (baris 225, tepat setelah `activeKosts`) sebelum hook dan efek apa pun dieksekusi.
+  - Menghapus deklarasi duplikat pada baris 371/484.
+- **File Tersentuh**:
+  - `functions/public/pages/MyKost.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi build frontend Vite (`npm.cmd --prefix functions/public run build`): Berhasil 100% (2512 modul, 0 error).
+  - Runtime verification: Halaman `/my-bookings` dapat dimuat sempurna tanpa error TDZ / ReferenceError pada console.
+
 ### 490. Smart Context-Aware Default Tab Orders ('/my-bookings'), Resolusi Foto Kamar Unit Riil Sesuai Tipe/Nomor Kamar, & Eliminasi Modal Pembesaran Thumbnail (`MyKost.tsx`) (November 2026)
 - **Permintaan & Masukan Pengguna**:
   1. Pengguna meminta ketika user memiliki penyewaan aktif, saat pertama kali masuk ke menu Orders (`/my-bookings`), sistem otomatis langsung mengarahkan ke tab **AKTIF**, bukan tab DIAJUKAN yang menampilkan status kosong "Belum ada pengajuan".
