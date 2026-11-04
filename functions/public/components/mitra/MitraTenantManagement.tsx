@@ -115,13 +115,13 @@ const MitraTenantManagement: React.FC<MitraTenantManagementProps> = ({
             alert('Tanggal masuk awal tidak valid.');
             return;
         }
-        if (!window.confirm(`Setujui permintaan masuk lebih awal untuk ${resident.profile.name} menjadi tanggal ${safeFormatDate(proposedDate)}? Tanggal sewa akan otomatis dihitung ulang dan serah terima kunci langsung aktif.`)) return;
+        if (!window.confirm(`Setujui permintaan masuk lebih awal untuk ${resident.profile.name} menjadi tanggal ${safeFormatDate(proposedDate)}? Tanggal mulai dan selesai sewa akan otomatis diperbarui. Serah terima kunci tetap dilakukan saat penyewa tiba di kost.`)) return;
         setIsUpdating(true);
         try {
             const targetId = resident.id || resident.last_transaction_id;
             const res = await approveEarlyCheckIn(targetId, proposedDate);
             if (res.success) {
-                alert(`Permintaan masuk awal disetujui! Tanggal sewa baru: ${res.newStartDate} s/d ${res.newEndDate}. Status penghuni kini AKTIF.`);
+                alert(`Permintaan masuk awal disetujui! Tanggal sewa baru: ${res.newStartDate} s/d ${res.newEndDate}. Serah terima kunci fisik dapat dilakukan saat penyewa tiba di lokasi.`);
                 await refreshData();
             } else {
                 alert('Gagal menyetujui early check-in: ' + (res.error || 'Terjadi kesalahan'));

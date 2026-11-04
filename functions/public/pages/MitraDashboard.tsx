@@ -937,13 +937,13 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
             alert('Tanggal early check-in tidak valid.');
             return;
         }
-        if (!window.confirm(`Setujui pemajuan tanggal masuk menjadi ${proposedDate}? Tanggal selesai sewa akan otomatis dihitung ulang.`)) return;
+        if (!window.confirm(`Setujui pemajuan tanggal masuk menjadi ${proposedDate}? Tanggal mulai dan selesai sewa akan otomatis diperbarui. Serah terima kunci tetap dilakukan saat penyewa tiba di kost.`)) return;
         try {
             setLoading(true);
             const targetId = booking.resident_status_id || booking.id;
             const res = await approveEarlyCheckIn(targetId, proposedDate);
             if (res.success) {
-                alert(`Permintaan masuk lebih awal disetujui! Tanggal sewa baru: ${res.newStartDate} s/d ${res.newEndDate}`);
+                alert(`Permintaan masuk lebih awal disetujui! Tanggal sewa baru: ${res.newStartDate} s/d ${res.newEndDate}. Serah terima kunci fisik dapat dilakukan saat penyewa tiba di lokasi.`);
                 await loadData();
             } else {
                 alert('Gagal menyetujui: ' + (res.error || 'Terjadi kesalahan'));

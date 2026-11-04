@@ -2,6 +2,41 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 497. Decoupled Early Check-In Reschedule vs Physical Key Handover Lifecycle (`userService.ts`, `MyKost.tsx`, `MitraDashboard.tsx`, `MitraTenantManagement.tsx`) (November 2026)
+- **Permintaan & Masukan Pengguna**:
+  - Pengguna menemukan anomali serius pada alur persetujuan masuk lebih awal: Saat Mitra menekan tombol "ACC Masuk Lebih Awal" pada Dashboard Mitra untuk memajukan jadwal masuk (misal menjadi 08 November 2026 dari jadwal awal 10 November 2026), status sewa penyewa seketika berubah menjadi **"SEDANG DISEWA"** dan **"KUNCI DITERIMA"** dengan banner **"MASA SEWA BERJALAN: Hari ke-0 dari 30 Hari"**.
+  - Padahal hari ini masih 04 November 2026 (4 hari sebelum jadwal masuk baru), penyewa belum tiba di kost, dan belum ada serah terima kunci fisik.
+  - Pengguna menuntut agar sistem memisahkan secara tegas antara **persetujuan jadwal masuk** (reschedule) dan **serah terima fisik kunci kamar** (key handover). Sekalipun tanggal yang dipilih adalah hari ini, status tidak boleh langsung aktif sebelum salah satu pihak mengonfirmasi serah terima kunci fisik.
+- **Akar Masalah & Analisis Teknis**:
+  - Pada `approveEarlyCheckIn` di `functions/public/userService.ts`, proses persetujuan jadwal keliru menginjeksi metadata serah terima fisik langsung pada detik itu juga: `actual_checkin_at: nowIso`, `handover_confirmed: true`, dan `checked_in_by: 'owner'`.
+  - Akibatnya, flag `isHandoverDone` di `MyKost.tsx` dan `MitraDashboard.tsx` langsung bernilai `true`, sehingga sistem menganggap kunci fisik telah diterima dan hunian aktif berjalan mendahului kalender sewa.
+  - Di `MyKost.tsx`, evaluasi badge atas menggunakan kondisi negatif `!isWaitingArrival` yang memicu tampilan "SEDANG DISEWA" jika hari-H tiba meskipun kunci fisik belum diserahterimakan.
+- **Implementasi Solusi**:
+  1. **Decoupling Logika pada `approveEarlyCheckIn` (`userService.ts`)**:
+     - Menghapus penulisan `actual_checkin_at`, `handover_confirmed: true`, dan `checked_in_by: 'owner'` saat pemilik menyetujui perubahan jadwal.
+     - Membersihkan flag serah terima fisik dari `metadata` di tabel `resident_status` dan `transactions`.
+     - Fungsi murni memajukan `start_date`, menghitung ulang `end_date`, dan menyetel `early_checkin_status: 'approved'`.
+  2. **Refined State Handover Lifecycle pada `MyKost.tsx`**:
+     - Menjadikan `isHandoverDone` sebagai syarat mutlak untuk status **"SEDANG DISEWA"** dan hitung mundur sisa hari sewa aktif.
+     - Menambahkan badge status **"SIAP CHECK-IN"** dan alert **"Masuk Hari Ini"** saat hari-H tiba namun kunci fisik belum diserahterimakan (`!isHandoverDone && !isUpcoming`).
+     - Memastikan status tetap **"MENUNGGU TANGGAL MASUK"** dengan countdown presisi (misal: "Masuk dlm 4 Hari") selama `today < start_date`.
+     - Tombol aksi **"Terima Kunci & Masuk"** tetap muncul saat hari-H tiba untuk konfirmasi penyewa.
+  3. **Penyesuaian Komunikasi & Aksi pada `MitraDashboard.tsx` & `MitraTenantManagement.tsx`**:
+     - Memastikan tombol **"Serah Terima Kunci"** tetap tersedia bagi Mitra setelah ACC jadwal masuk awal hingga kunci fisik benar-benar diserahkan.
+     - Memperbaiki teks konfirmasi dan alert agar transparan dan mendidik pengguna: *"Serah terima kunci fisik dapat dilakukan saat penyewa tiba di lokasi."*
+  4. **Sanitasi Data Simulasi di Supabase**:
+     - Menjalankan script data repair untuk membersihkan `actual_checkin_at` dan `handover_confirmed` pada record hunian Kost Ryuta (`16daa84e-f9cd-4b4a-aae9-ba9cf92d360f`) dan transaksi (`f4c2c5d5-0f26-4092-8364-59455ad87306`), mengembalikan status bersih ke **"Menunggu Tanggal Masuk (08 November 2026)"**.
+- **File Tersentuh**:
+  - `functions/public/userService.ts`
+  - `functions/public/pages/MyKost.tsx`
+  - `functions/public/pages/MitraDashboard.tsx`
+  - `functions/public/components/mitra/MitraTenantManagement.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Verifikasi Database Supabase: `actual_checkin_at: undefined`, `handover_confirmed: undefined`, `start_date: '2026-11-08'`, `end_date: '2026-12-08'`, `early_checkin_approved: true`.
+  - Kompilasi Vite build front-end (`npm.cmd --prefix functions/public run build`): Lulus 100% (0 error, built in 22.06s).
+
 ### 496. Programmatic Date Picker Trigger (`showPicker()` API) & Ref Binding pada Modal 'Ajukan Check-in Lebih Awal' (`MyKost.tsx`) (November 2026)
 - **Permintaan & Masukan Pengguna**:
   - Pengguna melaporkan bahwa saat masuk ke modal "Ajukan Check-in Lebih Awal" pada halaman MyKost, elemen pilihan rencana tanggal masuk tidak bisa diklik dan tidak ada reaksi apa pun saat ditekan.

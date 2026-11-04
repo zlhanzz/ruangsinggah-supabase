@@ -2414,6 +2414,8 @@ export async function approveEarlyCheckIn(
 
     if (resRecord) {
       const meta = resRecord.metadata || {};
+      // Bersihkan flag handover/checkin jika ada agar serah terima kunci tetap dilakukan secara fisik
+      const { actual_checkin_at, handover_confirmed, checked_in_by, ...cleanMeta } = meta;
       await supabase
         .from('resident_status')
         .update({
@@ -2421,14 +2423,14 @@ export async function approveEarlyCheckIn(
           end_date: newEndDate,
           status: 'ACTIVE',
           metadata: {
-            ...meta,
+            ...cleanMeta,
             startDate: approvedDate,
             endDate: newEndDate,
+            early_checkin_status: 'approved',
             early_checkin_approved: true,
             early_checkin_approved_at: nowIso,
-            actual_checkin_at: nowIso,
-            handover_confirmed: true,
-            checked_in_by: 'owner'
+            early_checkin_requested: false,
+            early_checkin_proposed_date: approvedDate
           },
           updated_at: nowIso
         })
@@ -2444,18 +2446,19 @@ export async function approveEarlyCheckIn(
 
     if (trxRecord) {
       const tMeta = trxRecord.metadata || {};
+      const { actual_checkin_at, handover_confirmed, checked_in_by, ...cleanTMeta } = tMeta;
       await supabase
         .from('transactions')
         .update({
           metadata: {
-            ...tMeta,
+            ...cleanTMeta,
             startDate: approvedDate,
             endDate: newEndDate,
+            early_checkin_status: 'approved',
             early_checkin_approved: true,
             early_checkin_approved_at: nowIso,
-            actual_checkin_at: nowIso,
-            handover_confirmed: true,
-            checked_in_by: 'owner'
+            early_checkin_requested: false,
+            early_checkin_proposed_date: approvedDate
           },
           updated_at: nowIso
         })
