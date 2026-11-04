@@ -194,12 +194,13 @@ const MitraTenantManagement: React.FC<MitraTenantManagementProps> = ({
             const startD = r.start_date ? parseDateSafely(r.start_date) : null;
             const startNorm = startD ? new Date(startD.getFullYear(), startD.getMonth(), startD.getDate()) : null;
 
-            // Is Upcoming: Not yet handed over AND (start date in future OR explicitly marked WAITING_CHECKIN / UPCOMING)
+            // Is Upcoming: Not yet handed over / checked in
             const isUpcoming = Boolean(
                 !isHandoverDone && (
-                    (startNorm && todayNorm.getTime() < startNorm.getTime()) ||
+                    (startNorm && todayNorm.getTime() <= startNorm.getTime()) ||
                     ['UPCOMING', 'WAITING_CHECKIN', 'AWAITING_CHECKIN'].includes((r.status || '').toUpperCase()) ||
-                    ['UPCOMING', 'WAITING_CHECKIN'].includes((rMeta.status || '').toUpperCase())
+                    ['UPCOMING', 'WAITING_CHECKIN'].includes((rMeta.status || '').toUpperCase()) ||
+                    !rMeta.handover_confirmed
                 )
             );
 
@@ -233,7 +234,7 @@ const MitraTenantManagement: React.FC<MitraTenantManagementProps> = ({
                 endDate: r.end_date,
                 totalPeriods: r.total_months || 0,
                 periodLabel: 'Bulan',
-                totalSewaLabel: `${r.total_months || 0} Bulan`,
+                totalSewaLabel: meta.periodLabel || (meta.period ? `${meta.period === 'bulanan' ? '1 Bulan' : meta.period === '3bulanan' ? '3 Bulan' : meta.period === '6bulanan' ? '6 Bulan' : meta.period === 'tahunan' ? '1 Tahun' : meta.period}` : `${r.total_months || 1} Bulan`),
                 billingBreakdown: {
                     base: Number(meta.basePrice) || (Number(t.amount || 0) - (Number(meta.extraPersonFee) || 0) - (Number(meta.facilityAmount || meta.additionalFeePrice || meta.facilityFee) || 0) - (Number(meta.platformFee) || 0)),
                     extraOccupant: Number(meta.extraPersonFee) || 0,

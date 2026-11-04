@@ -2212,6 +2212,7 @@ export async function syncResidentStatus(trxId: string, options: { overrideMasaS
         if (p === 'tahunan') totalMonthsCalc = 12;
         else if (p === '6bulanan') totalMonthsCalc = 6;
         else if (p === '3bulanan') totalMonthsCalc = 3;
+        else if (p === 'bulanan') totalMonthsCalc = 1;
         else if (p === 'harian' || p === 'mingguan') totalMonthsCalc = 1;
         else {
             const startDateObj = new Date(startDate);

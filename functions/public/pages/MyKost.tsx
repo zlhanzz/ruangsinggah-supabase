@@ -2506,6 +2506,25 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
                             const isExpiredBooking = expiry.isExpired || (kost.status || '').toUpperCase() === 'EXPIRED';
                             const isAwaitingPayment = ['AWAITING_PAYMENT', 'PENDING'].includes((kost.status || '').toUpperCase()) && !isExpiredBooking;
 
+                            // Arrival & Handover State
+                            const isHandoverDone = Boolean(kMeta.actual_checkin_at || kMeta.handover_confirmed || kost.actual_checkin_at);
+                            const isEarlyRequested = Boolean(kMeta.early_checkin_requested && !kMeta.early_checkin_approved);
+                            const isUpcoming = Boolean(
+                                !isHandoverDone && (
+                                    (startDateObj && new Date(nowObj.getFullYear(), nowObj.getMonth(), nowObj.getDate()).getTime() < new Date(startDateObj.getFullYear(), startDateObj.getMonth(), startDateObj.getDate()).getTime()) ||
+                                    ['UPCOMING', 'WAITING_CHECKIN', 'AWAITING_CHECKIN'].includes((kost.status || '').toUpperCase()) ||
+                                    ['UPCOMING', 'WAITING_CHECKIN'].includes((kMeta.status || '').toUpperCase())
+                                )
+                            );
+                            const isWaitingArrival = isPaid && !kost.is_checked_out && !isHandoverDone && isUpcoming;
+
+                            let daysUntilArrival: number | null = null;
+                            if (startDateObj) {
+                                const todayNorm = new Date(nowObj.getFullYear(), nowObj.getMonth(), nowObj.getDate());
+                                const startNorm = new Date(startDateObj.getFullYear(), startDateObj.getMonth(), startDateObj.getDate());
+                                daysUntilArrival = Math.ceil((startNorm.getTime() - todayNorm.getTime()) / (1000 * 60 * 60 * 24));
+                            }
+
                             return (
                                 <div key={kost.id} className="group relative bg-white rounded-2xl sm:rounded-[2rem] p-5 sm:p-7 lg:p-8 border border-slate-100 shadow-md shadow-slate-200/50 hover:shadow-xl hover:shadow-orange-900/5 transition-all duration-300 overflow-hidden flex flex-col gap-5 sm:gap-7">
                                     {/* Accent Background Glow */}
@@ -2549,7 +2568,16 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
                                                 <div className="flex-1 w-full min-w-0">
                                                     {/* Badges Bar */}
                                                     <div className="flex flex-wrap justify-center sm:justify-start items-center gap-1.5 sm:gap-2 mb-2.5 sm:mb-3">
-                                                        {isPaid && !kost.is_checked_out && (
+                                                        {/* 1. Menunggu Masuk (Upcoming Stay before Check-in) */}
+                                                        {isWaitingArrival && (
+                                                            <span className="px-2.5 sm:px-3.5 py-0.5 sm:py-1 rounded-full text-[8.5px] sm:text-[9px] font-black uppercase tracking-wider border flex items-center gap-1 sm:gap-1.5 bg-amber-50 text-amber-700 border-amber-200 shadow-sm shadow-amber-100">
+                                                                <Calendar className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-amber-600" />
+                                                                MENUNGGU MASUK
+                                                            </span>
+                                                        )}
+
+                                                        {/* 2. Sedang Disewa (Active Stay after Check-in) */}
+                                                        {isPaid && !kost.is_checked_out && !isWaitingArrival && (
                                                             <span className={`px-2.5 sm:px-3.5 py-0.5 sm:py-1 rounded-full text-[8.5px] sm:text-[9px] font-black uppercase tracking-wider border flex items-center gap-1 sm:gap-1.5 ${
                                                                 (kost.daysRemaining || 0) < 0 
                                                                     ? 'bg-gray-50 text-gray-400 border-gray-200' 
@@ -2590,7 +2618,16 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
                                                             </span>
                                                         )}
 
-                                                        {kost.daysRemaining !== null && isPaid && !kost.is_checked_out && (
+                                                        {/* Arrival Countdown for Upcoming Stay */}
+                                                        {isWaitingArrival && daysUntilArrival !== null && (
+                                                            <div className="px-2.5 sm:px-3 py-1 rounded-lg text-[9px] sm:text-[9.5px] font-bold uppercase tracking-wider border flex items-center gap-1.5 bg-orange-50 text-orange-600 border-orange-200">
+                                                                <Clock className="w-3.5 h-3.5" />
+                                                                {daysUntilArrival === 0 ? 'Masuk Hari Ini' : daysUntilArrival === 1 ? 'Masuk Besok' : `Masuk dlm ${daysUntilArrival} Hari`}
+                                                            </div>
+                                                        )}
+
+                                                        {/* Active Lease Countdown (Only when actively occupied) */}
+                                                        {!isWaitingArrival && kost.daysRemaining !== null && isPaid && !kost.is_checked_out && (
                                                             <div className={`px-2.5 sm:px-3 py-1 rounded-lg text-[9px] sm:text-[9.5px] font-bold uppercase tracking-wider border flex items-center gap-1.5 ${
                                                                 kost.daysRemaining <= 7 
                                                                     ? 'bg-red-50 text-red-600 border-red-200 animate-pulse' 
@@ -2767,9 +2804,6 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
 
                                             {/* Visual Progress Bar / Handover Status */}
                                             {isPaid && !kost.is_checked_out && (() => {
-                                                const isHandoverDone = Boolean(kMeta.actual_checkin_at || kMeta.handover_confirmed || kost.actual_checkin_at);
-                                                const isEarlyRequested = Boolean(kMeta.early_checkin_requested && !kMeta.early_checkin_approved);
-                                                const isUpcoming = Boolean(startDateObj && nowObj.getTime() < new Date(startDateObj.getFullYear(), startDateObj.getMonth(), startDateObj.getDate()).getTime());
 
                                                 if (!isHandoverDone && isUpcoming) {
                                                     return (

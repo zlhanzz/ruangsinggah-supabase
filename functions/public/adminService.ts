@@ -1092,6 +1092,7 @@ export async function syncResidentStatus(transactionId: string, metadataOverride
             if (p === 'tahunan') newTotalMonths = 12;
             else if (p === '6bulanan') newTotalMonths = 6;
             else if (p === '3bulanan') newTotalMonths = 3;
+            else if (p === 'bulanan') newTotalMonths = 1;
             else if (p === 'harian' || p === 'mingguan') newTotalMonths = 1;
             else newTotalMonths = durationInMonths > 0 ? durationInMonths : 1;
 

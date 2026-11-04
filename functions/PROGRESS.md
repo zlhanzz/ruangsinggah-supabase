@@ -2,6 +2,39 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 489. Standardisasi Siklus Masa Tunggu (Upcoming Stay) vs Sewa Berjalan (Active Stay) & Eliminasi Glitch Countdown 60 Hari (`MyKost.tsx`, `MitraTenantManagement.tsx`, `adminService.ts`, `functions/src/index.ts`) (November 2026)
+- **Permintaan & Masukan Pengguna**:
+  1. Pengguna menemukan bahwa saat masih dalam fase masa tunggu (sebelum serah terima kunci), kartu pesanan menampilkan countdown ~60 hari (`61 HARI LAGI`) dan badge `SEDANG DISEWA`. Namun ketika tombol "Serah Terima Kunci" diklik, countdown langsung terkoreksi menjadi `30 HARI LAGI`.
+  2. Pengguna meminta agar durasi dan paket sewa jauh lebih selaras dan konsisten di seluruh sistem RuangSinggah.
+- **Akar Masalah & Analisis Teknis**:
+  1. Di `MyKost.tsx`, header kartu pesanan (`Badges Bar`) merender badge `SEDANG DISEWA` dan `kost.daysRemaining Hari Lagi` murni berdasarkan `isPaid && !kost.is_checked_out` tanpa mengecek apakah penghuni sudah tiba / serah terima kunci (`!isHandoverDone && isUpcoming`).
+  2. Akibatnya, pada fase masa tunggu, sistem menghitung mundur hari sewa dari `today` menuju `end_date` (yang sempat tercatat 2 bulan karena tumpukan siklus lama), sehingga muncul badge `SEDANG DISEWA 61 HARI LAGI` yang bertentangan dengan subcard `MENUNGGU TANGGAL MASUK`.
+  3. Ketika serah terima kunci diklik, fungsi `confirmCheckIn` di `userService.ts` menghitung ulang durasi murni 1 bulan dari tanggal hari ini (`todayStr + 1 bulan = 30 hari`), sehingga countdown langsung meloncat menjadi `30 HARI LAGI`.
+  4. Di `MitraTenantManagement.tsx`, calon penghuni yang belum serah terima kunci (`!isHandoverDone`) sempat keluar dari filter `isUpcoming` jika tanggal mulai sewa telah sama dengan hari ini (`todayNorm == startNorm`), sehingga salah masuk ke status `AKTIF` dengan tampilan `SISA HARI: 62H`.
+  5. Di `adminService.ts` dan `functions/src/index.ts`, penentuan `total_months` untuk booking sewa awal perlu penguncian eksplisit `p === 'bulanan' => 1` agar deterministik 100% dan tidak pernah terpengaruh residual kalkulasi.
+- **Implementasi Solusi**:
+  1. **Pemisahan Status Header 'Menunggu Masuk' vs 'Sedang Disewa' (`MyKost.tsx`)**:
+     - Menghitung flag `isWaitingArrival = isPaid && !kost.is_checked_out && !isHandoverDone && isUpcoming`.
+     - Jika `isWaitingArrival` bernilai `true`: Render badge oranye/amber **`MENUNGGU MASUK`** (bukan `SEDANG DISEWA`), dan render countdown kedatangan yang presisi (`Masuk Hari Ini`, `Masuk Besok`, atau `Masuk dlm N Hari`).
+     - Badge hijau **`SEDANG DISEWA`** dan countdown masa sewa aktif (`30 Hari Lagi`) hanya ditampilkan ketika sewa telah resmi aktif berjalan (`!isWaitingArrival`).
+  2. **Standardisasi Status & Durasi Calon Penghuni (`MitraTenantManagement.tsx`)**:
+     - Memperbaiki evaluasi `isUpcoming`: Selama serah terima kunci belum dilakukan (`!isHandoverDone`), penghuni diidentifikasi sebagai calon penghuni pra-masuk (`isUpcoming`).
+     - Menyinkronkan kolom paket sewa agar deterministik membaca paket yang dipilih (`1 Bulan`, `3 Bulan`, `6 Bulan`, `1 Tahun`).
+  3. **Penguncian Deterministik Total Bulan & Idempotensi (`adminService.ts` & `functions/src/index.ts`)**:
+     - Menambahkan klausul eksplisit `else if (p === 'bulanan') newTotalMonths = 1;` dan `totalMonthsCalc = 1;` untuk booking sewa awal (`kost_booking`).
+  4. **Sanitasi Data Database Supabase**:
+     - Memperbarui rekam data `resident_status` pengujian Kost Ryuta menjadi `total_months: 1` yang sinkron dengan masa sewa berjalan 30 hari.
+- **File Tersentuh**:
+  - `functions/public/pages/MyKost.tsx`
+  - `functions/public/components/mitra/MitraTenantManagement.tsx`
+  - `functions/public/adminService.ts`
+  - `functions/src/index.ts`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Build frontend Vite (`npm.cmd --prefix functions/public run build`): Berhasil 100% (2512 modul, 0 error).
+  - Verifikasi integritas status: Fase masa tunggu kini menampilkan badge amber `MENUNGGU MASUK` dengan countdown kedatangan, dan countdown sewa aktif `30 Hari Lagi` hanya berdetak setelah serah terima kunci.
+
 ### 488. Perbaikan Bug Ketersediaan Kamar (Macet "Penuh") & Akurasi Durasi Sewa 1 Bulan (Bebas Glitch 60 Hari) (`KostDetail.tsx`, `MitraDashboard.tsx`, `adminService.ts`, `functions/src/index.ts`) (November 2026)
 - **Permintaan & Masukan Pengguna**:
   1. Pengguna mengosongkan tabel `resident_status` dan menghapus transaksi pengujian di Supabase untuk menguji alur booking ulang, namun kamar tipe Standard di halaman detail publik (`KostDetail.tsx`) macet berstatus `● Penuh`. Pengguna mencoba mengatur jumlah kamar via modal kendali cepat pada dashboard mitra menjadi `2 TERSEDIA`, namun tidak berpengaruh apa-apa di halaman publik.
