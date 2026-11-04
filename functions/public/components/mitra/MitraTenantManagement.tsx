@@ -180,8 +180,20 @@ const MitraTenantManagement: React.FC<MitraTenantManagementProps> = ({
 
             const daysLeft = getRemainingDays(r.end_date);
 
+            const isSurveyOccupant = Boolean(
+                r.isSurveyOccupant || 
+                r.is_survey_occupant || 
+                meta.isSurveyOccupant || 
+                meta.is_survey_occupant ||
+                rMeta.isSurveyOccupant || 
+                rMeta.is_survey_occupant ||
+                String(r.id || '').startsWith('survey-')
+            );
+
             // Handover & Check-in Verification
+            // Note: Penghuni survey lapangan KostManager secara inheren sudah memegang kunci fisik sejak pendataan awal
             const isHandoverDone = Boolean(
+                isSurveyOccupant ||
                 rMeta.actual_checkin_at || 
                 rMeta.handover_confirmed || 
                 r.actual_checkin_at || 
@@ -194,13 +206,12 @@ const MitraTenantManagement: React.FC<MitraTenantManagementProps> = ({
             const startD = r.start_date ? parseDateSafely(r.start_date) : null;
             const startNorm = startD ? new Date(startD.getFullYear(), startD.getMonth(), startD.getDate()) : null;
 
-            // Is Upcoming: Not yet handed over / checked in
+            // Is Upcoming: Belum serah terima kunci & jadwal masuk di masa depan (tidak berlaku untuk penghuni survey)
             const isUpcoming = Boolean(
                 !isHandoverDone && (
                     (startNorm && todayNorm.getTime() <= startNorm.getTime()) ||
                     ['UPCOMING', 'WAITING_CHECKIN', 'AWAITING_CHECKIN'].includes((r.status || '').toUpperCase()) ||
-                    ['UPCOMING', 'WAITING_CHECKIN'].includes((rMeta.status || '').toUpperCase()) ||
-                    !rMeta.handover_confirmed
+                    ['UPCOMING', 'WAITING_CHECKIN'].includes((rMeta.status || '').toUpperCase())
                 )
             );
 
@@ -453,6 +464,9 @@ const MitraTenantManagement: React.FC<MitraTenantManagementProps> = ({
                                                     <span className="text-[9px] bg-orange-50 text-orange-600 px-2 py-0.5 rounded-lg font-bold border border-orange-100 uppercase truncate max-w-[120px]">{resident.kostName}</span>
                                                     {isKostManager && (
                                                         <span className="text-[9px] font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-lg border border-indigo-100 uppercase tracking-wider flex items-center gap-1">⭐ KOSTMANAGER</span>
+                                                    )}
+                                                    {resident.isSurveyOccupant && (
+                                                        <span className="text-[9px] font-bold text-teal-700 bg-teal-50 px-2 py-0.5 rounded-lg border border-teal-200/60 uppercase tracking-wider flex items-center gap-1">PENGHUNI SURVEY</span>
                                                     )}
                                                     {resident.isUpcoming ? (
                                                         resident.isEarlyRequested ? (

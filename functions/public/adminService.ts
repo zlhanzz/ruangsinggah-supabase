@@ -732,6 +732,7 @@ export async function getResidentStatus(filters?: { ownerUid?: string; userId?: 
                         const startDate = rt.startDate || rt.leaseStartDate || rt.start_date || (p.created_at ? p.created_at.split('T')[0] : new Date().toISOString().split('T')[0]);
                         const endDate = rt.endDate || rt.leaseEndDate || rt.end_date || '';
 
+                        const checkInIso = startDate ? new Date(startDate).toISOString() : new Date().toISOString();
                         offlineResidents.push({
                             id: `survey-resident-${p.id}-${rIdx}`,
                             user_id: p.owner_uid || ownerUid || `survey-user-${p.id}-${rIdx}`,
@@ -742,7 +743,23 @@ export async function getResidentStatus(filters?: { ownerUid?: string; userId?: 
                             status: 'ACTIVE',
                             total_months: 1,
                             last_transaction_id: `survey-trx-${p.id}-${rIdx}`,
-                            created_at: startDate ? new Date(startDate).toISOString() : new Date().toISOString(),
+                            created_at: checkInIso,
+                            actual_checkin_at: checkInIso,
+                            handover_confirmed: true,
+                            is_survey_occupant: true,
+                            isSurveyOccupant: true,
+                            metadata: {
+                                actual_checkin_at: checkInIso,
+                                handover_confirmed: true,
+                                is_survey_occupant: true,
+                                isSurveyOccupant: true,
+                                managed_by: 'kostmanager',
+                                is_managed: true,
+                                tenantName,
+                                userName: tenantName,
+                                startDate,
+                                endDate: endDate || 'Sewa Berjalan'
+                            },
                             user: {
                                 id: `survey-user-${p.id}-${rIdx}`,
                                 name: tenantName,
@@ -770,7 +787,10 @@ export async function getResidentStatus(filters?: { ownerUid?: string; userId?: 
                                     platformFee: 0,
                                     billingPeriod: rt.paymentPeriod || rt.billingPeriod || 'bulanan',
                                     phone: rt.residentPhone || rt.tenantPhone || rt.occupant_phone || '-',
-                                    isSurveyOccupant: true
+                                    isSurveyOccupant: true,
+                                    is_survey_occupant: true,
+                                    actual_checkin_at: checkInIso,
+                                    handover_confirmed: true
                                 }
                             }
                         });

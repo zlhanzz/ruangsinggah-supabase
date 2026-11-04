@@ -2,6 +2,34 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 498. Isolasi Domain Tegas Penghuni Survey Offline KostManager vs Penyewa Online Kost Biasa (`MitraTenantManagement.tsx`, `adminService.ts`) (November 2026)
+- **Permintaan & Masukan Pengguna**:
+  - Pengguna menemukan bug arsitektur pada listing dikelola KostManager (akun Mitra Sulhan, properti Kost Apalah Daya): Seluruh 8 penghuni hasil pendataan agen survey lapangan tertahan dalam status **"MENUNGGU MASUK"** (`8 TOTAL • 8 MENUNGGU MASUK • 0 AKTIF • 0 TENGGANG`) dan masing-masing memunculkan tombol **"SERAH TERIMA KUNCI"**.
+  - Padahal ke-8 penghuni tersebut adalah penghuni eksisting riil yang sudah tinggal di kamar (seperti Rifqi sejak November 2025). Serah terima kunci fisik tidak masuk akal karena mereka sudah memegang kunci sejak awal disurvei oleh agen.
+  - Pengguna menuntut agar sistem memiliki pemisahan domain yang tegas dan tidak mencampuradukkan alur operasional booking online Kost Biasa dengan pendataan offline KostManager.
+- **Akar Masalah & Analisis Teknis**:
+  - Pada `MitraTenantManagement.tsx`, ekspresi boolean `isUpcoming` memiliki fallback `!rMeta.handover_confirmed` yang selalu bernilai `true` untuk penghuni survey (karena mereka tidak memiliki riwayat serah terima online). Akibatnya, 100% penghuni survey dipaksa menjadi `isUpcoming = true` (Menunggu Masuk), mengabaikan tanggal mulai riil.
+  - Objek data `offlineResidents` yang diekstrak dari `properties.room_types` di `adminService.ts` tidak menyertakan flag `is_survey_occupant: true`, `handover_confirmed: true`, dan `actual_checkin_at`.
+- **Implementasi Solusi**:
+  1. **Standarisasi Metadata Ekstraksi (`adminService.ts`)**:
+     - Menambahkan atribut root `is_survey_occupant: true`, `isSurveyOccupant: true`, `actual_checkin_at: checkInIso`, dan `handover_confirmed: true` pada `offlineResidents`.
+     - Melengkapi metadata transaksi survey dengan penanda serah terima fisik inheren.
+  2. **Isolasi Domain & Eliminasi Boolean Bug (`MitraTenantManagement.tsx`)**:
+     - Mendefinisikan `isSurveyOccupant` secara menyeluruh berbasis flag root, metadata, maupun ID prefix `survey-`.
+     - Menetapkan bahwa untuk penghuni survey, `isHandoverDone` secara inheren bernilai `true`.
+     - Menghapus fallback berbahaya `!rMeta.handover_confirmed` dari rumus `isUpcoming`, sehingga `isUpcoming` murni mengukur apakah tanggal masuk benar-benar di masa depan.
+     - Menghilangkan tombol `Serah Terima Kunci` dari kartu penghuni survey (digantikan oleh status `Auto-Pilot Managed` dan `Hubungi Tim KM`).
+     - Menambahkan badge penanda visual `PENGHUNI SURVEY` pada kartu penghuni.
+- **File Tersentuh**:
+  - `functions/public/adminService.ts`
+  - `functions/public/components/mitra/MitraTenantManagement.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Simulasi perhitungan penghuni Kost Apalah Daya: Total=8, Menunggu Masuk=0, Sewa Aktif=2 (Rifqi & Room 3), Masa Tenggang/Expired=6 (Afriani dkk).
+  - 100% sinkron dengan counter sidebar `Penghuni Aktif: 2`.
+  - Kompilasi build frontend Vite (`npm.cmd --prefix functions/public run build`): Lulus 100% (0 error, built in 21.68s).
+
 ### 497. Decoupled Early Check-In Reschedule vs Physical Key Handover Lifecycle (`userService.ts`, `MyKost.tsx`, `MitraDashboard.tsx`, `MitraTenantManagement.tsx`) (November 2026)
 - **Permintaan & Masukan Pengguna**:
   - Pengguna menemukan anomali serius pada alur persetujuan masuk lebih awal: Saat Mitra menekan tombol "ACC Masuk Lebih Awal" pada Dashboard Mitra untuk memajukan jadwal masuk (misal menjadi 08 November 2026 dari jadwal awal 10 November 2026), status sewa penyewa seketika berubah menjadi **"SEDANG DISEWA"** dan **"KUNCI DITERIMA"** dengan banner **"MASA SEWA BERJALAN: Hari ke-0 dari 30 Hari"**.
