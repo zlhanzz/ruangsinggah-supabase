@@ -1,77 +1,116 @@
-# WALKTHROUGH: Modernisasi & Standardisasi Industri Portal Pembayaran (PaymentGateway.tsx)
+# WALKTHROUGH - Milestone #490: Smart Orders Navigation, Resolusi Foto Kamar Riil, & Eliminasi Modal Thumbnail
 
-## Ringkasan Pekerjaan
-Pada tugas ini, kita melakukan evaluasi, redesain visual, serta perbaikan arsitektur sistem pada komponen portal pembayaran (**Checkout Gateway / `PaymentGateway.tsx`**) agar memenuhi standar industri proptech & fintech terkemuka, mengintegrasikan identitas merek resmi **RuangSinggah.id**, serta menyelesaikan bug tabrakan teks dan batas waktu habis palsu.
-
----
-
-## Daftar Perubahan Mendalam
-
-### 1. Integrasi Branding Resmi RuangSinggah.id & Keamanan Perbankan
-- **Logo Resmi**: Mengganti teks inisial `"RS"` oranye dengan logo resmi `/logo.png` bersanding dengan tipografi wordmark `RuangSinggah.id`.
-- **Badging & Keamanan**:
-  - Badge header: `Official Checkout Gateway`.
-  - Security strip: `<ShieldCheck className="w-4 h-4 text-emerald-400" /> Enkripsi Bank-Grade 256-bit SSL` dan `Midtrans Verified ✓`.
-  - Footer jaminan keamanan: `Transaksi Resmi Dilindungi RuangSinggah.id • Powered by Midtrans`.
-
-### 2. Eliminasi Total Tampilan "AI Slop" & Emoji Mentah
-- **Radius Proporsional Standar Fintech**: Mengganti sudut bengkak (`rounded-[2.5rem]`, `rounded-[3rem]`) menjadi sudut modern `rounded-2xl` dan `rounded-xl`.
-- **Pure Vector SVG (`lucide-react`)**: Menghapus seluruh emoji teks mentah (`📱 💳`, `📥`, `💳`, `✅`, `⚠️`) dan menggantinya 100% dengan komponen SVG dari paket `lucide-react`:
-  - `<QrCode />`, `<Smartphone />`, `<Wallet />`, `<CreditCard />`, `<Building2 />` untuk saluran pembayaran.
-  - `<Download />` untuk tombol unduh QRIS.
-  - `<Copy />` $\rightarrow$ `<Check />` untuk tombol salin nomor Virtual Account.
-  - `<AlertCircle />` untuk pesan galat.
-  - `<CheckCircle2 />` untuk layar pembayaran berhasil.
-
-### 3. Pemisahan Layout Anti-Tumpuk (Zero Text-Collision Layout)
-- **Akar Masalah Sebelumnya**: Nominal tagihan (`Rp 1.000.000`) dan timer countdown (`00:00:00`) diletakkan dalam satu baris flex horizontal tanpa pembungkus protektif, sehingga pada layar ponsel keduanya menempel rapat (`Rp 1.000.00000:00:00`).
-- **Solusi Industri**:
-  - Total Tagihan diletakkan dalam baris tersendiri dengan tipografi tegas dan tombol toggle `[ Lihat Rincian / Tutup Rincian ]` yang menampilkan accordion rincian biaya secara rapi.
-  - Batas waktu pembayaran dipindahkan ke dalam banner waktu terdedikasi (`bg-amber-50/90 border border-amber-200/70 text-amber-950 rounded-xl px-3.5 py-2`) lengkap dengan ikon vektor `<Clock />`.
-  - Pada tampilan mobile maupun desktop, nominal tagihan dan timer countdown **100% terpisah dan tidak akan pernah bertubrukan**.
-
-### 4. Perbaikan Arsitektur Waktu Batas Pembayaran (`getRemainingSeconds`)
-- **Akar Masalah Sebelumnya**: Komponen lama menghitung waktu mundur dari `created_at` dengan durasi kaku 3 jam. Untuk pesanan sewa kost yang baru saja disetujui mitra hari ini padahal pengajuannya dibuat kemarin, timer langsung menampilkan `00:00:00` merah.
-- **Solusi Industri**:
-  - Sistem kini mendeteksi tipe produk secara otomatis. Untuk pesanan sewa (`kost_booking`, `rent`, `kost`, dll), durasi jendela SLA adalah **24 Jam penuh (86.400 detik)** dihitung dari `metadata.approved_at || updated_at || created_at`.
-  - Timer kini langsung menampilkan sisa waktu yang benar (~23 jam atau 24 jam) saat penyewa menekan tombol BAYAR.
+**Tanggal:** 04 November 2026  
+**Status:** Berhasil Diimplementasikan & Lulus Uji Kompilasi Build (0 Error)  
+**Branch:** `bukan-productions`
 
 ---
 
-## Hasil Pengujian & Kompilasi
+## 1. Ringkasan Pekerjaan & Masalah yang Diselesaikan
 
-### 1. Kompilasi Front-End Vite (`functions/public`)
-- Perintah: `npm.cmd --prefix functions/public run build`
-- Hasil: **LULUS (2512 modul, 0 error)**
-- Bukti log kompilasi:
-  ```text
-  vite v6.4.1 building for production...
-  transforming...
-  ✓ 2512 modules transformed.
-  rendering chunks...
-  computing gzip size...
-  ../../public/assets/PaymentGateway-DLLe9dHj.js          33.49 kB │ gzip:   9.84 kB
-  ✓ built in 34.46s
-  ```
+Berdasarkan masukan dan persetujuan pengguna (*"okee jalankan"*), Milestone #490 berhasil menyelesaikan 3 aspek utama pada halaman Orders / Kost Saya (`/my-bookings`):
 
-### 2. Kompilasi Backend Cloud Functions (`functions`)
-- Perintah: `npm.cmd --prefix functions run build`
-- Hasil: **LULUS (tsc, 0 error)**
-- Bukti log kompilasi:
-  ```text
-  > build
-  > tsc
-  ```
+1. **Smart Context-Aware Default Tab Orders**:
+   - **Sebelumnya:** Setiap kali pengguna mengunjungi menu Orders dari navbar bawah (`/my-bookings`), sistem selalu memaksa mendarat di tab "Diajukan" (`/my-bookings/diajukan`). Jika pengguna sudah memiliki sewa aktif dan tidak sedang mengajukan kost baru, layar menampilkan state kosong *"Belum Ada Pengajuan"* meskipun badge tab "Aktif" menunjukkan angka 1.
+   - **Sesudah:** Sistem mengevaluasi data sewa pengguna secara cerdas. Jika pengguna memiliki sewa aktif (`residentStatus.length > 0`), navigasi ke `/my-bookings` secara otomatis langsung mengarahkan ke tab **AKTIF** (`/my-bookings/aktif`) sehingga penyewa langsung melihat kartu kost yang sedang disewanya. Tab "Diajukan" hanya dijadikan default jika pengguna tidak memiliki sewa aktif.
+
+2. **Resolusi Foto Kamar Riil Sesuai Tipe Kamar / Nomor Kamar**:
+   - **Sebelumnya:** Pada kartu pesanan/sewa, foto pratinjau yang muncul adalah foto gerbang / pagar depan kost ("Bangunan Depan"). Hal ini terjadi karena foto unit kamar disimpan di `properties.image_urls` dengan label tertentu (seperti `"Kamar: Standard"`), namun ketika `currentRoom.images` kosong, kode fallback secara eksplisit mencari foto berlabel `"bangunan depan"` (`frontBuildingImg`).
+   - **Sesudah:** Diterapkan fungsi resolver hirarkis `resolveRoomPhotos` yang secara presisi mencocokkan foto dengan tipe kamar yang disewa (untuk Kost Biasa, e.g. `"Kamar: Standard"`) atau nomor kamar (untuk KostManager, e.g. `"Unit 101"` / `"Kamar 1"`), dengan memprioritaskan kategori kamar tidur/interior dibanding foto kamar mandi, dapur, atau fasad bangunan.
+
+3. **Eliminasi Modal Pembesaran Thumbnail**:
+   - **Sebelumnya:** Mengklik foto thumbnail kartu pesanan membuka modal galeri yang membesarkan gambar, yang dinilai pengguna kurang berguna (*"kurang berguna"*).
+   - **Sesudah:** Handler `onClick`, kelas kursor pointer, dan pemicu modal galeri pada container foto thumbnail telah dieliminasi. Foto kini berfungsi sebagai thumbnail pratinjau yang bersih, elegan, dan statis tanpa memicu popup.
 
 ---
 
-## Panduan Pengujian bagi Pengguna
+## 2. Rincian Perubahan Kode
 
-1. Buka halaman **Kost Saya** (`/my-kost`) dengan akun penyewa (`userbiasa1`).
-2. Pada pesanan yang berstatus **Tunggu Pembayaran**, klik tombol **BAYAR**.
-3. Periksa tampilan modal Checkout Gateway yang baru:
-   - Header menampilkan logo resmi **RuangSinggah.id** dan badge keamanan bank-grade SSL.
-   - Nominal **Rp 1.000.000** tampil bersih, besar, dan tidak bertabrakan dengan batas waktu.
-   - Countdown timer menunjukkan sisa waktu 24 jam yang valid (bukan 00:00:00).
-   - Seluruh daftar metode bayar (QRIS, GoPay, DANA, Virtual Account) menggunakan kartu bergaris halus dan ikon vektor SVG jernih.
-   - Fitur salin nomor Virtual Account dan unduh QR code berfungsi mulus dengan umpan balik visual instan.
+### File: `functions/public/pages/MyKost.tsx`
+
+1. **Penerapan Helper `normalizePhotoUrl` & `resolveRoomPhotos`**:
+   - Didefinisikan di level modul untuk standardisasi penanganan URL storage dan pemetaan foto unit kamar.
+   - Prioritas resolusi foto:
+     1. `currentRoom.categorized_photos` / `categorizedPhotos` (kategori: interior, kasur, tempat tidur, kamar tidur).
+     2. `currentRoom.images` array.
+     3. Pencarian cerdas pada `properties.image_urls`:
+        - KostManager: Mencocokkan label nomor kamar (`kamar: <no>`, `unit <no>`).
+        - Kost Biasa: Mencocokkan label tipe kamar (`kamar: <type>`, e.g. "Kamar: Standard").
+        - Memprioritaskan foto kamar tidur riil dan mengabaikan foto eksterior (`bangunan depan`, `fasad`, `parkir`).
+     4. Fallback: Foto kamar tidur pertama yang tersedia, bukan foto fasad depan.
+
+2. **Smart Tab Redirection pada `useEffect` & `fetchMyKosts`**:
+   ```typescript
+   // Sync state with URL
+   useEffect(() => {
+       if (tabParam) {
+           const validTabs = ['diajukan', 'aktif', 'riwayat'];
+           if (validTabs.includes(tabParam)) {
+               setActiveTab(tabParam as any);
+           } else {
+               navigate(`${Page.MY_BOOKINGS}/diajukan`, { replace: true });
+           }
+       } else if (!loading) {
+           // Smart context-aware default tab when landing on /my-bookings
+           const hasActive = residentStatus.length > 0;
+           const target = hasActive ? 'aktif' : 'diajukan';
+           setActiveTab(target);
+           navigate(`${Page.MY_BOOKINGS}/${target}`, { replace: true });
+       }
+   }, [tabParam, loading, residentStatus.length, navigate]);
+   ```
+   - Di akhir fungsi `fetchMyKosts`: Ditambahkan sinkronisasi langsung saat data sewa aktif (`uniqueActive`) berhasil dimuat dari database.
+   - Pada `handleTabChange`: Ditambahkan `setActiveTab(tab)` untuk respon navigasi instan (optimistic UI update).
+
+3. **Integrasi Resolver ke Seluruh Alur Data**:
+   - Pemetaan pesanan `kostsData` (baris ~903-939).
+   - Pemetaan sewa aktif `mapResidentStatus` (baris ~1125-1154).
+   - Fallback `rawClaim` untuk sewa terkelola (baris ~1430-1437).
+
+4. **Pembersihan Container Foto Thumbnail Kartu Pesanan (baris ~2538-2565)**:
+   - Dihapus: `onClick={() => heroImage && handleOpenGallery(...)}`
+   - Dihapus: `cursor-pointer`, `group/img`, `title="Klik untuk melihat foto kamar & hunian"`
+   - Dihapus: `transform hover:scale-[1.02]`, `group-hover/img:scale-105`, `group-hover/img:opacity-100`
+
+---
+
+## 3. Hasil Pengujian & Kompilasi
+
+### A. Uji Kompilasi Frontend Vite (`npm run build`)
+Perintah: `npm.cmd --prefix functions/public run build`
+Hasil:
+```
+vite v6.4.1 building for production...
+transforming...
+✓ 2512 modules transformed.
+rendering chunks...
+computing gzip size...
+../../public/assets/MyKost-RlZUYopQ.js                 192.06 kB │ gzip:  46.17 kB
+✓ built in 33.33s
+```
+**Status: 0 Error, Berhasil 100%.**
+
+### B. Hasil Simulasi Pencocokan Foto Unit Kamar
+- Data properti Kost Ryuta diuji dengan tipe kamar "Standard":
+  - Label `properties.image_urls`: `"Kamar: Standard"`, `"Kamar Mandi: Standard"`, `"Bangunan Depan"`.
+  - Hasil resolver: Foto yang terpilih sebagai `heroImage` dan `displayImg` adalah foto `Kamar: Standard` (`1793157885194_cuz1sg...webp`), bukan foto gerbang `"Bangunan Depan"`.
+
+---
+
+## 4. Panduan Verifikasi Pengguna (User Testing Guide)
+
+Untuk menguji perubahan ini langsung di antarmuka web:
+
+1. **Pengujian Default Tab Orders**:
+   - Pastikan akun Anda memiliki 1 penyewaan aktif (misal: Kost Ryuta).
+   - Klik menu navigasi **Orders** di navbar bawah.
+   - **Hasil yang Diharapkan:** Halaman otomatis langsung membuka tab **AKTIF** (`/my-bookings/aktif`) dan langsung memperlihatkan kartu sewa Anda (tidak lagi membuka tab "Diajukan" yang kosong).
+   - Coba klik manual tab "Diajukan" atau "Riwayat": Sistem tetap mengizinkan Anda berpindah tab secara normal.
+
+2. **Pengujian Foto Pratinjau Kamar**:
+   - Perhatikan kartu sewa Kost Ryuta pada tab **AKTIF**.
+   - **Hasil yang Diharapkan:** Gambar pratinjau kamar kini menampilkan foto interior kamar tipe Standard (kamar tidur dengan kasur/lemari), bukan lagi foto gerbang/pagar depan kost.
+
+3. **Pengujian Eliminasi Modal Pembesaran**:
+   - Klik foto thumbnail kamar pada kartu sewa tersebut.
+   - **Hasil yang Diharapkan:** Foto tidak memunculkan popup modal yang membesar, kartu tetap rapi dan tidak mengganggu alur interaksi pengguna.

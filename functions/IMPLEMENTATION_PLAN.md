@@ -1,98 +1,98 @@
-# IMPLEMENTATION PLAN: Perbaikan Fase Masa Tunggu (Upcoming Stay) vs Sewa Berjalan & Eliminasi Glitch Countdown 60 Hari
+# IMPLEMENTATION PLAN: Optimasi UX Pesanan (MyKost) Sesuai Standar Industri Global (Airbnb / Booking.com / Traveloka)
 
-## 1. Analisis Masalah & Kebutuhan (Root Cause Analysis)
-
-### Masalah yang Ditemukan
-User melaporkan temuan pengujian yang sangat penting:
-> *"ketika sudah klik serah terima kunci langsung 30 hari lagi di countdownnya. 60 harian jika masih di fase masa tunggu"*
-
-Berdasarkan investigasi menyeluruh pada alur data antara `KostDetail`, `PaymentGateway`, `adminService`, `userService:confirmCheckIn`, `MyKost.tsx`, dan `MitraTenantManagement.tsx`:
-
-1. **Inkonsistensi Status & Badge pada Fase Masa Tunggu (`isUpcoming` / Pre-Arrival)**:
-   - Saat transaksi sewa telah lunas (`PAID`), tetapi penyewa **belum tiba di kost / belum serah terima kunci** (jadwal masuk di masa mendatang, misal booking tgl 5 Nov sementara hari ini tgl 4 Nov):
-     - Di `MyKost.tsx`, header kartu menampilkan badge hijau **`SEDANG DISEWA`** dan badge oranye **`61 HARI LAGI`**.
-     - Di `MitraTenantManagement.tsx` (Dashboard Mitra), penghuni langsung masuk ke kategori tab **`SEWA AKTIF`** dengan **`SISA HARI: 62H`** dan selesai sewa **`5 Jan 2027`**.
-   - Ini merupakan **kesalahan konseptual dan UX**:
-     - Masa sewa belum dimulai (penyewa belum serah terima kunci dan tanggal masuk belum tiba).
-     - Menghitung mundur sisa hari sewa dari `today` (hari ini) menuju tanggal selesai sewa adalah salah kaprah, karena masa sewa 30 hari baru boleh dikurangi setelah kunci diserahterimakan / tanggal mulai sewa tiba.
-
-2. **Akar Penyebab Nilai 60-an Hari (`2027-01-04` / `total_months: 2`)**:
-   - Pada saat pembayaran booking lunas, fungsi sinkronisasi sewa (`syncResidentStatus`) sempat mendeteksi record `resident_status` yang sudah ada (dari fase booking `PENDING` atau sesi sebelumnya).
-   - Di logika lama sebelum sanitasi tuntas, alur sinkronisasi memperlakukan record tersebut layaknya perpanjangan sewa (`isExtension`), sehingga tanggal akhir sewa ditambahkan **+1 bulan lagi** di atas tanggal akhir yang sudah ada (`2026-12-04 + 1 bulan = 2027-01-04`, `total_months = 2`).
-   - Akibatnya, `end_date` menjadi 2 bulan ke depan (sekitar 61-62 hari dari hari ini).
-   - Namun, ketika user menekan tombol **"Sudah Tiba & Terima Kunci"** (serah terima kunci), fungsi `confirmCheckIn` di `userService.ts` dijalankan. Fungsi ini secara cerdas menghitung ulang durasi murni **1 bulan dari hari serah terima kunci** (`todayStr + 1 bulan = 2026-12-04`). Begitu tanggal diperbarui menjadi 1 bulan, countdown langsung terkoreksi menjadi **30 Hari Lagi**!
+Dokumen ini disusun berdasarkan **Pasal 8 Protokol Workspace (Evaluasi Objektif Standar Industri Anti-Bias Konfirmasi)** untuk merombak arsitektur navigasi, akurasi visual, dan micro-interaction pada modul **Kost Saya** (`MyKost.tsx`).
 
 ---
 
-## 2. Komparasi & Evaluasi Standar Industri Objektif (Anti-Bias Konfirmasi)
+## 1. Analisis Masalah & Kebutuhan Pengguna
 
-Berdasarkan ketentuan Pasal 8 Protokol Workspace, berikut perbandingan objektif antara implementasi saat ini dengan standar industri platform proptech/hospitality global (Airbnb, Traveloka, Mamikos, Booking.com):
+Pengguna memberikan 3 masukan konkrit dari hasil pengujian nyata:
+1. **Navigasi Default Masih Tertahan di "Diajukan"**:
+   - Saat pengguna membuka menu *Orders*, sistem selalu mendaratkan pengguna ke tab `diajukan` meskipun pengguna memiliki sewa aktif yang sedang berjalan dan tidak memiliki pengajuan baru yang tertunda.
+   - Pengguna disuguhi halaman kosong (*"Belum Ada Pengajuan"*) padahal tab `aktif` memiliki badge `1`.
+2. **Foto Preview Menampilkan Fasad Luar / Gerbang, Bukan Unit Kamar**:
+   - Pada kartu sewa aktif (Kost Ryuta tipe Standard), foto yang tampil adalah foto gerbang/pagar depan kost (*"Bangunan Depan"*), bukan foto interior kamar yang disewa.
+   - Pada data `properties`, foto kamar Standard tersimpan di `image_urls` dengan label `"Kamar: Standard"`. Karena array `currentRoom.images` kosong, algoritma lama langsung jatuh ke fallback pencarian kata kunci *"bangunan depan"*.
+3. **Modal Pembesaran Foto Dinilai Kurang Berguna (*Modal Trap*)**:
+   - Mengklik thumbnail memicu modal dialog besar yang hanya menampilkan ulang foto yang sama (1 foto), menginterupsi alur pengguna tanpa nilai tambah fungsional.
 
-| Dimensi Evaluasi | Kondisi Saat Ini (Sebelum Perbaikan) | Standar Industri (Airbnb / Traveloka / Mamikos) | Status Standar | Alasan & Rekomendasi Tindakan |
+---
+
+## 2. Komparasi & Evaluasi Objektif Standar Industri (Anti-Bias Konfirmasi)
+
+Mengacu pada arsitektur platform proptech & hospitality terkemuka di dunia (**Airbnb Trips**, **Booking.com Manage Booking**, **Traveloka Pesanan**, **Mamikos Kos Saya**):
+
+| Dimensi Evaluasi | Implementasi Saat Ini | Standar Industri Terkemuka (Airbnb / Booking.com / Traveloka) | Status Klasifikasi | Alasan Teknis & Rekomendasi Solusi |
 | :--- | :--- | :--- | :--- | :--- |
-| **Pemisahan Status Lifecycle Penghuni** | Menggabungkan masa tunggu ke dalam status `SEDANG DISEWA`, menampilkan countdown sewa sebelum tanggal masuk. | Memisahkan tegas 3 fase siklus: **Upcoming Stay (Menunggu Tanggal Masuk)**, **Active Stay (Sedang Dihuni)**, dan **Completed/Checked-Out**. | ⚠️ *Below Industry Standard* | Terapkan status khusus `MENUNGGU MASUK` pada header badge pesanan dan dashboard mitra selama `!isHandoverDone && isUpcoming`. |
-| **Kalkulasi Countdown Hari** | Countdown `daysRemaining` dihitung dari `today` ke `end_date` tanpa mempedulikan apakah sewa sudah aktif berjalan atau masih pre-arrival. | Selama fase reservasi/masa tunggu, countdown yang ditampilkan adalah **Hitung Mundur Kedatangan** (misal: *Masuk Besok* atau *H-2 Menuju Masuk*). Countdown durasi sewa 30 hari baru aktif setelah check-in fisik. | ⚠️ *Below Industry Standard* | Di fase `isUpcoming`, sembunyikan countdown `N Hari Lagi` (atau ganti dengan badge `H-N Menuju Masuk`), dan baru aktifkan countdown sewa berjalan setelah serah terima kunci. |
-| **Determinisme Durasi Sewa Awal (Initial Booking Guard)** | Berisiko terjadi penambahan bulan ganda jika sinkronisasi database dipicu berulang kali saat transaksi booking baru. | Idempotent transaction guard: Initial booking dikunci mati secara deterministik (`total_months = 1` untuk bulanan) tanpa terpengaruh record `resident_status` sebelumnya. | 🌟 *Industry Standard* (setelah perbaikan) | Perketat guard di `adminService.ts` dan `functions/src/index.ts` agar booking sewa baru (`kost_booking`) tidak pernah dapat dievaluasi sebagai `isExtension`. |
-| **Sinkronisasi Tab Dashboard Mitra** | Penghuni masa tunggu langsung muncul di filter `SEWA AKTIF` mitra dengan hitungan hari yang melenceng. | Mitra melihat calon penghuni di badge `MENUNGGU MASUK` (Upcoming) dan tanggal mulai yang jelas, bukan `SEWA AKTIF`. | 🌟 *Industry Standard* (setelah perbaikan) | Sinkronkan filter dan label di `MitraTenantManagement.tsx` agar penghuni `isUpcoming` berlabel jelas `MENUNGGU MASUK`. |
+| **Routing & Default Tab Hierarchy** | Hardcoded static routing: default selalu ke tab `diajukan` tanpa memperhitungkan status kepemilikan sewa pengguna. | **Context-Aware Intent Routing**: Platform mendeteksi reservasi yang membutuhkan perhatian tertinggi pengguna. Pengguna dengan reservasi aktif/berjalan secara otomatis diprioritaskan mendarat di **Active Stay**, karena kebutuhan operasional harian penghuni adalah mengelola kamar aktifnya (WiFi, kunci, tagihan, komplain). | ⚠️ *Below Industry Standard* | Terapkan resolusi tab berbasis prioritas status: jika `activeCount > 0` dan tidak ada instruksi rute spesifik, otomatis arahkan ke `/my-bookings/aktif` dengan `replace: true`. |
+| **Unit Photo Binding & Taxonomy Resolution** | Fallback primitif: jika `currentRoom.images` kosong, langsung mencari foto bertuliskan "bangunan depan" / fasad luar. | **Hierarchical Unit Asset Matching**: Penyewa harus melihat foto unit kamar yang mereka tempati untuk mencegah disonansi kognitif (*"Apakah saya menyewa gerbang atau kamar?"*). Sistem memindai metadata foto dengan hirarki: (1) Foto unit fisik spesifik, (2) Foto tipe kamar berlabel `Kamar: [Tipe]`, (3) Foto interior kamar tidur pertama, baru (4) Eksterior properti. | ⚠️ *Below Industry Standard* | Bangun fungsi resolver multi-tier `resolveRoomCoverPhoto` yang memindai `image_urls` dan `categorized_photos` dengan prioritas kamar tidur utama. |
+| **Card Micro-Interactions & Ergonomics** | Membuka modal galeri besar saat thumbnail di-tap, memicu *Modal Trap* yang menutupi aksi operasional sewa. | **Task-Focused Active Dashboard**: Pada dashboard sewa aktif, kartu hunian adalah panel kendali operasional (bukan katalog belanja). Thumbnail foto berfungsi sebagai *visual anchor* statis. Interaksi klik difokuskan pada aksi cepat: Serah Terima Kunci, Chat Pemilik, Bayar Tagihan, dan Ajukan Kendala. | 🌟 *Industry Standard* (setelah disederhanakan) | Eliminasi event `onClick` modal pembesaran foto pada kartu pesanan, optimalkan thumbnail sebagai preview berkualitas tinggi yang bersih dan terintegrasi. |
 
 ---
 
-## 3. Dampak Perubahan (Affected Files)
+## 3. Desain Teknis & Spesifikasi Solusi
+
+### A. Context-Aware Tab Routing Engine (`MyKost.tsx`)
+1. **Prioritas Alur Mendarat (Landing Precedence)**:
+   - **Tingkat 1 (Prioritas Tertinggi)**: Jika URL secara eksplisit menyebutkan sub-path valid (`/my-bookings/aktif`, `/my-bookings/diajukan`, `/my-bookings/riwayat`), hormati pilihan pengguna.
+   - **Tingkat 2 (Konteks Sewa Berjalan)**: Jika pengguna masuk ke root `/my-bookings` (misal dari Bottom Navigation Bar) dan memiliki **Sewa Aktif** (`residentStatus.length > 0`), arahkan langsung ke tab **`aktif`** (`/my-bookings/aktif`).
+   - **Tingkat 3 (Pengajuan Menunggu)**: Jika tidak memiliki sewa aktif tetapi memiliki pengajuan menunggu persetujuan / tunggu bayar (`pendingCount > 0`), arahkan ke tab **`diajukan`** (`/my-bookings/diajukan`).
+   - **Tingkat 4 (Fallback Riwayat / Default)**: Jika tidak ada sewa aktif maupun pengajuan, default ke **`diajukan`** atau **`riwayat`** secara cerdas.
+2. **Pencegahan FOUT & Double-Mounting**:
+   - Gunakan `replace: true` saat sinkronisasi URL agar history back button browser pengguna tidak terjebak dalam loop redirect.
+
+### B. Algoritma Multi-Tier Room Asset Matching (`resolveRoomCoverPhoto`)
+Membangun hirarki pencarian foto yang deterministik:
+$$\text{Matched Photo} = \text{Tier 1} \to \text{Tier 2} \to \text{Tier 3} \to \text{Tier 4} \to \text{Tier 5}$$
+- **Tier 1 (KostManager Specific Room Unit)**:
+  - Jika sewa memiliki nomor kamar fisik (misal: `"Unit 101"`, `"Kamar 2"`):
+  - Cari foto di `currentRoom.images` atau `image_urls` yang label/kategorinya cocok dengan `unit [nomor]` atau `kamar [nomor]`.
+- **Tier 2 (Kost Biasa Category Matching)**:
+  - Cari foto di `prop.image_urls` yang label/kategorinya mengandung `Kamar: [roomType]` (misal: `"Kamar: Standard"`).
+  - Beri bobot tertinggi pada foto kamar tidur (mengandung `"kamar"` dan BUKAN `"mandi"` / `"dapur"`).
+- **Tier 3 (Room Type Array Inspection)**:
+  - Periksa `currentRoom.images` atau `currentRoom.categorized_photos.kamar`.
+- **Tier 4 (Any Bedroom in Property)**:
+  - Cari foto apa saja di properti yang berkategori `"Kamar"` atau `"Kamar Tidur"`.
+- **Tier 5 (Fallback Cover)**:
+  - Gunakan `prop.image_urls[0]`.
+
+### C. Eliminasi Modal Trap Thumbnail
+- Hilangkan atribut `onClick={() => handleOpenGallery(...)}` pada thumbnail kartu di `MyKost.tsx`.
+- Hilangkan efek hover scale berlebih dan cursor pointer yang menyesatkan.
+- Pertahankan badge jumlah foto sebagai info pelengkap statis atau integrasikan ke tombol detail jika diperlukan.
+
+---
+
+## 4. Dampak Perubahan (Affected Files)
 
 1. `functions/public/pages/MyKost.tsx`:
-   - Memperbaiki rendering badge header pada kartu pesanan: Jika `!isHandoverDone && isUpcoming`, tampilkan badge **`MENUNGGU MASUK`** (oranye/amber) alih-alih `SEDANG DISEWA` (hijau).
-   - Memperbaiki badge countdown waktu: Selama `!isHandoverDone && isUpcoming`, sembunyikan countdown sewa `N Hari Lagi` yang prematur, atau tampilkan hitung mundur kedatangan (misal: `Masuk dlm 1 hari` / `H-1`). Countdown masa sewa 30 hari hanya muncul ketika `isHandoverDone` atau masa sewa telah resmi berjalan.
-2. `functions/public/adminService.ts`:
-   - Mengunci deterministik durasi `kost_booking`: Pastikan `newTotalMonths = 1` dan `endDate = meta.endDate` secara mutlak untuk pembayaran sewa baru, mencegah penambahan bulan ganda.
-3. `functions/public/components/mitra/MitraTenantManagement.tsx`:
-   - Memastikan penghuni dalam status `isUpcoming` menampilkan badge status `MENUNGGU MASUK` (bukan `SEWA AKTIF`), dan durasi sewa menampilkan durasi paket yang dipesan (`1 Bulan`) tanpa sisa hari 60H yang membingungkan.
-4. `functions/public/userService.ts`:
-   - Memastikan kalkulasi `confirmCheckIn` dan `createBookingRequest` selalu konsisten dengan durasi paket sewa.
+   - Implementasi Context-Aware Tab Router pada `useEffect` inisialisasi tab dan penyelesaian loading data.
+   - Implementasi fungsi `resolveRoomCoverPhoto` untuk memetakan foto kamar Standard / Premium secara akurat.
+   - Pembersihan event handler klik thumbnail pada kartu pesanan.
 
 ---
 
-## 4. Langkah-Langkah Eksekusi (Fase 2)
+## 5. Langkah-Langkah Eksekusi (Fase 2)
 
-### Langkah 1: Koreksi Logika Badge & Countdown di `MyKost.tsx`
-- Tambahkan flag `isWaitingArrival = isPaid && !kost.is_checked_out && !isHandoverDone && isUpcoming`.
-- Jika `isWaitingArrival` bernilai `true`:
-  - Badge utama: Render badge oranye elegan `MENUNGGU MASUK` dengan ikon `Clock`/`Calendar`.
-  - Badge countdown: Tampilkan countdown kedatangan yang presisi (misal: jika tanggal masuk besok, tampilkan `Masuk Besok` atau `H-1 Masuk`). Jangan tampilkan sisa sewa 60 hari.
-- Jika sewa sudah berjalan (`isHandoverDone` atau `!isUpcoming`):
-  - Badge utama: Render badge hijau `SEDANG DISEWA`.
-  - Badge countdown: Render countdown masa sewa aktif (`30 Hari Lagi`).
-
-### Langkah 2: Sanitasi Perhitungan di `MitraTenantManagement.tsx`
-- Pastikan kartu penghuni di dashboard mitra mengecek `isUpcoming`.
-- Jika penghuni belum serah terima kunci (`isUpcoming`):
-  - Label status: `MENUNGGU MASUK` (warna amber/oranye).
-  - Kolom sisa hari: Tampilkan estimasi tanggal masuk atau durasi paket (`1 Bulan`), bukan angka 60H/62H.
-
-### Langkah 3: Penguatan Idempotensi di `adminService.ts`
-- Pada fungsi `syncResidentStatus`, pastikan transaksi dengan tipe `kost_booking` tidak pernah membaca atau memperpanjang `existing.end_date`.
-- Tanggal akhir sewa awal dikunci murni pada `meta.startDate + 1 bulan = meta.endDate`.
-
-### Langkah 4: Uji Kompilasi & Build Frontend
-- Jalankan `npm.cmd --prefix functions/public run build` untuk memastikan 0 error TypeScript / JSX.
-- Catat riwayat di `functions/PROGRESS.md`.
-- Buat laporan `WALKTHROUGH.md`.
-- Commit dan push ke branch `bukan-productions`.
+1. **Langkah 1**: Perbarui `MyKost.tsx` dengan helper resolusi foto kamar spesifik (`resolveRoomCoverPhoto`) pada pemetaan `residentStatus` dan `activeKosts`.
+2. **Langkah 2**: Perbarui logika pemilihan tab otomatis: ketika data selesai dimuat dari Supabase, jika rute adalah `/my-bookings` atau default dan pengguna memiliki sewa aktif (`residentStatus.length > 0`), otomatis aktifkan tab `aktif`.
+3. **Langkah 3**: Hapus interaksi klik modal pembesaran thumbnail foto di kartu sewa.
+4. **Langkah 4**: Uji kelulusan build kompilasi TypeScript & Vite (`npm.cmd --prefix functions/public run build`).
+5. **Langkah 5**: Perbarui `functions/PROGRESS.md` (Milestone #490) dan `WALKTHROUGH.md`.
+6. **Langkah 6**: Commit dan push ke branch `bukan-productions`.
 
 ---
 
-## 5. Rencana Verifikasi
+## 6. Rencana Verifikasi
 
-1. **Uji Kompilasi**: `npm run build` berhasil tanpa error (`0 errors`).
-2. **Uji Tampilan MyKost (User View)**:
-   - Saat status `Menunggu Tanggal Masuk`:
-     - Header kartu menampilkan badge **`MENUNGGU MASUK`** (bukan `SEDANG DISEWA`).
-     - Tidak ada lagi badge rancu `61 HARI LAGI`.
-     - Subcard menampilkan: *Menunggu Tanggal Masuk: 05 November 2026* + tombol *Jadwalkan Lebih Cepat*.
-   - Saat klik **Serah Terima Kunci** (Sewa Aktif Berjalan):
-     - Header kartu beralih menjadi **`SEDANG DISEWA`** + **`30 HARI LAGI`**.
-     - Subcard menampilkan: *Masa Sewa Berjalan (Hari ke-0 dari 30 Hari)*.
-3. **Uji Dashboard Mitra (Owner View)**:
-   - Calon penghuni sebelum serah terima kunci berstatus `MENUNGGU MASUK` dengan durasi paket `1 Bulan`.
+1. **Uji Kompilasi**: Build `functions/public` sukses dengan 0 error.
+2. **Uji Alur Navigasi Tab**:
+   - Buka `/my-bookings` pada akun penyewa aktif -> Halaman langsung mendarat di tab **AKTIF** (`/my-bookings/aktif`) tanpa perlu klik tab.
+3. **Uji Foto Kamar**:
+   - Kartu Kost Ryuta tipe Standard menampilkan foto interior kamar tidur Standard (kasur, lemari, meja), **bukan** gerbang pagar depan.
+4. **Uji Interaksi Foto**:
+   - Mengklik foto thumbnail tidak memunculkan modal dialog pembesaran gambar.
 
 ---
 

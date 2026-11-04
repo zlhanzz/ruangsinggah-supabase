@@ -1,86 +1,116 @@
-# WALKTHROUGH: Standardisasi Siklus Masa Tunggu (Upcoming Stay) vs Sewa Berjalan & Eliminasi Glitch Countdown 60 Hari
+# WALKTHROUGH - Milestone #490: Smart Orders Navigation, Resolusi Foto Kamar Riil, & Eliminasi Modal Thumbnail
 
-## Ringkasan Eksekutif
-Pekerjaan perbaikan pada **Milestone #489** telah selesai dieksekusi dengan sukses. Masalah inkonsistensi durasi sewa yang menampilkan badge `SEDANG DISEWA 61 HARI LAGI` saat masih dalam masa tunggu (sebelum serah terima kunci) telah diselesaikan secara tuntas dan menyeluruh di seluruh alur sistem (frontend penyewa, dashboard mitra, dan logika sinkronisasi database).
-
----
-
-## 1. Daftar Perubahan (Detailed Changes)
-
-### A. Frontend Penyewa (`functions/public/pages/MyKost.tsx`)
-1. **Pemisahan Tegas Status 'Menunggu Masuk' vs 'Sedang Disewa'**:
-   - Menambahkan identifikasi siklus kedatangan:
-     `isWaitingArrival = isPaid && !kost.is_checked_out && !isHandoverDone && isUpcoming`.
-   - **Pada Fase Masa Tunggu (`isWaitingArrival = true`)**:
-     - Badge status utama di header kartu merender:
-       **`MENUNGGU MASUK`** (warna amber elegan dengan icon `Calendar`), bukan lagi `SEDANG DISEWA` (hijau).
-     - Menghilangkan countdown sisa sewa 60 hari yang prematur.
-     - Menggantinya dengan **Countdown Kedatangan Menuju Masuk**:
-       - `Masuk Hari Ini` (jika tanggal masuk adalah hari ini).
-       - `Masuk Besok` (jika H-1).
-       - `Masuk dlm N Hari` (jika H-N).
-   - **Pada Fase Sewa Aktif Berjalan (`!isWaitingArrival`)**:
-     - Setelah penyewa serah terima kunci / tanggal sewa berjalan:
-     - Badge status utama beralih menjadi hijau **`SEDANG DISEWA`**.
-     - Countdown durasi sewa aktif **`30 Hari Lagi`** resmi berdetak.
-
-### B. Dashboard Mitra (`functions/public/components/mitra/MitraTenantManagement.tsx`)
-1. **Perbaikan Identifikasi Calon Penghuni Pra-Masuk (`isUpcoming`)**:
-   - Memperbaiki kondisi `isUpcoming`: Selama kunci kamar fisik belum diserahterimakan (`!isHandoverDone`), calon penghuni tetap diidentifikasi sebagai penghuni masa tunggu.
-   - Kolom status menampilkan badge amber **`MENUNGGU MASUK`** (atau `AJUKAN MASUK AWAL` jika mengajukan percepatan tanggal).
-   - Kolom tengah menampilkan `Jadwal Masuk: [Tanggal]`, `Paket Sewa: 1 Bulan`, dan `Total Bayar: Rp 1` (bukan angka sisa hari 60H/62H yang menyesatkan).
-   - Tombol aksi utama menyediakan **`Serah Terima Kunci`** dan **`ACC Masuk Awal`**.
-
-### C. Backend & SSOT Sinkronisasi Database (`adminService.ts` & `functions/src/index.ts`)
-1. **Penguncian Deterministik Total Bulan & Tanggal Akhir Sewa**:
-   - Pada `syncResidentStatus`, transaksi pemesanan awal (`kost_booking`) dikunci mutlak:
-     - `p === 'bulanan' => newTotalMonths = 1;` / `totalMonthsCalc = 1;`.
-     - `endDate` terkunci murni pada `startDate + 1 bulan = endDate` yang disepakati saat booking.
-     - Tidak pernah menumpuk atau memperpanjang interval sewa di atas record lama.
-
-### D. Sanitasi Data Database Supabase (`resident_status`)
-1. Rekam data `resident_status` pengujian Kost Ryuta (`d8df93e7-...`) telah disanitasi:
-   - `total_months: 1`
-   - `start_date: 2026-11-04`
-   - `end_date: 2026-12-04` (Masa sewa 30 hari berjalan).
+**Tanggal:** 04 November 2026  
+**Status:** Berhasil Diimplementasikan & Lulus Uji Kompilasi Build (0 Error)  
+**Branch:** `bukan-productions`
 
 ---
 
-## 2. Hasil Pengujian & Kompilasi (Verification Results)
+## 1. Ringkasan Pekerjaan & Masalah yang Diselesaikan
 
-1. **Uji Kompilasi TypeScript & Vite Build**:
-   ```powershell
-   npm.cmd --prefix functions/public run build
+Berdasarkan masukan dan persetujuan pengguna (*"okee jalankan"*), Milestone #490 berhasil menyelesaikan 3 aspek utama pada halaman Orders / Kost Saya (`/my-bookings`):
+
+1. **Smart Context-Aware Default Tab Orders**:
+   - **Sebelumnya:** Setiap kali pengguna mengunjungi menu Orders dari navbar bawah (`/my-bookings`), sistem selalu memaksa mendarat di tab "Diajukan" (`/my-bookings/diajukan`). Jika pengguna sudah memiliki sewa aktif dan tidak sedang mengajukan kost baru, layar menampilkan state kosong *"Belum Ada Pengajuan"* meskipun badge tab "Aktif" menunjukkan angka 1.
+   - **Sesudah:** Sistem mengevaluasi data sewa pengguna secara cerdas. Jika pengguna memiliki sewa aktif (`residentStatus.length > 0`), navigasi ke `/my-bookings` secara otomatis langsung mengarahkan ke tab **AKTIF** (`/my-bookings/aktif`) sehingga penyewa langsung melihat kartu kost yang sedang disewanya. Tab "Diajukan" hanya dijadikan default jika pengguna tidak memiliki sewa aktif.
+
+2. **Resolusi Foto Kamar Riil Sesuai Tipe Kamar / Nomor Kamar**:
+   - **Sebelumnya:** Pada kartu pesanan/sewa, foto pratinjau yang muncul adalah foto gerbang / pagar depan kost ("Bangunan Depan"). Hal ini terjadi karena foto unit kamar disimpan di `properties.image_urls` dengan label tertentu (seperti `"Kamar: Standard"`), namun ketika `currentRoom.images` kosong, kode fallback secara eksplisit mencari foto berlabel `"bangunan depan"` (`frontBuildingImg`).
+   - **Sesudah:** Diterapkan fungsi resolver hirarkis `resolveRoomPhotos` yang secara presisi mencocokkan foto dengan tipe kamar yang disewa (untuk Kost Biasa, e.g. `"Kamar: Standard"`) atau nomor kamar (untuk KostManager, e.g. `"Unit 101"` / `"Kamar 1"`), dengan memprioritaskan kategori kamar tidur/interior dibanding foto kamar mandi, dapur, atau fasad bangunan.
+
+3. **Eliminasi Modal Pembesaran Thumbnail**:
+   - **Sebelumnya:** Mengklik foto thumbnail kartu pesanan membuka modal galeri yang membesarkan gambar, yang dinilai pengguna kurang berguna (*"kurang berguna"*).
+   - **Sesudah:** Handler `onClick`, kelas kursor pointer, dan pemicu modal galeri pada container foto thumbnail telah dieliminasi. Foto kini berfungsi sebagai thumbnail pratinjau yang bersih, elegan, dan statis tanpa memicu popup.
+
+---
+
+## 2. Rincian Perubahan Kode
+
+### File: `functions/public/pages/MyKost.tsx`
+
+1. **Penerapan Helper `normalizePhotoUrl` & `resolveRoomPhotos`**:
+   - Didefinisikan di level modul untuk standardisasi penanganan URL storage dan pemetaan foto unit kamar.
+   - Prioritas resolusi foto:
+     1. `currentRoom.categorized_photos` / `categorizedPhotos` (kategori: interior, kasur, tempat tidur, kamar tidur).
+     2. `currentRoom.images` array.
+     3. Pencarian cerdas pada `properties.image_urls`:
+        - KostManager: Mencocokkan label nomor kamar (`kamar: <no>`, `unit <no>`).
+        - Kost Biasa: Mencocokkan label tipe kamar (`kamar: <type>`, e.g. "Kamar: Standard").
+        - Memprioritaskan foto kamar tidur riil dan mengabaikan foto eksterior (`bangunan depan`, `fasad`, `parkir`).
+     4. Fallback: Foto kamar tidur pertama yang tersedia, bukan foto fasad depan.
+
+2. **Smart Tab Redirection pada `useEffect` & `fetchMyKosts`**:
+   ```typescript
+   // Sync state with URL
+   useEffect(() => {
+       if (tabParam) {
+           const validTabs = ['diajukan', 'aktif', 'riwayat'];
+           if (validTabs.includes(tabParam)) {
+               setActiveTab(tabParam as any);
+           } else {
+               navigate(`${Page.MY_BOOKINGS}/diajukan`, { replace: true });
+           }
+       } else if (!loading) {
+           // Smart context-aware default tab when landing on /my-bookings
+           const hasActive = residentStatus.length > 0;
+           const target = hasActive ? 'aktif' : 'diajukan';
+           setActiveTab(target);
+           navigate(`${Page.MY_BOOKINGS}/${target}`, { replace: true });
+       }
+   }, [tabParam, loading, residentStatus.length, navigate]);
    ```
-   **Status: LULUS (100% Berhasil)**
-   - Sebanyak 2.512 modul berhasil ditransformasi tanpa 0 error kompilasi.
-   - Bundle production di `public/assets/` ter-generate dengan presisi.
+   - Di akhir fungsi `fetchMyKosts`: Ditambahkan sinkronisasi langsung saat data sewa aktif (`uniqueActive`) berhasil dimuat dari database.
+   - Pada `handleTabChange`: Ditambahkan `setActiveTab(tab)` untuk respon navigasi instan (optimistic UI update).
 
-2. **Verifikasi Integritas Siklus 2-Fase**:
-   - Fase 1 (Perencanaan): `IMPLEMENTATION_PLAN.md` telah disetujui.
-   - Fase 2 (Eksekusi): Seluruh perubahan kode selesai diuji dan dicatat ke `functions/PROGRESS.md`.
+3. **Integrasi Resolver ke Seluruh Alur Data**:
+   - Pemetaan pesanan `kostsData` (baris ~903-939).
+   - Pemetaan sewa aktif `mapResidentStatus` (baris ~1125-1154).
+   - Fallback `rawClaim` untuk sewa terkelola (baris ~1430-1437).
+
+4. **Pembersihan Container Foto Thumbnail Kartu Pesanan (baris ~2538-2565)**:
+   - Dihapus: `onClick={() => heroImage && handleOpenGallery(...)}`
+   - Dihapus: `cursor-pointer`, `group/img`, `title="Klik untuk melihat foto kamar & hunian"`
+   - Dihapus: `transform hover:scale-[1.02]`, `group-hover/img:scale-105`, `group-hover/img:opacity-100`
 
 ---
 
-## 3. Panduan Pengujian User (User Testing Guide)
+## 3. Hasil Pengujian & Kompilasi
 
-### Skenario A: Melihat Pesanan yang Sudah Serah Terima Kunci (Sewa Berjalan)
-1. Buka menu **Orders** / **MyKost** di akun penyewa (`userbiasa1`).
-2. Periksa kartu **Kost Ryuta**:
-   - Header badge menampilkan:
-     - Badge hijau: **`SEDANG DISEWA`**
-     - Badge oranye: **`30 HARI LAGI`** (bukan 60 harian!).
-   - Subcard menampilkan: **`MASA SEWA BERJALAN`** • **`KUNCI DITERIMA`** (Hari ke-0 dari 30 Hari, Mulai 04 Nov 2026 - Berakhir 04 Des 2026).
+### A. Uji Kompilasi Frontend Vite (`npm run build`)
+Perintah: `npm.cmd --prefix functions/public run build`
+Hasil:
+```
+vite v6.4.1 building for production...
+transforming...
+✓ 2512 modules transformed.
+rendering chunks...
+computing gzip size...
+../../public/assets/MyKost-RlZUYopQ.js                 192.06 kB │ gzip:  46.17 kB
+✓ built in 33.33s
+```
+**Status: 0 Error, Berhasil 100%.**
 
-### Skenario B: Pengujian Booking Baru (Fase Masa Tunggu)
-1. Buka detail kost mana saja dan ajukan sewa 1 bulan dengan tanggal masuk beberapa hari ke depan (misal: H+2).
-2. Lakukan simulasi pembayaran hingga lunas (`PAID`).
-3. Buka halaman pesanan:
-   - Header kartu sekarang menampilkan:
-     - Badge amber: **`MENUNGGU MASUK`** (bukan `SEDANG DISEWA`).
-     - Badge countdown kedatangan: **`Masuk dlm 2 Hari`** (bukan sisa sewa 60 hari!).
-   - Subcard menampilkan banner oranye: **`MENUNGGU TANGGAL MASUK: [Tanggal]`** dengan tombol **`Jadwalkan Lebih Cepat`**.
-4. Di dashboard Mitra menu **Penghuni Aktif**:
-   - Calon penghuni masuk ke tab **`Menunggu Masuk`** dengan status **`MENUNGGU MASUK`**, paket sewa **`1 Bulan`**, dan tombol **`Serah Terima Kunci`**.
-5. Klik **`Serah Terima Kunci`**:
-   - Status otomatis beralih menjadi **`SEWA AKTIF`** dengan countdown masa sewa resmi berdetak **`30 Hari Lagi`**.
+### B. Hasil Simulasi Pencocokan Foto Unit Kamar
+- Data properti Kost Ryuta diuji dengan tipe kamar "Standard":
+  - Label `properties.image_urls`: `"Kamar: Standard"`, `"Kamar Mandi: Standard"`, `"Bangunan Depan"`.
+  - Hasil resolver: Foto yang terpilih sebagai `heroImage` dan `displayImg` adalah foto `Kamar: Standard` (`1793157885194_cuz1sg...webp`), bukan foto gerbang `"Bangunan Depan"`.
+
+---
+
+## 4. Panduan Verifikasi Pengguna (User Testing Guide)
+
+Untuk menguji perubahan ini langsung di antarmuka web:
+
+1. **Pengujian Default Tab Orders**:
+   - Pastikan akun Anda memiliki 1 penyewaan aktif (misal: Kost Ryuta).
+   - Klik menu navigasi **Orders** di navbar bawah.
+   - **Hasil yang Diharapkan:** Halaman otomatis langsung membuka tab **AKTIF** (`/my-bookings/aktif`) dan langsung memperlihatkan kartu sewa Anda (tidak lagi membuka tab "Diajukan" yang kosong).
+   - Coba klik manual tab "Diajukan" atau "Riwayat": Sistem tetap mengizinkan Anda berpindah tab secara normal.
+
+2. **Pengujian Foto Pratinjau Kamar**:
+   - Perhatikan kartu sewa Kost Ryuta pada tab **AKTIF**.
+   - **Hasil yang Diharapkan:** Gambar pratinjau kamar kini menampilkan foto interior kamar tipe Standard (kamar tidur dengan kasur/lemari), bukan lagi foto gerbang/pagar depan kost.
+
+3. **Pengujian Eliminasi Modal Pembesaran**:
+   - Klik foto thumbnail kamar pada kartu sewa tersebut.
+   - **Hasil yang Diharapkan:** Foto tidak memunculkan popup modal yang membesar, kartu tetap rapi dan tidak mengganggu alur interaksi pengguna.

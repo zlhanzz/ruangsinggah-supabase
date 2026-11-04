@@ -103,6 +103,121 @@ const StarRatingDisplay: React.FC<{ rating?: number }> = ({ rating }) => {
     );
 };
 
+const normalizePhotoUrl = (raw: any): string => {
+    if (!raw) return '';
+    const path = typeof raw === 'string' ? raw : (raw.url || raw.original || raw.webp || '');
+    if (!path) return '';
+    if (path.startsWith('http') || path.startsWith('data:')) return path;
+    return supabase.storage.from('properties').getPublicUrl(path).data?.publicUrl || path;
+};
+
+const resolveRoomPhotos = (
+    currentRoom: any,
+    rawType: string,
+    cleanRoomNum: string | null,
+    propImages: any[]
+): { roomPhotos: string[]; displayImg: string | null } => {
+    let photos: string[] = [];
+
+    const isBedroomCategory = (cat: string) => {
+        const c = (cat || '').toLowerCase();
+        return c.includes('interior') || c.includes('tempat tidur') || c.includes('kasur') || c.includes('kamar tidur') || (c.includes('kamar') && !c.includes('mandi') && !c.includes('dapur'));
+    };
+
+    // 1. Direct from currentRoom.categorized_photos or currentRoom.categorizedPhotos
+    const catPhotos = currentRoom?.categorized_photos || currentRoom?.categorizedPhotos;
+    if (catPhotos && typeof catPhotos === 'object') {
+        const bedPhotos: string[] = [];
+        const otherPhotos: string[] = [];
+
+        Object.entries(catPhotos).forEach(([category, list]: [string, any]) => {
+            if (Array.isArray(list)) {
+                list.forEach((p: any) => {
+                    const u = normalizePhotoUrl(p);
+                    if (u) {
+                        if (isBedroomCategory(category)) {
+                            if (!bedPhotos.includes(u)) bedPhotos.push(u);
+                        } else {
+                            if (!otherPhotos.includes(u)) otherPhotos.push(u);
+                        }
+                    }
+                });
+            }
+        });
+        photos = [...bedPhotos, ...otherPhotos];
+    }
+
+    // 2. Direct from currentRoom.images if photos is empty
+    if (photos.length === 0 && currentRoom?.images && Array.isArray(currentRoom.images) && currentRoom.images.length > 0) {
+        photos = currentRoom.images.map(normalizePhotoUrl).filter(Boolean);
+    }
+
+    // 3. Match from propImages (properties.image_urls) by room type (Kost Biasa) or room number (KostManager)
+    if (photos.length === 0 && Array.isArray(propImages) && propImages.length > 0) {
+        const targetType = (rawType || '').toLowerCase().trim();
+        const targetRoom = (cleanRoomNum || '').toLowerCase().trim();
+        const targetRoomOnly = targetRoom.replace(/^kamar\s*/i, '').trim();
+
+        const bedMatches: string[] = [];
+        const roomMatches: string[] = [];
+        const otherMatches: string[] = [];
+
+        propImages.forEach((img: any) => {
+            const label = (img?.label || img?.caption || img?.category || '').toLowerCase();
+            const u = normalizePhotoUrl(img);
+            if (!u) return;
+
+            // Check if matches KostManager room number (e.g. "Kamar: 1 - Tempat Tidur" or "Kamar 1")
+            const matchesRoomNumber = Boolean(targetRoom && (
+                label.includes(`kamar: ${targetRoom}`) ||
+                label.includes(`kamar ${targetRoom}`) ||
+                label.includes(`unit ${targetRoom}`) ||
+                (targetRoomOnly && (
+                    label.includes(`kamar: ${targetRoomOnly}`) ||
+                    label.includes(`kamar ${targetRoomOnly}`)
+                ))
+            ));
+
+            // Check if matches Kost Biasa room type (e.g. "Kamar: Standard")
+            const matchesRoomType = Boolean(targetType && (
+                label.includes(`kamar: ${targetType}`) ||
+                label.includes(`kamar ${targetType}`) ||
+                label.includes(targetType)
+            ));
+
+            if (matchesRoomNumber || matchesRoomType) {
+                if (isBedroomCategory(label)) {
+                    if (!bedMatches.includes(u)) bedMatches.push(u);
+                } else if (!label.includes('bangunan depan') && !label.includes('fasad') && !label.includes('area parkir') && !label.includes('lingkungan')) {
+                    if (!roomMatches.includes(u)) roomMatches.push(u);
+                } else {
+                    if (!otherMatches.includes(u)) otherMatches.push(u);
+                }
+            }
+        });
+
+        photos = [...bedMatches, ...roomMatches, ...otherMatches];
+    }
+
+    // 4. Fallback if still no room-specific photo: prioritize any bedroom image in propImages over building exterior
+    let displayImg: string | null = null;
+    if (photos.length > 0) {
+        displayImg = photos[0];
+    } else if (Array.isArray(propImages) && propImages.length > 0) {
+        const anyRoomImg = propImages.find((img: any) => {
+            const label = (img?.label || img?.caption || img?.category || '').toLowerCase();
+            return isBedroomCategory(label);
+        });
+        const chosen = anyRoomImg || propImages[0];
+        if (chosen) {
+            displayImg = normalizePhotoUrl(chosen);
+            if (displayImg) photos = [displayImg];
+        }
+    }
+
+    return { roomPhotos: photos, displayImg };
+};
+
 const MyKost: React.FC<MyKostProps> = ({ user }) => {
     const navigate = useNavigate();
     const { "*": tabParam } = useParams();
@@ -197,14 +312,17 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
                 // Redirect invalid sub-paths to default
                 navigate(`${Page.MY_BOOKINGS}/diajukan`, { replace: true });
             }
-        } else {
-            // Default to 'diajukan' if no sub-path, and update URL
-            setActiveTab('diajukan');
-            navigate(`${Page.MY_BOOKINGS}/diajukan`, { replace: true });
+        } else if (!loading) {
+            // Smart context-aware default tab when landing on /my-bookings
+            const hasActive = residentStatus.length > 0;
+            const target = hasActive ? 'aktif' : 'diajukan';
+            setActiveTab(target);
+            navigate(`${Page.MY_BOOKINGS}/${target}`, { replace: true });
         }
-    }, [tabParam, navigate]);
+    }, [tabParam, loading, residentStatus.length, navigate]);
 
     const handleTabChange = (tab: 'diajukan' | 'aktif' | 'riwayat') => {
+        setActiveTab(tab);
         navigate(`${Page.MY_BOOKINGS}/${tab}`);
     };
     const [extraBills, setExtraBills] = useState<any[]>([]);
@@ -901,42 +1019,8 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
                             return false;
                         }) || (propRooms.length === 1 ? propRooms[0] : null);
 
-                        const normalizePhotoUrl = (raw: any): string => {
-                            if (!raw) return '';
-                            const path = typeof raw === 'string' ? raw : (raw.url || raw.original || raw.webp || '');
-                            if (!path) return '';
-                            if (path.startsWith('http') || path.startsWith('data:')) return path;
-                            return supabase.storage.from('properties').getPublicUrl(path).data?.publicUrl || path;
-                        };
-
-                        let roomPhotos: string[] = [];
-                        if (currentRoom?.images && Array.isArray(currentRoom.images) && currentRoom.images.length > 0) {
-                            roomPhotos = currentRoom.images.map(normalizePhotoUrl).filter(Boolean);
-                        } else if (currentRoom?.categorized_photos && typeof currentRoom.categorized_photos === 'object') {
-                            Object.values(currentRoom.categorized_photos).forEach((photos: any) => {
-                                if (Array.isArray(photos)) {
-                                    photos.forEach((p: any) => {
-                                        const url = normalizePhotoUrl(p);
-                                        if (url && !roomPhotos.includes(url)) roomPhotos.push(url);
-                                    });
-                                }
-                            });
-                        }
-
-                        let displayImg = null;
-                        if (roomPhotos.length > 0) {
-                            displayImg = roomPhotos[0];
-                        } else {
-                            const rawImages = prop?.image_urls || doc.image_urls || metadata.imageUrls || [];
-                            const frontBuildingImg = rawImages.find((img: any) => {
-                                const label = (img?.label || '').toLowerCase();
-                                return label.includes('bangunan depan') || label.includes('fasad') || label.includes('depan');
-                            });
-                            const chosenImg = frontBuildingImg || rawImages[0];
-                            if (chosenImg) {
-                                displayImg = normalizePhotoUrl(chosenImg);
-                            }
-                        }
+                        const rawImages = prop?.image_urls || doc.image_urls || metadata.imageUrls || [];
+                        const { roomPhotos, displayImg } = resolveRoomPhotos(currentRoom, rawType, cleanRoomNum, rawImages);
 
                         kostsData.push({
                             id: doc.id,
@@ -1123,35 +1207,8 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
                     return false;
                 }) || (propRooms.length === 1 ? propRooms[0] : null);
 
-                let roomPhotos: string[] = [];
-                if (currentRoom?.images && Array.isArray(currentRoom.images) && currentRoom.images.length > 0) {
-                    roomPhotos = currentRoom.images.filter(Boolean);
-                } else if (currentRoom?.categorized_photos && typeof currentRoom.categorized_photos === 'object') {
-                    Object.values(currentRoom.categorized_photos).forEach((photos: any) => {
-                        if (Array.isArray(photos)) {
-                            photos.forEach((p: any) => { if (typeof p === 'string' && p && !roomPhotos.includes(p)) roomPhotos.push(p); });
-                        }
-                    });
-                }
-
-                // Image resolution: Prioritize actual room photo over building diagram
-                let displayImg = null;
-                if (roomPhotos.length > 0) {
-                    displayImg = roomPhotos[0];
-                } else {
-                    const rawImages = prop.image_urls || [];
-                    const frontBuildingImg = rawImages.find((img: any) => {
-                        const label = (img?.label || '').toLowerCase();
-                        return label.includes('bangunan depan') || label.includes('fasad') || label.includes('depan');
-                    });
-                    const chosenImg = frontBuildingImg || rawImages[0];
-                    if (chosenImg) {
-                        const path = typeof chosenImg === 'string' ? chosenImg : (chosenImg.original || chosenImg.url || chosenImg.webp || '');
-                        if (path) {
-                            displayImg = path.startsWith('http') ? path : supabase.storage.from('properties').getPublicUrl(path).data.publicUrl;
-                        }
-                    }
-                }
+                // Room photo resolution matching specific room type / room number
+                const { roomPhotos, displayImg } = resolveRoomPhotos(currentRoom, rawType, cleanRoomNum, prop.image_urls || []);
 
                 const pendBills = (bills || []).filter(b => {
                     const bid = (b.product_id || b.kost_id || '').toString();
@@ -1404,6 +1461,13 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
 
                 setResidentStatus(uniqueActive);
                 setActiveKosts(activeWithBills);
+
+                // Smart initial tab redirect if user landed on root /my-bookings
+                if (!tabParam) {
+                    const target = uniqueActive.length > 0 ? 'aktif' : 'diajukan';
+                    setActiveTab(target);
+                    navigate(`${Page.MY_BOOKINGS}/${target}`, { replace: true });
+                }
             } else {
                 // Fallback untuk user baru yang belum ada transaksi tetapi memiliki claim sewa
                 const rawClaim = localStorage.getItem('rs_active_tenant_claim');
@@ -1427,14 +1491,13 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
                                     daysRem = Math.ceil((eNorm.getTime() - tNorm.getTime()) / (1000 * 60 * 60 * 24));
                                 }
 
-                                let displayImg = null;
-                                if (claimProp.image_urls && claimProp.image_urls.length > 0) {
-                                    const img = claimProp.image_urls[0];
-                                    const path = typeof img === 'string' ? img : (img.original || img.webp || '');
-                                    if (path) {
-                                        displayImg = path.startsWith('http') ? path : supabase.storage.from('properties').getPublicUrl(path).data.publicUrl;
-                                    }
-                                }
+                                const { roomPhotos: claimRoomPhotos, displayImg: claimDisplayImg } = resolveRoomPhotos(
+                                    null,
+                                    claim.roomType || '',
+                                    claim.roomNumber || '',
+                                    claimProp.image_urls || []
+                                );
+                                const displayImg = claimDisplayImg;
 
                                 const claimedItem = {
                                     id: `claim_${claim.propertyId}_${claim.roomNumber}`,
@@ -2535,17 +2598,13 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
                                         {/* Left / Main Column */}
                                         <div className="lg:col-span-8 flex flex-col gap-5 sm:gap-6 w-full">
                                             <div className="flex flex-col sm:flex-row items-center sm:items-start gap-5 sm:gap-7 text-center sm:text-left">
-                                                {/* Interactive Image Container */}
-                                                <div 
-                                                    onClick={() => heroImage && handleOpenGallery(roomPhotoList, kost.kostName || 'Kamar Kost')}
-                                                    className="relative shrink-0 group/img cursor-pointer"
-                                                    title="Klik untuk melihat foto kamar & hunian"
-                                                >
-                                                    <div className="w-48 h-36 sm:w-56 sm:h-44 bg-slate-900 rounded-2xl sm:rounded-[2rem] flex items-center justify-center shadow-xl shadow-orange-100/70 border-2 border-white transform hover:scale-[1.02] transition-all duration-500 overflow-hidden relative">
+                                                {/* Room Preview Image Container */}
+                                                <div className="relative shrink-0">
+                                                    <div className="w-48 h-36 sm:w-56 sm:h-44 bg-slate-900 rounded-2xl sm:rounded-[2rem] flex items-center justify-center shadow-xl shadow-orange-100/70 border-2 border-white overflow-hidden relative">
                                                         {heroImage ? (
                                                             <img 
                                                                 src={heroImage} 
-                                                                className="w-full h-full object-cover group-hover/img:scale-105 transition-transform duration-700" 
+                                                                className="w-full h-full object-cover" 
                                                                 alt={kost.kostName} 
                                                             />
                                                         ) : (
@@ -2554,7 +2613,7 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
                                                                 <span className="text-[10px] font-bold text-slate-300">RuangSinggah</span>
                                                             </div>
                                                         )}
-                                                        <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-80 group-hover/img:opacity-100 transition-opacity" />
+                                                        <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-80" />
                                                         
                                                         {/* Photo Count Overlay Badge */}
                                                         <div className="absolute bottom-2.5 left-2.5 sm:bottom-3 sm:left-3 bg-black/60 backdrop-blur-md text-white text-[9px] sm:text-[10px] font-bold px-2.5 sm:px-3 py-0.5 sm:py-1 rounded-full flex items-center gap-1.5 border border-white/20">

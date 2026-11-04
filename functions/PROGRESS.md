@@ -2,6 +2,42 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 490. Smart Context-Aware Default Tab Orders ('/my-bookings'), Resolusi Foto Kamar Unit Riil Sesuai Tipe/Nomor Kamar, & Eliminasi Modal Pembesaran Thumbnail (`MyKost.tsx`) (November 2026)
+- **Permintaan & Masukan Pengguna**:
+  1. Pengguna meminta ketika user memiliki penyewaan aktif, saat pertama kali masuk ke menu Orders (`/my-bookings`), sistem otomatis langsung mengarahkan ke tab **AKTIF**, bukan tab DIAJUKAN yang menampilkan status kosong "Belum ada pengajuan".
+  2. Untuk preview foto kost yang sedang disewa pada kartu pesanan, pengguna ingin agar foto yang ditampilkan adalah foto kamar riil sesuai tipe kamar (Kost Biasa: misal Standard / Premium) atau nomor kamar (KostManager: misal Kamar 1 / Unit 101), bukan foto gerbang / fasad depan kost ("Bangunan Depan").
+  3. Ketika foto preview kost diklik lalu muncul popup modal yang membesarkan gambar, pengguna merasa fitur tersebut kurang berguna dan meminta agar dieliminasi agar tampilan kartu lebih bersih dan tidak menimbulkan popup yang tidak diperlukan.
+- **Akar Masalah & Analisis Teknis**:
+  1. Di `MyKost.tsx` line 200-205, hook `useEffect` sinkronisasi URL memiliki alur fallback hardcoded: jika `tabParam` kosong (`/my-bookings`), sistem langsung mengeksekusi `navigate('/my-bookings/diajukan', { replace: true })` sebelum data `residentStatus` selesai diambil dari database. Akibatnya, penyewa aktif selalu dipaksa mendarat di tab "Diajukan" yang kosong.
+  2. Pada pemetaan properti `mapResidentStatus` dan `kostsData`, objek `currentRoom.images` sering kali kosong untuk Kost Biasa karena foto kamar disimpan di level properti (`properties.image_urls`) dengan label seperti `"Kamar: Standard"`, `"Kamar Mandi: Standard"`, dan `"Bangunan Depan"`. Ketika `roomPhotos` kosong, kode sebelumnya memiliki fallback yang secara eksplisit mencari label `'bangunan depan'` (`frontBuildingImg`), sehingga kartu sewa justru menampilkan foto pagar/gerbang depan.
+  3. Di container foto thumbnail kartu sewa (`MyKost.tsx` line 2540), terdapat handler `onClick={() => heroImage && handleOpenGallery(...)}` yang membuka `galleryModalOpen` saat foto diklik.
+- **Implementasi Solusi**:
+  1. **Smart Context-Aware Default Tab Routing (`MyKost.tsx`)**:
+     - Memperbarui `useEffect` sinkronisasi tab URL: Saat mendarat di rute utama `/my-bookings` (tanpa subpath) dan proses loading selesai (`!loading`), sistem mengevaluasi ketersediaan sewa aktif pengguna (`residentStatus.length > 0`).
+     - Jika pengguna memiliki sewa aktif, sistem langsung mengarahkan ke tab `${Page.MY_BOOKINGS}/aktif` via `{ replace: true }`. Jika tidak ada sewa aktif, sistem mengarahkan ke tab `${Page.MY_BOOKINGS}/diajukan`.
+     - Menambahkan proteksi serupa di akhir `fetchMyKosts` setelah `uniqueActive` diset ke state, serta menerapkan optimistic update pada `handleTabChange`.
+  2. **Hierarchical Room Photo Resolver (`resolveRoomPhotos`)**:
+     - Membuat fungsi modular `resolveRoomPhotos` yang mengevaluasi foto unit kamar dengan urutan prioritas:
+       1) Foto kamar tidur langsung dari `currentRoom.categorized_photos` / `categorizedPhotos` (kategori: `interior`, `tempat tidur`, `kasur`, `kamar tidur`).
+       2) Foto dari `currentRoom.images`.
+       3) Pencarian cerdas pada `properties.image_urls` dengan pencocokan label:
+          - Untuk KostManager: Mencocokkan nomor kamar (`kamar: <cleanRoomNum>`, `unit <cleanRoomNum>`), memprioritaskan kategori kamar tidur dibanding kamar mandi/dapur.
+          - Untuk Kost Biasa: Mencocokkan tipe kamar (`kamar: <rawType>`, e.g. "Kamar: Standard"), memprioritaskan foto interior kamar tidur riil dan mengabaikan foto eksterior (`bangunan depan`, `fasad`, `parkir`).
+       4) Fallback cerdas: Jika tidak ada foto spesifik yang cocok, ambil foto kamar tidur pertama yang tersedia di properti, bukan foto fasad depan.
+     - Mengintegrasikan `resolveRoomPhotos` ke dalam pemetaan `kostsData`, `mapResidentStatus`, dan fallback `rawClaim`.
+  3. **Eliminasi Modal Pembesaran Thumbnail Kartu Pesanan**:
+     - Menghapus event handler `onClick`, kelas `cursor-pointer`, `group/img`, atribut tooltip `title`, dan efek hover zoom pada container gambar thumbnail kartu pesanan.
+     - Gambar pratinjau kamar kini beroperasi sebagai thumbnail statis beresolusi tajam dengan badge jumlah foto yang bersih dan elegan, tanpa memunculkan modal galeri saat diklik.
+- **File Tersentuh**:
+  - `functions/public/pages/MyKost.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Uji kompilasi build Vite: `npm.cmd --prefix functions/public run build` lulus 100% (2512 modul, 0 error).
+  - Simulasi routing: User dengan sewa aktif yang mendarat di `/my-bookings` otomatis diarahkan ke tab "Aktif" (`/my-bookings/aktif`).
+  - Simulasi pencocokan gambar: Kost Ryuta dengan kamar "Standard" secara presisi memilih foto `Kamar: Standard` (`1793157885194_cuz1sg...webp`) sebagai `heroImage` dan `displayImg`, menggantikan foto gerbang depan.
+  - Simulasi klik thumbnail: Mengklik foto thumbnail kartu tidak lagi memicu modal pembesaran.
+
 ### 489. Standardisasi Siklus Masa Tunggu (Upcoming Stay) vs Sewa Berjalan (Active Stay) & Eliminasi Glitch Countdown 60 Hari (`MyKost.tsx`, `MitraTenantManagement.tsx`, `adminService.ts`, `functions/src/index.ts`) (November 2026)
 - **Permintaan & Masukan Pengguna**:
   1. Pengguna menemukan bahwa saat masih dalam fase masa tunggu (sebelum serah terima kunci), kartu pesanan menampilkan countdown ~60 hari (`61 HARI LAGI`) dan badge `SEDANG DISEWA`. Namun ketika tombol "Serah Terima Kunci" diklik, countdown langsung terkoreksi menjadi `30 HARI LAGI`.
