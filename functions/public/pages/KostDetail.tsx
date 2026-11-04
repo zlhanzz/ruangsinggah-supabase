@@ -614,9 +614,9 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
 
     const countVal = (rt.availableRoomCount !== undefined && rt.availableRoomCount !== null) 
       ? Number(rt.availableRoomCount) 
-      : null;
+      : (rt.availableRooms !== undefined && rt.availableRooms !== null ? Number(rt.availableRooms) : null);
     const isAvail = countVal !== null 
-      ? (rt.isAvailable !== false && countVal > 0)
+      ? countVal > 0 
       : (rt.isAvailable !== false && rt.status?.toLowerCase() !== 'terisi' && rt.status?.toLowerCase() !== 'penuh');
     const rName = rt.name ? (String(rt.name).trim().toLowerCase().startsWith('kamar') ? rt.name : `Kamar ${rt.name}`) : `Kamar ${rtIdx + 1}`;
     const rawImages = rt.images || rt.image_urls || [];
@@ -755,9 +755,9 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
       return kost.roomTypes.map((rt: any, idx: number) => {
         const countVal = (rt.availableRoomCount !== undefined && rt.availableRoomCount !== null) 
           ? Number(rt.availableRoomCount) 
-          : null;
+          : (rt.availableRooms !== undefined && rt.availableRooms !== null ? Number(rt.availableRooms) : null);
         const isAvail = countVal !== null 
-          ? (rt.isAvailable !== false && countVal > 0)
+          ? countVal > 0 
           : (rt.isAvailable !== false && rt.status?.toLowerCase() !== 'terisi' && rt.status?.toLowerCase() !== 'penuh');
         const rName = rt.name || `Tipe ${idx + 1}`;
         const matchedNorm = normalizedRooms.find(r => r.variantIdx === idx);

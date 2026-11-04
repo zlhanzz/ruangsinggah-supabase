@@ -2,6 +2,40 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 494. Resilient Inventory-Pool Availability Engine (Kost Biasa vs KostManager), Sanitasi Data Kuota Kamar, & Sinkronisasi Build Cloud Functions (`KostDetail.tsx`, `functions/src/index.ts`, `functions/lib/index.js`, `properties.room_types`) (November 2026)
+- **Permintaan & Masukan Pengguna**:
+  - Pengguna melaporkan anomali ketersediaan kamar: Mengapa penyewaan 1 kali pada 1 akun langsung membuat listing kost yang awalnya memiliki 3 kamar kosong langsung berstatus "Penuh" pada halaman detail kost (`KostDetail.tsx`).
+- **Akar Masalah & Analisis Teknis**:
+  1. Perbedaan Arsitektur KostManager vs Kost Biasa:
+     - Pada KostManager, setiap entri di `room_types` adalah 1 kamar fisik individual (misal: "Kamar 101").
+     - Pada Kost Biasa, setiap entri di `room_types` adalah kategori tipe kamar (misal: Tipe "Standard" dengan kuota `availableRoomCount: 3`).
+  2. Residu Sinkronisasi Lama: Booking Kost Ryuta disetujui saat sistem masih menjalankan logika lama yang menimpa tipe kamar Kost Biasa dengan `status: "Terisi"`, `isAvailable: false`, dan `residentName: "userbiasa1"`, seolah-olah seluruh tipe kamar adalah 1 unit fisik tunggal, tanpa mengurangi kuota stok.
+  3. Poisoned Flag pada Frontend: Di `KostDetail.tsx`, kondisi ketersediaan `isAvail = (rt.isAvailable !== false && countVal > 0)` teracuni oleh `rt.isAvailable: false` data historis, sehingga mengabaikan kuota 3 kamar yang masih tercatat dan memaksanya menjadi "Penuh".
+  4. Build Desynchronization: Kompilasi `functions/src/index.ts` ke `functions/lib/index.js` belum dijalankan kembali dan sempat terhambat error urutan variabel `isExtension`.
+- **Implementasi Solusi**:
+  1. **Resilient Inventory-Pool Engine di `KostDetail.tsx`**:
+     - Untuk Kost Biasa (`!kost.isManaged`), evaluasi ketersediaan kamar disempurnakan agar murni berpatokan pada sisa kuota numerik (`countVal > 0`).
+     - Kebal 100% dari flag residu `isAvailable: false` bawaan sinkronisasi legacy, sehingga tipe kamar dengan kuota > 0 selalu tampil tersedia secara akurat dengan jumlah sisa kamar riil.
+  2. **Sanitasi Database Supabase (`properties.room_types`)**:
+     - Menyelaraskan array `room_types` Kost Ryuta (`f0347475-4e49-4af2-978a-5eb5fabd7f16`):
+       - Tipe "Standard": `availableRoomCount: 2` (dari 3 awal - 1 sewa aktif), `isAvailable: true`, `status: "Kosong"`, serta menghapus residu nama penyewa dari katalog properti (SSOT penyewa tersimpan aman di tabel relasional `resident_status`).
+       - Tipe "Premium": Tetap `availableRoomCount: 3`, `isAvailable: true`, `status: "Kosong"`.
+  3. **Kompilasi Ulang Backend Cloud Functions (`functions/src/index.ts` -> `functions/lib/index.js`)**:
+     - Memperbaiki deklarasi block-scoped `isExtension` di `functions/src/index.ts`.
+     - Mengompilasi ulang TypeScript backend (`tsc`) sehingga file produksi `functions/lib/index.js` sinkron dengan logika pengurangan kuota `newAvail = Math.max(0, currentAvail - 1)`.
+- **File Tersentuh**:
+  - `functions/public/pages/KostDetail.tsx`
+  - `functions/src/index.ts`
+  - `functions/lib/index.js`
+  - Record Supabase `properties` ID `f0347475-4e49-4af2-978a-5eb5fabd7f16`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi `tsc` backend functions: Lulus 100% (0 error).
+  - Kompilasi build frontend Vite (`npm.cmd --prefix functions/public run build`): Lulus 100% (2512 modul, 0 error).
+  - Verifikasi Data Database: Tipe Standard Kost Ryuta memiliki `availableRoomCount: 2`, `isAvailable: true`, dan `status: "Kosong"`.
+  - Simulasi UI `KostDetail`: Tipe Standard menampilkan badge hijau **`● 2 Kamar Tersedia`** dan tombol sewa aktif kembali.
+
 ### 493. Standardisasi Format Tanggal Indonesia (Locale-Aware Hybrid Date Picker UI) pada Modal 'Ajukan Check-in Lebih Awal' (`MyKost.tsx`) (November 2026)
 - **Permintaan & Masukan Pengguna**:
   - Pengguna menemukan format tanggal pada modal "Ajukan Check-in Lebih Awal" menampilkan format raw US yang membingungkan: `11/04/2026` (seharusnya format baku Indonesia).

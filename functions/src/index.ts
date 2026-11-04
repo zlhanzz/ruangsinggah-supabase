@@ -2120,6 +2120,7 @@ export async function syncResidentStatus(trxId: string, options: { overrideMasaS
         return;
     }
 
+    const isExtension = trx.product_type !== 'kost_booking' && (trx.product_type === 'perpanjangan_sewa' || Boolean(metadata.extensionPeriod) || metadata.extensionType === 'manual_extension' || metadata.isManualExtension === true || options.isManualExtension === true);
     let resId = trx.resident_status_id || metadata.resident_status_id;
     let resident: any = null;
 
@@ -2144,7 +2145,6 @@ export async function syncResidentStatus(trxId: string, options: { overrideMasaS
         }
     }
 
-    const isExtension = trx.product_type !== 'kost_booking' && (trx.product_type === 'perpanjangan_sewa' || Boolean(metadata.extensionPeriod) || metadata.extensionType === 'manual_extension' || metadata.isManualExtension === true || options.isManualExtension === true);
     const now = new Date(metadata.simulated_date || new Date());
 
     let newEnd: Date;
