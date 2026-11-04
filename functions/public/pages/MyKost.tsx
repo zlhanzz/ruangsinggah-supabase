@@ -2784,8 +2784,6 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
                                                                     </p>
                                                                     <p className="text-xs sm:text-sm font-black text-gray-900 tracking-tight mt-0.5 truncate">
                                                                         {FORMAT_DATE(kost.moveInDate)}
-                                                                        {kMeta.checkInTime ? <span className="text-[11px] font-semibold text-gray-500 ml-1.5">({kMeta.checkInTime})</span> : null}
-                                                                        {kMeta.checkInEta ? <span className="text-[10px] font-semibold text-orange-600/90 ml-1.5">• ETA: {kMeta.checkInEta}</span> : null}
                                                                     </p>
                                                                 </div>
                                                             </div>

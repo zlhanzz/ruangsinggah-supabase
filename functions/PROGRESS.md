@@ -2,6 +2,40 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 487. Pemisahan Calon Penghuni 'Menunggu Masuk' (Upcoming Stay) dari Sewa Aktif pada Database Penghuni Mitra & Penyederhanaan Notifikasi Jadwal Masuk Penyewa (`MyKost.tsx`, `MitraTenantManagement.tsx`, `MitraDashboard.tsx`) (November 2026)
+- **Permintaan & Masukan Pengguna**:
+  1. Pada kartu pesanan penyewa (`MyKost.tsx`), hilangkan rincian waktu jam sewa `(14:00 WIB (Fleksibel))` dan estimasi ETA, cukup tampilkan tanggal masuk secara ringkas, elegan, dan estetik (`Menunggu Tanggal Masuk: [Tanggal]`).
+  2. Pada akun Mitra (menu "Penghuni Aktif" / Database Penghuni), calon penghuni yang sudah lunas tetapi tanggal masuknya masih di masa depan dan belum melakukan serah terima kunci fisik (`handover`) secara keliru masuk ke kategori "SEWA AKTIF" dengan badge hijau `AKTIF` dan countdown hari yang menyesatkan (`SISA HARI: 62H`). Pisahkan calon penghuni pra-masuk ke dalam tab kategori tersendiri **"MENUNGGU MASUK"** berbadge amber, serta sediakan aksi serah terima kunci dan persetujuan masuk awal.
+  3. Menjelaskan mekanisme alur kerja ketika user mengajukan *"Jadwalkan Lebih Cepat"* (Early Check-in), apa output yang tampil pada sisi Mitra, dan bagaimana persetujuannya (hanya menggeser siklus tanggal kalender sewa tanpa memicu tagihan/transaksi pembayaran baru).
+- **Implementasi Solusi**:
+  1. **Penyederhanaan Banner Jadwal Masuk Penyewa (`MyKost.tsx`)**:
+     - Menghapus keterangan jam `(14:00 WIB (Fleksibel))` dan ETA (`• ETA: ...`).
+     - Mempertahankan tampilan ringkas berstandar branding RuangSinggah: `MENUNGGU TANGGAL MASUK: [Tanggal Format ID]` dengan single CTA `[⚡ JADWALKAN LEBIH CEPAT]`.
+  2. **Pemisahan Logika 'isUpcoming' vs 'isActive' (`MitraTenantManagement.tsx`)**:
+     - Menghitung `isHandoverDone` berdasarkan kehadiran `actual_checkin_at` atau `handover_confirmed` baik di `resident_status` maupun `transactions.metadata`.
+     - Mengidentifikasi status calon penghuni pra-masuk (`isUpcoming`) jika serah terima kunci belum selesai (`!isHandoverDone`) DAN tanggal mulai berada di masa depan (`todayNorm < startNorm`).
+     - Mengisolasi penghuni upcoming dari status aktif (`!isUpcoming && daysLeft > 7`), tenggang (`!isUpcoming && daysLeft <= 7`), dan kadaluarsa (`!isUpcoming && daysLeft < 0`).
+  3. **Penambahan Tab dan Badge Khusus 'MENUNGGU MASUK' (`MitraTenantManagement.tsx`)**:
+     - Menambahkan tab filter baru `[Menunggu Masuk (N)]` dengan palet amber di sebelah tab `Semua`.
+     - Memberikan badge dinamis pada kartu penghuni: `MENUNGGU MASUK` (amber) atau `AJUKAN MASUK AWAL` (amber berkedip / animate-pulse jika penyewa meminta reschedule maju).
+  4. **Pembaruan Grid Informasi & Aksi Kartu Penghuni Upcoming (`MitraTenantManagement.tsx`)**:
+     - Pada calon penghuni upcoming, mengganti kolom *Sisa Hari* menjadi *Jadwal Masuk* lengkap dengan tanggal kedatangan, *Paket Sewa*, dan *Total Bayar*.
+     - Menyediakan tombol aksi langsung:
+       - `[🔑 Serah Terima Kunci]`: Memanggil `confirmCheckIn(targetId, 'owner')` dengan dialog konfirmasi agar masa sewa resmi berubah menjadi `AKTIF`.
+       - `[⚡ ACC Masuk Awal]`: Tampil jika penyewa mengajukan pemajuan tanggal masuk, memanggil `approveEarlyCheckIn` yang otomatis menggeser kalender sewa.
+       - `[Chat]`: Langsung membuka WhatsApp penyewa.
+  5. **Sinkronisasi Counter Sidebar Mitra Dashboard (`MitraDashboard.tsx`)**:
+     - Memperbarui filter penghuni aktif pada sidebar Mitra Dashboard agar tidak menghitung calon penghuni pra-masuk sebelum kunci diserahterimakan.
+- **File Tersentuh**:
+  - `functions/public/pages/MyKost.tsx`
+  - `functions/public/components/mitra/MitraTenantManagement.tsx`
+  - `functions/public/pages/MitraDashboard.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Uji kompilasi frontend Vite (`npm run build`): Lulus 100% (2512 modul, 0 error).
+  - Status calon penyewa "userbiasa1" (tanggal masuk 6 November 2026): Masuk ke tab "Menunggu Masuk", badge amber, menampilkan Jadwal Masuk 6 Nov 2026, dan memiliki tombol `[🔑 Serah Terima Kunci]`.
+
 ### 486. Penerapan Matriks Kelayakan Ulasan & Rating Kost Berbasis Validasi Terima Kunci dan Durasi Tinggal (`MyKost.tsx`) (November 2026)
 - **Permintaan & Masukan Pengguna**:
   1. Tombol "Beri Ulasan & Rating" pada kartu sewa aktif (`MyKost.tsx`) seharusnya tidak langsung bisa diakses sejak hari pertama pembayaran.

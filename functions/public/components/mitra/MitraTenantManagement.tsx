@@ -3,13 +3,14 @@ import {
     Users, Search, Filter, Calendar, Clock, ArrowRight, User, 
     MessageCircle, MoreHorizontal, ChevronRight, ChevronDown, ChevronUp, MapPin, Briefcase, 
     GraduationCap, ClipboardList, TrendingUp, AlertCircle, Plus, DollarSign, ExternalLink, X, Home, Zap, RefreshCw,
-    Share2, ShieldAlert, File, History, ShieldCheck, Sparkles
+    Share2, ShieldAlert, File, History, ShieldCheck, Sparkles, Key
 } from 'lucide-react';
 import PaymentHistoryModal from '../PaymentHistoryModal';
 import { FORMAT_CURRENCY } from '../../constants';
 import { getCurrentDate, parseDateSafely } from '../../utils/timeUtils';
 import { Kost } from '../../types';
 import AddBillModal from './AddBillModal';
+import { confirmCheckIn, approveEarlyCheckIn } from '../../userService';
 
 interface MitraTenantManagementProps {
     residentStatus: any[];
@@ -89,6 +90,49 @@ const MitraTenantManagement: React.FC<MitraTenantManagementProps> = ({
         }
     };
 
+    const handleConfirmHandover = async (resident: any) => {
+        if (!window.confirm(`Konfirmasi serah terima kunci untuk ${resident.profile.name}? Setelah serah terima dikonfirmasi, masa sewa akan resmi berstatus AKTIF.`)) return;
+        setIsUpdating(true);
+        try {
+            const targetId = resident.id || resident.last_transaction_id;
+            const res = await confirmCheckIn(targetId, 'owner', 'Serah terima kunci fisik dikonfirmasi oleh pemilik/mitra.');
+            if (res.success) {
+                alert(`Serah terima kunci berhasil dikonfirmasi! Penghuni ${resident.profile.name} kini resmi berstatus AKTIF.`);
+                await refreshData();
+            } else {
+                alert('Gagal mengonfirmasi serah terima kunci: ' + (res.error || 'Terjadi kesalahan'));
+            }
+        } catch (err: any) {
+            alert('Terjadi kesalahan: ' + err.message);
+        } finally {
+            setIsUpdating(false);
+        }
+    };
+
+    const handleApproveEarlyCheckIn = async (resident: any) => {
+        const proposedDate = resident.earlyProposedDate;
+        if (!proposedDate) {
+            alert('Tanggal masuk awal tidak valid.');
+            return;
+        }
+        if (!window.confirm(`Setujui permintaan masuk lebih awal untuk ${resident.profile.name} menjadi tanggal ${safeFormatDate(proposedDate)}? Tanggal sewa akan otomatis dihitung ulang dan serah terima kunci langsung aktif.`)) return;
+        setIsUpdating(true);
+        try {
+            const targetId = resident.id || resident.last_transaction_id;
+            const res = await approveEarlyCheckIn(targetId, proposedDate);
+            if (res.success) {
+                alert(`Permintaan masuk awal disetujui! Tanggal sewa baru: ${res.newStartDate} s/d ${res.newEndDate}. Status penghuni kini AKTIF.`);
+                await refreshData();
+            } else {
+                alert('Gagal menyetujui early check-in: ' + (res.error || 'Terjadi kesalahan'));
+            }
+        } catch (err: any) {
+            alert('Terjadi kesalahan: ' + err.message);
+        } finally {
+            setIsUpdating(false);
+        }
+    };
+
     // --- HELPERS ---
 
 
@@ -132,14 +176,47 @@ const MitraTenantManagement: React.FC<MitraTenantManagementProps> = ({
             const p = r.property || {};
             const t = r.last_transaction || {};
             const meta = t.metadata || {};
+            const rMeta = r.metadata || {};
 
             const daysLeft = getRemainingDays(r.end_date);
+
+            // Handover & Check-in Verification
+            const isHandoverDone = Boolean(
+                rMeta.actual_checkin_at || 
+                rMeta.handover_confirmed || 
+                r.actual_checkin_at || 
+                meta.actual_checkin_at || 
+                meta.handover_confirmed
+            );
+
+            const today = getCurrentDate();
+            const todayNorm = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+            const startD = r.start_date ? parseDateSafely(r.start_date) : null;
+            const startNorm = startD ? new Date(startD.getFullYear(), startD.getMonth(), startD.getDate()) : null;
+
+            // Is Upcoming: Not yet handed over AND (start date in future OR explicitly marked WAITING_CHECKIN / UPCOMING)
+            const isUpcoming = Boolean(
+                !isHandoverDone && (
+                    (startNorm && todayNorm.getTime() < startNorm.getTime()) ||
+                    ['UPCOMING', 'WAITING_CHECKIN', 'AWAITING_CHECKIN'].includes((r.status || '').toUpperCase()) ||
+                    ['UPCOMING', 'WAITING_CHECKIN'].includes((rMeta.status || '').toUpperCase())
+                )
+            );
+
+            const isEarlyRequested = Boolean(
+                (rMeta.early_checkin_requested || meta.early_checkin_requested) && 
+                !(rMeta.early_checkin_approved || meta.early_checkin_approved)
+            );
+
+            const earlyProposedDate = rMeta.early_checkin_proposed_date || meta.early_checkin_proposed_date || null;
+            const earlyReason = rMeta.early_checkin_reason || meta.early_checkin_reason || null;
             
             return {
                 id: r.id,
                 uid: r.user_id,
+                last_transaction_id: r.last_transaction_id || t.id,
                 profile: {
-                    name: u.name || u.full_name || (r.metadata || {}).userName || (r.metadata || {}).tenantName || 'Penyewa',
+                    name: u.name || u.full_name || rMeta.userName || rMeta.tenantName || 'Penyewa',
                     photo_url: u.photo_url,
                     phone: u.phone,
                     email: u.email,
@@ -165,10 +242,14 @@ const MitraTenantManagement: React.FC<MitraTenantManagementProps> = ({
                     total: Number(t.amount || 0)
                 },
                 daysLeft,
-                isExpired: daysLeft !== null && daysLeft < 0,
-                isExpiring: daysLeft !== null && daysLeft <= 7 && daysLeft >= 0,
-                isActive: daysLeft !== null && daysLeft > 7,
-                isNoExtension: meta.noExtension === true,
+                isUpcoming,
+                isEarlyRequested,
+                earlyProposedDate,
+                earlyReason,
+                isExpired: !isUpcoming && daysLeft !== null && daysLeft < 0,
+                isExpiring: !isUpcoming && daysLeft !== null && daysLeft <= 7 && daysLeft >= 0,
+                isActive: !isUpcoming && daysLeft !== null && daysLeft > 7,
+                isNoExtension: !isUpcoming && meta.noExtension === true,
                 isSurveyOccupant: meta.isSurveyOccupant === true || r.isSurveyOccupant === true,
                 billingStatus: (t.status || 'PAID').toLowerCase(),
                 relatedBills: bookings.filter(bt => 
@@ -192,12 +273,11 @@ const MitraTenantManagement: React.FC<MitraTenantManagementProps> = ({
             const matchesProperty = filterProperty === 'all' || res.kostId === filterProperty;
             
             let matchesStatus = true;
-            if (filterStatus === 'expiring') matchesStatus = res.isExpiring;
+            if (filterStatus === 'upcoming') matchesStatus = res.isUpcoming;
+            else if (filterStatus === 'expiring') matchesStatus = res.isExpiring;
             else if (filterStatus === 'active') matchesStatus = res.isActive;
             else if (filterStatus === 'no_extension') matchesStatus = res.isNoExtension;
             else if (filterStatus === 'all') {
-                // In 'all' view, we show active and expiring. 
-                // Expired ( < 0 ) will be shown if they are within the grace period (-3 days)
                 matchesStatus = true; 
             }
 
@@ -206,12 +286,14 @@ const MitraTenantManagement: React.FC<MitraTenantManagementProps> = ({
     }, [processedResidents, searchQuery, filterProperty, filterStatus]);
 
     const stats = useMemo(() => {
+        const upcomingArrivals = processedResidents.filter(r => r.isUpcoming).length;
         const expiringSoon = processedResidents.filter(r => r.isExpiring).length;
         const activeRentals = processedResidents.filter(r => r.isActive).length;
         const noExtensions = processedResidents.filter(r => r.isNoExtension).length;
 
         return {
             total: processedResidents.length,
+            upcomingArrivals,
             expiringSoon,
             activeRentals,
             noExtensions
@@ -239,7 +321,7 @@ const MitraTenantManagement: React.FC<MitraTenantManagementProps> = ({
                 <div>
                     <h2 className="text-xl md:text-2xl font-black text-gray-900 uppercase tracking-tight">Database Penghuni</h2>
                     <p className="text-xs text-gray-500 font-bold uppercase tracking-wider mt-0.5">
-                        <span className="text-orange-500">{stats.total} Total</span> • <span className="text-emerald-600">{stats.activeRentals} Aktif</span> • <span className="text-rose-500">{stats.expiringSoon} Tenggang</span>
+                        <span className="text-orange-500">{stats.total} Total</span> • {stats.upcomingArrivals > 0 && <><span className="text-amber-600">{stats.upcomingArrivals} Menunggu Masuk</span> • </>}<span className="text-emerald-600">{stats.activeRentals} Aktif</span> • <span className="text-rose-500">{stats.expiringSoon} Tenggang</span>
                     </p>
                 </div>
                 <div className="flex items-center gap-2">
@@ -292,6 +374,16 @@ const MitraTenantManagement: React.FC<MitraTenantManagementProps> = ({
                     }`}
                 >
                     Semua <span className={`px-1.5 py-0.5 rounded-full text-[10px] ${filterStatus === 'all' ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-600'}`}>{processedResidents.length}</span>
+                </button>
+                <button
+                    onClick={() => setFilterStatus('upcoming')}
+                    className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center gap-1.5 cursor-pointer ${
+                        filterStatus === 'upcoming'
+                            ? 'bg-amber-500 text-white shadow-md'
+                            : 'bg-white text-amber-600 border border-amber-100 hover:bg-amber-50'
+                    }`}
+                >
+                    <Clock size={12} /> Menunggu Masuk <span className={`px-1.5 py-0.5 rounded-full text-[10px] ${filterStatus === 'upcoming' ? 'bg-amber-600 text-white' : 'bg-amber-100 text-amber-700'}`}>{stats.upcomingArrivals}</span>
                 </button>
                 <button
                     onClick={() => setFilterStatus('expiring')}
@@ -361,7 +453,13 @@ const MitraTenantManagement: React.FC<MitraTenantManagementProps> = ({
                                                     {isKostManager && (
                                                         <span className="text-[9px] font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-lg border border-indigo-100 uppercase tracking-wider flex items-center gap-1">⭐ KOSTMANAGER</span>
                                                     )}
-                                                    {resident.isExpired ? (
+                                                    {resident.isUpcoming ? (
+                                                        resident.isEarlyRequested ? (
+                                                            <span className="text-[9px] font-bold text-amber-700 bg-amber-100 border border-amber-200 px-2 py-0.5 rounded-lg uppercase tracking-wider flex items-center gap-1 animate-pulse"><Zap size={10} fill="currentColor"/> AJUKAN MASUK AWAL</span>
+                                                        ) : (
+                                                            <span className="text-[9px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-lg uppercase tracking-wider flex items-center gap-1"><Clock size={10}/> MENUNGGU MASUK</span>
+                                                        )
+                                                    ) : resident.isExpired ? (
                                                         <span className="text-[9px] font-bold text-white bg-rose-600 px-2 py-0.5 rounded-lg uppercase tracking-wider flex items-center gap-1"><AlertCircle size={10}/> HABIS</span>
                                                     ) : resident.isExpiring ? (
                                                         <span className="text-[9px] font-bold text-orange-500 bg-orange-50 px-2 py-0.5 rounded-lg uppercase tracking-wider flex items-center gap-1 animate-pulse"><Clock size={10}/> TENGGANG</span>
@@ -379,30 +477,85 @@ const MitraTenantManagement: React.FC<MitraTenantManagementProps> = ({
                                             </div>
                                         </div>
 
-                                        {/* Middle: Sisa Hari, Selesai Sewa, Total Tagihan */}
-                                        <div className="grid grid-cols-3 gap-2 bg-gray-50/50 p-3 rounded-2xl border border-gray-100/50 lg:flex lg:flex-wrap lg:items-center lg:gap-8 lg:bg-transparent lg:border-transparent lg:p-0">
-                                            <div className="min-w-0">
-                                                <p className="text-[9px] text-gray-400 font-bold uppercase tracking-wider truncate">Sisa Hari</p>
-                                                <span className={`inline-flex items-center gap-0.5 text-[10px] font-black uppercase mt-0.5 ${
-                                                    daysLeft !== null && daysLeft <= 7 ? 'text-rose-600' : 'text-emerald-600'
-                                                }`}>
-                                                    <Clock size={10} /> <span className="truncate">{daysLeft}h</span>
-                                                </span>
+                                        {/* Middle: Sisa Hari or Jadwal Masuk */}
+                                        {resident.isUpcoming ? (
+                                            <div className="grid grid-cols-3 gap-2 bg-amber-50/40 p-3 rounded-2xl border border-amber-100/60 lg:flex lg:flex-wrap lg:items-center lg:gap-8 lg:bg-transparent lg:border-transparent lg:p-0">
+                                                <div className="min-w-0">
+                                                    <p className="text-[9px] text-amber-700/80 font-bold uppercase tracking-wider truncate">Jadwal Masuk</p>
+                                                    <p className="text-[10px] font-black text-amber-900 mt-0.5 truncate flex items-center gap-1">
+                                                        <Clock size={10} className="text-amber-600 shrink-0" />
+                                                        {safeFormatDate(resident.startDate, {day:'numeric', month:'short', year:'numeric'})}
+                                                    </p>
+                                                </div>
+                                                <div className="min-w-0">
+                                                    <p className="text-[9px] text-gray-400 font-bold uppercase tracking-wider truncate">Paket Sewa</p>
+                                                    <p className="text-[10px] font-black text-gray-900 mt-0.5 truncate">{resident.totalSewaLabel}</p>
+                                                </div>
+                                                <div className="min-w-0">
+                                                    <p className="text-[9px] text-gray-400 font-bold uppercase tracking-wider truncate">Total Bayar</p>
+                                                    <p className="text-[10px] font-black text-orange-500 mt-0.5 truncate">{FORMAT_CURRENCY(resident.billingBreakdown.total)}</p>
+                                                </div>
                                             </div>
-                                            <div className="min-w-0">
-                                                <p className="text-[9px] text-gray-400 font-bold uppercase tracking-wider truncate">Selesai Sewa</p>
-                                                <p className="text-[10px] font-black text-gray-900 mt-0.5 truncate">{safeFormatDate(resident.endDate, {day:'numeric', month:'short', year:'numeric'})}</p>
+                                        ) : (
+                                            <div className="grid grid-cols-3 gap-2 bg-gray-50/50 p-3 rounded-2xl border border-gray-100/50 lg:flex lg:flex-wrap lg:items-center lg:gap-8 lg:bg-transparent lg:border-transparent lg:p-0">
+                                                <div className="min-w-0">
+                                                    <p className="text-[9px] text-gray-400 font-bold uppercase tracking-wider truncate">Sisa Hari</p>
+                                                    <span className={`inline-flex items-center gap-0.5 text-[10px] font-black uppercase mt-0.5 ${
+                                                        daysLeft !== null && daysLeft <= 7 ? 'text-rose-600' : 'text-emerald-600'
+                                                    }`}>
+                                                        <Clock size={10} /> <span className="truncate">{daysLeft}h</span>
+                                                    </span>
+                                                </div>
+                                                <div className="min-w-0">
+                                                    <p className="text-[9px] text-gray-400 font-bold uppercase tracking-wider truncate">Selesai Sewa</p>
+                                                    <p className="text-[10px] font-black text-gray-900 mt-0.5 truncate">{safeFormatDate(resident.endDate, {day:'numeric', month:'short', year:'numeric'})}</p>
+                                                </div>
+                                                <div className="min-w-0">
+                                                    <p className="text-[9px] text-gray-400 font-bold uppercase tracking-wider truncate">Total</p>
+                                                    <p className="text-[10px] font-black text-orange-500 mt-0.5 truncate">{FORMAT_CURRENCY(resident.billingBreakdown.total)}</p>
+                                                </div>
                                             </div>
-                                            <div className="min-w-0">
-                                                <p className="text-[9px] text-gray-400 font-bold uppercase tracking-wider truncate">Total</p>
-                                                <p className="text-[10px] font-black text-orange-500 mt-0.5 truncate">{FORMAT_CURRENCY(resident.billingBreakdown.total)}</p>
-                                            </div>
-                                        </div>
+                                        )}
 
                                         {/* Right: Actions & Expand Button */}
                                         <div className="flex items-center justify-between gap-2 border-t lg:border-t-0 pt-3 lg:pt-0 border-gray-100 w-full lg:w-auto">
                                             <div className="flex items-center gap-1.5 flex-wrap">
-                                                {isKostManager ? (
+                                                {resident.isUpcoming ? (
+                                                    <>
+                                                        {resident.isEarlyRequested && (
+                                                            <button 
+                                                                onClick={() => handleApproveEarlyCheckIn(resident)}
+                                                                disabled={isUpdating}
+                                                                className="px-2.5 py-1.5 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-[9px] font-black uppercase tracking-wider transition-all flex items-center gap-1 cursor-pointer shadow-sm animate-pulse"
+                                                                title={`Setujui masuk lebih awal pada ${resident.earlyProposedDate ? safeFormatDate(resident.earlyProposedDate, {day: 'numeric', month: 'short'}) : 'Awal'}`}
+                                                            >
+                                                                <Zap size={11} fill="currentColor" /> ACC Masuk Awal
+                                                            </button>
+                                                        )}
+                                                        <button 
+                                                            onClick={() => handleConfirmHandover(resident)}
+                                                            disabled={isUpdating}
+                                                            className="px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-[9px] font-black uppercase tracking-wider transition-all flex items-center gap-1 cursor-pointer shadow-sm"
+                                                            title="Konfirmasi bahwa calon penghuni telah tiba dan menerima kunci fisik kost"
+                                                        >
+                                                            <Key size={11} /> Serah Terima Kunci
+                                                        </button>
+                                                        <button 
+                                                            onClick={() => {
+                                                                if (resident.profile.phone && resident.profile.phone !== '-') {
+                                                                    const cleanPhone = resident.profile.phone.replace(/[^0-9]/g, '');
+                                                                    const waPhone = cleanPhone.startsWith('0') ? '62' + cleanPhone.slice(1) : cleanPhone;
+                                                                    window.open(`https://wa.me/${waPhone}`, '_blank');
+                                                                } else {
+                                                                    onStartChat?.(resident.uid, resident.kostId);
+                                                                }
+                                                            }}
+                                                            className="px-2.5 py-1.5 bg-blue-50 text-blue-600 rounded-xl border border-blue-100 text-[9px] font-black uppercase tracking-wider hover:bg-blue-100 transition-all flex items-center gap-1 cursor-pointer"
+                                                        >
+                                                            <MessageCircle size={11} /> Chat
+                                                        </button>
+                                                    </>
+                                                ) : isKostManager ? (
                                                     <>
                                                         <div className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 border border-indigo-100 rounded-xl text-indigo-700 shadow-sm" title="Penagihan dan operasional ditangani 100% oleh Tim KostManager RuangSinggah">
                                                             <ShieldCheck size={13} className="text-indigo-600 shrink-0" />
@@ -469,6 +622,28 @@ const MitraTenantManagement: React.FC<MitraTenantManagementProps> = ({
                                     {/* Collapsible Info Grid */}
                                     {expandedResidents[resKey] && (
                                         <div className="space-y-6 pt-6 mt-6 border-t border-gray-100 animate-in slide-in-from-top-4 duration-300">
+                                            {resident.isEarlyRequested && (
+                                                <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="w-9 h-9 rounded-xl bg-amber-500 text-white flex items-center justify-center shadow-md shrink-0">
+                                                            <Zap size={18} fill="currentColor" />
+                                                        </div>
+                                                        <div>
+                                                            <p className="text-xs font-black text-amber-950 uppercase tracking-tight">Pengajuan Masuk Lebih Cepat</p>
+                                                            <p className="text-[11px] text-amber-800 mt-0.5">
+                                                                Penyewa mengajukan masuk lebih awal pada <span className="font-bold underline">{safeFormatDate(resident.earlyProposedDate)}</span>.
+                                                                {resident.earlyReason && <span className="italic block text-gray-600 mt-0.5">"{resident.earlyReason}"</span>}
+                                                            </p>
+                                                        </div>
+                                                    </div>
+                                                    <button
+                                                        onClick={() => handleApproveEarlyCheckIn(resident)}
+                                                        className="px-3.5 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-[10px] font-black uppercase tracking-wider transition-all shadow-sm shrink-0 cursor-pointer flex items-center gap-1.5 self-end sm:self-auto"
+                                                    >
+                                                        <Zap size={12} fill="currentColor" /> Setujui Tanggal Baru
+                                                    </button>
+                                                </div>
+                                            )}
                                             {isKostManager && (
                                                 <div className="bg-gradient-to-r from-indigo-50/80 to-blue-50/50 border border-indigo-100/80 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
                                                     <div className="flex items-center gap-3">
@@ -526,15 +701,27 @@ const MitraTenantManagement: React.FC<MitraTenantManagementProps> = ({
                                                         <p className="text-sm font-black text-orange-600 leading-none">{safeFormatDate(resident.endDate, {day:'numeric', month:'short', year: 'numeric'})}</p>
                                                     </div>
                                                 </div>
-                                                <div className="bg-emerald-50/50 border border-emerald-100 rounded-xl p-3 flex items-center justify-between">
-                                                    <div className="flex items-center gap-2">
-                                                        <div className="w-6 h-6 rounded-lg bg-emerald-100 flex items-center justify-center text-emerald-600"><Clock size={12}/></div>
-                                                        <p className="text-[9px] font-black text-gray-500 uppercase">SISA HARI</p>
+                                                {resident.isUpcoming ? (
+                                                    <div className="bg-amber-50/50 border border-amber-100 rounded-xl p-3 flex items-center justify-between">
+                                                        <div className="flex items-center gap-2">
+                                                            <div className="w-6 h-6 rounded-lg bg-amber-100 flex items-center justify-center text-amber-600"><Clock size={12}/></div>
+                                                            <p className="text-[9px] font-black text-amber-700 uppercase">STATUS KEDATANGAN</p>
+                                                        </div>
+                                                        <p className="text-xs font-black text-amber-600 uppercase tracking-tight">
+                                                            Menunggu Jadwal Masuk ({safeFormatDate(resident.startDate, {day:'numeric', month:'short', year:'numeric'})})
+                                                        </p>
                                                     </div>
-                                                    <p className="text-xs font-black text-emerald-600 uppercase tracking-tight">
-                                                        {daysLeft} Hari Lagi
-                                                    </p>
-                                                </div>
+                                                ) : (
+                                                    <div className="bg-emerald-50/50 border border-emerald-100 rounded-xl p-3 flex items-center justify-between">
+                                                        <div className="flex items-center gap-2">
+                                                            <div className="w-6 h-6 rounded-lg bg-emerald-100 flex items-center justify-center text-emerald-600"><Clock size={12}/></div>
+                                                            <p className="text-[9px] font-black text-gray-500 uppercase">SISA HARI</p>
+                                                        </div>
+                                                        <p className="text-xs font-black text-emerald-600 uppercase tracking-tight">
+                                                            {daysLeft} Hari Lagi
+                                                        </p>
+                                                    </div>
+                                                )}
                                             </div>
 
                                             {/* Rincian Tagihan */}

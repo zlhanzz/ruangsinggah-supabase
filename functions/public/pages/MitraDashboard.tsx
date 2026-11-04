@@ -706,11 +706,14 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                 return a + pViews;
             }, 0);
 
-            // 5. Active Tenants (Direct from Resident Status Table - Validated Active & Paid only)
+            // 5. Active Tenants (Direct from Resident Status Table - Validated Active & Paid only, excluding upcoming pre-arrivals)
             const activeCount = statusRecords.filter(r => {
                 const isStatusActive = (r.status || '').toUpperCase() === 'ACTIVE';
+                const isHandoverDone = Boolean(r.metadata?.actual_checkin_at || r.metadata?.handover_confirmed || r.actual_checkin_at);
+                const startD = r.start_date ? new Date(r.start_date) : null;
+                const isUpcoming = Boolean(!isHandoverDone && startD && startD.getTime() > now.getTime());
                 const daysLeft = r.end_date ? Math.ceil((new Date(r.end_date).getTime() - now.getTime()) / (1000 * 60 * 60 * 24)) : 0;
-                return isStatusActive && daysLeft >= 0;
+                return isStatusActive && daysLeft >= 0 && !isUpcoming;
             }).length;
 
             // 6. Available Rooms Listed by Owner (Across all properties and room types)
