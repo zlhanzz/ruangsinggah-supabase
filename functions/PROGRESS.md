@@ -2,6 +2,42 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 492. Contextual Alternating Action Slot (Jadwalkan Lebih Cepat vs Terima Kunci & Masuk), Proteksi Gembok Fitur Lapor Kendala Kamar, & Penyelarasan Durasi Sewa (`MyKost.tsx`) (November 2026)
+- **Permintaan & Masukan Pengguna**:
+  1. Pada fase menunggu masuk (`!isHandoverDone`), tombol **"Lapor Kendala Kamar"** seharusnya belum berfungsi karena penyewa belum memegang kunci fisik atau menempati kamar.
+  2. Tombol **"Jadwalkan Masuk Lebih Cepat"** dan **"Terima Kunci & Masuk"** bukan tombol terpisah yang muncul bersamaan di dua tempat (banner vs sidebar), melainkan satu tombol yang sama dan bergantian (*alternating contextual action slot*):
+     - Muncul "Jadwalkan Lebih Cepat" ketika masih jauh hari sebelum hari H masuk.
+     - Otomatis berganti menjadi "Terima Kunci & Masuk" tepat ketika hari H masuk yang disepakati telah tiba (baik dari penetapan awal booking maupun hasil persetujuan jadwal lebih cepat oleh Mitra).
+  3. Menjaga keselarasan durasi sewa 1 bulan dan tanggal selesai sewa (`end_date`) agar kartu sewa konsisten menampilkan periode 1 bulan.
+- **Akar Masalah & Analisis Teknis**:
+  1. Tombol `handleOpenComplaint` sebelumnya selalu dapat diklik selama `isPaid && !is_checked_out`, tanpa mengecek apakah penyewa sudah menyelesaikan serah terima kunci (`isHandoverDone`). Akibatnya penyewa yang masih berstatus H-6 menunggu masuk dapat membuat tiket komplain fasilitas kamar fiktif sebelum check-in.
+  2. Di `MyKost.tsx`, banner status sewa memiliki tombol `Jadwalkan Lebih Cepat`, sementara sidebar memiliki tombol `Terima Kunci & Masuk` secara bersamaan, sehingga membingungkan penyewa dan menyalahi pola UX contextual single primary action.
+  3. Pemetaan `mapResidentStatus` sebelumnya hanya membaca `r.end_date` database tanpa memprioritaskan metadata durasi sewa yang disepakati (`r.metadata?.endDate`).
+- **Implementasi Solusi**:
+  1. **Proteksi & Penguncian Gembok Fitur Lapor Kendala Kamar**:
+     - Menambahkan validasi `isHandoverDone` pada tombol dan handler `handleOpenComplaint(kost)`:
+     - Jika penyewa belum menyelesaikan serah terima kunci (`!isHandoverDone`), tombol dirender dalam keadaan disabled (`bg-gray-50 text-gray-400 border-gray-100 cursor-not-allowed opacity-70`) disertai teks keterangan subheader: *"SELESAIKAN TERIMA KUNCI TERLEBIH DAHULU"*.
+     - Handler `handleOpenComplaint` dilengkapi alert modal penjaga: jika belum check-in, sistem mencegah pembukaan formulir keluhan dengan pesan ramah instruktif.
+  2. **Single Contextual Alternating Action Slot (Jadwalkan Lebih Cepat vs Terima Kunci & Masuk)**:
+     - Banner status diubah menjadi murni informatif dan bebas redundansi tombol:
+       - Saat H-N menunggu masuk: Menampilkan badge *"Masuk dlm N Hari"* atau *"Menunggu ACC Masuk Tgl ..."* dengan ikon kalender/jam yang bersih.
+       - Saat Hari H tiba: Menampilkan notifikasi *"Hari Masuk Kost Telah Tiba! Siap Check-in"*.
+     - Tombol aksi primer di sidebar kartu pesanan kini bergantian secara dinamis (*contextual state*):
+       - **Sebelum Hari H (`isUpcoming = true` & `!isHandoverDone`)**: Menampilkan tombol primer **`[⚡ JADWALKAN LEBIH CEPAT]`** (atau status menunggu persetujuan mitra). Tombol "Terima Kunci & Masuk" disembunyikan.
+       - **Pada Hari H Masuk (`isUpcoming = false` & `!isHandoverDone`)**: Tombol primer secara otomatis beralih menjadi **`[✓ TERIMA KUNCI & MASUK]`**. Tombol "Jadwalkan Lebih Cepat" disembunyikan.
+       - **Setelah Serah Terima Kunci (`isHandoverDone = true`)**: Kedua tombol pra-masuk menghilang, banner beralih ke masa sewa aktif (*KUNCI DITERIMA*), dan tombol "Lapor Kendala Kamar" terbuka aktif.
+  3. **Penyelarasan Tanggal Selesai & Durasi Sewa**:
+     - Pada `mapResidentStatus`, `endDate` kini memprioritaskan `r.metadata?.endDate || r.end_date`.
+     - Mengoreksi data resident sewa Kost Ryuta pada Supabase ke tanggal akhir yang presisi (10 Desember 2026, 1 bulan penuh).
+- **File Tersentuh**:
+  - `functions/public/pages/MyKost.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi build frontend Vite (`npm.cmd --prefix functions/public run build`): Lulus 100% (2512 modul, 0 error).
+  - Simulasi Pra-Hari H: Kartu sewa hanya menampilkan tombol "Jadwalkan Lebih Cepat", tombol "Terima Kunci & Masuk" tidak muncul, dan "Lapor Kendala Kamar" terkunci aman.
+  - Simulasi Hari H: Tombol secara otomatis berganti menjadi "Terima Kunci & Masuk", dan banner mengarahkan serah terima kunci.
+
 ### 491. Perbaikan Runtime ReferenceError TDZ 'residentStatus' pada MyKost (`MyKost.tsx`) (November 2026)
 - **Permintaan & Masukan Pengguna**:
   - Pengguna menemukan crash fatal front-end pada console saat membuka halaman Orders (`/my-bookings`):

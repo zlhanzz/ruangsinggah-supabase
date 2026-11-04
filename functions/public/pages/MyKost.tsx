@@ -1303,7 +1303,7 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
                         return validPeriods.includes(raw) ? raw : 'bulanan';
                     })(),
                     moveInDate: r.start_date,
-                    endDate: r.end_date,
+                    endDate: r.metadata?.endDate || r.end_date,
                     daysRemaining: daysRem,
                     totalPrice: (() => {
                         const baseRent = Number(combinedMeta.baseRent || combinedMeta.basePrice || 0);
@@ -1670,6 +1670,12 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
     };
 
     const handleOpenComplaint = (kost: any) => {
+        const kMeta = typeof kost.metadata === 'string' ? JSON.parse(kost.metadata) : (kost.metadata || {});
+        const isCheckedIn = Boolean(kMeta.actual_checkin_at || kMeta.handover_confirmed || kost.actual_checkin_at || kost.is_checked_in);
+        if (!isCheckedIn) {
+            alert('Fitur Lapor Kendala Kamar baru dapat digunakan setelah Anda menyelesaikan serah terima kunci dan resmi masuk kost.');
+            return;
+        }
         setSelectedKost(kost);
         setComplaintTitle('');
         setComplaintDesc('');
@@ -2886,12 +2892,10 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
                                                                     Menunggu ACC Masuk Tgl {FORMAT_DATE(kMeta.early_checkin_proposed_date)}
                                                                 </span>
                                                             ) : (
-                                                                <button
-                                                                    onClick={() => handleOpenEarlyCheckInModal(kost)}
-                                                                    className="w-full sm:w-auto px-4 py-2 rounded-xl bg-orange-500 hover:bg-orange-600 text-white text-[10px] font-black uppercase tracking-wider transition-all shadow-sm shadow-orange-500/25 active:scale-95 shrink-0 cursor-pointer flex items-center justify-center gap-1.5"
-                                                                >
-                                                                    <Zap className="w-3.5 h-3.5" /> Jadwalkan Lebih Cepat
-                                                                </button>
+                                                                <span className="px-3 py-1.5 rounded-xl bg-white/90 text-orange-700 text-[10px] font-black uppercase tracking-wider border border-orange-200/80 flex items-center gap-1.5 shrink-0 shadow-2xs">
+                                                                    <Clock className="w-3.5 h-3.5 text-orange-500" />
+                                                                    {daysUntilArrival !== null && daysUntilArrival > 0 ? (daysUntilArrival === 1 ? 'Masuk Besok' : `Masuk dlm ${daysUntilArrival} Hari`) : 'Segera Masuk'}
+                                                                </span>
                                                             )}
                                                         </div>
                                                     );
@@ -2910,18 +2914,10 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
                                                                         <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[9px] font-black">Siap Check-in</span>
                                                                     </div>
                                                                     <p className="text-xs font-semibold text-emerald-800 mt-0.5">
-                                                                        Silakan serah terima kunci fisik dengan pemilik/penjaga kost dan konfirmasi di bawah.
+                                                                        Hari masuk kost Anda telah tiba. Silakan serah terima kunci fisik dengan pemilik/penjaga kost dan konfirmasi di bawah.
                                                                     </p>
                                                                 </div>
                                                             </div>
-                                                            <button
-                                                                onClick={() => handleConfirmTenantCheckIn(kost)}
-                                                                disabled={isConfirmingCheckIn}
-                                                                className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-black uppercase tracking-wider transition-all shadow-md active:scale-95 shrink-0 cursor-pointer flex items-center justify-center gap-1.5"
-                                                            >
-                                                                <CheckCircle2 className="w-3.5 h-3.5" />
-                                                                {isConfirmingCheckIn ? 'Memproses...' : 'Sudah Tiba & Terima Kunci'}
-                                                            </button>
                                                         </div>
                                                     );
                                                 }
@@ -3104,16 +3100,37 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
                                                 </button>
                                             )}
 
-                                            {/* Tombol Konfirmasi Terima Kunci (Jika belum handover) */}
-                                            {isPaid && !kost.is_checked_out && !Boolean(kMeta.actual_checkin_at || kMeta.handover_confirmed || kost.actual_checkin_at) && (
-                                                <button
-                                                    onClick={() => handleConfirmTenantCheckIn(kost)}
-                                                    disabled={isConfirmingCheckIn}
-                                                    className="w-full bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white px-4 sm:px-5 py-3 sm:py-3.5 rounded-xl sm:rounded-2xl font-black flex items-center justify-center gap-2 sm:gap-2.5 transition-all text-[9.5px] sm:text-[10px] uppercase tracking-widest shadow-md shadow-emerald-500/20 active:scale-[0.98] cursor-pointer"
-                                                >
-                                                    <CheckCircle2 className="w-4 h-4 text-emerald-200" />
-                                                    <span>{isConfirmingCheckIn ? 'Memproses...' : 'Terima Kunci & Masuk'}</span>
-                                                </button>
+                                            {/* Tombol Kontekstual Pra-Masuk: Bergantian Jadwalkan Lebih Cepat (H-N) vs Terima Kunci & Masuk (Hari H) */}
+                                            {isPaid && !kost.is_checked_out && !isHandoverDone && (
+                                                <>
+                                                    {/* KONDISI 1: Belum Hari H (Masih Jauh Hari Masuk) -> Tampilkan Jadwalkan Lebih Cepat */}
+                                                    {isUpcoming ? (
+                                                        isEarlyRequested ? (
+                                                            <div className="w-full bg-amber-50 text-amber-800 border-2 border-amber-200/80 px-4 py-3 rounded-xl sm:rounded-2xl font-bold flex items-center justify-center gap-2 text-[10px] uppercase tracking-wider shadow-2xs">
+                                                                <Clock className="w-4 h-4 text-amber-600 shrink-0" />
+                                                                <span className="truncate">Menunggu ACC Masuk Tgl {FORMAT_DATE(kMeta.early_checkin_proposed_date)}</span>
+                                                            </div>
+                                                        ) : (
+                                                            <button
+                                                                onClick={() => handleOpenEarlyCheckInModal(kost)}
+                                                                className="w-full bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white px-4 sm:px-5 py-3 sm:py-3.5 rounded-xl sm:rounded-2xl font-black flex items-center justify-center gap-2 sm:gap-2.5 transition-all text-[9.5px] sm:text-[10px] uppercase tracking-widest shadow-md shadow-orange-500/20 active:scale-[0.98] cursor-pointer"
+                                                            >
+                                                                <Zap className="w-4 h-4 text-amber-200" />
+                                                                <span>Jadwalkan Lebih Cepat</span>
+                                                            </button>
+                                                        )
+                                                    ) : (
+                                                        /* KONDISI 2: Sudah Hari H Masuk -> Tombol Berganti Menjadi Terima Kunci & Masuk */
+                                                        <button
+                                                            onClick={() => handleConfirmTenantCheckIn(kost)}
+                                                            disabled={isConfirmingCheckIn}
+                                                            className="w-full bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white px-4 sm:px-5 py-3 sm:py-3.5 rounded-xl sm:rounded-2xl font-black flex items-center justify-center gap-2 sm:gap-2.5 transition-all text-[9.5px] sm:text-[10px] uppercase tracking-widest shadow-md shadow-emerald-500/20 active:scale-[0.98] cursor-pointer"
+                                                        >
+                                                            <CheckCircle2 className="w-4 h-4 text-emerald-200" />
+                                                            <span>{isConfirmingCheckIn ? 'Memproses...' : 'Terima Kunci & Masuk'}</span>
+                                                        </button>
+                                                    )}
+                                                </>
                                             )}
 
                                             {/* Perpanjang Sewa (For Paid) */}
@@ -3207,14 +3224,32 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
                                                         <Smartphone className="w-4 h-4" /> {kost.isManagedKost ? 'Bantuan KostManager' : 'Hubungi Pemilik'}
                                                     </button>
 
-                                                    {/* Lapor Kendala Fasilitas Kamar */}
+                                                    {/* Lapor Kendala Fasilitas Kamar (Hanya aktif setelah serah terima kunci) */}
                                                     {isPaid && !kost.is_checked_out && (
-                                                        <button
-                                                            onClick={() => handleOpenComplaint(kost)}
-                                                            className="w-full bg-white hover:bg-rose-50 text-rose-600 border border-rose-200 px-4 sm:px-5 py-2.5 sm:py-3 rounded-xl sm:rounded-2xl font-black flex items-center justify-center gap-2 transition-all text-[9px] uppercase tracking-widest active:scale-[0.98] cursor-pointer"
-                                                        >
-                                                            <Wrench className="w-3.5 h-3.5 text-rose-500" /> Lapor Kendala Kamar
-                                                        </button>
+                                                        <div className="flex flex-col gap-1 w-full">
+                                                            <button
+                                                                onClick={() => {
+                                                                    if (!isHandoverDone) {
+                                                                        alert('Fitur Lapor Kendala Kamar baru dapat digunakan setelah Anda menyelesaikan serah terima kunci dan resmi masuk kost.');
+                                                                        return;
+                                                                    }
+                                                                    handleOpenComplaint(kost);
+                                                                }}
+                                                                disabled={!isHandoverDone}
+                                                                className={`w-full ${
+                                                                    !isHandoverDone
+                                                                        ? 'bg-gray-50 text-gray-400 border border-gray-100 cursor-not-allowed opacity-70'
+                                                                        : 'bg-white hover:bg-rose-50 text-rose-600 border border-rose-200 cursor-pointer shadow-2xs'
+                                                                } px-4 sm:px-5 py-2.5 sm:py-3 rounded-xl sm:rounded-2xl font-black flex items-center justify-center gap-2 transition-all text-[9px] uppercase tracking-widest active:scale-[0.98]`}
+                                                            >
+                                                                <Wrench className={`w-3.5 h-3.5 ${!isHandoverDone ? 'text-gray-300' : 'text-rose-500'}`} /> Lapor Kendala Kamar
+                                                            </button>
+                                                            {!isHandoverDone && (
+                                                                <p className="text-[8px] font-bold text-gray-400 text-center uppercase tracking-[0.15em]">
+                                                                    Selesaikan terima kunci terlebih dahulu
+                                                                </p>
+                                                            )}
+                                                        </div>
                                                     )}
 
                                                     {/* Beri / Edit Ulasan & Rating Kost (Sesuai Aturan Kelayakan Waktu & Terima Kunci) */}
