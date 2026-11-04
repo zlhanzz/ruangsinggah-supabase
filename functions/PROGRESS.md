@@ -2,6 +2,48 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 495. Single Source of Truth Dynamic Room Availability Engine & Mitra Quick Room Control Overhaul (`KostDetail.tsx`, `MitraDashboard.tsx`, `KostCard.tsx`, `functions/src/index.ts`, `properties.room_types`) (November 2026)
+- **Permintaan & Masukan Pengguna**:
+  - Pengguna menemukan ketidakkonsistenan data yang membingungkan: Setelah melakukan simulasi booking hingga berstatus penghuni aktif (`resident_status`), halaman detail listing kamar Standard sempat kembali menampilkan "3 Kamar Tersedia".
+  - Di dashboard pemilik kost (`MitraDashboard.tsx`), modal "Kendali Cepat Kamar Per Tipe" menampilkan badge kontradiktif: tipe kamar Standard berstatus merah `[PENUH]` berdampingan dengan angka counter `3`.
+  - Pengguna menuntut sistem inventori yang benar-benar dinamis, matematis, dan reaktif terhadap status penyewa riil, baik pada tampilan pencari kost (User) maupun pada panel pemilik kost (Mitra).
+- **Akar Masalah & Analisis Teknis**:
+  1. *Statis vs Dinamis*: Sisa kamar disimpan sebagai integer statis `availableRoomCount` di dalam JSONB `properties.room_types` yang terputus dari tabel relasional `resident_status`.
+  2. *Ambiguitas Status Boolean*: Tipe kamar Standard di database memiliki `availableRoomCount: 3`, tetapi `isAvailable: false` dan `status: "Terisi"`. Pada modal Mitra, badge membaca flag `isAvailable !== false` (menghasilkan status `PENUH`), sedangkan stepper counter membaca angka `availableRoomCount: 3`.
+  3. *Kendali Cepat Kaku tanpa Okupansi*: Modal kendali cepat mitra hanya menimpa angka kosong tanpa memperhitungkan penyewa aktif yang sedang tinggal, tidak memiliki safety constraint, dan tidak menyajikan visibilitas total unit vs terisi vs kosong.
+- **Implementasi Solusi**:
+  1. **Dynamic Reactive Deduction Engine pada Front-End (`KostDetail.tsx`)**:
+     - Menghubungkan pembacaan active resident dari `resident_status` untuk properti terkait (`kost.id`).
+     - Menghitung sisa kamar secara otomatis dengan rumus:
+       $$\text{Kamar Tersedia} = \max(0, \text{Total Kapasitas} - \text{Penyewa Aktif})$$
+     - Untuk Kost Ryuta (kapasitas 3 Standard, 1 penyewa aktif `userbiasa1`): sistem secara matematis menampilkan tepat **`2 Kamar Tersedia`** (kebal terhadap drift database).
+  2. **Overhaul Modal Kendali Cepat & Property Card (`MitraDashboard.tsx`)**:
+     - Menambahkan fungsi agregasi `getActiveResidentsCount(propId, roomTypeName)` berbasis state `residentStatus`.
+     - Property Card: Menghitung total kapasitas dan sisa kamar gabungan secara dinamis, menampilkan okupansi akurat (e.g. `5 dari 6 Kamar Kosong`, `Okupansi 17%`).
+     - Modal "Kendali Cepat Kamar Per Tipe":
+       - Menampilkan status badge hijau `N Tersedia` jika sisa $> 0$, dan merah `Penuh` jika sisa $= 0$ (100% sinkron, 0% kontradiksi).
+       - Menampilkan pill biru `{occForType} Dihuni` jika ada penyewa aktif.
+       - Menyajikan rincian lengkap: `Total X Unit (Y Terisi, Z Kosong)`.
+       - Stepper mengatur sisa kamar kosong secara real-time dan menyimpan kapasitas total serta sisa kamar yang konsisten ke Supabase.
+  3. **Preservasi Kuota Total Backend (`functions/src/index.ts`)**:
+     - Memperbarui `syncResidentStatus` agar memelihara `totalRooms` pada tipe kamar Kost Biasa dan memotong `availableRoomCount` tanpa menimpa status tipe kamar menjadi 'Terisi' selama sisa unit masih $> 0$.
+  4. **Sanitasi Database Supabase (`properties.room_types`)**:
+     - Mengoreksi record Kost Ryuta: Standard (`totalRooms: 3, availableRoomCount: 2, isAvailable: true, status: 'Kosong'`), Premium (`totalRooms: 3, availableRoomCount: 3, isAvailable: true, status: 'Kosong'`), `total_rooms: 6`.
+- **File Tersentuh**:
+  - `functions/public/pages/KostDetail.tsx`
+  - `functions/public/pages/MitraDashboard.tsx`
+  - `functions/src/index.ts`
+  - Record Supabase `properties` ID `f0347475-4e49-4af2-978a-5eb5fabd7f16`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi `tsc` backend functions: Lulus 100% (0 error).
+  - Kompilasi build frontend Vite (`npm.cmd --prefix functions/public run build`): Lulus 100% (2512 modul, 0 error).
+  - Inspeksi Database Supabase: Tipe Standard Kost Ryuta memiliki `totalRooms: 3`, `availableRoomCount: 2`, `isAvailable: true`, dan `status: "Kosong"`.
+  - Simulasi perhitungan ketersediaan:
+    - User view: Standard = 2 Kamar Tersedia, Premium = 3 Kamar Tersedia.
+    - Owner view: Standard = 2 Tersedia, 1 Dihuni (Total 3 Unit), Premium = 3 Tersedia, 0 Dihuni (Total 3 Unit).
+
 ### 494. Resilient Inventory-Pool Availability Engine (Kost Biasa vs KostManager), Sanitasi Data Kuota Kamar, & Sinkronisasi Build Cloud Functions (`KostDetail.tsx`, `functions/src/index.ts`, `functions/lib/index.js`, `properties.room_types`) (November 2026)
 - **Permintaan & Masukan Pengguna**:
   - Pengguna melaporkan anomali ketersediaan kamar: Mengapa penyewaan 1 kali pada 1 akun langsung membuat listing kost yang awalnya memiliki 3 kamar kosong langsung berstatus "Penuh" pada halaman detail kost (`KostDetail.tsx`).

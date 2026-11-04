@@ -1317,6 +1317,19 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
         );
     };
 
+    const getActiveResidentsCount = (propId: string, roomTypeName?: string) => {
+        return residentStatus.filter(r => {
+            const isMatchKost = r.kost_id === propId || r.property_id === propId;
+            if (!isMatchKost) return false;
+            const isActive = (r.status || '').toUpperCase() === 'ACTIVE';
+            if (!isActive) return false;
+            if (!roomTypeName) return true;
+            const rType = (r.room_type || r.metadata?.roomType || r.metadata?.roomNumber || '').trim().toLowerCase();
+            const targetType = roomTypeName.trim().toLowerCase();
+            return rType === targetType || rType.includes(targetType) || targetType.includes(rType);
+        }).length;
+    };
+
     const handleQuickUpdateRooms = async (kostId: string, newAvailableCount: number, roomTypeIndex: number = 0) => {
         const targetKost = properties.find(p => p.id === kostId);
         if (!targetKost) return;
@@ -1327,8 +1340,11 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
 
         const sanitizeRoomObject = (rm: any) => {
             const nextStatus = safeCount > 0 ? 'Kosong' : 'Penuh';
+            const occForType = getActiveResidentsCount(kostId, rm.name);
+            const totalForType = safeCount + occForType;
             const res = {
                 ...rm,
+                totalRooms: totalForType,
                 availableRoomCount: safeCount,
                 isAvailable: safeCount > 0,
                 status: nextStatus
@@ -1361,11 +1377,18 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
             updatedRoomTypes[0] = sanitizeRoomObject(updatedRoomTypes[0]);
         }
 
+        // Calculate total capacity across all room types
+        const calcTotalRooms = updatedRoomTypes.reduce((acc: number, rm: any) => {
+            const occ = getActiveResidentsCount(kostId, rm.name);
+            const cap = Number(rm.totalRooms ?? (((rm.availableRoomCount ?? 0) + occ) || 1));
+            return acc + cap;
+        }, 0);
+
         // Optimistic UI update
-        const newProperties = properties.map(p => p.id === kostId ? { ...p, roomTypes: updatedRoomTypes } : p);
+        const newProperties = properties.map(p => p.id === kostId ? { ...p, roomTypes: updatedRoomTypes, total_rooms: calcTotalRooms } : p);
         setProperties(newProperties);
         if (quickRoomModalKost && quickRoomModalKost.id === kostId) {
-            setQuickRoomModalKost({ ...quickRoomModalKost, roomTypes: updatedRoomTypes });
+            setQuickRoomModalKost({ ...quickRoomModalKost, roomTypes: updatedRoomTypes, total_rooms: calcTotalRooms });
         }
         setUpdatingRoomKostId(kostId);
 
@@ -1374,6 +1397,7 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                 .from('properties')
                 .update({
                     room_types: updatedRoomTypes,
+                    total_rooms: calcTotalRooms,
                     updated_at: new Date().toISOString()
                 })
                 .eq('id', kostId);
@@ -2104,9 +2128,29 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                                 {/* Properti Aktif */}
                                 {properties.map(p => {
                                     const isKm = Boolean(p.isManaged);
-                                    const totalRooms = p.roomTypes?.length || 0;
-                                    const availRooms = p.roomTypes?.filter((r: any) => r.isAvailable !== false && r.status?.toLowerCase() !== 'terisi' && r.status?.toLowerCase() !== 'penuh')?.length || 0;
-                                    const occRate = totalRooms > 0 ? Math.round(((totalRooms - availRooms) / totalRooms) * 100) : 0;
+                                    let totalRooms = 0;
+                                    let availRooms = 0;
+
+                                    if (isKm) {
+                                        totalRooms = p.roomTypes?.length || 0;
+                                        availRooms = p.roomTypes?.filter((r: any) => r.isAvailable !== false && r.status?.toLowerCase() !== 'terisi' && r.status?.toLowerCase() !== 'penuh')?.length || 0;
+                                    } else {
+                                        // Regular kost: sum capacity across all room types dynamically
+                                        (p.roomTypes || []).forEach((rt: any) => {
+                                            const occForType = getActiveResidentsCount(p.id, rt.name);
+                                            const typeCapacity = Number(rt.totalRooms ?? rt.roomCount ?? rt.totalCount ?? rt.quantity ?? (((rt.availableRoomCount ?? 0) + occForType) || 1));
+                                            let typeAvail = Math.max(0, typeCapacity - occForType);
+                                            if (rt.availableRoomCount !== undefined && rt.availableRoomCount !== null) {
+                                                const stored = Number(rt.availableRoomCount);
+                                                if (!isNaN(stored)) typeAvail = Math.min(typeAvail, stored);
+                                            }
+                                            totalRooms += typeCapacity;
+                                            availRooms += typeAvail;
+                                        });
+                                        if (totalRooms === 0) totalRooms = Number(p.totalRooms || p.roomTypes?.length || 1);
+                                    }
+                                    const occupiedRooms = Math.max(0, totalRooms - availRooms);
+                                    const occRate = totalRooms > 0 ? Math.round((occupiedRooms / totalRooms) * 100) : 0;
 
                                     return (
                                         <div key={p.id} className={`bg-white rounded-3xl border overflow-hidden shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 group ${isKm ? 'border-orange-200 ring-1 ring-orange-100' : 'border-gray-100'}`}>
@@ -5245,48 +5289,76 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
 
                             <div className="space-y-3">
                                 {(quickRoomModalKost.roomTypes || []).map((rt: any, idx: number) => {
-                                    const count = Number(rt.availableRoomCount ?? (rt.isAvailable !== false ? 1 : 0));
-                                    const isAvail = count > 0 && rt.isAvailable !== false;
+                                    const occForType = getActiveResidentsCount(quickRoomModalKost.id, rt.name);
+                                    const typeCapacity = Number(rt.totalRooms ?? rt.roomCount ?? rt.totalCount ?? rt.quantity ?? (((rt.availableRoomCount ?? 0) + occForType) || 1));
+                                    
+                                    let availCount = Math.max(0, typeCapacity - occForType);
+                                    if (rt.availableRoomCount !== undefined && rt.availableRoomCount !== null) {
+                                        const stored = Number(rt.availableRoomCount);
+                                        if (!isNaN(stored)) availCount = Math.min(availCount, stored);
+                                    }
+                                    const isAvail = availCount > 0;
 
                                     return (
-                                        <div key={idx} className="p-4 bg-slate-50 rounded-2xl border border-slate-200/80 flex items-center justify-between gap-3">
+                                        <div key={idx} className="p-4 bg-slate-50 rounded-2xl border border-slate-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                                             <div className="min-w-0 flex-1">
-                                                <h5 className="font-black text-gray-900 text-xs uppercase tracking-tight truncate">
-                                                    {rt.name || `Tipe Kamar ${idx + 1}`}
-                                                </h5>
-                                                <div className="flex items-center gap-2 mt-1">
-                                                    <span className="text-[11px] font-black text-emerald-600">
-                                                        {FORMAT_CURRENCY(rt.price || quickRoomModalKost.price || 0)}
-                                                    </span>
+                                                <div className="flex items-center gap-2 flex-wrap">
+                                                    <h5 className="font-black text-gray-900 text-xs uppercase tracking-tight truncate">
+                                                        {rt.name || `Tipe Kamar ${idx + 1}`}
+                                                    </h5>
                                                     <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider ${isAvail ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
-                                                        {isAvail ? `${count} Tersedia` : 'Penuh'}
+                                                        {isAvail ? `${availCount} Tersedia` : 'Penuh'}
+                                                    </span>
+                                                    {occForType > 0 && (
+                                                        <span className="px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-blue-100 text-blue-700">
+                                                            {occForType} Dihuni
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                <div className="flex items-center gap-2 mt-1 flex-wrap">
+                                                    <span className="text-[11px] font-black text-emerald-600">
+                                                        {FORMAT_CURRENCY(rt.price || quickRoomModalKost.price || 0)}/bln
+                                                    </span>
+                                                    <span className="text-[10px] text-gray-400 font-bold">•</span>
+                                                    <span className="text-[10px] text-gray-500 font-semibold">
+                                                        Total {typeCapacity} Unit ({occForType} Terisi, {availCount} Kosong)
                                                     </span>
                                                 </div>
                                             </div>
 
                                             {/* Stepper */}
-                                            <div className="flex items-center gap-2 bg-white p-1.5 rounded-xl border border-slate-200/60 shadow-2xs">
-                                                <button
-                                                    type="button"
-                                                    onClick={() => handleQuickUpdateRooms(quickRoomModalKost.id, count - 1, idx)}
-                                                    disabled={count <= 0 || updatingRoomKostId === quickRoomModalKost.id}
-                                                    className="w-8 h-8 rounded-lg bg-slate-100 hover:bg-orange-100 text-gray-700 hover:text-orange-600 disabled:opacity-30 disabled:hover:bg-slate-100 font-black text-sm flex items-center justify-center transition-all active:scale-95 cursor-pointer disabled:cursor-not-allowed select-none"
-                                                >
-                                                    -
-                                                </button>
+                                            <div className="flex items-center justify-between sm:justify-end gap-2 shrink-0">
+                                                <span className="text-[10px] font-black text-gray-400 uppercase tracking-wider sm:hidden">Kamar Kosong:</span>
+                                                <div className="flex items-center gap-2 bg-white p-1.5 rounded-xl border border-slate-200/60 shadow-2xs">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleQuickUpdateRooms(quickRoomModalKost.id, availCount - 1, idx)}
+                                                        disabled={availCount <= 0 || updatingRoomKostId === quickRoomModalKost.id}
+                                                        className="w-8 h-8 rounded-lg bg-slate-100 hover:bg-orange-100 text-gray-700 hover:text-orange-600 disabled:opacity-30 disabled:hover:bg-slate-100 font-black text-sm flex items-center justify-center transition-all active:scale-95 cursor-pointer disabled:cursor-not-allowed select-none"
+                                                        title="Kurangi 1 Kamar Kosong"
+                                                    >
+                                                        -
+                                                    </button>
 
-                                                <span className="w-8 text-center text-sm font-black text-gray-900">
-                                                    {count}
-                                                </span>
+                                                    <div className="w-10 text-center">
+                                                        <span className="text-sm font-black text-gray-900 block leading-tight">
+                                                            {availCount}
+                                                        </span>
+                                                        <span className="text-[8px] font-bold text-gray-400 block uppercase">
+                                                            Kosong
+                                                        </span>
+                                                    </div>
 
-                                                <button
-                                                    type="button"
-                                                    onClick={() => handleQuickUpdateRooms(quickRoomModalKost.id, count + 1, idx)}
-                                                    disabled={updatingRoomKostId === quickRoomModalKost.id}
-                                                    className="w-8 h-8 rounded-lg bg-orange-500 hover:bg-orange-600 text-white font-black text-sm flex items-center justify-center transition-all shadow-xs active:scale-95 cursor-pointer disabled:opacity-50 select-none"
-                                                >
-                                                    +
-                                                </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleQuickUpdateRooms(quickRoomModalKost.id, availCount + 1, idx)}
+                                                        disabled={updatingRoomKostId === quickRoomModalKost.id}
+                                                        className="w-8 h-8 rounded-lg bg-orange-500 hover:bg-orange-600 text-white font-black text-sm flex items-center justify-center transition-all shadow-xs active:scale-95 cursor-pointer disabled:opacity-50 select-none"
+                                                        title="Tambah 1 Kamar Kosong"
+                                                    >
+                                                        +
+                                                    </button>
+                                                </div>
                                             </div>
                                         </div>
                                     );

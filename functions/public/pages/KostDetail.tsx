@@ -149,6 +149,50 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
     }
   }, [kost.id, hideBookingAndChat, user?.uid]);
 
+  // --- DYNAMIC INVENTORY ENGINE: Reactive Resident Deduction ---
+  const [activeResidentsMap, setActiveResidentsMap] = useState<Record<string, number>>({});
+
+  useEffect(() => {
+    if (!kost.id) return;
+    let isMounted = true;
+
+    const fetchActiveResidents = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('resident_status')
+          .select('room_type, status')
+          .eq('kost_id', kost.id)
+          .in('status', ['ACTIVE', 'active']);
+
+        if (!error && data && isMounted) {
+          const counts: Record<string, number> = {};
+          data.forEach((r: any) => {
+            const rawType = (r.room_type || '').trim().toLowerCase();
+            if (rawType) {
+              counts[rawType] = (counts[rawType] || 0) + 1;
+            }
+          });
+          setActiveResidentsMap(counts);
+        }
+      } catch (err) {
+        console.error('Error fetching active residents count:', err);
+      }
+    };
+
+    fetchActiveResidents();
+    return () => { isMounted = false; };
+  }, [kost.id]);
+
+  const getOccupiedCount = (name: string) => {
+    const norm = (name || '').trim().toLowerCase();
+    if (!norm) return 0;
+    if (activeResidentsMap[norm] !== undefined) return activeResidentsMap[norm];
+    for (const [k, v] of Object.entries(activeResidentsMap)) {
+      if (k === norm || k.includes(norm) || norm.includes(k)) return v;
+    }
+    return 0;
+  };
+
   const [selectedPeriod, setSelectedPeriod] = useState<PricingPeriod>('bulanan');
   const [isBookingModalOpen, setIsBookingModalOpen] = useState(false);
   const [isPaymentGatewayOpen, setIsPaymentGatewayOpen] = useState(false);
@@ -612,12 +656,23 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
       });
     }
 
-    const countVal = (rt.availableRoomCount !== undefined && rt.availableRoomCount !== null) 
-      ? Number(rt.availableRoomCount) 
-      : (rt.availableRooms !== undefined && rt.availableRooms !== null ? Number(rt.availableRooms) : null);
-    const isAvail = countVal !== null 
-      ? countVal > 0 
-      : (rt.isAvailable !== false && rt.status?.toLowerCase() !== 'terisi' && rt.status?.toLowerCase() !== 'penuh');
+    const occResidents = getOccupiedCount(rt.name || '');
+    const totalCountVal = Number(rt.totalRooms ?? rt.roomCount ?? rt.totalCount ?? rt.quantity ?? 0);
+
+    let countVal: number;
+    if (totalCountVal > 0) {
+      countVal = Math.max(0, totalCountVal - occResidents);
+      if (rt.availableRoomCount !== undefined && rt.availableRoomCount !== null) {
+        const rawAvail = Number(rt.availableRoomCount);
+        if (!isNaN(rawAvail)) countVal = Math.min(countVal, rawAvail);
+      }
+    } else if (rt.availableRoomCount !== undefined && rt.availableRoomCount !== null) {
+      countVal = Math.max(0, Number(rt.availableRoomCount) - occResidents);
+    } else {
+      const isInitiallyAvail = (rt.isAvailable !== false && rt.status?.toLowerCase() !== 'terisi' && rt.status?.toLowerCase() !== 'penuh');
+      countVal = isInitiallyAvail ? Math.max(0, 1 - occResidents) : 0;
+    }
+    const isAvail = countVal > 0;
     const rName = rt.name ? (String(rt.name).trim().toLowerCase().startsWith('kamar') ? rt.name : `Kamar ${rt.name}`) : `Kamar ${rtIdx + 1}`;
     const rawImages = rt.images || rt.image_urls || [];
 
@@ -753,20 +808,32 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
     if (!kost.isManaged) {
       // For regular kost: each item in kost.roomTypes is its own parent type
       return kost.roomTypes.map((rt: any, idx: number) => {
-        const countVal = (rt.availableRoomCount !== undefined && rt.availableRoomCount !== null) 
-          ? Number(rt.availableRoomCount) 
-          : (rt.availableRooms !== undefined && rt.availableRooms !== null ? Number(rt.availableRooms) : null);
-        const isAvail = countVal !== null 
-          ? countVal > 0 
-          : (rt.isAvailable !== false && rt.status?.toLowerCase() !== 'terisi' && rt.status?.toLowerCase() !== 'penuh');
         const rName = rt.name || `Tipe ${idx + 1}`;
         const matchedNorm = normalizedRooms.find(r => r.variantIdx === idx);
+        const occResidents = getOccupiedCount(rName);
+        const totalCountVal = Number(rt.totalRooms ?? rt.roomCount ?? rt.totalCount ?? rt.quantity ?? 0);
 
-        const rawAvailCount = countVal !== null 
-          ? countVal 
-          : Number(rt.availableRooms ?? rt.availableCount ?? (isAvail ? 1 : 0));
-        const finalAvailCount = isAvail ? (rawAvailCount > 0 ? rawAvailCount : 1) : 0;
-        const totalCount = Number(rt.totalRooms ?? rt.roomCount ?? rt.totalCount ?? rt.quantity ?? (finalAvailCount > 0 ? finalAvailCount : 1));
+        let finalAvailCount: number;
+        let finalTotalCount: number;
+
+        if (totalCountVal > 0) {
+          finalTotalCount = totalCountVal;
+          finalAvailCount = Math.max(0, totalCountVal - occResidents);
+          if (rt.availableRoomCount !== undefined && rt.availableRoomCount !== null) {
+            const rawAvail = Number(rt.availableRoomCount);
+            if (!isNaN(rawAvail)) finalAvailCount = Math.min(finalAvailCount, rawAvail);
+          }
+        } else if (rt.availableRoomCount !== undefined && rt.availableRoomCount !== null) {
+          const rawAvail = Number(rt.availableRoomCount);
+          finalTotalCount = Math.max(1, rawAvail + occResidents);
+          finalAvailCount = Math.max(0, rawAvail - occResidents);
+        } else {
+          const isInitiallyAvail = (rt.isAvailable !== false && rt.status?.toLowerCase() !== 'terisi' && rt.status?.toLowerCase() !== 'penuh');
+          finalTotalCount = Math.max(1, (isInitiallyAvail ? 1 : 0) + occResidents);
+          finalAvailCount = isInitiallyAvail ? Math.max(0, finalTotalCount - occResidents) : 0;
+        }
+
+        const isAvail = finalAvailCount > 0;
 
         return {
           typeName: rName,
@@ -774,7 +841,7 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
           size: rt.size || '3x3',
           roomFacilities: rt.roomFacilities || [],
           availableCount: finalAvailCount,
-          totalCount: Math.max(totalCount, finalAvailCount),
+          totalCount: Math.max(finalTotalCount, finalAvailCount),
           isAvailable: isAvail && finalAvailCount > 0,
           rooms: [{
             id: rt.id || `room_${idx}`,

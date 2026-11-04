@@ -2390,9 +2390,11 @@ export async function syncResidentStatus(trxId: string, options: { overrideMasaS
                 // KOST BIASA (REGULER):
                 // Kurangi kuota availableRoomCount. Hanya set Penuh jika sisa kuota <= 0.
                 const currentAvail = Number(rm.availableRoomCount ?? rm.availableRooms ?? 1);
+                const currentTotal = Number(rm.totalRooms ?? (currentAvail + 1));
                 const newAvail = Math.max(0, currentAvail - 1);
                 return {
                   ...rm,
+                  totalRooms: currentTotal,
                   availableRoomCount: newAvail,
                   isAvailable: newAvail > 0,
                   status: newAvail > 0 ? 'Kosong' : 'Penuh',
