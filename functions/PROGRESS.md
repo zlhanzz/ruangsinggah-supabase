@@ -2,6 +2,30 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 496. Programmatic Date Picker Trigger (`showPicker()` API) & Ref Binding pada Modal 'Ajukan Check-in Lebih Awal' (`MyKost.tsx`) (November 2026)
+- **Permintaan & Masukan Pengguna**:
+  - Pengguna melaporkan bahwa saat masuk ke modal "Ajukan Check-in Lebih Awal" pada halaman MyKost, elemen pilihan rencana tanggal masuk tidak bisa diklik dan tidak ada reaksi apa pun saat ditekan.
+- **Akar Masalah & Analisis Teknis**:
+  - Pada browser Chromium (Edge, Chrome, Opera), elemen `<input type="date">` memiliki Shadow DOM yang membedakan area teks tanggal dengan glyph tombol kalender kecil (16x16 px) di pojok kanan.
+  - Karena input diberi styling `opacity: 0` sebagai overlay di atas kartu visual, klik pengguna jatuh pada area teks transparan. Browser Chromium hanya memfokuskan teks tersembunyi tanpa membuka popup dialog kalender.
+  - Elemen kartu visual di bawahnya tidak memiliki handler klik programatis yang memanggil W3C standard API `HTMLInputElement.showPicker()`.
+- **Implementasi Solusi**:
+  1. **React Ref Binding (`useRef`)**:
+     - Mengimpor `useRef` di `MyKost.tsx` dan membuat ref `earlyCheckInInputRef = useRef<HTMLInputElement>(null)`.
+  2. **Programmatic Date Picker Trigger (`handleOpenEarlyCheckInDatePicker`)**:
+     - Membuat fungsi handler yang memanggil `earlyCheckInInputRef.current.showPicker()` dengan fallback `focus()` yang aman jika API tidak didukung browser lawas.
+  3. **Universal Interactive Card Binding**:
+     - Menautkan `onClick={handleOpenEarlyCheckInDatePicker}` pada kontainer kartu visual, ikon kalender, teks tanggal, hingga tombol "UBAH ▾".
+     - Menambahkan handler `onClick` langsung pada elemen `<input type="date">` agar klik native tetap mengeksekusi `showPicker()`.
+     - Menambahkan mikro-interaksi taktil `active:scale-[0.99]` agar pengguna mendapatkan feedback visual seketika.
+- **File Tersentuh**:
+  - `functions/public/pages/MyKost.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi build frontend Vite (`npm.cmd --prefix functions/public run build`): Lulus 100% (2512 modul, 0 error, built in 59s).
+  - Simulasi interaksi: Klik pada kotak tanggal, teks, ikon, maupun tombol "Ubah ▾" langsung membuka dialog kalender native browser secara instan.
+
 ### 495. Single Source of Truth Dynamic Room Availability Engine & Mitra Quick Room Control Overhaul (`KostDetail.tsx`, `MitraDashboard.tsx`, `KostCard.tsx`, `functions/src/index.ts`, `properties.room_types`) (November 2026)
 - **Permintaan & Masukan Pengguna**:
   - Pengguna menemukan ketidakkonsistenan data yang membingungkan: Setelah melakukan simulasi booking hingga berstatus penghuni aktif (`resident_status`), halaman detail listing kamar Standard sempat kembali menampilkan "3 Kamar Tersedia".

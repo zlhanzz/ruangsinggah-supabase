@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { supabase } from '../supabase';
 import { ArrowLeft, Clock, MapPin, Receipt, Upload, Plus, MessageSquare, AlertCircle, FileText, X, Star, CheckCircle, CheckCircle2, Smartphone, Phone, Calendar, Search, Heart, ChevronRight, XCircle, Zap, Check, Activity, DoorClosed, ChevronDown, ChevronUp, Camera, ShieldCheck, Building, Bed, Bath, Wifi, Maximize2, Share2, PhoneCall, HelpCircle, Layers, Wrench, RotateCcw, ZoomIn, Eye, Users, Wind, Droplets, BedDouble, AlertTriangle, Sparkles } from 'lucide-react';
@@ -502,6 +502,25 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
     const [earlyCheckInReason, setEarlyCheckInReason] = useState<string>('');
     const [earlyCheckInLoading, setEarlyCheckInLoading] = useState<boolean>(false);
     const [isConfirmingCheckIn, setIsConfirmingCheckIn] = useState<boolean>(false);
+    const earlyCheckInInputRef = useRef<HTMLInputElement>(null);
+
+    const handleOpenEarlyCheckInDatePicker = (e?: React.MouseEvent) => {
+        if (e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+        if (earlyCheckInInputRef.current) {
+            try {
+                if (typeof earlyCheckInInputRef.current.showPicker === 'function') {
+                    earlyCheckInInputRef.current.showPicker();
+                } else {
+                    earlyCheckInInputRef.current.focus();
+                }
+            } catch {
+                earlyCheckInInputRef.current.focus();
+            }
+        }
+    };
 
     const handleOpenEarlyCheckInModal = (kostItem: any) => {
         setSelectedKost(kostItem);
@@ -6099,32 +6118,41 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
                                 <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest">
                                     Rencana Tanggal Masuk Baru (Lebih Awal)
                                 </label>
-                                <div className="relative group">
-                                    {/* Presentasi Visual Tanggal Format Baku Indonesia (Bebas Glitch MM/DD/YYYY Browser) */}
-                                    <div className="w-full bg-white hover:bg-amber-50/40 border-2 border-amber-200/90 rounded-2xl px-4 py-3 text-xs font-black text-gray-900 flex items-center justify-between shadow-2xs transition-all group-hover:border-amber-400 cursor-pointer">
-                                        <div className="flex items-center gap-2.5 min-w-0">
-                                            <div className="w-8 h-8 rounded-xl bg-amber-500/10 text-amber-600 flex items-center justify-center shrink-0">
-                                                <Calendar className="w-4 h-4 text-amber-600" />
-                                            </div>
-                                            <div className="min-w-0">
-                                                <p className="text-xs sm:text-sm font-black text-gray-900 leading-tight truncate">
-                                                    {earlyCheckInDate ? FORMAT_DATE(earlyCheckInDate) : 'Pilih Tanggal Masuk'}
-                                                </p>
-                                                <p className="text-[10px] font-bold text-amber-700/80 leading-tight mt-0.5 capitalize">
-                                                    {earlyCheckInDate ? new Date(earlyCheckInDate.replace(/-/g, '/')).toLocaleDateString('id-ID', { weekday: 'long' }) : 'Klik untuk memilih'}
-                                                </p>
-                                            </div>
+                                <div 
+                                    onClick={handleOpenEarlyCheckInDatePicker}
+                                    className="relative group w-full bg-white hover:bg-amber-50/50 active:scale-[0.99] border-2 border-amber-200/90 hover:border-amber-400 rounded-2xl px-4 py-3 text-xs font-black text-gray-900 flex items-center justify-between shadow-2xs transition-all cursor-pointer select-none"
+                                >
+                                    <div className="flex items-center gap-2.5 min-w-0">
+                                        <div className="w-8 h-8 rounded-xl bg-amber-500/10 text-amber-600 flex items-center justify-center shrink-0">
+                                            <Calendar className="w-4 h-4 text-amber-600" />
                                         </div>
-                                        <span className="text-[10px] font-black text-amber-700 bg-amber-100/70 group-hover:bg-amber-200/80 px-2.5 py-1 rounded-xl border border-amber-200 uppercase tracking-wider flex items-center gap-1 shrink-0">
-                                            Ubah ▾
-                                        </span>
+                                        <div className="min-w-0">
+                                            <p className="text-xs sm:text-sm font-black text-gray-900 leading-tight truncate">
+                                                {earlyCheckInDate ? FORMAT_DATE(earlyCheckInDate) : 'Pilih Tanggal Masuk'}
+                                            </p>
+                                            <p className="text-[10px] font-bold text-amber-700/80 leading-tight mt-0.5 capitalize">
+                                                {earlyCheckInDate ? new Date(earlyCheckInDate.replace(/-/g, '/')).toLocaleDateString('id-ID', { weekday: 'long' }) : 'Klik untuk memilih'}
+                                            </p>
+                                        </div>
                                     </div>
+                                    <span 
+                                        onClick={handleOpenEarlyCheckInDatePicker}
+                                        className="text-[10px] font-black text-amber-700 bg-amber-100/70 group-hover:bg-amber-200/80 px-2.5 py-1 rounded-xl border border-amber-200 uppercase tracking-wider flex items-center gap-1 shrink-0 cursor-pointer"
+                                    >
+                                        Ubah ▾
+                                    </span>
 
-                                    {/* Transparent Native Date Picker Overlay (Tetap Mempertahankan Picker Native Perangkat) */}
+                                    {/* Native Date Picker Overlay with Ref and Explicit showPicker Trigger */}
                                     <input
+                                        ref={earlyCheckInInputRef}
                                         type="date"
                                         value={earlyCheckInDate}
                                         onChange={(e) => setEarlyCheckInDate(e.target.value)}
+                                        onClick={(e) => {
+                                            try {
+                                                e.currentTarget.showPicker?.();
+                                            } catch {}
+                                        }}
                                         min={new Date().toISOString().split('T')[0]}
                                         max={selectedKost.moveInDate ? new Date(selectedKost.moveInDate).toISOString().split('T')[0] : undefined}
                                         className="absolute inset-0 opacity-0 w-full h-full cursor-pointer z-10"
