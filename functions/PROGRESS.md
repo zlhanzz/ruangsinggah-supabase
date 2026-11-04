@@ -12032,22 +12032,33 @@ ooms, sehingga tidak muncul alarm palsu di konsol browser mitra.
   - Frontend Vite build: Exit code 0, 0 error (✓ 2512 modules transformed).
 
 
-### 282. Perbaikan Minor UI Galeri Foto Listing: Eliminasi Badge Atas & Harmonisasi Tema Warna Badge Bawah (`KostDetail.tsx`) (November 2026)
+### 283. Pemisahan Domain & Aturan Baku Isolasi Kost Biasa (Reguler) vs KostManager (`adminService.ts`, `functions/src/index.ts`, `properties.room_types`) (November 2026)
 - **Permintaan & Masalah**:
-  1. Pengguna meminta perbaikan minor visual pada galeri foto utama detail kost: menghapus badge overlay di pojok kiri atas foto (`KAMAR: PREMIUM` dsb.) yang menutupi visual interior kamar dan menimbulkan redundansi visual.
-  2. Mempertahankan badge counter di pojok kanan bawah, namun menyelaraskan warna teks label kategori agar sesuai dengan tema branding resmi RuangSinggah (oranye/putih) dan bukan lagi hijau zamrud (`text-emerald-400`).
-- **Implementasi & Solusi**:
-  1. **Eliminasi Badge Kiri Atas**:
-     - Menghapus blok elemen `<div className="absolute top-6 left-6 ...">` pada galeri foto utama di `functions/public/pages/KostDetail.tsx`.
-     - Sudut atas foto kini 100% bersih dan bebas hambatan pandang (*unobstructed view*), sesuai standar industri platform akomodasi (Airbnb / Mamikos).
-  2. **Harmonisasi Badge Kanan Bawah**:
-     - Mengonsolidasikan informasi foto pada badge counter `absolute bottom-6 right-6`.
-     - Memperbarui evaluasi label menjadi `(currentPhotoItem?.label || currentPhotoItem?.category)`.
-     - Mengubah warna teks nama kamar / kategori foto menjadi **`text-orange-400 font-bold`** yang menyatu harmonis dengan ikon kamera oranye dan palet branding resmi RuangSinggah, dengan pembatas `text-white/40` dan nomor urut foto dalam `text-white`.
+  1. Pengguna menemukan masalah tumpang tindih data (*data bleeding*): Setelah data di database `resident_status` dikosongkan, kartu sewa di menu Orders penyewa memang hilang, tetapi di dashboard mitra tab "Penghuni Aktif" kartu penghuni `userbiasa1` (Kost Ryuta) masih tercantum dengan durasi 60 hari.
+  2. Padahal Kost Ryuta adalah kost reguler/biasa (`is_managed: false`) yang tidak terdaftar di KostManager.
+  3. Pengguna meminta aturan konkret dan komprehensif agar fungsi Kost Biasa dan KostManager terisolasi secara tegas dan tidak saling merusak.
+- **Akar Masalah (Root Cause)**:
+  1. **Ekstraksi Cadangan Tanpa Guard**: Di `adminService.ts` fungsi `getResidentStatus()`, terdapat loop ekstraksi penghuni offline dari `properties.room_types` yang ditujukan untuk properti survei KostManager. Namun loop tersebut memindai seluruh properti owner tanpa memeriksa flag `is_managed`.
+  2. **Pencemaran Data Kamar Online**: Saat transaksi booking online lunas, backend menulis `residentName`, `residentPhone`, `startDate`, `endDate` langsung ke dalam kolom JSON `room_types` Kost Biasa, sehingga saat `resident_status` dikosongkan, data kamar tertinggal sebagai data yatim (*orphaned occupancy data*).
+- **Implementasi & Solusi (4 Aturan Baku Arsitektur)**:
+  1. **Aturan 1 (SSOT Terisolasi)**:
+     - Untuk Kost Biasa (Reguler / Mandiri), SSOT penghuni adalah 100% tabel relasional `resident_status`.
+     - Dilarang membaca/mengekstrak data penghuni dari `room_types` untuk Kost Biasa.
+  2. **Aturan 2 (Strict Isolation Guard pada `getResidentStatus` di `adminService.ts`)**:
+     - Memilih kolom `is_managed` pada query properti.
+     - Menambahkan guard isolasi ketat: `const isKostManager = Boolean(p.is_managed === true || p.isManaged === true || kmPropIds.includes(p.id)); if (!isKostManager) return;`.
+     - Properti Kost Biasa dilewati 100% dari loop ekstraksi offline.
+  3. **Aturan 3 (Pembersihan Mutasi Booking Online di `functions/src/index.ts` & `adminService.ts`)**:
+     - Saat booking online, properti Kost Biasa (`!isManaged`) hanya mengubah status ketersediaan unit (`status: 'Terisi'`, `isAvailable: false`), tanpa menyematkan `residentName`, `residentPhone`, `startDate`, atau `endDate` ke dalam JSON `room_types`.
+  4. **Aturan 4 (Sanitasi Data Supabase)**:
+     - Membersihkan kamar `Standard` Kost Ryuta di Supabase (`properties.room_types`): mengubah status menjadi `status: 'Kosong'`, `isAvailable: true`, dan menghapus sisa `residentName`, `residentPhone`, `startDate`, dan `endDate`.
 - **File Tersentuh**:
-  - `functions/public/pages/KostDetail.tsx`
+  - `functions/public/adminService.ts`
+  - `functions/src/index.ts`
+  - Database Supabase (`properties` row `f0347475-4e49-4af2-978a-5eb5fabd7f16`)
   - `functions/PROGRESS.md`
   - `WALKTHROUGH.md`
 - **Verifikasi**:
+  - Simulasi `getResidentStatus` untuk pemilik Kost Ryuta (`sulhan`): Menghasilkan `0` penghuni aktif (kartu hantu hilang 100%).
+  - Backend `tsc` build: Exit code 0, 0 error.
   - Frontend Vite build: Exit code 0, 0 error (2512 modules transformed).
-  - Tampilan foto utama kini bersih di bagian atas dan counter di bagian bawah selaras dengan tema oranye RuangSinggah.

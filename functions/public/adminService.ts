@@ -614,19 +614,20 @@ export async function getResidentStatus(filters?: { ownerUid?: string; userId?: 
     // 1. Fetch relevant properties (especially if ownerUid is specified, with dual-check fallback for KostManager requests)
     let propertiesForExtraction: any[] = [];
     let propIds: string[] = [];
+    let kmPropIds: string[] = [];
 
     if (ownerUid) {
         const [propsRes, kmReqsRes] = await Promise.all([
-            supabase.from('properties').select('id, title, address, city, area, image_urls, location, price, room_types, additional_fee_name, additional_fee_price, owner_uid, created_at').eq('owner_uid', ownerUid),
+            supabase.from('properties').select('id, title, address, city, area, image_urls, location, price, room_types, additional_fee_name, additional_fee_price, owner_uid, created_at, is_managed').eq('owner_uid', ownerUid),
             supabase.from('kostmanager_requests').select('property_id').eq('user_id', ownerUid)
         ]);
 
         let combinedProps = propsRes.data || [];
-        const kmPropIds = (kmReqsRes.data || []).map(r => r.property_id).filter(Boolean);
+        kmPropIds = (kmReqsRes.data || []).map(r => r.property_id).filter(Boolean);
         if (kmPropIds.length > 0) {
             const missingKmIds = kmPropIds.filter(id => !combinedProps.some(p => p.id === id));
             if (missingKmIds.length > 0) {
-                const { data: kmProps } = await supabase.from('properties').select('id, title, address, city, area, image_urls, location, price, room_types, additional_fee_name, additional_fee_price, owner_uid, created_at').in('id', missingKmIds);
+                const { data: kmProps } = await supabase.from('properties').select('id, title, address, city, area, image_urls, location, price, room_types, additional_fee_name, additional_fee_price, owner_uid, created_at, is_managed').in('id', missingKmIds);
                 if (kmProps) combinedProps = [...combinedProps, ...kmProps];
             }
         }
@@ -639,7 +640,7 @@ export async function getResidentStatus(filters?: { ownerUid?: string; userId?: 
         }
     } else if (!userId) {
         // Admin view - fetch all properties to extract offline occupants as well
-        const { data: allProps } = await supabase.from('properties').select('id, title, address, city, area, image_urls, location, price, room_types, additional_fee_name, additional_fee_price, owner_uid, created_at');
+        const { data: allProps } = await supabase.from('properties').select('id, title, address, city, area, image_urls, location, price, room_types, additional_fee_name, additional_fee_price, owner_uid, created_at, is_managed');
         propertiesForExtraction = allProps || [];
     }
 
@@ -672,7 +673,7 @@ export async function getResidentStatus(filters?: { ownerUid?: string; userId?: 
 
     const [usersRes, propsRes, trxsRes] = await Promise.all([
         userIds.length > 0 ? supabase.from('users').select('id, name, full_name, photo_url, phone, occupation, institution, city, address, email').in('id', userIds) : { data: [] },
-        propertyIds.length > 0 ? supabase.from('properties').select('id, title, address, city, area, image_urls, location, price, room_types, additional_fee_name, additional_fee_price, owner_uid, created_at').in('id', propertyIds) : { data: [] },
+        propertyIds.length > 0 ? supabase.from('properties').select('id, title, address, city, area, image_urls, location, price, room_types, additional_fee_name, additional_fee_price, owner_uid, created_at, is_managed').in('id', propertyIds) : { data: [] },
         trxIds.length > 0 ? supabase.from('transactions').select('id, amount, status, payment_method, pakasir_order_id, metadata, product_type').in('id', trxIds.filter(id => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id))) : { data: [] }
     ]);
 
@@ -705,6 +706,18 @@ export async function getResidentStatus(filters?: { ownerUid?: string; userId?: 
         const propsToCheck = propertiesForExtraction.length > 0 ? propertiesForExtraction : (propsRes.data || []);
         
         propsToCheck.forEach(p => {
+            // [ATURAN BAKU: ISOLASI DOMAIN KOST BIASA VS KOSTMANAGER]
+            // Properti Kost Biasa (Reguler / Mandiri): SSOT penghuni adalah 100% tabel resident_status.
+            // Dilarang keras mengekstrak penghuni offline/sintetis dari room_types properti Kost Biasa.
+            const isKostManager = Boolean(
+                p.is_managed === true || 
+                p.isManaged === true || 
+                kmPropIds.includes(p.id)
+            );
+            if (!isKostManager) {
+                return; // SKIP total untuk Kost Biasa!
+            }
+
             const roomList = Array.isArray(p.room_types) ? p.room_types : [];
             roomList.forEach((rt: any, rIdx: number) => {
                 const hasExplicitTenantName = Boolean(rt.residentName || rt.tenantName || rt.occupant_name);
@@ -1211,12 +1224,13 @@ export async function syncResidentStatus(transactionId: string, metadataOverride
             try {
                 const { data: propRow } = await supabase
                     .from('properties')
-                    .select('id, room_types')
+                    .select('id, room_types, is_managed')
                     .eq('id', kostId)
                     .maybeSingle();
 
                 if (propRow && Array.isArray(propRow.room_types)) {
                     let roomMatched = false;
+                    const isManaged = Boolean(propRow.is_managed);
                     const updatedRoomTypes = propRow.room_types.map((rm: any, rmIdx: number) => {
                         const curRoomNum = (rm.name || rm.roomNumber || '').trim();
                         const curRoomNumNorm = curRoomNum.replace(/^kamar\s*/i, '').toLowerCase();
@@ -1234,10 +1248,13 @@ export async function syncResidentStatus(transactionId: string, metadataOverride
                                 ...rm,
                                 status: 'Terisi',
                                 isAvailable: false,
-                                residentName: tenantDisplayName || rm.residentName || 'Penghuni Terdata',
-                                residentPhone: tenantPhoneNum || rm.residentPhone || '',
-                                startDate: startDate || rm.startDate || '',
-                                endDate: endDate || rm.endDate || ''
+                                // [ATURAN BAKU: PISAHKAN DATA PRIBADI PENYEWA KOST BIASA VS KOSTMANAGER]
+                                // Hanya properti KostManager yang menyimpan residentName di room_types fisik.
+                                // Untuk Kost Biasa, SSOT kontrak & profil penyewa murni di tabel resident_status!
+                                residentName: isManaged ? (tenantDisplayName || rm.residentName || 'Penghuni Terdata') : '',
+                                residentPhone: isManaged ? (tenantPhoneNum || rm.residentPhone || '') : '',
+                                startDate: isManaged ? (startDate || rm.startDate || '') : '',
+                                endDate: isManaged ? (endDate || rm.endDate || '') : ''
                             };
                         }
                         return rm;

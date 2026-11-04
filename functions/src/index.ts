@@ -2356,12 +2356,13 @@ export async function syncResidentStatus(trxId: string, options: { overrideMasaS
       try {
         const { data: propRow } = await supabase
           .from('properties')
-          .select('id, room_types')
+          .select('id, room_types, is_managed')
           .eq('id', trx.product_id)
           .maybeSingle();
 
         if (propRow && Array.isArray(propRow.room_types)) {
           let roomMatched = false;
+          const isManaged = Boolean(propRow.is_managed);
           const updatedRoomTypes = propRow.room_types.map((rm: any) => {
             const curRoomNum = (rm.name || rm.roomNumber || '').trim();
             const curRoomNumNorm = curRoomNum.replace(/^kamar\s*/i, '').toLowerCase();
@@ -2378,10 +2379,13 @@ export async function syncResidentStatus(trxId: string, options: { overrideMasaS
                 ...rm,
                 status: 'Terisi',
                 isAvailable: false,
-                residentName: tenantDisplayName || rm.residentName || 'Penghuni Terdata',
-                residentPhone: tenantPhoneNum || rm.residentPhone || '',
-                startDate: startDate || rm.startDate || '',
-                endDate: newEnd.toISOString().split('T')[0] || rm.endDate || ''
+                // [ATURAN BAKU: PISAHKAN DATA PRIBADI PENYEWA KOST BIASA VS KOSTMANAGER]
+                // Hanya properti KostManager yang menyimpan residentName di room_types fisik.
+                // Untuk Kost Biasa, SSOT kontrak & profil penyewa murni di tabel resident_status!
+                residentName: isManaged ? (tenantDisplayName || rm.residentName || 'Penghuni Terdata') : '',
+                residentPhone: isManaged ? (tenantPhoneNum || rm.residentPhone || '') : '',
+                startDate: isManaged ? (startDate || rm.startDate || '') : '',
+                endDate: isManaged ? (newEnd.toISOString().split('T')[0] || rm.endDate || '') : ''
               };
             }
             return rm;
