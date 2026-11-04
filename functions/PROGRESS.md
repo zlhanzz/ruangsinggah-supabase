@@ -12030,3 +12030,24 @@ ooms, sehingga tidak muncul alarm palsu di konsol browser mitra.
     - Harian: Rencana 10 Nov $\rightarrow$ Masuk 04 Nov $\rightarrow$ Baru: 04 Nov s.d. 05 Nov (tepat 1 hari).
   - Backend `tsc` build: Exit code 0, 0 error.
   - Frontend Vite build: Exit code 0, 0 error (✓ 2512 modules transformed).
+
+
+### 282. Perbaikan Minor UI Galeri Foto Listing: Eliminasi Badge Atas & Harmonisasi Tema Warna Badge Bawah (`KostDetail.tsx`) (November 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna meminta perbaikan minor visual pada galeri foto utama detail kost: menghapus badge overlay di pojok kiri atas foto (`KAMAR: PREMIUM` dsb.) yang menutupi visual interior kamar dan menimbulkan redundansi visual.
+  2. Mempertahankan badge counter di pojok kanan bawah, namun menyelaraskan warna teks label kategori agar sesuai dengan tema branding resmi RuangSinggah (oranye/putih) dan bukan lagi hijau zamrud (`text-emerald-400`).
+- **Implementasi & Solusi**:
+  1. **Eliminasi Badge Kiri Atas**:
+     - Menghapus blok elemen `<div className="absolute top-6 left-6 ...">` pada galeri foto utama di `functions/public/pages/KostDetail.tsx`.
+     - Sudut atas foto kini 100% bersih dan bebas hambatan pandang (*unobstructed view*), sesuai standar industri platform akomodasi (Airbnb / Mamikos).
+  2. **Harmonisasi Badge Kanan Bawah**:
+     - Mengonsolidasikan informasi foto pada badge counter `absolute bottom-6 right-6`.
+     - Memperbarui evaluasi label menjadi `(currentPhotoItem?.label || currentPhotoItem?.category)`.
+     - Mengubah warna teks nama kamar / kategori foto menjadi **`text-orange-400 font-bold`** yang menyatu harmonis dengan ikon kamera oranye dan palet branding resmi RuangSinggah, dengan pembatas `text-white/40` dan nomor urut foto dalam `text-white`.
+- **File Tersentuh**:
+  - `functions/public/pages/KostDetail.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Frontend Vite build: Exit code 0, 0 error (2512 modules transformed).
+  - Tampilan foto utama kini bersih di bagian atas dan counter di bagian bawah selaras dengan tema oranye RuangSinggah.

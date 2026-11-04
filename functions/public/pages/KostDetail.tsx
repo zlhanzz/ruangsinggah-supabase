@@ -1699,34 +1699,17 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
                 <div className="absolute bottom-6 right-6 max-w-[85%] bg-black/60 backdrop-blur-md text-white px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-widest border border-white/15 flex items-center gap-2">
                   <Camera size={12} className="text-orange-400 shrink-0" />
                   <span className="shrink-0">{currentPhoto + 1} / {displayedImages.length} FOTO</span>
-                  {currentPhotoItem?.label ? (
+                  {(currentPhotoItem?.label || currentPhotoItem?.category) ? (
                     <>
                       <span className="text-white/40 shrink-0">•</span>
-                      <span className={`truncate ${currentPhotoItem.isRoom ? "text-orange-400 font-bold" : "text-emerald-400 font-bold"}`}>
+                      <span className="truncate text-orange-400 font-bold">
                         {currentPhotoItem.isRoom
-                          ? (currentPhotoItem.roomName ? `${currentPhotoItem.roomName} - ${currentPhotoItem.label}` : currentPhotoItem.label)
-                          : currentPhotoItem.label}
+                          ? (currentPhotoItem.roomName ? `${currentPhotoItem.roomName} - ${currentPhotoItem.label || currentPhotoItem.category}` : (currentPhotoItem.label || currentPhotoItem.category))
+                          : (currentPhotoItem.label || currentPhotoItem.category)}
                       </span>
                     </>
                   ) : null}
                 </div>
-
-                {/* Active Category Tag Top Left */}
-                {currentPhotoItem && (currentPhotoItem.label || currentPhotoItem.category) && (
-                  <div className="absolute top-6 left-6 max-w-[80%] bg-black/60 backdrop-blur-md text-white px-3.5 py-1.5 rounded-full text-[11px] font-black uppercase tracking-wider shadow-lg border border-white/20 flex items-center gap-1.5">
-                    {currentPhotoItem.isRoom ? (
-                      <>
-                        <Bed size={13} className="text-orange-400 shrink-0" />
-                        <span className="truncate">{currentPhotoItem.roomName ? `${currentPhotoItem.roomName} • ${currentPhotoItem.label || currentPhotoItem.category}` : (currentPhotoItem.label || currentPhotoItem.category)}</span>
-                      </>
-                    ) : (
-                      <>
-                        <Sparkles size={13} className="text-orange-400 shrink-0" />
-                        <span className="truncate">{currentPhotoItem.label || currentPhotoItem.category}</span>
-                      </>
-                    )}
-                  </div>
-                )}
 
                 {/* Photo Caption Overlay (Bottom Left) - Tampil jika caption ada dan berbeda dari kategori */}
                 {currentPhotoItem?.caption && (
