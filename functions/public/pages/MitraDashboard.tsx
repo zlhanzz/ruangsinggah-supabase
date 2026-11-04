@@ -1323,30 +1323,42 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
 
         const safeCount = Math.max(0, newAvailableCount);
         let updatedRoomTypes = [...(targetKost.roomTypes || [])];
+        const isKm = Boolean(targetKost.is_managed || targetKost.isManaged);
+
+        const sanitizeRoomObject = (rm: any) => {
+            const nextStatus = safeCount > 0 ? 'Kosong' : 'Penuh';
+            const res = {
+                ...rm,
+                availableRoomCount: safeCount,
+                isAvailable: safeCount > 0,
+                status: nextStatus
+            };
+            if (!isKm && safeCount > 0) {
+                // Bersihkan sampah metadata penyewa lama dari room_types Kost Biasa
+                delete res.residentName;
+                delete res.residentPhone;
+                delete res.residentEmail;
+                delete res.startDate;
+                delete res.endDate;
+                delete res.occupant_name;
+                delete res.occupant_phone;
+            }
+            return res;
+        };
 
         if (updatedRoomTypes.length === 0) {
-            updatedRoomTypes = [{
+            updatedRoomTypes = [sanitizeRoomObject({
                 name: 'Kamar Standard',
                 size: '3x3',
                 price: targetKost.price || 0,
-                availableRoomCount: safeCount,
-                isAvailable: safeCount > 0,
                 features: [],
                 roomFacilities: [],
                 bathroomFacilities: []
-            }];
+            })];
         } else if (updatedRoomTypes[roomTypeIndex]) {
-            updatedRoomTypes[roomTypeIndex] = {
-                ...updatedRoomTypes[roomTypeIndex],
-                availableRoomCount: safeCount,
-                isAvailable: safeCount > 0
-            };
+            updatedRoomTypes[roomTypeIndex] = sanitizeRoomObject(updatedRoomTypes[roomTypeIndex]);
         } else {
-            updatedRoomTypes[0] = {
-                ...updatedRoomTypes[0],
-                availableRoomCount: safeCount,
-                isAvailable: safeCount > 0
-            };
+            updatedRoomTypes[0] = sanitizeRoomObject(updatedRoomTypes[0]);
         }
 
         // Optimistic UI update

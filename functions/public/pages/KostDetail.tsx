@@ -612,7 +612,12 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
       });
     }
 
-    const isAvail = rt.isAvailable !== false && rt.status?.toLowerCase() !== 'terisi' && rt.status?.toLowerCase() !== 'penuh';
+    const countVal = (rt.availableRoomCount !== undefined && rt.availableRoomCount !== null) 
+      ? Number(rt.availableRoomCount) 
+      : null;
+    const isAvail = countVal !== null 
+      ? (rt.isAvailable !== false && countVal > 0)
+      : (rt.isAvailable !== false && rt.status?.toLowerCase() !== 'terisi' && rt.status?.toLowerCase() !== 'penuh');
     const rName = rt.name ? (String(rt.name).trim().toLowerCase().startsWith('kamar') ? rt.name : `Kamar ${rt.name}`) : `Kamar ${rtIdx + 1}`;
     const rawImages = rt.images || rt.image_urls || [];
 
@@ -748,11 +753,18 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
     if (!kost.isManaged) {
       // For regular kost: each item in kost.roomTypes is its own parent type
       return kost.roomTypes.map((rt: any, idx: number) => {
-        const isAvail = rt.isAvailable !== false && rt.status?.toLowerCase() !== 'terisi' && rt.status?.toLowerCase() !== 'penuh';
+        const countVal = (rt.availableRoomCount !== undefined && rt.availableRoomCount !== null) 
+          ? Number(rt.availableRoomCount) 
+          : null;
+        const isAvail = countVal !== null 
+          ? (rt.isAvailable !== false && countVal > 0)
+          : (rt.isAvailable !== false && rt.status?.toLowerCase() !== 'terisi' && rt.status?.toLowerCase() !== 'penuh');
         const rName = rt.name || `Tipe ${idx + 1}`;
         const matchedNorm = normalizedRooms.find(r => r.variantIdx === idx);
 
-        const rawAvailCount = Number(rt.availableRoomCount ?? rt.availableRooms ?? rt.availableCount ?? (isAvail ? 1 : 0));
+        const rawAvailCount = countVal !== null 
+          ? countVal 
+          : Number(rt.availableRooms ?? rt.availableCount ?? (isAvail ? 1 : 0));
         const finalAvailCount = isAvail ? (rawAvailCount > 0 ? rawAvailCount : 1) : 0;
         const totalCount = Number(rt.totalRooms ?? rt.roomCount ?? rt.totalCount ?? rt.quantity ?? (finalAvailCount > 0 ? finalAvailCount : 1));
 
@@ -762,7 +774,7 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
           size: rt.size || '3x3',
           roomFacilities: rt.roomFacilities || [],
           availableCount: finalAvailCount,
-          totalCount: totalCount,
+          totalCount: Math.max(totalCount, finalAvailCount),
           isAvailable: isAvail && finalAvailCount > 0,
           rooms: [{
             id: rt.id || `room_${idx}`,
@@ -770,8 +782,8 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
             roomNumber: rName,
             displayName: rName,
             floor: rt.floor || '',
-            status: isAvail ? 'Kosong' : 'Terisi',
-            isAvailable: isAvail,
+            status: (isAvail && finalAvailCount > 0) ? 'Kosong' : 'Terisi',
+            isAvailable: isAvail && finalAvailCount > 0,
             price: Number(rt.price || kost.price || 0),
             size: rt.size || '3x3',
             pricing: rt.pricing || [{ period: 'bulanan', price: rt.price || kost.price }],

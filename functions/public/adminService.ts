@@ -865,8 +865,8 @@ export async function syncResidentStatus(transactionId: string, metadataOverride
         const kostId = trx.kost_id || meta.kostId || trx.product_id;
         const roomType = trx.room_type || meta.roomType || meta.variantName || '-';
 
-        // 3. Determine Duration Types EARLY
-        const isExtension = trx.product_type === 'perpanjangan_sewa' || !!meta.extensionPeriod || meta.extensionType === 'manual_extension';
+        // 3. Determine Duration Types EARLY (kost_booking is strictly an INITIAL booking)
+        const isExtension = trx.product_type !== 'kost_booking' && (trx.product_type === 'perpanjangan_sewa' || !!meta.extensionPeriod || meta.extensionType === 'manual_extension');
         const isFacilityOnly = (trx.product_type === 'tagihan_ekstra' || meta.isFacilityPayment || meta.isFacilityOnly || (meta.billPayment && !isExtension)) && !isExtension;
 
         if (!userId || !kostId) {
@@ -896,13 +896,13 @@ export async function syncResidentStatus(transactionId: string, metadataOverride
                 existing = candidates.find(r => r.metadata?.booking_session_id === incomingSessionId);
             }
 
-            // PRIORITY 2: Match by ACTIVE status (if no session match)
-            if (!existing) {
+            // PRIORITY 2: Match by ACTIVE status (Only for extensions!)
+            if (!existing && isExtension) {
                 existing = candidates.find(r => (r.status || '').toUpperCase() === 'ACTIVE');
             }
 
-            // PRIORITY 3: Match by latest updated_at
-            if (!existing) {
+            // PRIORITY 3: Match by latest updated_at (Only for extensions!)
+            if (!existing && isExtension) {
                 existing = candidates.sort((a, b) => new Date(b.updated_at || 0).getTime() - new Date(a.updated_at || 0).getTime())[0];
             }
 
@@ -1244,18 +1244,32 @@ export async function syncResidentStatus(transactionId: string, metadataOverride
 
                         if (isMatch) {
                             roomMatched = true;
-                            return {
-                                ...rm,
-                                status: 'Terisi',
-                                isAvailable: false,
-                                // [ATURAN BAKU: PISAHKAN DATA PRIBADI PENYEWA KOST BIASA VS KOSTMANAGER]
-                                // Hanya properti KostManager yang menyimpan residentName di room_types fisik.
-                                // Untuk Kost Biasa, SSOT kontrak & profil penyewa murni di tabel resident_status!
-                                residentName: isManaged ? (tenantDisplayName || rm.residentName || 'Penghuni Terdata') : '',
-                                residentPhone: isManaged ? (tenantPhoneNum || rm.residentPhone || '') : '',
-                                startDate: isManaged ? (startDate || rm.startDate || '') : '',
-                                endDate: isManaged ? (endDate || rm.endDate || '') : ''
-                            };
+                            if (isManaged) {
+                                return {
+                                    ...rm,
+                                    status: 'Terisi',
+                                    isAvailable: false,
+                                    residentName: tenantDisplayName || rm.residentName || 'Penghuni Terdata',
+                                    residentPhone: tenantPhoneNum || rm.residentPhone || '',
+                                    startDate: startDate || rm.startDate || '',
+                                    endDate: endDate || rm.endDate || ''
+                                };
+                            } else {
+                                // KOST BIASA (REGULER):
+                                // Kurangi kuota availableRoomCount. Hanya set Penuh jika sisa kuota <= 0.
+                                const currentAvail = Number(rm.availableRoomCount ?? rm.availableRooms ?? 1);
+                                const newAvail = Math.max(0, currentAvail - 1);
+                                return {
+                                    ...rm,
+                                    availableRoomCount: newAvail,
+                                    isAvailable: newAvail > 0,
+                                    status: newAvail > 0 ? 'Kosong' : 'Penuh',
+                                    residentName: '',
+                                    residentPhone: '',
+                                    startDate: '',
+                                    endDate: ''
+                                };
+                            }
                         }
                         return rm;
                     });

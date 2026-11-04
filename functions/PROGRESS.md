@@ -2,6 +2,40 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 488. Perbaikan Bug Ketersediaan Kamar (Macet "Penuh") & Akurasi Durasi Sewa 1 Bulan (Bebas Glitch 60 Hari) (`KostDetail.tsx`, `MitraDashboard.tsx`, `adminService.ts`, `functions/src/index.ts`) (November 2026)
+- **Permintaan & Masukan Pengguna**:
+  1. Pengguna mengosongkan tabel `resident_status` dan menghapus transaksi pengujian di Supabase untuk menguji alur booking ulang, namun kamar tipe Standard di halaman detail publik (`KostDetail.tsx`) macet berstatus `● Penuh`. Pengguna mencoba mengatur jumlah kamar via modal kendali cepat pada dashboard mitra menjadi `2 TERSEDIA`, namun tidak berpengaruh apa-apa di halaman publik.
+  2. Pengguna mempertanyakan mengapa ketika memilih durasi sewa 1 bulan ("Per Bulan") saat booking, setelah pembayaran berhasil masa sewa yang tercatat dan countdown harinya menjadi ~60 hari / 2 bulan (selesai Jan 2027) dan tidak akurat 1 bulan (Des 2026).
+- **Akar Masalah & Analisis Teknis**:
+  1. Pada `properties.room_types` Kost Ryuta di Supabase, objek kamar Standard memiliki `"status": "Terisi"`, `"isAvailable": true`, `"availableRoomCount": 2` serta sisa metadata penyewa lama.
+  2. Di `KostDetail.tsx`, evaluasi `isAvail` membaca `rt.status !== 'terisi'`. Karena statusnya `'Terisi'`, `isAvail` menjadi `false`, memaksa `finalAvailCount = 0` dan mengunci badge `● Penuh`.
+  3. Di `MitraDashboard.tsx` (`handleQuickUpdateRooms`), pengubahan angka stepper hanya memperbarui `availableRoomCount` dan `isAvailable`, namun tidak mengubah field `status` (tetap `'Terisi'`) serta tidak membersihkan residu metadata penyewa pada Kost Biasa.
+  4. Di `adminService.ts` dan `functions/src/index.ts` (`syncResidentStatus`), pencarian data `existing` di `resident_status` berdasarkan `(user_id, kost_id)` tanpa isolasi session membuat booking baru keliru masuk ke alur perpanjangan (`isExtension` / lease stacking), sehingga tanggal selesai sewa ditambahkan 1 bulan lagi dari siklus sebelumnya (`2026-12-06` + 1 bulan = `2027-01-05` / 60 hari).
+- **Implementasi Solusi**:
+  1. **Prioritas Kuota Ketersediaan Kamar Kost Biasa (`KostDetail.tsx`)**:
+     - Memperbarui `normalizedRooms` dan parent room groups mapping agar ketersediaan tipe kamar Kost Biasa (`!kost.isManaged`) diprioritaskan berdasarkan kuota `availableRoomCount > 0`.
+     - Jika kuota `availableRoomCount > 0`, kamar dijamin berstatus `isAvailable: true`, `status: 'Kosong'`, dan menampilkan kuota riil tanpa terblokir oleh residu string `status: 'Terisi'`.
+  2. **Sinkronisasi Status & Pembersihan Sampah Metadata di Kendali Cepat (`MitraDashboard.tsx`)**:
+     - Pada `handleQuickUpdateRooms`, saat mitra mengubah jumlah kamar tersedia, otomatis sinkronkan field `status: safeCount > 0 ? 'Kosong' : 'Penuh'`.
+     - Jika `safeCount > 0` pada properti Kost Biasa, bersihkan seluruh metadata penyewa lama (`residentName`, `residentPhone`, `residentEmail`, `startDate`, `endDate`).
+  3. **Isolasi Siklus Sewa Baru & Integritas Kalender 1 Bulan (`adminService.ts` & `functions/src/index.ts`)**:
+     - Mengunci `isExtension = trx.product_type !== 'kost_booking' && (...)` sehingga transaksi pemesanan baru (`kost_booking`) tidak pernah diperlakukan sebagai perpanjangan sewa.
+     - Membatasi pencarian fallback `resident_status` berstatus `ACTIVE` hanya untuk transaksi perpanjangan sewa (`isExtension`), mencegah booking baru menumpuk interval sewa di atas record lama.
+     - Pada sinkronisasi booking Kost Biasa, kurangi kuota `availableRoomCount` sebanyak 1 unit dan hanya ubah status menjadi `Penuh` jika sisa unit <= 0 tanpa mencemari JSONB properti dengan data penyewa.
+  4. **Sanitasi Database Supabase (`properties`)**:
+     - Menjalankan sanitasi data kamar Standard pada Kost Ryuta: reset `status: 'Kosong'`, `isAvailable: true`, `availableRoomCount: 2`, dan menghapus metadata penyewa lama.
+- **File Tersentuh**:
+  - `functions/public/pages/KostDetail.tsx`
+  - `functions/public/pages/MitraDashboard.tsx`
+  - `functions/public/adminService.ts`
+  - `functions/src/index.ts`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Build frontend Vite (`npm.cmd --prefix functions/public run build`): Berhasil 100% (2512 modul, 0 error).
+  - Sanitasi database Supabase: Kost Ryuta kamar Standard kini berstatus `Kosong`, `availableRoomCount: 2`, `isAvailable: true`.
+  - Halaman publik KostDetail kini menampilkan kamar Standard tersedia untuk disewa.
+
 ### 487. Pemisahan Calon Penghuni 'Menunggu Masuk' (Upcoming Stay) dari Sewa Aktif pada Database Penghuni Mitra & Penyederhanaan Notifikasi Jadwal Masuk Penyewa (`MyKost.tsx`, `MitraTenantManagement.tsx`, `MitraDashboard.tsx`) (November 2026)
 - **Permintaan & Masukan Pengguna**:
   1. Pada kartu pesanan penyewa (`MyKost.tsx`), hilangkan rincian waktu jam sewa `(14:00 WIB (Fleksibel))` dan estimasi ETA, cukup tampilkan tanggal masuk secara ringkas, elegan, dan estetik (`Menunggu Tanggal Masuk: [Tanggal]`).

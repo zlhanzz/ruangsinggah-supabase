@@ -2128,8 +2128,8 @@ export async function syncResidentStatus(trxId: string, options: { overrideMasaS
         resident = data;
     }
 
-    // [UPSERT LOGIC] If no resident record found, try searching by user_id and product_id
-    if (!resident) {
+    // [UPSERT LOGIC] If no resident record found, try searching by user_id and product_id (Only for extensions!)
+    if (!resident && isExtension) {
         console.log(`SYNC_RESIDENT: Searching for existing record for User ${trx.user_id} at Kost ${trx.product_id}`);
         const { data: existing } = await supabase.from('resident_status')
             .select('*')
@@ -2144,7 +2144,7 @@ export async function syncResidentStatus(trxId: string, options: { overrideMasaS
         }
     }
 
-    const isExtension = trx.product_type === 'perpanjangan_sewa' || Boolean(metadata.extensionPeriod) || metadata.extensionType === 'manual_extension' || metadata.isManualExtension === true || options.isManualExtension === true;
+    const isExtension = trx.product_type !== 'kost_booking' && (trx.product_type === 'perpanjangan_sewa' || Boolean(metadata.extensionPeriod) || metadata.extensionType === 'manual_extension' || metadata.isManualExtension === true || options.isManualExtension === true);
     const now = new Date(metadata.simulated_date || new Date());
 
     let newEnd: Date;
@@ -2375,18 +2375,32 @@ export async function syncResidentStatus(trxId: string, options: { overrideMasaS
 
             if (isMatch) {
               roomMatched = true;
-              return {
-                ...rm,
-                status: 'Terisi',
-                isAvailable: false,
-                // [ATURAN BAKU: PISAHKAN DATA PRIBADI PENYEWA KOST BIASA VS KOSTMANAGER]
-                // Hanya properti KostManager yang menyimpan residentName di room_types fisik.
-                // Untuk Kost Biasa, SSOT kontrak & profil penyewa murni di tabel resident_status!
-                residentName: isManaged ? (tenantDisplayName || rm.residentName || 'Penghuni Terdata') : '',
-                residentPhone: isManaged ? (tenantPhoneNum || rm.residentPhone || '') : '',
-                startDate: isManaged ? (startDate || rm.startDate || '') : '',
-                endDate: isManaged ? (newEnd.toISOString().split('T')[0] || rm.endDate || '') : ''
-              };
+              if (isManaged) {
+                return {
+                  ...rm,
+                  status: 'Terisi',
+                  isAvailable: false,
+                  residentName: tenantDisplayName || rm.residentName || 'Penghuni Terdata',
+                  residentPhone: tenantPhoneNum || rm.residentPhone || '',
+                  startDate: startDate || rm.startDate || '',
+                  endDate: newEnd.toISOString().split('T')[0] || rm.endDate || ''
+                };
+              } else {
+                // KOST BIASA (REGULER):
+                // Kurangi kuota availableRoomCount. Hanya set Penuh jika sisa kuota <= 0.
+                const currentAvail = Number(rm.availableRoomCount ?? rm.availableRooms ?? 1);
+                const newAvail = Math.max(0, currentAvail - 1);
+                return {
+                  ...rm,
+                  availableRoomCount: newAvail,
+                  isAvailable: newAvail > 0,
+                  status: newAvail > 0 ? 'Kosong' : 'Penuh',
+                  residentName: '',
+                  residentPhone: '',
+                  startDate: '',
+                  endDate: ''
+                };
+              }
             }
             return rm;
           });
